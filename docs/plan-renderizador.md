@@ -342,6 +342,118 @@ El riesgo de este diseño es olvidarse de meter algo en la firma: la pantalla se
 quedaría con una imagen vieja. Cualquier opción nueva del renderizador tiene que
 entrar en `computeFrameSignature`.
 
+## Fase 4 — Acumulación progresiva: un integrador, cuatro efectos
+
+Al construir la caché de frame con refinamiento progresivo montamos, sin darnos cuenta,
+el sustrato exacto de un **integrador de Monte Carlo**: con la cámara quieta disponemos
+de N pasadas gratis, porque el usuario ya no está esperando nada. Hoy esas pasadas solo
+suben la resolución. Si además **variasen un parámetro de muestreo y se acumulasen**, el
+mismo mecanismo resolvería cuatro problemas distintos que hoy no sabemos resolver.
+
+Todos son la misma integral. Lo que cambia es sobre qué se integra:
+
+| Se varía entre pasadas | Se obtiene |
+|---|---|
+| Desplazamiento sub-píxel de la proyección | Antialiasing exacto, no un parche posterior |
+| Dirección de la luz dentro de un cono | Sombras suaves con penumbra real |
+| Dirección de un rayo sobre el hemisferio | Oclusión ambiental |
+| Posición de la cámara sobre un disco | Profundidad de campo |
+
+Una sola maquinaria —acumulador y contador de pasadas— y cuatro efectos que, por
+separado, serían cuatro implementaciones.
+
+### 4.1 El estimador
+
+Cada píxel es una integral sobre su propia superficie: `I = ∫∫ f(x,y) dx dy`. Muestrear
+una vez en el centro, que es lo que hacemos, es la peor aproximación posible de esa
+integral, y el resultado son los bordes dentados.
+
+Promediando N muestras el error cae como `1/√N` si las posiciones son aleatorias. Pero
+con una **secuencia de baja discrepancia** cae como `log(N)/N` —cota de Koksma-Hlawka—,
+que a 16 muestras ya es una diferencia enorme. Para dos dimensiones, la secuencia R2 de
+Roberts es casi óptima y son dos líneas:
+
+    φ = 1.324717957244746        (número plástico, raíz de x³ = x + 1)
+    xᵢ = frac(i / φ)
+    yᵢ = frac(i / φ²)
+
+Sin estado, sin tablas, sin generador aleatorio, y determinista — que para este motor no
+es un detalle: la pasada número 7 es siempre la misma pasada número 7.
+
+### 4.2 Qué hay que tocar
+
+- **Desplazamiento sub-píxel**: sumar `(xᵢ-0.5, yᵢ-0.5)` en píxeles a la traslación de
+  la matriz de proyección. Dos términos de la matriz; el rasterizador ni se entera.
+- **Acumulador**: un `Float32Array` de tres canales junto al framebuffer. Al presentar,
+  dividir por el número de pasadas.
+- **Firma de frame**: debe incluir el índice de pasada, o la caché detendría la
+  convergencia creyendo que no ha cambiado nada. Y cualquier cambio de cámara, escena u
+  opciones reinicia el contador a cero.
+
+Es la parte delicada del diseño y conviene escribirla con cuidado: la caché y el
+acumulador tiran en sentidos opuestos si no se coordinan.
+
+### 4.3 Por qué es mejor que el supersampleo que ya tenemos
+
+El supersampleo ×2 da 4 muestras pagando 4× en **un solo** frame, y ahí se acaba: no
+puede ir más allá sin cuadruplicar otra vez. La acumulación da 4 muestras en 4 frames
+pagando 1× cada uno, y **no tiene techo**: a los dos segundos quietos van 60 muestras.
+Para un motor cuyo caso dominante es mirar un objeto parado, la segunda forma es
+estrictamente superior.
+
+### 4.4 Oclusión ambiental sin estructuras nuevas
+
+La oclusión ambiental es `∫_Ω V(ω) cos θ dω`, la fracción del hemisferio que ve un
+punto. Calcularla con rayos exigiría una jerarquía de volúmenes envolventes y código de
+intersección nuevo.
+
+Pero ya tenemos un mecanismo que responde «¿ve la luz este punto?» para una dirección
+dada: el mapa de sombras. **Promediar el test de sombra sobre muchas direcciones
+distribuidas en el hemisferio es la oclusión ambiental**, y una dirección por pasada
+converge sola con el acumulador. Reutiliza entero lo que ya está escrito.
+
+Es lo que de verdad asienta un objeto sobre el suelo, mucho más que la sombra
+direccional.
+
+## Fase 5 — Simplificación con error medible
+
+El nivel de detalle por radio proyectado (fase 1.2) es una heurística: reduce
+triángulos sin saber cuánto se aleja de la forma original.
+
+La formulación rigurosa son las **métricas de error cuadrático** de Garland-Heckbert.
+Cada vértice acumula una matriz simétrica 4×4, suma de los productos externos de los
+planos de sus caras incidentes; el coste de colapsar una arista es `vᵀQv`, que es
+exactamente **la suma de distancias al cuadrado a esos planos**. Minimizarlo da la
+posición óptima del vértice resultante resolviendo un sistema 3×3.
+
+Lo que aporta no es solo mejor simplificación: aporta **una cota de error en unidades de
+mundo**. Eso permite dos cosas que hoy no podemos:
+
+- Elegir el nivel de detalle por un criterio verificable —«error por debajo de medio
+  píxel en pantalla»— en vez de por una constante ajustada a ojo.
+- Que el informe del agente diga *«simplificado a 2.000 triángulos con una desviación
+  máxima de 0,3 mm»*, que es justo el tipo de número que hemos perseguido todo el
+  proyecto.
+
+## Fase 6 — Piezas menores, pero exactas
+
+**Derivadas de pantalla por regla del cociente.** Cuando lleguen las texturas hará falta
+el nivel de mipmap, que se elige por `∂u/∂x` y `∂u/∂y`. No hace falta calcularlas por
+diferencias finitas: `u = (u/w)/(1/w)` y las dos partes son afines en pantalla con
+gradientes que el rasterizador **ya calcula**, así que la derivada sale exacta por la
+regla del cociente. Filtrado anisótropo correcto sin muestrear vecinos.
+
+**Ruido azul en vez de Bayer.** La matriz de Bayer tiene estructura regular y en un
+degradado suave se percibe como un tramado en aspas. Una tesela de ruido azul de 64×64
+—generada por «void and cluster»— concentra el error de cuantización en las frecuencias
+altas, donde el ojo es menos sensible. Mismo coste: un acceso a tabla.
+
+**Predicados exactos.** Las funciones de arista usan coma flotante, así que la
+orientación de un triángulo casi degenerado puede evaluarse mal. Los predicados
+adaptativos de Shewchuk la hacen demostrablemente correcta. Es rigor de más para
+dibujar, pero es la base honesta si el render se usa como verdad de referencia en
+integración continua.
+
 ## Fase 3 — Producción
 
 **3.1 Cargador GLB** hacia el formato `Mesh`. Conecta el banco de agentes con el
