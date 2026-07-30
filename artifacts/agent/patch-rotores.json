@@ -1,0 +1,8 @@
+{
+  "edits": [
+    { "op": "rotate", "target": "propeller-blade-*", "degrees": [0, 35, 0] },
+    { "op": "color", "target": "camera-*", "rgb": [0.95, 0.35, 0.15] },
+    { "op": "hide", "target": "motor-knurl-*" },
+    { "op": "translate", "target": "no-existe-esta-pieza", "delta": [0, 1, 0] }
+  ]
+}

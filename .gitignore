@@ -1,0 +1,35 @@
+# Dependencias y salidas de compilación
+node_modules/
+dist/
+dist-node/
+.cache/
+.DS_Store
+
+# Configuración local con rutas absolutas de la máquina
+.claude/
+
+# --- Proyecto del dron: fuera de este repositorio ---
+# softsight es el motor y el banco de agentes. El visor Three.js, la tubería
+# img2threejs (Apache-2.0 de terceros) y el material de referencia se quedan en local.
+# El GLB del dron sí entra: es geometría propia y hace de espécimen de pruebas.
+img2threejs/
+references/
+artifacts/intake/
+artifacts/review/
+artifacts/drone-sculpt-spec.json
+index.html
+glb.html
+src/main.ts
+src/glbMain.ts
+src/createDroneModel.ts
+src/generatedDroneBlockout.ts
+src/glbDroneRig.ts
+src/droneControls.ts
+src/style.css
+src/lib/
+src/types/
+tools/split-drone.mjs
+
+# Pliegos generados por el banco de agentes; los ejemplos JSON sí entran
+artifacts/agent/*.png
+artifacts/agent/*.obj

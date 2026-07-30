@@ -1,0 +1,45 @@
+{
+  "objects": [
+    {
+      "name": "fuselaje",
+      "geometry": { "primitive": "box", "parameters": [1.2, 0.28, 1.2] },
+      "position": [0, 0.5, 0],
+      "color": [0.42, 0.46, 0.54]
+    },
+    {
+      "name": "sensor",
+      "geometry": { "primitive": "sphere", "parameters": [0.26] },
+      "position": [0, 0.34, 0.42],
+      "color": [0.2, 0.66, 0.92],
+      "specular": 0.8,
+      "shininess": 128
+    },
+    {
+      "name": "brazo-a",
+      "geometry": { "primitive": "box", "parameters": [2.6, 0.08, 0.14] },
+      "position": [0, 0.5, 0],
+      "rotation": [0, 45, 0],
+      "color": [0.3, 0.32, 0.36]
+    },
+    {
+      "name": "brazo-b",
+      "geometry": { "primitive": "box", "parameters": [2.6, 0.08, 0.14] },
+      "position": [0, 0.5, 0],
+      "rotation": [0, -45, 0],
+      "color": [0.3, 0.32, 0.36]
+    },
+    {
+      "name": "rotor-abierto",
+      "geometry": {
+        "positions": [
+          -0.5, 0, -0.5, 0.5, 0, -0.5, 0.5, 0, 0.5, -0.5, 0, 0.5, 0, 0.35, 0
+        ],
+        "indices": [0, 1, 4, 1, 2, 4, 2, 3, 4]
+      },
+      "position": [0.92, 0.62, 0.92],
+      "scale": 0.55,
+      "color": [0.9, 0.42, 0.2]
+    }
+  ],
+  "budget": { "triangles": 5000 }
+}

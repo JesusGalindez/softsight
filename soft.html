@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0d12" />
+    <title>Rasterizador software · sin GPU</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --ink: #e8edf5;
+        --muted: #8b97a8;
+        --line: #1e2632;
+        --panel: #10141b;
+        --accent: #55d6ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: #070a0e;
+        color: var(--ink);
+        height: 100vh;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+      }
+      main {
+        position: relative;
+        min-width: 0;
+      }
+      #surface {
+        width: 100%;
+        height: 100%;
+        display: block;
+        background: #070a0e;
+        cursor: grab;
+        /* Escalado suave: con resolución dinámica el buffer es más pequeño que
+           el elemento, y el interpolado del navegador disimula la bajada mejor
+           que el vecino más cercano. El HUD sigue reportando el tamaño real. */
+        image-rendering: auto;
+      }
+      #surface:active {
+        cursor: grabbing;
+      }
+      #hud {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        margin: 0;
+        padding: 10px 12px;
+        font: 11px/1.6 ui-monospace, "SF Mono", Menlo, monospace;
+        color: var(--muted);
+        background: rgba(7, 10, 14, 0.78);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        white-space: pre;
+        pointer-events: none;
+      }
+      #hud::first-line {
+        color: var(--accent);
+      }
+      .badge {
+        position: absolute;
+        bottom: 14px;
+        left: 14px;
+        font: 11px/1.5 ui-monospace, Menlo, monospace;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 5px 11px;
+        background: rgba(7, 10, 14, 0.78);
+      }
+      aside {
+        border-left: 1px solid var(--line);
+        background: var(--panel);
+        padding: 18px 16px;
+        overflow-y: auto;
+      }
+      h1 {
+        font-size: 13px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        margin: 0 0 4px;
+      }
+      .subtitle {
+        margin: 0 0 18px;
+        font-size: 11px;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+      .group {
+        border-top: 1px solid var(--line);
+        padding: 14px 0 4px;
+      }
+      .group h2 {
+        font-size: 10px;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 10px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+        font-size: 12px;
+      }
+      .row.is-disabled {
+        opacity: 0.35;
+        pointer-events: none;
+      }
+      .row label {
+        color: var(--ink);
+      }
+      select {
+        background: #0a0e14;
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 4px 6px;
+        font-size: 12px;
+      }
+      input[type="range"] {
+        width: 118px;
+        accent-color: var(--accent);
+      }
+      input[type="checkbox"] {
+        accent-color: var(--accent);
+        width: 15px;
+        height: 15px;
+      }
+      .value {
+        font: 11px ui-monospace, Menlo, monospace;
+        color: var(--accent);
+        min-width: 38px;
+        text-align: right;
+      }
+      .scene-label {
+        margin: 0 0 12px;
+        font: 11px ui-monospace, Menlo, monospace;
+        color: var(--accent);
+        overflow-wrap: anywhere;
+      }
+      button {
+        flex: 1;
+        background: #0a0e14;
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 8px;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      input[type="file"] {
+        width: 132px;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      #surface.is-dropping {
+        outline: 2px dashed var(--accent);
+        outline-offset: -8px;
+      }
+      .note {
+        font-size: 11px;
+        line-height: 1.6;
+        color: var(--muted);
+        margin: 4px 0 0;
+      }
+      @media (max-width: 860px) {
+        body {
+          grid-template-columns: 1fr;
+          grid-template-rows: 60vh auto;
+          height: auto;
+        }
+        aside {
+          border-left: none;
+          border-top: 1px solid var(--line);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <canvas id="surface"></canvas>
+      <pre id="hud"></pre>
+      <p class="badge">canvas 2D · putImageData · cero WebGL</p>
+    </main>
+
+    <aside>
+      <h1>Rasterizador software</h1>
+      <p class="subtitle">
+        Pipeline 3D completo en CPU: proyección, recortado homogéneo, z-buffer y
+        sombreado por píxel. Arrastra para orbitar, rueda para acercar.
+      </p>
+
+      <div class="group">
+        <h2>Modelo</h2>
+        <p class="scene-label" id="scene-label">escena de demostración</p>
+        <div class="row">
+          <label for="model-file">Importar GLB u OBJ</label>
+          <input id="model-file" type="file" accept=".glb,.obj" />
+        </div>
+        <div class="row">
+          <button type="button" id="load-demo-model">Dron sin comprimir</button>
+          <button type="button" id="load-compressed-model">Dron meshopt</button>
+        </div>
+        <div class="row">
+          <button type="button" id="restore-scene">Volver a la escena de demo</button>
+        </div>
+        <p class="note">
+          También puedes soltar el fichero sobre el visor. Los lectores no usan
+          ninguna API de Node, así que el mismo código corre aquí y en el CLI de
+          agentes. Con un modelo cargado el modo paralelo se desactiva: los workers
+          reconstruyen la escena a partir del tiempo y no conocen tu fichero.
+        </p>
+      </div>
+
+      <div class="group">
+        <h2>Proyección</h2>
+        <div class="row">
+          <label for="projection">Tipo</label>
+          <select id="projection">
+            <option value="perspective">Perspectiva</option>
+            <option value="orthographic">Ortográfica</option>
+          </select>
+        </div>
+        <div class="row" id="fov-row">
+          <label for="fov">FOV vertical</label>
+          <input id="fov" type="range" min="15" max="120" step="1" value="55" />
+          <span class="value" id="fov-value"></span>
+        </div>
+        <div class="row is-disabled" id="ortho-row">
+          <label for="ortho">Media altura</label>
+          <input id="ortho" type="range" min="1" max="20" step="0.5" value="6" />
+          <span class="value" id="ortho-value"></span>
+        </div>
+        <div class="row">
+          <label for="near">Plano cercano</label>
+          <input id="near" type="range" min="0.02" max="4" step="0.02" value="0.1" />
+          <span class="value" id="near-value"></span>
+        </div>
+        <p class="note">
+          Sube el plano cercano y observa cómo la geometría se recorta contra él en
+          lugar de deformarse: ese recorte ocurre antes del divide por w.
+        </p>
+      </div>
+
+      <div class="group">
+        <h2>Rasterizado</h2>
+        <div class="row">
+          <label for="perspective-correct">Corrección de perspectiva</label>
+          <input id="perspective-correct" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="cull">Culling de caras ocultas</label>
+          <input id="cull" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="shadows">Sombras (mapa 1024²)</label>
+          <input id="shadows" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="soft-shadows">Sombras suaves (4 muestras)</label>
+          <input id="soft-shadows" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="frustum">Culling por frustum</label>
+          <input id="frustum" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="antialias">Antialiasing de siluetas</label>
+          <input id="antialias" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="wireframe">Wireframe</label>
+          <input id="wireframe" type="checkbox" />
+        </div>
+        <div class="row">
+          <label for="resolution">Resolución máxima</label>
+          <input id="resolution" type="range" min="25" max="200" step="5" value="150" />
+          <span class="value" id="resolution-value"></span>
+        </div>
+        <div class="row">
+          <label for="dynamic-resolution">Resolución dinámica (30 fps)</label>
+          <input id="dynamic-resolution" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <label for="parallel" id="parallel-label">Paralelo por bandas</label>
+          <input id="parallel" type="checkbox" checked />
+        </div>
+        <p class="note">
+          Desactiva la corrección de perspectiva y mira el suelo: el tablero se
+          ondula. Es el mismo artefacto de la PlayStation 1.
+        </p>
+        <p class="note">
+          El buffer interno se amplía a pantalla con filtrado bilineal, así que la
+          escala baja pierde nitidez pero no produce bloques. Por encima del 100 %
+          el buffer es mayor que la pantalla y al reducirlo sale antialiasing real
+          por supersampleo, no un parche posterior. El HUD muestra el modelo de
+          coste ajustado en vivo: cuando avisa de que el término fijo manda, bajar
+          resolución ya no compra fluidez.
+        </p>
+      </div>
+
+      <div class="group">
+        <h2>Sombreado</h2>
+        <div class="row">
+          <label for="shading">Modo</label>
+          <select id="shading">
+            <option value="lit">Iluminado</option>
+            <option value="albedo">Solo albedo</option>
+            <option value="normals">Normales</option>
+            <option value="depth">Profundidad</option>
+            <option value="uv">UV</option>
+          </select>
+        </div>
+      </div>
+    </aside>
+
+    <script type="module" src="/src/soft/softMain.ts"></script>
+  </body>
+</html>
