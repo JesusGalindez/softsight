@@ -4,11 +4,6 @@
 Loads GLB/OBJ, renders contact sheets, audits topology, applies patches — headless,
 deterministic, JSON in and out.
 
-![Pliego de contactos generado por softsight](docs/contact-sheet.png)
-
-*Seis vistas de un GLB de 296 piezas y 37.950 triángulos, renderizadas en CPU en medio
-segundo. Esta imagen la generó la propia herramienta con una orden.*
-
 ---
 
 Rasterizador 3D por software —sin GPU y sin dependencias— con un banco de trabajo
