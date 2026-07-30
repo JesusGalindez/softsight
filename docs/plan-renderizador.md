@@ -454,6 +454,57 @@ adaptativos de Shewchuk la hacen demostrablemente correcta. Es rigor de más par
 dibujar, pero es la base honesta si el render se usa como verdad de referencia en
 integración continua.
 
+## Fase 7 — Izar lo que el gradiente ya dice que es constante
+
+El rasterizador calcula, por triángulo, el gradiente de cada varying: `∂v/∂x` y
+`∂v/∂y`. Ese gradiente **es la derivada**, y una derivada nula significa que el atributo
+no varía en todo el triángulo. Hoy esa información se calcula y se tira.
+
+### El caso que importa: normal constante
+
+En una superficie plana los tres vértices comparten normal, luego sus seis gradientes
+son cero. Y sin embargo el sombreado hace, en **cada** píxel:
+
+    normalizar N   →  3 cuadrados, 1 raíz, 3 divisiones
+    lambert = N·L  →  3 multiplicaciones, 2 sumas
+
+Es decir, se recalcula cien mil veces un número que es idéntico las cien mil. El suelo
+de la escena de demostración son dos triángulos; cada cara de cada caja de la columnata,
+igual. Cualquier modelo de superficie dura —justo lo que audita el banco de agentes—
+está lleno de caras planas.
+
+### La detección es gratis y exacta
+
+No hace falta heurística ni marcar las mallas de antemano. En la preparación del
+triángulo ya están `varyingStepX[3..5]` y `varyingStepY[3..5]`. Si los seis son cero, la
+normal es constante: se normaliza una vez, se calcula `lambert` una vez, y ambos se izan
+fuera del bucle de píxeles. Un `if` por triángulo sobre seis números ya calculados.
+
+### La regla general
+
+**Cualquier varying con gradiente nulo es constante, y toda operación que dependa solo
+de constantes puede izarse a la preparación del triángulo.** Es la extracción de
+invariantes de bucle que haría un compilador, hecha en tiempo de ejecución con
+información que el rasterizador ya posee y que hoy descarta.
+
+Ahorro estimado en un triángulo de normal constante: una raíz, tres divisiones y una
+docena de multiplicaciones por píxel, entre el 30 y el 40 % del sombreado iluminado. El
+especular sigue variando, porque depende del vector de vista.
+
+### Condición de entrada
+
+**Medir primero** qué fracción de los píxeles sombreados proviene de triángulos con
+normal constante. Un contador en la preparación, sin tocar el bucle interior.
+
+- Por encima del 50 %: se implementa.
+- Por debajo del 20 %: se queda aquí como idea descartada por medida, con su cifra.
+
+En la escena de demostración la estimación es alta —suelo y columnas dominan el
+encuadre—, pero en el GLB del dron no se sabe. Este proyecto ya ha enseñado dos veces
+que optimizar sin medir el reparto es apostar: el controlador de resolución peleaba
+contra el término equivocado, y Newton-Raphson salió tres veces más lento de lo que
+sustituía.
+
 ## Fase 3 — Producción
 
 **3.1 Cargador GLB** hacia el formato `Mesh`. Conecta el banco de agentes con el
