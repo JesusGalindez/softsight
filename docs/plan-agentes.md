@@ -324,6 +324,37 @@ Recomiendo la primera, con la segunda documentada como salida si algún día mol
 Los cinco primeros son una sesión corta y ya cambian cómo se siente la herramienta: el
 agente pasa de mirar imágenes a verificar cambios.
 
+## Cabos sueltos de infraestructura
+
+No son del motor ni del banco de agentes, pero no están anotados en ningún otro sitio
+y se olvidan con facilidad.
+
+**Publicación del repositorio.** Falta poner en GitHub la **descripción** y los
+**temas**. Sin temas, el proyecto no aparece en las búsquedas de la plataforma, que es
+la mitad de la razón de haberlo publicado. La descripción está en `package.json`, y los
+temas sugeridos son `software-rendering`, `rasterizer`, `ai-agents`, `no-gpu`, `gltf`,
+`typescript`, `headless`, `deterministic`.
+
+**Repositorio padre huérfano.** `Documents/Dron` es todavía un repositorio git con un
+commit antiguo en el que todo el proyecto colgaba de un subdirectorio con espacios en
+el nombre. Se creó antes de decidir que softsight iría en su propio repositorio con el
+contenido en la raíz. Sobra: o se borra su `.git`, o se reconvierte en el repositorio
+privado del dron —el visor Three.js, `img2threejs` y el material de referencia siguen
+ahí, fuera del historial público.
+
+**Empuje con activos binarios.** El primer `git push` falló con **HTTP 400** porque el
+búfer de POST por defecto es de 1 MB y los GLB del espécimen suman 2,5. Ya quedó
+resuelto en la configuración local del repositorio:
+
+```
+http.postBuffer = 524288000
+http.version = HTTP/1.1
+```
+
+Queda anotado porque esa configuración **no viaja con el clon**: quien clone el
+repositorio y añada activos binarios grandes se encontrará el mismo error, y el mensaje
+de git no sugiere la causa.
+
 ## Cómo verificar cada cosa
 
 El mismo método que sostuvo todo el trabajo del rasterizador:
