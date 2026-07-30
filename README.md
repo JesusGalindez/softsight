@@ -1,12 +1,34 @@
 # softsight
 
+**Software 3D rasterizer with an agent workbench. No GPU, no dependencies.**
+Loads GLB/OBJ, renders contact sheets, audits topology, applies patches — headless,
+deterministic, JSON in and out.
+
+![Pliego de contactos generado por softsight](docs/contact-sheet.png)
+
+*Seis vistas de un GLB de 296 piezas y 37.950 triángulos, renderizadas en CPU en medio
+segundo. Esta imagen la generó la propia herramienta con una orden.*
+
+---
+
 Rasterizador 3D por software —sin GPU y sin dependencias— con un banco de trabajo
 headless para agentes de IA: carga GLB y OBJ, renderiza pliegos de contactos, audita
 topología y aplica parches. Entra y sale JSON.
 
-El dron que aparece en los ejemplos es el **espécimen de pruebas**: un modelo de 296
-piezas con nombres semánticos, generado proceduralmente, que resulta excepcionalmente
-bueno para ejercitar la carga jerárquica, la selección por patrón y las auditorías.
+## Por qué existe
+
+Un agente de IA que modifica geometría 3D trabaja a ciegas. Ve una imagen bonita y no
+puede saber si la malla está cerrada, si una normal apunta al revés, si una pieza flota
+en el aire o si el pivote quedará descentrado al rotar. Nada de eso se ve mirando.
+
+softsight le da las dos cosas que le faltan: **una imagen que puede pedir barata y
+repetible**, y **números exactos sobre lo que la imagen no muestra**. Y como el
+renderizado es por software, el mismo código corre en el navegador, en Node y en una
+tubería de integración continua sin GPU, sin drivers y sin sorpresas entre máquinas.
+
+El dron de los ejemplos es el **espécimen de pruebas**: un modelo de 296 piezas con
+nombres semánticos, generado proceduralmente, excepcionalmente bueno para ejercitar la
+carga jerárquica, la selección por patrón y las auditorías.
 
 ## Arrancar
 
@@ -39,6 +61,11 @@ npm run agent3d -- --model artifacts/export/drone.glb \
   --patch artifacts/agent/patch-rotores.json \
   --export salida.obj --out revision.png
 ```
+
+![Selección resaltada](docs/selection.png)
+
+*`--select "rotor-*,propeller-*"` resalta en naranja las 24 piezas que encajan y apaga
+el resto. El encuadre sigue a la selección.*
 
 `stdout` es JSON puro y el código de salida es 1 si hay avisos, así que encadena en
 CI sin interpretar nada. Opciones: `--tile N`, `--isolate true`, `--audit-limit N`,
