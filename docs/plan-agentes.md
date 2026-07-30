@@ -324,6 +324,53 @@ Recomiendo la primera, con la segunda documentada como salida si algún día mol
 Los cinco primeros son una sesión corta y ya cambian cómo se siente la herramienta: el
 agente pasa de mirar imágenes a verificar cambios.
 
+## Fase G — Manipular el modelo: a mano y por agente, con el mismo lenguaje
+
+El objetivo es poder mover piezas del modelo tanto desde la interfaz como desde un
+agente. La clave del diseño es que **no sean dos caminos**: el formato de parches ya
+es un lenguaje de manipulación completo —`translate`, `rotate`, `scale`, `color`,
+`hide`, `delete`, `rename`—, así que la interfaz debe limitarse a **emitir parches**,
+no a mutar el modelo por su cuenta.
+
+Si los dos caminos comparten formato, sale gratis lo demás: el agente puede leer lo que
+hizo la persona, la persona puede revisar lo que hizo el agente, y el historial de
+cambios es un fichero que se guarda, se revisa y se aplica en otra máquina.
+
+### G1. Selección por identificador de pieza — donde el rasterizador software gana
+
+Para saber qué pieza hay bajo el cursor, una aplicación de GPU normalmente lanza un rayo
+contra la geometría y resuelve intersecciones. Aquí no hace falta: el rasterizador ya
+recorre cada píxel y ya sabe qué nodo está dibujando.
+
+Basta con un **búfer de identificadores** paralelo al de profundidad: un `Int32Array`
+donde, en el mismo sitio donde se escribe la profundidad, se escribe el índice de la
+pieza. Una escritura entera más por píxel sombreado. Después, un clic es leer un entero
+de un array — selección **exacta**, sin tolerancias ni falsos positivos en siluetas
+finas, y a coste prácticamente nulo.
+
+Es un caso donde rasterizar por software es una ventaja y no una limitación.
+
+### G2. Interacción manual que produce parches
+
+Con la pieza seleccionada, la interfaz muestra su nombre y su auditoría, y ofrece
+desplazamiento y giro. Empezar por **teclas** —flechas para desplazar, `R` más eje para
+girar, con paso ajustable— antes que por manipuladores arrastrables: es una décima parte
+del trabajo y cubre la mayoría de las correcciones reales, que son ajustes pequeños.
+
+Cada acción **acumula una operación en una pila de parches**, no modifica el modelo
+directamente. De ahí salen tres cosas sin esfuerzo adicional: deshacer y rehacer,
+exportar lo hecho como fichero de parche, y que un agente continúe donde lo dejó la
+persona.
+
+### G3. Ciclo compartido
+
+- La interfaz exporta su pila con **«guardar parche»**.
+- El CLI la aplica con `--patch`, la audita y la vuelve a renderizar.
+- El agente escribe su propio parche y la interfaz lo carga para revisarlo a ojo.
+
+Depende de C3 (parches componibles, ensayo y deshacer), que ya está en este plan. G1 es
+requisito de G2, y no depende de nada más.
+
 ## Cabos sueltos de infraestructura
 
 No son del motor ni del banco de agentes, pero no están anotados en ningún otro sitio
