@@ -10,13 +10,7 @@
     "agent3d": "vite build --config vite.node.config.ts --logLevel error 1>&2 && node tools/agent3d.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },
-  "dependencies": {
-    "n8ao": "^2.0.0",
-    "postprocessing": "^6.39.4",
-    "three": "^0.179.1"
-  },
   "devDependencies": {
-    "@types/three": "^0.179.0",
     "typescript": "^5.9.2",
     "vite": "^7.1.3"
   },
