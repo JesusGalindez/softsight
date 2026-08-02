@@ -57,6 +57,7 @@ export { parseObj, serializeObj } from "./objLoader";
 export {
   applyPatch,
   dedupeNames,
+  matchesName,
   matchesPattern,
   selectParts,
   summarizeFamilies,
@@ -65,7 +66,8 @@ export {
 export type { Model, ModelPart, PartFamily, Patch, Edit, EditResult } from "./model";
 export { diffSheets } from "./renderDiff";
 export type { RasterImage, RenderDiff, DiffRegion } from "./renderDiff";
-export { resolveScene, createGroundPlane } from "./sceneSpec";
+export { resolveScene, resolveObject, createGroundPlane } from "./sceneSpec";
+export { applyPatchToScene } from "./scenePatch";
 export { SCENE_SCHEMA, PATCH_SCHEMA, validate, assertValid } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
 export type { SceneSpec, ObjectSpec, PrimitiveSpec, RawMeshSpec } from "./sceneSpec";
@@ -405,7 +407,6 @@ function viewReports(sheet: ContactSheet): ViewReport[] {
 
 function buildWarnings(
   objects: readonly ObjectReport[],
-  sheet: ContactSheet | null,
   /** `null` cuando no se ha renderizado: sin imagen no hay encuadre que juzgar. */
   objectCoverage: number | null,
 ): Warning[] {
@@ -463,6 +464,13 @@ function buildWarnings(
         `${object.name}: el centro de la caja está a ${offsetMagnitude.toFixed(2)} del origen del objeto; el pivote quedará descentrado al rotar.`,
       );
     }
+    if (object.inverted) {
+      add(
+        "MALLA_INVERTIDA",
+        object.name,
+        `${object.name}: la malla está cerrada pero su volumen firmado es negativo (${object.signedVolume}); las caras miran hacia dentro, así que se ve oscura o desaparece.`,
+      );
+    }
     if (object.symmetryErrorX !== null && object.symmetryErrorX > 0.02) {
       add(
         "SIMETRIA_ROTA",
@@ -488,16 +496,11 @@ function buildWarnings(
     );
   }
 
-  for (const view of sheet?.views ?? []) {
-    if (view.wireframe) continue; // sin caras rasterizadas, las métricas no aplican
-    if (view.backfaceRatio > 0.75) {
-      add(
-        "REVERSO_EXCESIVO",
-        null,
-        `vista "${view.name}": ${(view.backfaceRatio * 100).toFixed(0)} % de triángulos descartados por reverso; en un sólido cerrado lo normal es ~50 %, así que el bobinado está del revés.`,
-      );
-    }
-  }
+  // La proporción de caras descartadas por reverso **no** avisa de nada, y por eso
+  // ya no se usa: invertir un sólido cerrado cambia qué mitad se descarta, no
+  // cuánta —un cubo y su copia invertida dan las mismas seis cifras—, mientras que
+  // un cubo correcto visto de canto llega al 86 % sin tener nada malo. Lo que sí
+  // detecta la inversión es el signo del volumen, y va por pieza, arriba.
 
   return warnings;
 }
@@ -556,7 +559,7 @@ export function reviewScene(
     Number((aabb.max[2] - aabb.min[2]).toFixed(4)),
   ];
   const warnings = [
-    ...buildWarnings(objects, sheet, objectCoverage),
+    ...buildWarnings(objects, objectCoverage),
     ...budgetWarnings,
     ...checkScale(size, options.expectSize),
   ];
@@ -729,6 +732,13 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
         code: "NORMAL_INVERTIDA",
         part: audit.name,
         message: `${audit.name}: ${(audit.flippedNormalRatio * 100).toFixed(0)} % de caras con normal contraria a sus vértices; bobinado invertido.`,
+      });
+    }
+    if (audit.inverted) {
+      warnings.push({
+        code: "MALLA_INVERTIDA",
+        part: audit.name,
+        message: `${audit.name}: malla cerrada con volumen firmado negativo (${audit.signedVolume}); las caras miran hacia dentro.`,
       });
     }
     if (audit.degenerateTriangles > 0) {

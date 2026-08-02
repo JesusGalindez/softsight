@@ -63,7 +63,28 @@ inventar.
 ```
 
 Si la pirámide se deja sin base, el informe no se lo calla: `BORDE_ABIERTO: 4 aristas de
-borde` y el contrato `watertight` incumplido, con salida 1.
+borde` y el contrato `watertight` incumplido, con salida 1. Y si se bobina del revés
+—que no se ve en la imagen más que como una pieza oscura— salta `MALLA_INVERTIDA`, por
+el signo del volumen.
+
+Primitivas: `box`, `sphere`, `torus`, `plane`, `cylinder` y `cone`.
+
+Crear es **incremental**: un parche puede añadir piezas, y aplicado a una escena edita
+el documento, no la geometría. Lo que sale vuelve a ser una escena.
+
+```bash
+npm run agent3d -- --scene torre.json --patch anade-chimenea.json \
+  --save-scene torre-v2.json --out torre-v2.png
+```
+
+```json
+{ "edits": [
+  { "op": "add", "object": { "name": "chimenea",
+      "geometry": { "primitive": "cylinder", "parameters": [0.16, 0.9] },
+      "position": [0.38, 2.1, 0] } },
+  { "op": "translate", "target": "linterna", "delta": [0, 0.05, 0] }
+] }
+```
 
 ## Banco de trabajo para agentes
 

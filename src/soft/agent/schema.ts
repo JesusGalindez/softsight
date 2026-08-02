@@ -31,14 +31,15 @@ const VECTOR3 = "number[3]";
 
 const GEOMETRY_PRIMITIVE: ObjectSchema = {
   primitive: {
-    type: '"box"|"sphere"|"torus"|"plane"',
+    type: '"box"|"sphere"|"torus"|"plane"|"cylinder"|"cone"',
     required: true,
     description: "Primitiva a generar.",
   },
   parameters: {
     type: "number[]",
     description:
-      "box: [ancho, alto, profundo]; sphere: [radio]; torus: [mayor, menor]; plane: [lado, subdivisiones].",
+      "box: [ancho, alto, profundo]; sphere: [radio]; torus: [mayor, menor]; " +
+      "plane: [lado, subdivisiones]; cylinder: [radio, alto]; cone: [radio, alto].",
   },
 };
 
@@ -90,14 +91,19 @@ export const SCENE_SCHEMA: ObjectSchema = {
 
 const EDIT_FIELDS: ObjectSchema = {
   op: {
-    type: '"translate"|"rotate"|"scale"|"color"|"hide"|"show"|"delete"|"rename"',
+    type: '"add"|"translate"|"rotate"|"scale"|"color"|"hide"|"show"|"delete"|"rename"',
     required: true,
     description: "Operación a aplicar.",
   },
   target: {
     type: "string",
-    required: true,
-    description: "Nombre o ruta, con `*` como comodín. Sin coincidencias es un error, no un aviso.",
+    description:
+      "Nombre o ruta, con `*` como comodín. Obligatorio salvo en `add`. Sin coincidencias es un error, no un aviso.",
+  },
+  object: {
+    type: "object",
+    description: "add: la pieza a añadir, descrita igual que en una escena.",
+    fields: OBJECT_FIELDS,
   },
   delta: { type: VECTOR3, description: "translate: desplazamiento." },
   degrees: { type: VECTOR3, description: "rotate: grados por eje, alrededor del origen de la pieza." },

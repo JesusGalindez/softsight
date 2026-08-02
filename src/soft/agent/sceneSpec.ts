@@ -9,7 +9,15 @@
  * normales se calculan si no vienen.
  */
 
-import { computeNormals, createBox, createPlane, createSphere, createTorus, type Mesh } from "../mesh";
+import {
+  computeNormals,
+  createBox,
+  createCylinder,
+  createPlane,
+  createSphere,
+  createTorus,
+  type Mesh,
+} from "../mesh";
 import {
   identity,
   mat4,
@@ -25,8 +33,11 @@ import { assertValid, SCENE_SCHEMA } from "./schema";
 import type { Material, SceneNode } from "../renderer";
 
 export interface PrimitiveSpec {
-  primitive: "box" | "sphere" | "torus" | "plane";
-  /** box: [ancho, alto, profundo]; sphere: [radio]; torus: [mayor, menor]; plane: [lado, subdivisiones]. */
+  primitive: "box" | "sphere" | "torus" | "plane" | "cylinder" | "cone";
+  /**
+   * box: [ancho, alto, profundo]; sphere: [radio]; torus: [mayor, menor];
+   * plane: [lado, subdivisiones]; cylinder: [radio, alto]; cone: [radio, alto].
+   */
   parameters?: number[];
 }
 
@@ -86,6 +97,10 @@ function buildPrimitive(spec: PrimitiveSpec): Mesh {
       return createTorus(p[0] ?? 1, p[1] ?? 0.35, 48, 24);
     case "plane":
       return createPlane(p[0] ?? 10, p[1] ?? 1);
+    case "cylinder":
+      return createCylinder(p[0] ?? 0.5, p[0] ?? 0.5, p[1] ?? 1, 32);
+    case "cone":
+      return createCylinder(p[0] ?? 0.5, 0, p[1] ?? 1, 32);
     default: {
       const exhaustive: never = spec.primitive;
       throw new Error(`primitiva desconocida: ${String(exhaustive)}`);
@@ -163,6 +178,17 @@ function buildMaterial(spec: ObjectSpec): Material {
   };
 }
 
+/** Una pieza declarativa a nodo de escena. Suelta, para poder añadir de una en una. */
+export function resolveObject(object: ObjectSpec, index = 0): ResolvedObject {
+  const mesh = isRawMesh(object.geometry)
+    ? buildRawMesh(object.geometry)
+    : buildPrimitive(object.geometry);
+  return {
+    name: object.name ?? `objeto${index}`,
+    node: { mesh, model: buildModelMatrix(object), material: buildMaterial(object) },
+  };
+}
+
 export function resolveScene(spec: SceneSpec): ResolvedObject[] {
   // Contra el esquema antes de tocar nada: un campo mal escrito se ignoraría en
   // silencio y el agente vería un render que no es el que pidió, sin saber por qué.
@@ -171,15 +197,7 @@ export function resolveScene(spec: SceneSpec): ResolvedObject[] {
     throw new Error("la escena necesita al menos un objeto en `objects`");
   }
 
-  return spec.objects.map((object, index) => {
-    const mesh = isRawMesh(object.geometry)
-      ? buildRawMesh(object.geometry)
-      : buildPrimitive(object.geometry);
-    return {
-      name: object.name ?? `objeto${index}`,
-      node: { mesh, model: buildModelMatrix(object), material: buildMaterial(object) },
-    };
-  });
+  return spec.objects.map((object, index) => resolveObject(object, index));
 }
 
 /** Suelo de referencia: sin él no hay escala visible ni sombra de contacto. */

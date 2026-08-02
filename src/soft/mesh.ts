@@ -280,6 +280,131 @@ export function createTorus(
 }
 
 /**
+ * Tronco de cono cerrado, centrado en el origen y con el eje en Y. Con los dos
+ * radios iguales es un cilindro; con el de arriba a cero, un cono.
+ *
+ * Es una sola función porque son la misma superficie, y porque un generador que
+ * distingue casos acaba con tres caminos que se rompen por separado. **Cerrado de
+ * fábrica**: se añaden las tapas y sus centros, así que la auditoría lo da por
+ * estanco y el contrato `watertight` no salta por una pieza que el propio programa
+ * dejó abierta.
+ *
+ * Los vértices del costado no se comparten con los de las tapas: comparten
+ * posición pero no normal, y soldarlos redondearía un canto que es vivo.
+ */
+export function createCylinder(
+  radiusBottom = 0.5,
+  radiusTop = 0.5,
+  height = 1,
+  segments = 32,
+): Mesh {
+  const half = height / 2;
+  const sideVertices = (segments + 1) * 2;
+  // Cada tapa: su corona de vértices más el centro. La de radio cero se omite,
+  // porque un cono no tiene tapa arriba y sus triángulos serían degenerados.
+  const hasBottom = radiusBottom > 0;
+  const hasTop = radiusTop > 0;
+  const capVertices = (hasBottom ? segments + 2 : 0) + (hasTop ? segments + 2 : 0);
+  const vertexCount = sideVertices + capVertices;
+
+  const positions = new Float32Array(vertexCount * 3);
+  const normals = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  const sideTriangles = (hasBottom ? segments : 0) + (hasTop ? segments : 0);
+  const triangles = sideTriangles + (hasBottom ? segments : 0) + (hasTop ? segments : 0);
+  const indices = new Uint32Array(triangles * 3);
+
+  // La normal del costado se inclina con la pendiente del tronco: para un cono
+  // recto, la generatriz sube `height` mientras el radio baja `radiusBottom -
+  // radiusTop`, y la normal es perpendicular a ella.
+  const slope = radiusBottom - radiusTop;
+  const slopeLength = Math.hypot(slope, height) || 1;
+  const normalY = slope / slopeLength;
+  const normalRadial = height / slopeLength;
+
+  let vertex = 0;
+  for (let segment = 0; segment <= segments; segment += 1) {
+    const u = segment / segments;
+    const angle = u * Math.PI * 2;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    for (const top of [false, true]) {
+      const radius = top ? radiusTop : radiusBottom;
+      positions[vertex * 3 + 0] = cos * radius;
+      positions[vertex * 3 + 1] = top ? half : -half;
+      positions[vertex * 3 + 2] = sin * radius;
+      normals[vertex * 3 + 0] = cos * normalRadial;
+      normals[vertex * 3 + 1] = normalY;
+      normals[vertex * 3 + 2] = sin * normalRadial;
+      uvs[vertex * 2 + 0] = u;
+      uvs[vertex * 2 + 1] = top ? 1 : 0;
+      vertex += 1;
+    }
+  }
+
+  let index = 0;
+  for (let segment = 0; segment < segments; segment += 1) {
+    const bottom = segment * 2;
+    const top = bottom + 1;
+    const nextBottom = bottom + 2;
+    const nextTop = bottom + 3;
+    // En un cono, todo el anillo de arriba cae en el vértice: el triángulo que usa
+    // dos vértices de ese anillo tendría área nula. Se emite solo el que existe, y
+    // por eso cada guarda mira al anillo **contrario** al que aporta el par.
+    if (hasBottom) {
+      indices[index + 0] = bottom;
+      indices[index + 1] = top;
+      indices[index + 2] = nextBottom;
+      index += 3;
+    }
+    if (hasTop) {
+      indices[index + 0] = top;
+      indices[index + 1] = nextTop;
+      indices[index + 2] = nextBottom;
+      index += 3;
+    }
+  }
+
+  for (const top of [false, true]) {
+    const radius = top ? radiusTop : radiusBottom;
+    if (radius <= 0) continue;
+    const y = top ? half : -half;
+    const center = vertex;
+    positions[vertex * 3 + 1] = y;
+    normals[vertex * 3 + 1] = top ? 1 : -1;
+    uvs[vertex * 2 + 0] = 0.5;
+    uvs[vertex * 2 + 1] = 0.5;
+    vertex += 1;
+
+    const first = vertex;
+    for (let segment = 0; segment < segments; segment += 1) {
+      const angle = (segment / segments) * Math.PI * 2;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      positions[vertex * 3 + 0] = cos * radius;
+      positions[vertex * 3 + 1] = y;
+      positions[vertex * 3 + 2] = sin * radius;
+      normals[vertex * 3 + 1] = top ? 1 : -1;
+      uvs[vertex * 2 + 0] = cos * 0.5 + 0.5;
+      uvs[vertex * 2 + 1] = sin * 0.5 + 0.5;
+      vertex += 1;
+    }
+
+    for (let segment = 0; segment < segments; segment += 1) {
+      const current = first + segment;
+      const next = first + ((segment + 1) % segments);
+      // El bobinado se invierte entre tapas para que las dos miren hacia fuera.
+      indices[index + 0] = center;
+      indices[index + 1] = top ? next : current;
+      indices[index + 2] = top ? current : next;
+      index += 3;
+    }
+  }
+
+  return { positions, normals, uvs, indices, boundingRadius: boundingRadiusOf(positions) };
+}
+
+/**
  * Plano subdividido. Las subdivisiones importan: un plano de 2 triángulos
  * gigantes es el caso donde más se nota la corrección de perspectiva, porque el
  * error de interpolación crece con el tamaño del triángulo en pantalla.

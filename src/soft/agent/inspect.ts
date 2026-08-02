@@ -41,6 +41,13 @@ export interface MeshAudit {
   flippedNormalRatio: number;
   /** Error medio de simetría al espejar en X, o null si no se evaluó. */
   symmetryErrorX: number | null;
+  /**
+   * Volumen firmado por el teorema de la divergencia. Solo significa algo en una
+   * malla cerrada, y ahí lo dice todo: negativo es una malla del revés.
+   */
+  signedVolume: number;
+  /** Cerrada y con volumen negativo: las caras miran hacia dentro. */
+  inverted: boolean;
 }
 
 function edgeKey(a: number, b: number): number {
@@ -111,6 +118,17 @@ export function auditMesh(mesh: Mesh): MeshAudit {
   const edgeUse = new Map<number, number>();
   let degenerateTriangles = 0;
   let flippedFaces = 0;
+  /**
+   * Volumen firmado, seis veces, por el teorema de la divergencia: la suma de
+   * `v0 · (v1 × v2)` sobre las caras. En una malla cerrada da el volumen encerrado
+   * con signo, y el signo es exactamente lo que distingue una malla del revés.
+   *
+   * Hacía falta porque la proporción de caras descartadas por reverso —que es lo
+   * que se usaba— **no lo detecta**: invertir un sólido cerrado cambia qué mitad se
+   * descarta, no cuánta. Medido con un cubo y su copia invertida: las seis vistas
+   * dan la misma proporción.
+   */
+  let volume6 = 0;
 
   for (let triangle = 0; triangle < triangleCount; triangle += 1) {
     const i0 = indices[triangle * 3];
@@ -130,6 +148,10 @@ export function auditMesh(mesh: Mesh): MeshAudit {
     const faceX = e1y * e2z - e1z * e2y;
     const faceY = e1z * e2x - e1x * e2z;
     const faceZ = e1x * e2y - e1y * e2x;
+    volume6 +=
+      positions[a] * (positions[b + 1] * positions[c + 2] - positions[b + 2] * positions[c + 1]) +
+      positions[a + 1] * (positions[b + 2] * positions[c] - positions[b] * positions[c + 2]) +
+      positions[a + 2] * (positions[b] * positions[c + 1] - positions[b + 1] * positions[c]);
     const faceLength = Math.sqrt(faceX * faceX + faceY * faceY + faceZ * faceZ);
 
     if (faceLength < 1e-12) {
@@ -185,6 +207,8 @@ export function auditMesh(mesh: Mesh): MeshAudit {
     duplicatePositions: vertexCount - unique,
     flippedNormalRatio: triangleCount > 0 ? flippedFaces / triangleCount : 0,
     symmetryErrorX: symmetryErrorX(positions),
+    signedVolume: Number((volume6 / 6).toFixed(6)),
+    inverted: boundaryEdges === 0 && nonManifoldEdges === 0 && volume6 < 0,
   };
 }
 

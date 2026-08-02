@@ -537,26 +537,56 @@ no tiene «antes»: solo el JSON nuevo. Por eso el informe publica ahora
 torre: **12,2 % del pliego cambiado sin heredar el encuadre, 8,2 % heredándolo**, y con
 la pieza que de verdad se movió —`cubierta`— la primera de la lista en vez de la cuarta.
 
-### H2. Lo que falta para que crear sea cómodo
+### H2. Crear de forma incremental — hecho lo esencial
 
-- **No hay operación `add`.** Los parches mueven, giran, escalan, ocultan, borran y
-  renombran lo que ya existe; no añaden geometría. Sin eso, crear es reemitir el JSON
-  entero en cada turno, que es exactamente lo que el formato de parches evita al editar.
-- **Los parches no se aplican a escenas**, solo a modelos. Con `add` y esto, C3
-  —componer, ensayar, deshacer— sirve igual para crear.
-- **El vocabulario son cuatro primitivas** —caja, esfera, toro, plano— y arrays crudos.
-  Faltan cilindro y cono para empezar, extrusión de polígono y revolucionado después.
-  Booleanas quedan lejos y probablemente no compensen.
-- **Solo se exporta OBJ**, que pierde color, material y jerarquía.
+- **Operación `add`**, que describe la pieza igual que en una escena. El parche deja de
+  ser un lenguaje solo para retocar y pasa a serlo también para crear.
+- **Parches sobre escenas**, editando el **documento** y no la geometría resuelta: lo
+  que sale vuelve a ser una escena, y `--save-scene` la guarda para seguir desde ahí.
+  Si el parche produjera geometría, el JSON dejaría de ser la fuente y el agente
+  perdería lo único que sabe editar.
+- **Cilindro y cono**, una sola función porque son la misma superficie —un tronco de
+  cono— y un generador que distingue casos acaba con tres caminos que se rompen por
+  separado. Cerrados de fábrica, para que el contrato `watertight` no salte por una
+  pieza que produjo el propio programa.
 
-### H3. Dos defectos que salieron al probarlo
+Dos honestidades sobre la semántica de parchear un documento, dichas también en el
+código: `rotate` **suma grados por eje** en vez de componer matrices —que es lo que
+significa «gira quince grados más en Y» en un documento, y coincide con la composición
+exacta mientras se gire alrededor de un solo eje—, y `hide`/`show` **no existen** en una
+escena, porque una pieza que uno escribe o está o no está.
 
-- **Una malla del revés no se detecta.** La primera pirámide tenía las caras bobinadas
-  hacia dentro: renderizaba oscura y ninguna comprobación saltó, porque las normales
-  eran coherentes *entre sí*. Se caza con el volumen firmado de una malla cerrada:
-  negativo significa invertida. Encaja con las auditorías espaciales de la fase D.
-- **`createSphere` emite 64 triángulos de área nula** en los polos, así que cualquier
-  escena con una esfera arrastra un aviso que no es culpa de quien la escribió.
+**Verificación.** Un parche con dos `add`, un `translate` y un `color` sobre la torre:
+cinco objetos pasan a siete, el documento guardado los trae en orden, y el diff contra
+el pliego anterior localiza el cambio.
+
+Queda de esta fase: **extrusión de polígono y revolucionado** —las dos que de verdad
+amplían lo que se puede describir—, y **exportar GLB**, porque OBJ pierde color,
+material y jerarquía. Las booleanas quedan lejos y probablemente no compensen.
+
+### H3. Malla del revés — hecho, y un aviso retirado por medida
+
+La primera pirámide tenía las caras bobinadas hacia dentro: renderizaba oscura y ninguna
+comprobación saltó, porque las normales eran coherentes *entre sí*. Ahora la auditoría
+trae `signedVolume` —la suma de `v0 · (v1 × v2)` sobre las caras, que en una malla
+cerrada es seis veces el volumen encerrado— y `inverted`: cerrada y con volumen
+negativo. Un cubo da +1; el mismo cubo con cada triángulo invertido, −1.
+
+**Y de paso retira un aviso que no medía lo que decía.** `REVERSO_EXCESIVO` avisaba
+cuando una vista descartaba por reverso más del 75 % de los triángulos, «porque en un
+sólido cerrado lo normal es ~50 %». Las dos mitades de esa frase son falsas:
+
+- Un **cubo correcto** visto de frente en ortográfica llega al 86 %, porque cuatro de
+  sus seis caras quedan exactamente de canto. Saltaba con geometría impecable.
+- Un **sólido invertido no sube esa proporción**: invertirlo cambia *qué* mitad se
+  descarta, no *cuánta*. Medido con un cubo y su copia invertida: las seis vistas dan
+  las mismas cifras.
+
+Así que avisaba de lo que estaba bien y callaba ante lo que estaba mal. Fuera, y en su
+lugar el volumen firmado, que es exacto.
+
+Queda: **`createSphere` emite 64 triángulos de área nula** en los polos, así que
+cualquier escena con una esfera arrastra un aviso que no es culpa de quien la escribió.
 
 ## Cabos sueltos de infraestructura
 

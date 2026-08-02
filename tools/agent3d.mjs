@@ -28,6 +28,7 @@ import {
   PATCH_SCHEMA,
   SCENE_SCHEMA,
   applyPatch,
+  applyPatchToScene,
   computeSceneAabb,
   loadModel,
   reviewModel,
@@ -341,11 +342,13 @@ const USAGE = `agent3d — revisión de modelos y escenas 3D, headless y determi
 Entrada
   --model <ruta>          modelo GLB u OBJ; manda sobre --scene
   --scene <ruta>          escena declarativa en JSON
-  --patch <ruta>          parche a aplicar antes de renderizar (solo con --model)
+  --patch <ruta>          parche a aplicar antes de renderizar. En un modelo mueve
+                          matrices; en una escena edita el documento JSON
 
 Salida
   --out <ruta.png>        pliego de contactos; por defecto artifacts/agent/contact-sheet.png
   --export <ruta.obj>     exporta el modelo ya parcheado
+  --save-scene <ruta>     guarda la escena ya parcheada, para seguir desde ahí
   --inspect-only          solo el informe JSON, sin renderizar: ~4 veces más rápido
 
 Selección y encuadre
@@ -439,6 +442,14 @@ async function main() {
   const spec = scenePath ? JSON.parse(await readFile(resolve(scenePath), "utf8")) : DEMO_SCENE;
   const previous = await readBaselineReport(options);
 
+  // El parche edita el documento, no la geometría: lo que sale vuelve a ser una
+  // escena, y con --save-scene se guarda para seguir a partir de ella.
+  let edits = null;
+  const patchPath = options.get("patch");
+  if (patchPath) {
+    edits = applyPatchToScene(spec, JSON.parse(await readFile(resolve(patchPath), "utf8")));
+  }
+
   const { sheet, review } = reviewScene(spec, {
     ...commonOptions(options),
     baseline: await readBaselinePng(options),
@@ -451,10 +462,23 @@ async function main() {
     writeFileSync(outputPath, encodePng(sheet.pixels, sheet.width, sheet.height));
   }
 
+  let savedScene = null;
+  const savePath = options.get("save-scene");
+  if (savePath) {
+    savedScene = resolve(savePath);
+    mkdirSync(dirname(savedScene), { recursive: true });
+    writeFileSync(savedScene, `${JSON.stringify(spec, null, 2)}\n`, "utf8");
+  }
+
   process.stdout.write(
-    `${JSON.stringify({ ...review, file: sheet ? outputPath : null }, null, 2)}\n`,
+    `${JSON.stringify(
+      { ...review, edits, file: sheet ? outputPath : null, savedScene },
+      null,
+      2,
+    )}\n`,
   );
-  process.exitCode = review.warnings.length > 0 ? 1 : 0;
+  const failedEdits = (edits ?? []).filter((edit) => edit.error);
+  process.exitCode = review.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;
 }
 
 // Solo se ejecuta si es el programa invocado, no si alguien lo importa: así el
