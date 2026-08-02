@@ -199,7 +199,7 @@ compararlos es un `diff` de JSON.
 **Coste**: ~120 líneas. **Trampa**: invalidar mal la caché da resultados fantasma. La
 clave debe incluir el tamaño además del mtime, y conviene un `--no-cache`.
 
-### B3. `--schema`
+### B3. `--schema` — hecho
 
 Imprime la forma aceptada de la escena, del parche y del informe. Hoy, un agente sin la
 documentación delante tiene que adivinar el JSON o leerse `sceneSpec.ts`. Es lo que
@@ -207,7 +207,31 @@ permite que otro agente use la herramienta sin haberla escrito.
 
 Que salga del código, no de una constante escrita a mano, o divergirá.
 
-**Coste**: ~80 líneas.
+**Cómo se cumple esa condición**, que era la parte difícil: el esquema de entrada no
+es documentación, es **el objeto con el que se valida** la escena y el parche. Un campo
+que alguien añada al resolutor sin declararlo aquí se rechaza, y el fallo sale a la
+primera ejecución. Y el ejemplo de informe no está escrito: se genera revisando la
+escena de demostración con `--inspect-only`.
+
+Validar la entrada no estaba en el apartado, pero sin ello el esquema sería una segunda
+copia de la verdad. Además arregla un modo de fallo silencioso que un agente sufre y no
+ve: `positon` en vez de `position` se ignoraba, y el render salía mal sin decir por qué.
+Ahora:
+
+```
+la escena no encaja con el esquema:
+  - objects[0].geometri no existe; ¿querías decir geometry?
+  - objects[0].positon no existe; ¿querías decir position?
+```
+
+Los errores salen **todos juntos**: devolverlos de uno en uno multiplica los turnos del
+agente por el número de erratas.
+
+**Verificación.** Las tres escenas del repositorio y el parche de ejemplo siguen
+validando; una errata de una letra se caza con sugerencia; un tipo equivocado y una
+operación inventada se rechazan nombrando lo admitido.
+
+**Coste**: ~230 líneas, nuevo `agent/schema.ts`.
 
 ---
 
@@ -433,7 +457,7 @@ Conviene ser exacto sobre qué garantiza esto, porque es fácil prometer de más
 | 5 | ~~**A4** huella~~ **hecho** | Veinticinco líneas encima de A1 |
 | 6 | ~~**C1 + C2** avisos nuevos y presupuestos~~ **hecho** | Cierran el bucle de iteración |
 | 7 | ~~**D5** escala~~ **hecho** | Una división, atrapa el error más común |
-| 8 | **B3** esquema | Lo que abre la herramienta a otros |
+| 8 | ~~**B3** esquema~~ **hecho** | Lo que abre la herramienta a otros |
 | 9 | **D1–D4** auditorías espaciales | El mayor valor, y el mayor trabajo |
 | 10 | **E1–E3, B2, C3** | Comodidad y velocidad, ya con todo lo demás en pie |
 | — | ~~**F1**~~ **hecho** | Antes de prometer comparación de imágenes en CI |

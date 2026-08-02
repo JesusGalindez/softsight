@@ -66,6 +66,8 @@ export type { Model, ModelPart, PartFamily, Patch, Edit, EditResult } from "./mo
 export { diffSheets } from "./renderDiff";
 export type { RasterImage, RenderDiff, DiffRegion } from "./renderDiff";
 export { resolveScene, createGroundPlane } from "./sceneSpec";
+export { SCENE_SCHEMA, PATCH_SCHEMA, validate, assertValid } from "./schema";
+export type { FieldSchema, ObjectSchema } from "./schema";
 export type { SceneSpec, ObjectSpec, PrimitiveSpec, RawMeshSpec } from "./sceneSpec";
 export type { MeshAudit } from "./inspect";
 export type { ContactSheet, ViewDefinition } from "./contactSheet";

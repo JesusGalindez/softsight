@@ -112,6 +112,15 @@ sombra quedan fijados a los del modelo *antes* del parche: si no, mover una piez
 mueve la cámara y el pliego entero se desplaza un píxel.
 
 `stdout` es JSON puro y el código de salida es 1 si hay avisos, así que encadena en
+`--schema` imprime la forma aceptada de la escena y del parche, más un informe de
+ejemplo. No es documentación aparte: el esquema **es** lo que valida la entrada, así que
+no puede divergir del código, y una errata se caza con sugerencia en vez de ignorarse.
+
+```
+la escena no encaja con el esquema:
+  - objects[0].positon no existe; ¿querías decir position?
+```
+
 CI sin interpretar nada. `--help` lista todas las opciones: `--inspect-only`,
 `--baseline pliego.png`, `--baseline-report informe.json`, `--tile N`,
 `--isolate true`, `--audit-limit N`, `--ground false`, las de presupuesto y `--debug`.

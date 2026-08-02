@@ -21,6 +21,7 @@ import {
   translation,
   type Mat4,
 } from "../math";
+import { assertValid, SCENE_SCHEMA } from "./schema";
 import type { Material, SceneNode } from "../renderer";
 
 export interface PrimitiveSpec {
@@ -163,7 +164,10 @@ function buildMaterial(spec: ObjectSpec): Material {
 }
 
 export function resolveScene(spec: SceneSpec): ResolvedObject[] {
-  if (!Array.isArray(spec.objects) || spec.objects.length === 0) {
+  // Contra el esquema antes de tocar nada: un campo mal escrito se ignoraría en
+  // silencio y el agente vería un render que no es el que pidió, sin saber por qué.
+  assertValid(spec, SCENE_SCHEMA, "la escena");
+  if (spec.objects.length === 0) {
     throw new Error("la escena necesita al menos un objeto en `objects`");
   }
 

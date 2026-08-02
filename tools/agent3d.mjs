@@ -25,6 +25,8 @@ import { deflateSync, inflateSync } from "node:zlib";
 
 import {
   DEMO_SCENE,
+  PATCH_SCHEMA,
+  SCENE_SCHEMA,
   applyPatch,
   computeSceneAabb,
   loadModel,
@@ -376,17 +378,51 @@ Presupuesto (cada bandera es una cláusula; incumplirla es un aviso y salida 1)
   --max-symmetry-error <x>  error de simetría en X, en fracción del radio (0.02 = 2 %)
 
 Otras
+  --schema                forma aceptada de la escena y del parche, y un informe
+                          de ejemplo, todo generado por el propio código
   --debug                 vuelca la pila en los errores
   --help                  esta ayuda
 
 stdout es JSON puro. Código de salida: 0 sin avisos, 1 con avisos o parches
 fallidos, 2 si hay un error de datos.`;
 
+/**
+ * Esquema de entrada y ejemplo de salida.
+ *
+ * Los dos salen del código: el esquema es el mismo objeto con que se valida la
+ * entrada, y el ejemplo de informe se genera revisando la escena de demostración.
+ * Escribir cualquiera de los dos a mano garantizaría que divergiesen.
+ */
+function printSchema() {
+  const { review } = reviewScene(DEMO_SCENE, { inspectOnly: true });
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        scene: SCENE_SCHEMA,
+        patch: PATCH_SCHEMA,
+        reportExample: review,
+        notes: [
+          "El esquema es el que valida la entrada: un campo que no esté aquí se rechaza.",
+          "reportExample sale de revisar la escena de demostración con --inspect-only.",
+          "Con pliego, el informe trae además sheet, views, renderHash y partScreenBoxes.",
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
 async function main() {
   const options = parseArguments(process.argv.slice(2));
 
   if (options.has("help")) {
     process.stdout.write(`${USAGE}\n`);
+    return;
+  }
+
+  if (options.has("schema")) {
+    printSchema();
     return;
   }
   const outputPath = resolve(options.get("out") ?? "artifacts/agent/contact-sheet.png");
