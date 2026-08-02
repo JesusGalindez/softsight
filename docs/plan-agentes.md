@@ -325,7 +325,7 @@ Agrupar por prefijo de ruta jerárquica y reportar las piezas cuya diagonal de c
 desvía más de un factor 10 de la mediana del grupo. Es lo que detecta un tornillo del
 tamaño de un motor.
 
-### D5. Semántica de unidades y escala absoluta
+### D5. Semántica de unidades y escala absoluta — hecho
 
 El informe da la caja en unidades del fichero, y un agente no sabe si son metros o
 milímetros. glTF dice metros, así que un dron de 4,5 unidades **son 4,5 metros**, que
@@ -341,6 +341,23 @@ es absurdo para un cuadricóptero.
 Sin `--expect-size`, avisar solo fuera de un rango muy amplio (1 cm – 100 m) y **decir
 siempre la suposición**. Es el fallo número uno de la geometría generada por IA y se
 detecta con una división.
+
+Cuando el factor coincide con una conversión conocida —1000, 100, 39,37 o 3,28— el
+aviso lo dice: «parece estar en milímetros» es accionable, «factor 1000» hay que
+interpretarlo.
+
+**La comprobación destapó un error en el propio informe.** El campo `size` no era la
+caja: era el diámetro de la esfera envolvente repetido tres veces. El dron salía como
+un cubo de 12,9 m de lado cuando mide 9,9 × 2,4 × 8,2. Sobre eso no se podía juzgar
+ninguna escala, y además contradecía a su propia documentación —«tamaño en unidades del
+fichero»—. Ahora es la extensión real de la caja, y las escenas también la traen.
+
+**Verificación.** Cuatro casos construidos: caja de 350 unidades esperando 0,35 m
+—factor 1000, «parece estar en milímetros»—; la misma sin `--expect-size` —fuera del
+rango, con la suposición dicha—; una de 13,78 unidades esperando 0,35 —factor 39,4,
+«pulgadas»—; y una de 0,35 m, que no dispara nada y sale con 0.
+
+**Coste**: ~70 líneas.
 
 **Coste de la fase D**: ~350 líneas en un nuevo `agent/spatialAudit.ts`. Es la fase más
 larga y la de mayor valor absoluto. Merece su propio ciclo de verificación, con casos
@@ -415,7 +432,7 @@ Conviene ser exacto sobre qué garantiza esto, porque es fácil prometer de más
 | 4 | ~~**A1** diff de renders~~ **hecho** | El que convierte «creo» en «sé» |
 | 5 | ~~**A4** huella~~ **hecho** | Veinticinco líneas encima de A1 |
 | 6 | ~~**C1 + C2** avisos nuevos y presupuestos~~ **hecho** | Cierran el bucle de iteración |
-| 7 | **D5** escala | Una división, atrapa el error más común |
+| 7 | ~~**D5** escala~~ **hecho** | Una división, atrapa el error más común |
 | 8 | **B3** esquema | Lo que abre la herramienta a otros |
 | 9 | **D1–D4** auditorías espaciales | El mayor valor, y el mayor trabajo |
 | 10 | **E1–E3, B2, C3** | Comodidad y velocidad, ya con todo lo demás en pie |

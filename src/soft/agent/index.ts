@@ -130,6 +130,78 @@ export function compareWarnings(
   return { new: fresh, resolved, persistent: current.length - fresh.length };
 }
 
+/** Lado mayor de una caja, que es lo que se compara contra un tamaño esperado. */
+function longestSide(size: readonly [number, number, number]): number {
+  return Math.max(size[0], size[1], size[2]);
+}
+
+/** Unidades cuya conversión a metros explicaría un factor así. */
+const UNIT_GUESSES: Array<{ factor: number; name: string }> = [
+  { factor: 1000, name: "milímetros" },
+  { factor: 100, name: "centímetros" },
+  { factor: 39.3701, name: "pulgadas" },
+  { factor: 3.28084, name: "pies" },
+];
+
+function guessUnit(factor: number): string | null {
+  for (const guess of UNIT_GUESSES) {
+    if (Math.abs(factor / guess.factor - 1) < 0.05) return guess.name;
+  }
+  return null;
+}
+
+/**
+ * Escala absoluta: la comprobación más barata del plan y la que caza el fallo más
+ * común de la geometría generada.
+ *
+ * El informe da la caja en unidades del fichero y un agente no sabe si son metros o
+ * milímetros. glTF **dice metros**, así que un dron de 4,5 unidades son 4,5 metros,
+ * que es absurdo para un cuadricóptero. Con `expectSize` se compara contra lo que el
+ * objeto debería medir; sin él, solo se avisa fuera de un rango muy amplio. En los dos
+ * casos el aviso **dice la suposición**, porque la suposición es justo lo que puede
+ * estar mal.
+ */
+function checkScale(size: readonly [number, number, number], expectSize?: number): Warning[] {
+  const largest = longestSide(size);
+  if (largest <= 0) return [];
+
+  if (expectSize !== undefined && expectSize > 0) {
+    const factor = largest / expectSize;
+    if (factor > 1.5 || factor < 1 / 1.5) {
+      const unit = guessUnit(factor);
+      return [
+        {
+          code: "ESCALA_INESPERADA",
+          part: null,
+          message:
+            `la caja mide ${largest.toFixed(3)} m en su lado mayor y esperabas ~${expectSize} m ` +
+            `(factor ${factor.toFixed(1)}); ` +
+            (unit !== null
+              ? `el modelo parece estar en ${unit}.`
+              : "revisa la unidad del fichero o la escala del nodo raíz."),
+        },
+      ];
+    }
+    return [];
+  }
+
+  // Sin tamaño esperado, solo lo insostenible: por debajo de un centímetro o por
+  // encima de cien metros casi nada es lo que dice ser.
+  if (largest < 0.01 || largest > 100) {
+    return [
+      {
+        code: "ESCALA_SOSPECHOSA",
+        part: null,
+        message:
+          `la caja mide ${largest.toFixed(3)} m en su lado mayor, suponiendo que el fichero esté ` +
+          "en metros como manda glTF; fuera del rango 1 cm – 100 m casi nada es lo que dice ser. " +
+          "Pasa --expect-size para comprobarlo contra el tamaño real.",
+      },
+    ];
+  }
+  return [];
+}
+
 /** Sufijo «y N más» para no volcar 200 nombres en un aviso. */
 function nameList(names: readonly string[], limit = 4): string {
   if (names.length <= limit) return names.join(", ");
@@ -256,6 +328,8 @@ export interface SceneReview {
     vertices: number;
     boundsCenter: [number, number, number];
     boundsRadius: number;
+    /** Extensión de la caja envolvente en unidades del fichero. */
+    size: [number, number, number];
     /** Fracción del encuadre que ocupa el objeto, medida sin el suelo. */
     objectCoverage: number | null;
     budgetTriangles: number | null;
@@ -292,6 +366,11 @@ export interface ReviewOptions {
   frameAabb?: SceneAabb;
   /** Avisos de una revisión anterior, para separar lo nuevo de lo que ya estaba. */
   baselineWarnings?: readonly Warning[];
+  /**
+   * Tamaño plausible del objeto en metros, para juzgar la escala. glTF mide en
+   * metros, así que sin esto solo se puede avisar de lo insostenible.
+   */
+  expectSize?: number;
 }
 
 function sheetReport(sheet: ContactSheet): SheetReport {
@@ -468,7 +547,17 @@ export function reviewScene(
     mesh: entry.node.mesh,
     model: entry.node.model,
   }));
-  const warnings = [...buildWarnings(objects, sheet, objectCoverage), ...budgetWarnings];
+  const aabb = computeSceneAabb(objectNodes);
+  const size: [number, number, number] = [
+    Number((aabb.max[0] - aabb.min[0]).toFixed(4)),
+    Number((aabb.max[1] - aabb.min[1]).toFixed(4)),
+    Number((aabb.max[2] - aabb.min[2]).toFixed(4)),
+  ];
+  const warnings = [
+    ...buildWarnings(objects, sheet, objectCoverage),
+    ...budgetWarnings,
+    ...checkScale(size, options.expectSize),
+  ];
 
   const review: SceneReview = {
     objects,
@@ -478,6 +567,7 @@ export function reviewScene(
       vertices,
       boundsCenter: bounds.center,
       boundsRadius: Number(bounds.radius.toFixed(4)),
+      size,
       objectCoverage: objectCoverage ?? null,
       budgetTriangles,
       budgetExceeded: budgetWarnings.length > 0,
@@ -673,11 +763,16 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
     );
   }
 
+  // Extensión real de la caja, no el diámetro de la esfera envolvente repetido tres
+  // veces, que es lo que decía antes: un dron de 1,7 m de envergadura y 25 cm de alto
+  // salía como un cubo de 12,9 m de lado, y sobre eso no se puede juzgar una escala.
+  const aabb = computeSceneAabb(modelNodes);
   const size: [number, number, number] = [
-    wholeBounds.radius * 2,
-    wholeBounds.radius * 2,
-    wholeBounds.radius * 2,
+    aabb.max[0] - aabb.min[0],
+    aabb.max[1] - aabb.min[1],
+    aabb.max[2] - aabb.min[2],
   ];
+  warnings.push(...checkScale(size, options.expectSize));
 
   return {
     sheet,

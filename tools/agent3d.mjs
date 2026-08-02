@@ -213,10 +213,12 @@ function readBudget(options) {
 
 /** Lo que da igual que la entrada sea un modelo o una escena. */
 function commonOptions(options) {
+  const expectSize = options.get("expect-size");
   return {
     tileSize: Number(options.get("tile") ?? 320),
     ground: options.get("ground") !== "false",
     inspectOnly: options.get("inspect-only") === "true",
+    expectSize: expectSize !== undefined && expectSize !== "true" ? Number(expectSize) : undefined,
   };
 }
 
@@ -360,6 +362,10 @@ Verificación
                           ("sheet.frameAabb") para que la comparación sea local
 
 Todas estas opciones valen igual con --scene que con --model.
+
+Escala
+  --expect-size <m>       tamaño plausible del objeto en metros; sin esto solo se
+                          avisa fuera del rango 1 cm - 100 m, suponiendo metros
 
 Presupuesto (cada bandera es una cláusula; incumplirla es un aviso y salida 1)
   --max-triangles <n>     triángulos del modelo entero

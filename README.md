@@ -123,6 +123,18 @@ pieza auditada en cada vista, y avisos redactados como diagnóstico, no como mé
 Cada aviso es `{ code, part, message }`: el texto lleva las cifras dentro y cambia en
 cada ejecución, así que lo que se compara es el código.
 
+### Escala absoluta
+
+glTF mide en metros, así que un dron de 4,5 unidades **son 4,5 metros**, que es absurdo
+para un cuadricóptero. `--expect-size 0.35` compara el lado mayor de la caja contra lo
+que el objeto debería medir y nombra la unidad si el factor la delata:
+
+> `la caja mide 350.000 m en su lado mayor y esperabas ~0.35 m (factor 1000.0); el
+> modelo parece estar en milímetros.`
+
+Sin la bandera solo se avisa fuera del rango 1 cm – 100 m, y el aviso dice siempre la
+suposición de la que parte.
+
 ### Presupuesto como contrato
 
 ```bash
