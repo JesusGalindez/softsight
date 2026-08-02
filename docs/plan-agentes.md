@@ -1,7 +1,7 @@
 # Plan: mejores ojos y mejores manos para el agente
 
 Estado: en curso —hechos los seis primeros del orden recomendado (B1, A3, A2, A1, A4,
-C1 y C2); el resto, propuesta. Escrito el 2026-07-30 desde la experiencia de haber
+C1 y C2), además de F1 y la paridad del camino de escena (H1); el resto, propuesta. Escrito el 2026-07-30 desde la experiencia de haber
 usado `tools/agent3d.mjs` durante una sesión larga de trabajo real sobre el dron. Cada
 apartado nace de una fricción concreta que costó tiempo, no de una lista de deseos.
 
@@ -376,7 +376,7 @@ vez de deducirlo.
 
 ## Fase F — Determinismo, sin el cual A1 y A4 no valen en CI
 
-### F1. Reproducibilidad entre máquinas
+### F1. Reproducibilidad entre máquinas — hecho
 
 El render es determinista **dentro de la misma versión del motor JS**, pero no está
 garantizado entre motores: `Math.sin`, `Math.cos`, `Math.tan` y `Math.hypot` no están
@@ -390,7 +390,18 @@ prueba de CI:
 - **Sustituir esas llamadas en el camino caliente** por aproximaciones polinómicas
   propias. Sale caro y solo compensa si hace falta comparar entre máquinas distintas.
 
-Recomiendo la primera, con la segunda documentada como salida si algún día molesta.
+Tomada la primera: `.nvmrc` con `24.13.0` —V8 13.6— y `engines` en `package.json`
+acotado a esa serie. La segunda queda documentada como salida si algún día molesta.
+
+Conviene ser exacto sobre qué garantiza esto, porque es fácil prometer de más:
+
+- **La huella de un PNG dado no depende del motor.** Es aritmética entera sobre bytes
+  ya escritos: cualquiera puede recalcularla y le dará lo mismo.
+- **Lo que puede variar entre motores es el PNG**, no la forma de resumirlo. Se fija la
+  versión para que `renderHash` y `diff` comparen dos imágenes salidas del mismo
+  aritmético.
+- **No está medido que difieran.** No tengo dos motores a mano para provocarlo; es una
+  precaución sobre lo que el estándar no garantiza, no un fallo observado.
 
 ---
 
@@ -408,7 +419,7 @@ Recomiendo la primera, con la segunda documentada como salida si algún día mol
 | 8 | **B3** esquema | Lo que abre la herramienta a otros |
 | 9 | **D1–D4** auditorías espaciales | El mayor valor, y el mayor trabajo |
 | 10 | **E1–E3, B2, C3** | Comodidad y velocidad, ya con todo lo demás en pie |
-| — | **F1** | Antes de prometer comparación de imágenes en CI |
+| — | ~~**F1**~~ **hecho** | Antes de prometer comparación de imágenes en CI |
 
 Los cinco primeros son una sesión corta y ya cambian cómo se siente la herramienta: el
 agente pasa de mirar imágenes a verificar cambios.

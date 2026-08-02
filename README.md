@@ -100,6 +100,11 @@ Todo informe con pliego trae un `renderHash` —FNV-1a del búfer de color, uno 
 uno del pliego—, que responde «¿cambió algo?» comparando ocho caracteres, sin guardar
 imágenes. Es reproducible desde el PNG, así que sirve de prueba de no regresión en CI.
 
+Para eso el proyecto **fija la versión de Node** en `.nvmrc` y en `engines`. El render
+es determinista dentro del mismo motor, pero `Math.sin`, `cos`, `tan` y `hypot` no están
+especificados al último bit por el estándar —`+ - * / sqrt` sí—, así que comparar
+imágenes exige el mismo aritmético a los dos lados.
+
 Con `--baseline`, el informe trae además un `diff`: fracción del pliego que cambió,
 desglose por vista, y las regiones con las piezas responsables. Dos renders sin cambios
 dan **cero exacto**. Para que eso valga, con `--baseline` el encuadre y el volumen de la
