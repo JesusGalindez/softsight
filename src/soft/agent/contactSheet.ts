@@ -16,6 +16,9 @@
  *   - wireframe      : densidad de malla y triángulos degenerados
  */
 
+import { drawLabel } from "./bitmapFont";
+import { mat4, multiply, transformPoint, vec3, type Vec4 } from "../math";
+import { lookAt, ndcToScreenX, ndcToScreenY, orthographic, perspective } from "../projection";
 import { CullMode } from "../raster";
 import {
   cloneStats,
@@ -106,7 +109,9 @@ export interface SceneAabb {
 }
 
 /** Caja envolvente exacta en espacio de mundo, vértice a vértice. */
-export function computeSceneAabb(nodes: readonly SceneNode[]): SceneAabb {
+export function computeSceneAabb(
+  nodes: readonly Pick<SceneNode, "mesh" | "model">[],
+): SceneAabb {
   let minX = Infinity;
   let minY = Infinity;
   let minZ = Infinity;
@@ -263,6 +268,70 @@ export function frameCamera(
   };
 }
 
+/**
+ * Caja en píxeles que ocupa una caja de mundo vista por una cámara.
+ *
+ * Es la pieza que permite señalar: sin ella, ver algo raro en el pliego no se puede
+ * convertir en «esa pieza de ahí». Se proyectan las ocho esquinas y se toma el mínimo
+ * y el máximo en pantalla, así que es la caja de la caja envolvente, no la silueta:
+ * sirve para atribuir y para señalar, nunca para medir cobertura.
+ *
+ * Devuelve `null` en dos casos que no son un fallo: la pieza queda fuera del tile, o
+ * cruza el plano de la cámara y su proyección deja de estar definida.
+ */
+export function projectAabbToTile(
+  aabb: SceneAabb,
+  camera: Camera,
+  tileSize: number,
+): [number, number, number, number] | null {
+  const view = lookAt(
+    vec3(camera.position[0], camera.position[1], camera.position[2]),
+    vec3(camera.target[0], camera.target[1], camera.target[2]),
+    vec3(camera.up[0], camera.up[1], camera.up[2]),
+  );
+  // Aspecto 1: los tiles del pliego son cuadrados.
+  const projection =
+    camera.projection === "perspective"
+      ? perspective(camera.fovYDegrees * DEGREES_TO_RADIANS, 1, camera.near, camera.far)
+      : orthographic(camera.orthoHalfHeight, 1, camera.near, camera.far);
+  const viewProjection = multiply(projection, view, mat4());
+
+  const clip: Vec4 = new Float32Array(4);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (let corner = 0; corner < 8; corner += 1) {
+    transformPoint(
+      viewProjection,
+      (corner & 1 ? aabb.max : aabb.min)[0],
+      (corner & 2 ? aabb.max : aabb.min)[1],
+      (corner & 4 ? aabb.max : aabb.min)[2],
+      clip,
+    );
+    if (clip[3] <= 1e-6) return null;
+    const screenX = ndcToScreenX(clip[0] / clip[3], tileSize);
+    const screenY = ndcToScreenY(clip[1] / clip[3], tileSize);
+    if (screenX < minX) minX = screenX;
+    if (screenY < minY) minY = screenY;
+    if (screenX > maxX) maxX = screenX;
+    if (screenY > maxY) maxY = screenY;
+  }
+
+  if (maxX <= 0 || maxY <= 0 || minX >= tileSize || minY >= tileSize) return null;
+  // Un píxel de holgura: el antialiasing es una pasada de vecindad 3×3 sobre las
+  // discontinuidades de profundidad, así que tiñe un anillo por fuera de la arista
+  // geométrica. Sin la holgura, la caja de una hélice casi de canto deja fuera la
+  // fila de píxeles suavizados y la promesa «contiene todo lo pintado» sería falsa.
+  return [
+    Math.max(0, Math.floor(minX) - 1),
+    Math.max(0, Math.floor(minY) - 1),
+    Math.min(tileSize, Math.ceil(maxX) + 1),
+    Math.min(tileSize, Math.ceil(maxY) + 1),
+  ];
+}
+
 export interface RenderedView {
   name: string;
   column: number;
@@ -280,6 +349,8 @@ export interface RenderedView {
   shadedLoad: number;
   /** Fracción de triángulos descartados por reverso. */
   backfaceRatio: number;
+  /** La cámara con que se encuadró, para poder proyectar cajas sobre este tile. */
+  camera: Camera;
 }
 
 export interface ContactSheet {
@@ -290,6 +361,36 @@ export interface ContactSheet {
   rows: number;
   tileSize: number;
   views: RenderedView[];
+  /**
+   * Caja que definió el encuadre. Va en el informe para que la siguiente llamada
+   * pueda repetirlo: comparar dos pliegos exige la misma cámara, y quien tiene el
+   * pliego anterior no tiene ya la geometría con que se encuadró.
+   */
+  frameAabb: SceneAabb;
+}
+
+/**
+ * Altura de mundo que abarca el tile.
+ *
+ * Es el número que hace comparables dos vistas: cada una tiene su propio encuadre,
+ * así que una pieza más grande en píxeles puede ser más pequeña en unidades. En
+ * ortográfica es la altura del volumen; en perspectiva, la del plano que pasa por
+ * el objetivo, que es donde está el objeto.
+ */
+function visibleWorldHeight(camera: Camera): number {
+  if (camera.projection === "orthographic") return camera.orthoHalfHeight * 2;
+  const distance = Math.hypot(
+    camera.position[0] - camera.target[0],
+    camera.position[1] - camera.target[1],
+    camera.position[2] - camera.target[2],
+  );
+  return 2 * Math.tan((camera.fovYDegrees * DEGREES_TO_RADIANS) / 2) * distance;
+}
+
+function formatUnits(value: number): string {
+  if (value >= 100) return value.toFixed(0);
+  if (value >= 10) return value.toFixed(1);
+  return value.toFixed(2);
 }
 
 function baseOptions(): RenderOptions {
@@ -325,8 +426,18 @@ export function renderContactSheet(
    * Por defecto, todo lo que se dibuja.
    */
   framingNodes?: readonly SceneNode[],
+  /**
+   * Encuadre impuesto, que gana a `framingNodes`.
+   *
+   * Existe para poder comparar dos pliegos. La cámara se ajusta al contenido, así que
+   * mover una pieza un milímetro hacia arriba mueve la caja envolvente, mueve la
+   * cámara, y el pliego entero se desplaza un píxel: la comparación se llena de
+   * siluetas y el cambio real se pierde entre ellas. Fijando el encuadre, lo que
+   * cambia en la imagen es lo que cambió en el modelo.
+   */
+  frameAabb?: SceneAabb,
 ): ContactSheet {
-  const aabb = computeSceneAabb(framingNodes ?? nodes);
+  const aabb = frameAabb ?? computeSceneAabb(framingNodes ?? nodes);
   const rows = Math.ceil(views.length / columns);
   const width = columns * tileSize;
   const height = rows * tileSize;
@@ -340,6 +451,9 @@ export function renderContactSheet(
     options.shadingMode = view.shading;
     options.wireframe = view.wireframe ?? false;
     if (view.wireframe) options.antialias = false;
+    // Con el encuadre fijado se fija también el volumen de la sombra: si no, mover
+    // una pieza desplaza la rejilla del mapa y cambian las sombras de todas.
+    if (frameAabb) options.shadowBounds = frameAabb;
 
     const camera = frameCameraFromAabb(aabb, view);
     const start = performance.now();
@@ -355,6 +469,21 @@ export function renderContactSheet(
       pixels.set(renderer.framebuffer.color.subarray(source, source + tileStride), target);
     }
 
+    // Rótulo quemado: nombre de la vista y altura de mundo del tile, para que la
+    // imagen se explique sola sin el informe al lado.
+    const labelScale = Math.max(1, Math.round(tileSize / 320));
+    const margin = 4 * labelScale;
+    drawLabel(
+      pixels,
+      width,
+      height,
+      column * tileSize + margin,
+      row * tileSize + margin,
+      `${view.name} · ${tileSize}PX · ${formatUnits(visibleWorldHeight(camera))}U`,
+      labelScale,
+      tileSize - margin * 2,
+    );
+
     const drawn = stats.trianglesRasterized + stats.trianglesCulled;
     rendered.push({
       name: view.name,
@@ -368,10 +497,44 @@ export function renderContactSheet(
       stats: cloneStats(stats),
       shadedLoad: Number((stats.pixelsShaded / (tileSize * tileSize)).toFixed(4)),
       backfaceRatio: drawn > 0 ? Number((stats.trianglesCulled / drawn).toFixed(3)) : 0,
+      camera,
     });
   });
 
-  return { pixels, width, height, columns, rows, tileSize, views: rendered };
+  return { pixels, width, height, columns, rows, tileSize, views: rendered, frameAabb: aabb };
+}
+
+/**
+ * Huella del pliego y de cada vista: FNV-1a de 32 bits sobre el búfer de color.
+ *
+ * Responde «¿cambió algo?» sin guardar imágenes ni compararlas. Es el complemento
+ * barato del diff: la huella dice *si*, el diff dice *cuánto y dónde*, y para una
+ * prueba de no regresión en integración continua la huella sola basta.
+ *
+ * Es exacta, no tolerante: un píxel de dither distinto ya cambia la huella, donde
+ * el diff —que tiene umbral— diría cero. Por eso las dos cosas, y no una.
+ *
+ * Solo es comparable entre máquinas si el motor de JavaScript es el mismo: el
+ * rasterizador usa `sin`, `cos` y `tan`, que el estándar no fija al último bit.
+ */
+export function hashSheet(sheet: ContactSheet): { sheet: string; byView: Record<string, string> } {
+  const byView: Record<string, string> = {};
+  for (const view of sheet.views) {
+    let hash = 0x811c9dc5;
+    for (let y = 0; y < sheet.tileSize; y += 1) {
+      const start = ((view.row * sheet.tileSize + y) * sheet.width + view.column * sheet.tileSize) * 4;
+      for (let index = start; index < start + sheet.tileSize * 4; index += 1) {
+        hash = Math.imul(hash ^ sheet.pixels[index], 0x01000193);
+      }
+    }
+    byView[view.name] = (hash >>> 0).toString(16).padStart(8, "0");
+  }
+
+  let whole = 0x811c9dc5;
+  for (let index = 0; index < sheet.pixels.length; index += 1) {
+    whole = Math.imul(whole ^ sheet.pixels[index], 0x01000193);
+  }
+  return { sheet: (whole >>> 0).toString(16).padStart(8, "0"), byView };
 }
 
 /**

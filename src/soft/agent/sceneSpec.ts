@@ -54,8 +54,15 @@ export interface ObjectSpec {
 
 export interface SceneSpec {
   objects: ObjectSpec[];
-  /** Presupuesto que el agente no debe superar; se reporta como incumplimiento. */
-  budget?: { triangles?: number };
+  /** Contrato que la escena debe cumplir; mismos campos que `--max-*` en el CLI. */
+  budget?: {
+    triangles?: number;
+    parts?: number;
+    boundaryEdges?: number;
+    degenerateTriangles?: number;
+    symmetryError?: number;
+    watertight?: boolean;
+  };
 }
 
 export interface ResolvedObject {

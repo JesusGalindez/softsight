@@ -143,6 +143,11 @@ export interface RenderOptions {
   shadows: boolean;
   /** Muestras del mapa de sombras por píxel: 1 duro, 4 suave. */
   shadowSamples: 1 | 4;
+  /**
+   * Volumen fijo para el mapa de sombras, en vez de ajustarlo a los emisores. Sin
+   * él, mover una pieza mueve la rejilla de téxeles y cambian todas las sombras.
+   */
+  shadowBounds?: { min: readonly number[]; max: readonly number[] };
   frustumCulling: boolean;
   cullMode: CullMode;
   light: Light;
@@ -338,7 +343,7 @@ export class SoftwareRenderer {
           m[8] + m[9] + m[10] + m[11];
       }
       if (signature !== this.shadowSignature) {
-        this.shadowMap.render(this.shadowCasters, options.light.direction);
+        this.shadowMap.render(this.shadowCasters, options.light.direction, options.shadowBounds);
         this.shadowSignature = signature;
       }
       shadingContext.shadowMap = this.shadowMap;

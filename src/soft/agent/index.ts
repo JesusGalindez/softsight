@@ -16,8 +16,11 @@ import {
   renderContactSheet,
   computeSceneAabb,
   computeSceneBounds,
+  hashSheet,
   measureObjectCoverage,
+  projectAabbToTile,
   type ContactSheet,
+  type SceneAabb,
 } from "./contactSheet";
 import { parseGlb, type MeshoptDecoderLike } from "./glbLoader";
 import { auditMesh, type MeshAudit } from "./inspect";
@@ -27,16 +30,23 @@ import {
   summarizeFamilies,
   toSceneNodes,
   type Model,
+  type ModelPart,
   type PartFamily,
 } from "./model";
 import { parseObj } from "./objLoader";
+import type { Mat4 } from "../math";
+import type { Mesh } from "../mesh";
+import { diffSheets, type RasterImage, type RenderDiff } from "./renderDiff";
 import { createGroundPlane, resolveScene, type SceneSpec } from "./sceneSpec";
 import type { SceneNode } from "../renderer";
 
 export {
   renderContactSheet,
+  computeSceneAabb,
   computeSceneBounds,
+  hashSheet,
   measureObjectCoverage,
+  projectAabbToTile,
   frameCamera,
   DEFAULT_VIEWS,
 } from "./contactSheet";
@@ -53,6 +63,8 @@ export {
   toSceneNodes,
 } from "./model";
 export type { Model, ModelPart, PartFamily, Patch, Edit, EditResult } from "./model";
+export { diffSheets } from "./renderDiff";
+export type { RasterImage, RenderDiff, DiffRegion } from "./renderDiff";
 export { resolveScene, createGroundPlane } from "./sceneSpec";
 export type { SceneSpec, ObjectSpec, PrimitiveSpec, RawMeshSpec } from "./sceneSpec";
 export type { MeshAudit } from "./inspect";
@@ -61,6 +73,180 @@ export type { ContactSheet, ViewDefinition } from "./contactSheet";
 export interface ObjectReport extends MeshAudit {
   name: string;
 }
+
+/**
+ * Aviso con clave estable.
+ *
+ * El texto lleva las cifras dentro —«148 aristas de borde»— y cambia en cuanto la
+ * malla cambia, así que comparar textos entre dos ejecuciones da falsos avisos
+ * nuevos. `code` más `part` identifican el mismo problema aunque el número baile,
+ * y es lo que hace posible responder «¿esto es nuevo o ya estaba?».
+ */
+export interface Warning {
+  code: string;
+  /** Pieza a la que se refiere, o `null` si el aviso es del conjunto. */
+  part: string | null;
+  message: string;
+}
+
+/**
+ * Presupuesto como contrato: mientras solo hubo `budget.triangles`, el código de
+ * salida era informativo. Con esto, el agente sabe si su cambio cumple lo pactado
+ * sin interpretar el JSON —basta el código de salida— y sin negociar el criterio
+ * en cada llamada.
+ */
+export interface Budget {
+  triangles?: number;
+  parts?: number;
+  boundaryEdges?: number;
+  degenerateTriangles?: number;
+  /** Error de simetría en X admitido, como fracción del radio. */
+  symmetryError?: number;
+  /** Exige que todas las mallas estén cerradas. */
+  watertight?: boolean;
+}
+
+export interface WarningsDelta {
+  new: Warning[];
+  resolved: Warning[];
+  persistent: number;
+}
+
+const warningKey = (warning: Warning): string => `${warning.code}|${warning.part ?? ""}`;
+
+/**
+ * Avisos nuevos, resueltos y persistentes frente a un informe anterior. Un agente
+ * que repite una revisión solo necesita mirar `new`: lo demás ya lo sabía.
+ */
+export function compareWarnings(
+  current: readonly Warning[],
+  previous: readonly Warning[],
+): WarningsDelta {
+  const before = new Map(previous.map((warning) => [warningKey(warning), warning]));
+  const now = new Set(current.map(warningKey));
+
+  const fresh = current.filter((warning) => !before.has(warningKey(warning)));
+  const resolved = [...before.values()].filter((warning) => !now.has(warningKey(warning)));
+  return { new: fresh, resolved, persistent: current.length - fresh.length };
+}
+
+/** Sufijo «y N más» para no volcar 200 nombres en un aviso. */
+function nameList(names: readonly string[], limit = 4): string {
+  if (names.length <= limit) return names.join(", ");
+  return `${names.slice(0, limit).join(", ")} y ${names.length - limit} más`;
+}
+
+/**
+ * Incumplimientos del presupuesto. `audits` puede venir vacío: sin auditoría no se
+ * puede juzgar la topología, y callar sería peor que no ofrecer la comprobación.
+ */
+function checkBudget(
+  budget: Budget,
+  totals: { parts: number; triangles: number },
+  audits: readonly ObjectReport[],
+): Warning[] {
+  const warnings: Warning[] = [];
+
+  if (budget.triangles !== undefined && totals.triangles > budget.triangles) {
+    warnings.push({
+      code: "PRESUPUESTO_TRIANGULOS",
+      part: null,
+      message: `${totals.triangles} triángulos, ${budget.triangles} presupuestados: ${(
+        (totals.triangles / budget.triangles - 1) *
+        100
+      ).toFixed(0)} % por encima.`,
+    });
+  }
+  if (budget.parts !== undefined && totals.parts > budget.parts) {
+    warnings.push({
+      code: "PRESUPUESTO_PIEZAS",
+      part: null,
+      message: `${totals.parts} piezas, ${budget.parts} presupuestadas.`,
+    });
+  }
+
+  if (budget.watertight === true) {
+    const open = audits.filter((audit) => !audit.watertight).map((audit) => audit.name);
+    if (open.length > 0) {
+      warnings.push({
+        code: "PRESUPUESTO_ESTANQUEIDAD",
+        part: null,
+        message: `se exigen mallas cerradas y ${open.length} ${
+          open.length === 1 ? "no lo está" : "no lo están"
+        }: ${nameList(open)}.`,
+      });
+    }
+  }
+  if (budget.boundaryEdges !== undefined) {
+    const total = audits.reduce((sum, audit) => sum + audit.boundaryEdges, 0);
+    if (total > budget.boundaryEdges) {
+      warnings.push({
+        code: "PRESUPUESTO_BORDES",
+        part: null,
+        message: `${total} aristas de borde en total, ${budget.boundaryEdges} presupuestadas.`,
+      });
+    }
+  }
+  if (budget.degenerateTriangles !== undefined) {
+    const total = audits.reduce((sum, audit) => sum + audit.degenerateTriangles, 0);
+    if (total > budget.degenerateTriangles) {
+      warnings.push({
+        code: "PRESUPUESTO_DEGENERADOS",
+        part: null,
+        message: `${total} triángulos de área nula, ${budget.degenerateTriangles} presupuestados.`,
+      });
+    }
+  }
+  if (budget.symmetryError !== undefined) {
+    const worst = audits
+      .filter((audit) => audit.symmetryErrorX !== null)
+      .map((audit) => ({ name: audit.name, error: audit.symmetryErrorX as number }))
+      .filter((entry) => entry.error > (budget.symmetryError as number))
+      .sort((a, b) => b.error - a.error);
+    if (worst.length > 0) {
+      warnings.push({
+        code: "PRESUPUESTO_SIMETRIA",
+        part: null,
+        message: `${worst.length} ${
+          worst.length === 1 ? "pieza supera" : "piezas superan"
+        } el ${((budget.symmetryError as number) * 100).toFixed(
+          1,
+        )} % de error de simetría; la peor es ${worst[0].name} con ${(worst[0].error * 100).toFixed(1)} %.`,
+      });
+    }
+  }
+
+  return warnings;
+}
+
+export interface SheetReport {
+  width: number;
+  height: number;
+  tileSize: number;
+  columns: number;
+  rows: number;
+  /** Nombre de cada vista en orden de lectura, fila por fila. */
+  grid: string[];
+  totalMilliseconds: number;
+  /** Caja que definió el encuadre; devuélvela para repetir la misma cámara. */
+  frameAabb: SceneAabb;
+}
+
+export interface ViewReport {
+  name: string;
+  column: number;
+  row: number;
+  milliseconds: number;
+  shadedLoad: number;
+  backfaceRatio: number;
+  trianglesRasterized: number;
+  pixelsShaded: number;
+}
+
+export type RenderHash = { sheet: string; byView: Record<string, string> };
+
+/** Caja `[x0, y0, x1, y1]` por vista y por pieza, en píxeles del pliego entero. */
+export type ScreenBoxes = Record<string, Record<string, [number, number, number, number]>>;
 
 export interface SceneReview {
   objects: ObjectReport[];
@@ -71,69 +257,112 @@ export interface SceneReview {
     boundsCenter: [number, number, number];
     boundsRadius: number;
     /** Fracción del encuadre que ocupa el objeto, medida sin el suelo. */
-    objectCoverage: number;
+    objectCoverage: number | null;
     budgetTriangles: number | null;
     budgetExceeded: boolean;
   };
-  sheet: {
-    width: number;
-    height: number;
-    tileSize: number;
-    columns: number;
-    rows: number;
-    /** Nombre de cada vista en orden de lectura, fila por fila. */
-    grid: string[];
-    totalMilliseconds: number;
-  };
-  views: Array<{
-    name: string;
-    column: number;
-    row: number;
-    milliseconds: number;
-    shadedLoad: number;
-    backfaceRatio: number;
-    trianglesRasterized: number;
-    pixelsShaded: number;
-  }>;
-  warnings: string[];
+  /** Nulo con `inspectOnly`: no se ha renderizado nada que describir. */
+  sheet: SheetReport | null;
+  views: ViewReport[];
+  renderHash: RenderHash | null;
+  partScreenBoxes: ScreenBoxes | null;
+  diff: RenderDiff | null;
+  warnings: Warning[];
+  warningsDelta: WarningsDelta | null;
 }
 
 export interface ReviewOptions {
   tileSize?: number;
   /** Suelo de referencia: entra en el render, no en la auditoría ni el encuadre. */
   ground?: boolean;
+  /**
+   * Devolver solo el diagnóstico, sin renderizar el pliego.
+   *
+   * La mayoría de las llamadas de un agente son consultas —qué hay, cómo se llama,
+   * qué dice la auditoría— y en ellas el render es el grueso del coste y nadie mira
+   * la imagen.
+   */
+  inspectOnly?: boolean;
+  /** Pliego anterior ya decodificado, para comparar contra el que se va a renderizar. */
+  baseline?: RasterImage;
+  /**
+   * Encuadre impuesto. Comparar dos pliegos exige la misma cámara, y la cámara se
+   * ajusta al contenido: sin fijarla, cualquier cambio desplaza el pliego entero.
+   */
+  frameAabb?: SceneAabb;
+  /** Avisos de una revisión anterior, para separar lo nuevo de lo que ya estaba. */
+  baselineWarnings?: readonly Warning[];
+}
+
+function sheetReport(sheet: ContactSheet): SheetReport {
+  return {
+    width: sheet.width,
+    height: sheet.height,
+    tileSize: sheet.tileSize,
+    columns: sheet.columns,
+    rows: sheet.rows,
+    grid: sheet.views.map((view) => view.name),
+    totalMilliseconds: Number(
+      sheet.views.reduce((total, view) => total + view.milliseconds, 0).toFixed(2),
+    ),
+    frameAabb: sheet.frameAabb,
+  };
+}
+
+function viewReports(sheet: ContactSheet): ViewReport[] {
+  return sheet.views.map((view) => ({
+    name: view.name,
+    column: view.column,
+    row: view.row,
+    milliseconds: view.milliseconds,
+    shadedLoad: view.shadedLoad,
+    backfaceRatio: view.backfaceRatio,
+    trianglesRasterized: view.stats.trianglesRasterized,
+    pixelsShaded: view.stats.pixelsShaded,
+  }));
 }
 
 function buildWarnings(
   objects: readonly ObjectReport[],
-  sheet: ContactSheet,
-  objectCoverage: number,
-  budgetExceeded: boolean,
-): string[] {
-  const warnings: string[] = [];
+  sheet: ContactSheet | null,
+  /** `null` cuando no se ha renderizado: sin imagen no hay encuadre que juzgar. */
+  objectCoverage: number | null,
+): Warning[] {
+  const warnings: Warning[] = [];
+  const add = (code: string, part: string | null, message: string): void => {
+    warnings.push({ code, part, message });
+  };
 
   for (const object of objects) {
     if (object.triangles === 0) {
-      warnings.push(`${object.name}: la malla no tiene triángulos.`);
+      add("MALLA_VACIA", object.name, `${object.name}: la malla no tiene triángulos.`);
       continue;
     }
     if (object.degenerateTriangles > 0) {
-      warnings.push(
+      add(
+        "TRIANGULOS_DEGENERADOS",
+        object.name,
         `${object.name}: ${object.degenerateTriangles} triángulos de área nula; no pintan nada y cuestan preparación.`,
       );
     }
     if (object.nonManifoldEdges > 0) {
-      warnings.push(
+      add(
+        "NO_MANIFOLD",
+        object.name,
         `${object.name}: ${object.nonManifoldEdges} aristas compartidas por 3+ caras (no manifold); busca caras duplicadas o superpuestas.`,
       );
     }
     if (object.boundaryEdges > 0) {
-      warnings.push(
+      add(
+        "BORDE_ABIERTO",
+        object.name,
         `${object.name}: ${object.boundaryEdges} aristas de borde, la malla no está cerrada; si debía ser un sólido, falta soldar o tapar.`,
       );
     }
     if (object.flippedNormalRatio > 0.02) {
-      warnings.push(
+      add(
+        "NORMAL_INVERTIDA",
+        object.name,
         `${object.name}: ${(object.flippedNormalRatio * 100).toFixed(0)} % de caras con normal contraria a sus vértices; el bobinado está invertido ahí.`,
       );
     }
@@ -147,45 +376,63 @@ function buildWarnings(
       object.centerOffset[2],
     );
     if (object.boundingRadius > 0 && offsetMagnitude > object.boundingRadius * 0.5) {
-      warnings.push(
+      add(
+        "PIVOTE_DESCENTRADO",
+        object.name,
         `${object.name}: el centro de la caja está a ${offsetMagnitude.toFixed(2)} del origen del objeto; el pivote quedará descentrado al rotar.`,
       );
     }
     if (object.symmetryErrorX !== null && object.symmetryErrorX > 0.02) {
-      warnings.push(
+      add(
+        "SIMETRIA_ROTA",
+        object.name,
         `${object.name}: error de simetría en X del ${(object.symmetryErrorX * 100).toFixed(1)} % del radio; si debía ser simétrico, no lo es.`,
       );
     }
   }
 
-  if (objectCoverage < 0.005) {
-    warnings.push(
+  if (objectCoverage === null) {
+    // sin encuadre que juzgar
+  } else if (objectCoverage < 0.005) {
+    add(
+      "ENCUADRE_DIMINUTO",
+      null,
       `el objeto ocupa el ${(objectCoverage * 100).toFixed(2)} % del encuadre; queda fuera de cuadro o es diminuto frente a su propia caja envolvente.`,
     );
   } else if (objectCoverage > 0.9) {
-    warnings.push(
+    add(
+      "ENCUADRE_RECORTADO",
+      null,
       `el objeto ocupa el ${(objectCoverage * 100).toFixed(0)} % del encuadre; puede estar recortado.`,
     );
   }
 
-  for (const view of sheet.views) {
+  for (const view of sheet?.views ?? []) {
     if (view.wireframe) continue; // sin caras rasterizadas, las métricas no aplican
     if (view.backfaceRatio > 0.75) {
-      warnings.push(
+      add(
+        "REVERSO_EXCESIVO",
+        null,
         `vista "${view.name}": ${(view.backfaceRatio * 100).toFixed(0)} % de triángulos descartados por reverso; en un sólido cerrado lo normal es ~50 %, así que el bobinado está del revés.`,
       );
     }
   }
 
-  if (budgetExceeded) warnings.push("presupuesto de triángulos superado.");
   return warnings;
 }
 
-/** Resuelve, renderiza y audita. Devuelve el pliego en píxeles y el informe. */
+/**
+ * Resuelve, renderiza y audita una escena escrita por el agente.
+ *
+ * Lleva las mismas herramientas de verificación que el camino de modelo —consulta
+ * barata, comparación con el pliego anterior, avisos nuevos, cajas en pantalla—,
+ * porque quien **crea** desde cero las necesita al menos tanto como quien edita un
+ * fichero existente.
+ */
 export function reviewScene(
   spec: SceneSpec,
   options: ReviewOptions = {},
-): { sheet: ContactSheet; review: SceneReview } {
+): { sheet: ContactSheet | null; review: SceneReview } {
   const tileSize = options.tileSize ?? 320;
   const withGround = options.ground ?? true;
 
@@ -203,13 +450,25 @@ export function reviewScene(
   }));
 
   // Encuadre sobre el objeto, no sobre la escena dibujada: el suelo es contexto.
-  const sheet = renderContactSheet(nodes, tileSize, undefined, undefined, objectNodes);
-  const objectCoverage = Number(measureObjectCoverage(objectNodes).toFixed(4));
+  const sheet = options.inspectOnly
+    ? null
+    : renderContactSheet(nodes, tileSize, undefined, undefined, objectNodes, options.frameAabb);
+  const objectCoverage = options.inspectOnly
+    ? null
+    : Number(measureObjectCoverage(objectNodes).toFixed(4));
 
   const triangles = objects.reduce((total, object) => total + object.triangles, 0);
   const vertices = objects.reduce((total, object) => total + object.vertices, 0);
-  const budgetTriangles = spec.budget?.triangles ?? null;
-  const budgetExceeded = budgetTriangles !== null && triangles > budgetTriangles;
+  const budget = spec.budget ?? {};
+  const budgetTriangles = budget.triangles ?? null;
+  const budgetWarnings = checkBudget(budget, { parts: objects.length, triangles }, objects);
+
+  const boxed = resolved.map((entry) => ({
+    name: entry.name,
+    mesh: entry.node.mesh,
+    model: entry.node.model,
+  }));
+  const warnings = [...buildWarnings(objects, sheet, objectCoverage), ...budgetWarnings];
 
   const review: SceneReview = {
     objects,
@@ -219,32 +478,19 @@ export function reviewScene(
       vertices,
       boundsCenter: bounds.center,
       boundsRadius: Number(bounds.radius.toFixed(4)),
-      objectCoverage,
+      objectCoverage: objectCoverage ?? null,
       budgetTriangles,
-      budgetExceeded,
+      budgetExceeded: budgetWarnings.length > 0,
     },
-    sheet: {
-      width: sheet.width,
-      height: sheet.height,
-      tileSize: sheet.tileSize,
-      columns: sheet.columns,
-      rows: sheet.rows,
-      grid: sheet.views.map((view) => view.name),
-      totalMilliseconds: Number(
-        sheet.views.reduce((total, view) => total + view.milliseconds, 0).toFixed(2),
-      ),
-    },
-    views: sheet.views.map((view) => ({
-      name: view.name,
-      column: view.column,
-      row: view.row,
-      milliseconds: view.milliseconds,
-      shadedLoad: view.shadedLoad,
-      backfaceRatio: view.backfaceRatio,
-      trianglesRasterized: view.stats.trianglesRasterized,
-      pixelsShaded: view.stats.pixelsShaded,
-    })),
-    warnings: buildWarnings(objects, sheet, objectCoverage, budgetExceeded),
+    sheet: sheet ? sheetReport(sheet) : null,
+    views: sheet ? viewReports(sheet) : [],
+    renderHash: sheet ? hashSheet(sheet) : null,
+    partScreenBoxes: sheet ? screenBoxes(boxed, sheet) : null,
+    diff: sheet && options.baseline ? diffSheets(sheet, options.baseline, screenBoxes(boxed, sheet)) : null,
+    warnings,
+    warningsDelta: options.baselineWarnings
+      ? compareWarnings(warnings, options.baselineWarnings)
+      : null,
   };
 
   return { sheet, review };
@@ -274,10 +520,35 @@ export interface ModelReview {
     matched: string[];
     audits: ObjectReport[];
   };
-  sheet: SceneReview["sheet"];
-  views: SceneReview["views"];
+  /** Nulo con `inspectOnly`: no se ha renderizado nada que describir. */
+  sheet: SheetReport | null;
+  views: ViewReport[];
+  /**
+   * Caja `[x0, y0, x1, y1]` de cada pieza auditada en cada vista, **en píxeles del
+   * pliego entero**, que es la imagen que el agente tiene delante.
+   *
+   * Solo de las piezas auditadas, no de las 296: la lista completa por seis vistas
+   * gastaría más contexto del que ahorra. Una pieza ausente en una vista es una que
+   * queda fuera del tile o que cruza el plano de la cámara.
+   */
+  partScreenBoxes: ScreenBoxes | null;
+  /**
+   * Comparación con un pliego anterior, si se pasó uno. `null` cuando no lo hay.
+   *
+   * Las claves van en inglés como el resto del informe, no como en el boceto del
+   * plan: un informe con dos idiomas de clave obliga a recordar cuál toca en cada
+   * campo.
+   */
+  diff: RenderDiff | null;
+  /**
+   * Huella exacta del pliego y de cada vista. Comparar dos huellas cuesta cero y
+   * responde «¿cambió algo?» sin guardar imágenes; el `diff` dice cuánto y dónde.
+   */
+  renderHash: RenderHash | null;
   loaderNotes: string[];
-  warnings: string[];
+  warnings: Warning[];
+  /** Avisos nuevos, resueltos y persistentes frente al informe anterior, si se pasó. */
+  warningsDelta: WarningsDelta | null;
 }
 
 export interface ModelReviewOptions extends ReviewOptions {
@@ -287,10 +558,17 @@ export interface ModelReviewOptions extends ReviewOptions {
   auditLimit?: number;
   /** Colorear con el material del fichero en vez de arcilla neutra. */
   useMaterialColors?: boolean;
+  /**
+   * Contrato que el modelo debe cumplir. Las cláusulas de topología —cerrado,
+   * bordes, degenerados, simetría— obligan a auditar **todas** las piezas, no solo
+   * las seleccionadas: 1,2 s en el dron, frente a 0,16 s de una consulta. Solo se
+   * paga si se pide alguna de ellas.
+   */
+  budget?: Budget;
 }
 
 export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
-  sheet: ContactSheet;
+  sheet: ContactSheet | null;
   review: ModelReview;
 } {
   const tileSize = options.tileSize ?? 320;
@@ -320,13 +598,24 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
 
   // El encuadre sigue a la selección cuando la hay: si el agente está trabajando en
   // un rotor, quiere ver el rotor, no el dron entero con el rotor de 12 píxeles.
-  const framingNodes =
-    selected.length > 0 ? toSceneNodes(model, { highlight, isolate: true }) : modelNodes;
-  const sheet = renderContactSheet(nodes, tileSize, undefined, undefined, framingNodes);
+  let sheet: ContactSheet | null = null;
+  if (!options.inspectOnly) {
+    const framingNodes =
+      selected.length > 0 ? toSceneNodes(model, { highlight, isolate: true }) : modelNodes;
+    sheet = renderContactSheet(
+      nodes,
+      tileSize,
+      undefined,
+      undefined,
+      framingNodes,
+      options.frameAabb,
+    );
+  }
 
   const wholeBounds = computeSceneBounds(modelNodes);
   const auditLimit = options.auditLimit ?? 12;
-  const audits: ObjectReport[] = selected.slice(0, auditLimit).map((part) => ({
+  const audited = selected.slice(0, auditLimit);
+  const audits: ObjectReport[] = audited.map((part) => ({
     name: part.name,
     ...auditMesh(part.mesh),
   }));
@@ -334,24 +623,54 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
   const triangles = model.parts.reduce((total, part) => total + part.mesh.indices.length / 3, 0);
   const vertices = model.parts.reduce((total, part) => total + part.mesh.positions.length / 3, 0);
 
-  const warnings: string[] = [];
+  const warnings: Warning[] = [];
   for (const audit of audits) {
     if (audit.boundaryEdges > 0) {
-      warnings.push(
-        `${audit.name}: ${audit.boundaryEdges} aristas de borde, la malla no está cerrada.`,
-      );
+      warnings.push({
+        code: "BORDE_ABIERTO",
+        part: audit.name,
+        message: `${audit.name}: ${audit.boundaryEdges} aristas de borde, la malla no está cerrada.`,
+      });
     }
     if (audit.flippedNormalRatio > 0.02) {
-      warnings.push(
-        `${audit.name}: ${(audit.flippedNormalRatio * 100).toFixed(0)} % de caras con normal contraria a sus vértices; bobinado invertido.`,
-      );
+      warnings.push({
+        code: "NORMAL_INVERTIDA",
+        part: audit.name,
+        message: `${audit.name}: ${(audit.flippedNormalRatio * 100).toFixed(0)} % de caras con normal contraria a sus vértices; bobinado invertido.`,
+      });
     }
     if (audit.degenerateTriangles > 0) {
-      warnings.push(`${audit.name}: ${audit.degenerateTriangles} triángulos de área nula.`);
+      warnings.push({
+        code: "TRIANGULOS_DEGENERADOS",
+        part: audit.name,
+        message: `${audit.name}: ${audit.degenerateTriangles} triángulos de área nula.`,
+      });
     }
   }
   if (patterns.length > 0 && selected.length === 0) {
-    warnings.push(`la selección (${patterns.join(", ")}) no coincide con ninguna pieza.`);
+    warnings.push({
+      code: "SELECCION_VACIA",
+      part: null,
+      message: `la selección (${patterns.join(", ")}) no coincide con ninguna pieza.`,
+    });
+  }
+
+  // El presupuesto se comprueba contra el modelo entero. Las cláusulas de topología
+  // exigen auditar las 296 piezas, que en el dron son 1,2 s frente a los 0,16 s de
+  // una consulta, así que ese recorrido solo se hace si alguna está en el contrato.
+  const budget = options.budget;
+  if (budget) {
+    const needsFullAudit =
+      budget.watertight === true ||
+      budget.boundaryEdges !== undefined ||
+      budget.degenerateTriangles !== undefined ||
+      budget.symmetryError !== undefined;
+    const contractAudits: ObjectReport[] = needsFullAudit
+      ? model.parts.map((part) => ({ name: part.name, ...auditMesh(part.mesh) }))
+      : [];
+    warnings.push(
+      ...checkBudget(budget, { parts: model.parts.length, triangles }, contractAudits),
+    );
   }
 
   const size: [number, number, number] = [
@@ -376,31 +695,61 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
         matched: selected.map((part) => part.name),
         audits,
       },
-      sheet: {
-        width: sheet.width,
-        height: sheet.height,
-        tileSize: sheet.tileSize,
-        columns: sheet.columns,
-        rows: sheet.rows,
-        grid: sheet.views.map((view) => view.name),
-        totalMilliseconds: Number(
-          sheet.views.reduce((total, view) => total + view.milliseconds, 0).toFixed(2),
-        ),
-      },
-      views: sheet.views.map((view) => ({
-        name: view.name,
-        column: view.column,
-        row: view.row,
-        milliseconds: view.milliseconds,
-        shadedLoad: view.shadedLoad,
-        backfaceRatio: view.backfaceRatio,
-        trianglesRasterized: view.stats.trianglesRasterized,
-        pixelsShaded: view.stats.pixelsShaded,
-      })),
+      sheet: sheet ? sheetReport(sheet) : null,
+      partScreenBoxes: sheet ? screenBoxes(boxSources(audited), sheet) : null,
+      renderHash: sheet ? hashSheet(sheet) : null,
+      // La atribución mira todas las piezas aunque solo se publiquen las auditadas:
+      // el cambio interesante suele estar justo fuera de la selección.
+      diff:
+        sheet && options.baseline
+          ? diffSheets(sheet, options.baseline, screenBoxes(boxSources(model.parts), sheet))
+          : null,
+      views: sheet ? viewReports(sheet) : [],
       loaderNotes: model.notes,
       warnings,
+      warningsDelta: options.baselineWarnings
+        ? compareWarnings(warnings, options.baselineWarnings)
+        : null,
     },
   };
+}
+
+/** Una pieza del modelo vista como fuente de caja: el nombre y su malla colocada. */
+function boxSources(parts: readonly ModelPart[]): Array<{ name: string; mesh: Mesh; model: Mat4 }> {
+  return parts.map((part) => ({ name: part.name, mesh: part.mesh, model: part.matrix }));
+}
+
+/**
+ * Cajas en pantalla de cada pieza, vista por vista, ya trasladadas a la rejilla del
+ * pliego. Ocho proyecciones por pieza y vista: con doce piezas auditadas son 576
+ * multiplicaciones de matriz, ruido frente al render.
+ */
+function screenBoxes(
+  parts: readonly (Pick<SceneNode, "mesh" | "model"> & { name: string })[],
+  sheet: ContactSheet,
+): ScreenBoxes {
+  const boxes: ScreenBoxes = {};
+  for (const view of sheet.views) {
+    const byPart: Record<string, [number, number, number, number]> = {};
+    for (const part of parts) {
+      const box = projectAabbToTile(
+        computeSceneAabb([part]),
+        view.camera,
+        sheet.tileSize,
+      );
+      if (!box) continue;
+      const offsetX = view.column * sheet.tileSize;
+      const offsetY = view.row * sheet.tileSize;
+      byPart[part.name] = [
+        box[0] + offsetX,
+        box[1] + offsetY,
+        box[2] + offsetX,
+        box[3] + offsetY,
+      ];
+    }
+    boxes[view.name] = byPart;
+  }
+  return boxes;
 }
 
 /** Plano de referencia a la altura de la base del modelo. */

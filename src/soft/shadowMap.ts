@@ -75,8 +75,18 @@ export class ShadowMap {
   /**
    * Construye el volumen de la luz y rasteriza la profundidad de los emisores.
    * `lightDirection` apunta *hacia* la luz, igual que en el sombreado.
+   *
+   * `bounds` fija el volumen en vez de calcularlo de los emisores. Sirve para
+   * comparar dos fotogramas: el volumen ajustado al contenido se desplaza en cuanto
+   * una pieza se mueve, y con él la rejilla de téxeles, así que **todas** las sombras
+   * de la escena cambian aunque solo se haya tocado una pieza. Lo que quede fuera del
+   * volumen fijado no proyecta sombra, que es el precio de poder comparar.
    */
-  render(casters: readonly ShadowCaster[], lightDirection: readonly number[]): void {
+  render(
+    casters: readonly ShadowCaster[],
+    lightDirection: readonly number[],
+    bounds?: { min: readonly number[]; max: readonly number[] },
+  ): void {
     this.depth.fill(1);
     if (casters.length === 0) return;
 
@@ -87,7 +97,11 @@ export class ShadowMap {
     let maxX = -Infinity;
     let maxY = -Infinity;
     let maxZ = -Infinity;
-    for (const caster of casters) {
+    if (bounds) {
+      [minX, minY, minZ] = bounds.min;
+      [maxX, maxY, maxZ] = bounds.max;
+    }
+    for (const caster of bounds ? [] : casters) {
       const { positions } = caster.mesh;
       const m = caster.model;
       for (let offset = 0; offset < positions.length; offset += 3) {

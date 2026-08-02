@@ -1,7 +1,8 @@
 # Plan: mejores ojos y mejores manos para el agente
 
-Estado: propuesta. Escrito el 2026-07-30 desde la experiencia de haber usado
-`tools/agent3d.mjs` durante una sesión larga de trabajo real sobre el dron. Cada
+Estado: en curso —hechos los seis primeros del orden recomendado (B1, A3, A2, A1, A4,
+C1 y C2); el resto, propuesta. Escrito el 2026-07-30 desde la experiencia de haber
+usado `tools/agent3d.mjs` durante una sesión larga de trabajo real sobre el dron. Cada
 apartado nace de una fricción concreta que costó tiempo, no de una lista de deseos.
 
 ## Principio rector
@@ -24,7 +25,7 @@ en «sé que funcionó»**, porque sin eso todo lo demás se itera a ciegas.
 
 ## Fase A — Ojos: que el agente pueda *verificar*, no solo mirar
 
-### A1. Comparación de renders con atribución por pieza
+### A1. Comparación de renders con atribución por pieza — hecho
 
 La fricción: cada parche aplicado obligaba a mirar dos PNG y juzgar a ojo. Con renders
 deterministas eso es medible.
@@ -35,29 +36,48 @@ npm run agent3d -- --model dron.glb --patch cambio.json --baseline anterior.png
 
 ```json
 "diff": {
-  "pixelesDistintos": 0.032,
-  "porVista": { "3/4 iluminada": 0.081, "superior": 0.044, "frontal": 0 },
-  "regiones": [{ "vista": "3/4 iluminada", "bbox": [120, 88, 210, 160],
-                 "piezas": ["propeller-blade-front-left-a", "propeller-tip-front-left-a"] }]
+  "changedPixels": 0.000433,
+  "byView": { "3/4 iluminada": 0.0004, "superior": 0.0005, "wireframe": 0.0001 },
+  "regions": [{ "view": "frontal", "bbox": [368, 112, 400, 144], "changedPixels": 51,
+                "parts": ["rotor-screw-front-left", "rotor-hub-front-left"] }]
 }
 ```
 
-**Cómo.** Hace falta un **decodificador PNG**, porque solo escribí el codificador:
-firma, IHDR, `inflateSync` del IDAT y deshacer los filtros por fila (los cinco tipos:
-None, Sub, Up, Average, Paeth). Son ~90 líneas sobre `node:zlib`, en
-`tools/agent3d.mjs` con el codificador. Después, diferencia absoluta por píxel con
-umbral —3 niveles de 255, para no reportar el dither—, recuento por tile, y unión de
-cajas de los píxeles cambiados por región conexa aproximada.
+**Cómo.** Decodificador PNG en `tools/agent3d.mjs`, junto al codificador: firma, IHDR,
+`inflateSync` del IDAT y deshacer los cinco filtros por fila. La comparación y la
+atribución viven en `agent/renderDiff.ts`, que no toca ficheros. Umbral de 3 niveles de
+255 para no reportar el dither; regiones por celdas de 16 píxeles unidas entre vecinas,
+**sin cruzar el borde de un tile**, porque una región a caballo entre dos vistas es una
+caja sin sentido.
 
-La atribución a piezas sale gratis si A2 está hecho.
+**Lo que costó de verdad no fue el diff, sino que el diff dijera algo.** Al probarlo con
+un solo movimiento —subir un buje 6 cm— cambiaba el **3 % del pliego** y las regiones
+salpicaban las cuatro esquinas del dron. Dos causas, las dos por ajustar al contenido:
 
-**Verificación.** Renderizar dos veces sin cambios debe dar `pixelesDistintos: 0`
-exacto. Un cambio que se declara exacto y mueve píxeles es un bug — es el mismo
-criterio que ya uso con los contadores deterministas, aplicado a la imagen.
+1. **La cámara encuadra la caja envolvente.** Mover una pieza cambia la caja, mueve la
+   cámara, y el pliego entero se desplaza un píxel: la comparación se llena de siluetas.
+   Ahora, con `--baseline`, el encuadre se fija al del modelo **antes** del parche.
+2. **El mapa de sombras ajusta su volumen a los emisores.** Lo mismo: se desplaza la
+   rejilla de téxeles y cambian *todas* las sombras. Se fija al mismo volumen.
 
-**Coste**: ~150 líneas. **Riesgo**: bajo.
+Con las dos cosas fijadas, el mismo cambio pasa de 3 % a **0,043 %** —setenta veces
+menos— y todas las regiones caen donde tocan. El precio, dicho en el código: lo que el
+parche saque fuera del volumen fijado no proyecta sombra.
 
-### A2. Caja en pantalla de cada pieza
+**La atribución también hubo que rehacerla tres veces.** Por solape con la región
+mandaban las piezas grandes —el fuselaje firmaba cualquier cambio—; por fracción de la
+propia caja mandaban las diminutas —veintidós tornillos ocultos tapaban a la hélice que
+se movió—; y sin colapsar familias esos mismos tornillos llenaban la lista. Queda:
+fracción por cambio absoluto, una pieza por familia, seis por región.
+
+**Verificación.** Dos renders sin cambios dan `changedPixels: 0` exacto. El
+decodificador se comprueba aparte con un PNG fabricado con **un filtro distinto por
+fila**, porque el codificador solo escribe el filtro 0 y los otros cuatro caminos no se
+ejercitarían nunca: vuelve byte a byte, 0 de 9.028 distintos.
+
+**Coste**: ~320 líneas entre el decodificador, `renderDiff.ts` y el fijado de encuadre.
+
+### A2. Caja en pantalla de cada pieza — hecho
 
 La fricción: al ver algo raro en la imagen no había forma de saber **qué pieza** era,
 ni de pedir "enséñame esa". Y sin esto, el diff de A1 dice *dónde* cambió pero no
@@ -65,66 +85,103 @@ ni de pedir "enséñame esa". Y sin esto, el diff de A1 dice *dónde* cambió pe
 
 ```json
 "partScreenBoxes": {
-  "3/4 iluminada": { "rotor-hub-front-left": [148, 92, 176, 118], ... }
+  "3/4 iluminada": { "rotor-hub-front-left": [42, 87, 268, 265] }
 }
 ```
 
-**Cómo.** Durante `renderContactSheet`, proyectar las ocho esquinas de la caja
-envolvente en mundo de cada pieza con la cámara de esa vista y quedarse con el mínimo y
-el máximo en pantalla. Ocho puntos por pieza y vista; con 296 piezas y 6 vistas son
-14.208 proyecciones, del orden de un milisegundo. Es la caja, no la silueta: sirve para
-atribuir y para señalar, no para medir cobertura.
+**Cómo.** `projectAabbToTile` proyecta las ocho esquinas de la caja envolvente en mundo
+con la cámara de esa vista y se queda con el mínimo y el máximo en pantalla. Es la caja,
+no la silueta: sirve para atribuir y para señalar, no para medir cobertura.
 
-**Verificación.** Que la caja de una pieza aislada con `--isolate` contenga todos sus
-píxeles sombreados.
+Dos decisiones que no estaban en la propuesta:
 
-**Coste**: ~60 líneas en `agent/contactSheet.ts`.
+- **Coordenadas del pliego, no del tile.** El agente tiene delante la imagen compuesta;
+  obligarle a sumar el desplazamiento de la rejilla es pedirle una cuenta que puede
+  fallar.
+- **Solo las piezas auditadas**, no las 296. Las 296 por seis vistas son ~1.800 filas
+  de JSON: gastaría más contexto del que ahorra. Con doce piezas son 6,3 KB de un
+  informe de 28 KB, que ya es la mitad de lo que pesa la auditoría.
 
-### A3. Etiquetas quemadas en el pliego
+**Verificación.** Hecha con la pieza aislada, sin suelo, comparando la caja proyectada
+con la caja de los píxeles que difieren del color de limpieza —enmascarando el
+rectángulo exacto del rótulo—. Dieciocho comprobaciones sobre tres piezas: todas
+contenidas.
+
+Y una **medida que corrigió el código**: la hélice casi de canto en la vista frontal se
+salía un píxel por arriba y otro por abajo. No es un error de proyección, es el
+antialiasing, que es una pasada de vecindad 3×3 sobre las discontinuidades de
+profundidad y tiñe un anillo por fuera de la arista geométrica. La caja lleva ahora un
+píxel de holgura, y con eso la promesa «contiene todo lo pintado» es cierta.
+
+**Coste**: ~90 líneas entre `agent/contactSheet.ts` y `agent/index.ts`.
+
+### A3. Etiquetas quemadas en el pliego — hecho
 
 La fricción: me equivoqué **varias veces** al correlacionar qué tile era cuál, con el
 array `grid` delante. El agente mira la imagen sin contexto lateral.
 
 **Cómo.** Tipografía de mapa de bits 5×7 para mayúsculas, dígitos y unos pocos signos:
 cada glifo son 5 bytes, un byte por columna con 7 bits útiles. La tabla entera cabe en
-una cadena hexadecimal de ~250 caracteres. Se dibuja tras componer el pliego, en la
-esquina superior izquierda de cada tile, con un rectángulo de fondo semiopaco para que
-se lea sobre cualquier color.
+una cadena hexadecimal, así que no hay fichero de fuente ni activo binario que
+versionar. Se dibuja tras componer el pliego, en la esquina superior izquierda de cada
+tile, con un rectángulo de fondo semiopaco para que se lea sobre cualquier color.
 
-Conviene añadir en el mismo rótulo la escala de la vista —`3/4 · 320px · 1:2,4`— porque
-la otra confusión recurrente fue comparar tamaños entre vistas con encuadres distintos.
+El rótulo lleva también la escala, que era la otra confusión recurrente: comparar
+tamaños entre vistas con encuadres distintos. En vez de una razón —`1:2,4`, que exige
+saber respecto a qué— va la **altura de mundo que abarca el tile**:
+`3/4 ILUMINADA · 380PX · 18.3U`. Dos vistas con la misma cifra están a la misma escala,
+sin más cuentas. La altura sale del volumen ortográfico o, en perspectiva, del plano
+que pasa por el objetivo.
 
-**Coste**: ~110 líneas, nuevo `agent/bitmapFont.ts`. **Riesgo**: ninguno, es aditivo.
+**Verificación.** Los contadores deterministas de las seis vistas no se mueven —el
+rótulo se dibuja sobre el pliego ya compuesto, no sobre el fotograma—, y dos
+ejecuciones seguidas dan el mismo PNG byte a byte. Con `--tile 120` el texto se recorta
+por glifos enteros y no invade el tile vecino.
 
-### A4. Huella del render
+**Coste**: 160 líneas, nuevo `agent/bitmapFont.ts`.
+
+### A4. Huella del render — hecho
 
 Un número por vista y uno del pliego, con FNV-1a de 32 bits sobre el búfer de color.
 
 ```json
-"renderHash": { "sheet": "a3f19c04", "porVista": { "frontal": "7e21b8aa", ... } }
+"renderHash": { "sheet": "5ed96496", "byView": { "frontal": "fcf027e7", "...": "..." } }
 ```
 
 Comparar dos huellas cuesta cero y responde «¿cambió algo?» sin leer imágenes ni
 guardarlas. Es el complemento barato de A1: la huella dice *si*, el diff dice *cuánto y
 dónde*. Para CI, la huella sola basta como prueba de no-regresión.
 
-**Coste**: ~25 líneas. Depende de F1 para ser comparable entre máquinas.
+Las dos no sobran una de la otra, y conviene tenerlo claro: la huella es **exacta** y el
+diff tiene **umbral**. Un píxel de dither distinto cambia la huella y el diff sigue
+diciendo cero. La huella detecta lo que sea; el diff dice si importa.
+
+**Verificación.** Dos ejecuciones dan la misma huella. Tras un parche, cambia. Y —lo que
+la hace útil en CI— es **reproducible desde el PNG por un tercero**: recalculada con una
+implementación aparte, leyendo el fichero escrito, coinciden las seis vistas y el pliego.
+
+**Coste**: 30 líneas y ~30 ms sobre 640 ms en el dron. Depende de F1 para ser comparable
+entre máquinas.
 
 ---
 
 ## Fase B — Que consultar sea barato
 
-### B1. `--inspect-only`
+### B1. `--inspect-only` — hecho
 
 La fricción: pedí la lista de familias del dron cuatro o cinco veces, y **cada una me
 costó entre 500 y 900 ms de render que no miré**. Las consultas son la mayoría de las
 llamadas.
 
 Salta el pliego entero y devuelve solo el JSON: piezas, familias, auditoría, cajas.
-Debería bajar de ~700 ms a ~150 ms, que es lo que cuesta leer y analizar el GLB.
+Medido sobre `drone.glb` (296 piezas, 2,1 MB), tres ejecuciones de cada: **590 ms de
+media a 160 ms**. Lo que queda es leer y analizar el GLB, que es lo que ataca B2.
 
-**Coste**: trivial, un `if` en `reviewModel`. **Hacer primero**: es la mejor relación
-valor/esfuerzo de todo el plan.
+En el informe, `sheet` sale `null` y `views` vacío en vez de omitirse: un campo ausente
+obliga a distinguir «no lo pedí» de «falló», y el nulo lo dice sin ambigüedad.
+
+**Verificación.** Los dos informes, quitando `sheet`, `views` y `file`, son **idénticos
+carácter a carácter**; el modo rápido no cambia ningún diagnóstico.
 
 ### B2. Caché del modelo analizado
 
@@ -156,7 +213,7 @@ Que salga del código, no de una constante escrita a mano, o divergirá.
 
 ## Fase C — Memoria entre llamadas
 
-### C1. Avisos nuevos frente a preexistentes
+### C1. Avisos nuevos frente a preexistentes — hecho
 
 La fricción: el aviso de `rotor-hub` sin cerrar reapareció en cada ejecución y hubo que
 releer para saber si era nuevo.
@@ -166,23 +223,55 @@ releer para saber si era nuevo.
 ```
 
 ```json
-"warningsDelta": { "nuevos": [...], "resueltos": [...], "persistentes": 4 }
+"warningsDelta": { "new": [], "resolved": [{ "code": "BORDE_ABIERTO", "part": "rotor-hub-front-left", "message": "..." }], "persistent": 3 }
 ```
 
-Comparación por clave estable `pieza+tipo`, no por el texto del mensaje, que cambia con
-las cifras. El agente solo necesita mirar `nuevos`.
+Comparación por clave estable `code|part`, no por el texto del mensaje, que cambia con
+las cifras. El agente solo necesita mirar `new`.
 
-**Coste**: ~70 líneas, exige dar a cada aviso un `code` estable —`BORDE_ABIERTO`,
-`NORMAL_INVERTIDA`— además del texto.
+Esto **cambia la forma del informe**: `warnings` deja de ser una lista de textos y pasa
+a serlo de objetos `{ code, part, message }`. Es una ruptura, y vale la pena: sin clave
+estable no hay comparación posible, y el texto no puede serlo porque lleva las cifras
+dentro. Los códigos van en español —`BORDE_ABIERTO`, `NORMAL_INVERTIDA`,
+`PIVOTE_DESCENTRADO`— como los mensajes; las claves del JSON siguen en inglés como el
+resto del informe.
 
-### C2. Presupuestos como contrato
+Un informe anterior en el formato viejo no se compara en silencio: falla diciendo que
+hay que volver a generarlo.
+
+**Verificación.** Borrar una pieza con aviso y comparar contra el informe previo da
+exactamente `resolved: [BORDE_ABIERTO rotor-hub-front-left]`, `new: []`,
+`persistent: 3`.
+
+**Coste**: ~90 líneas.
+
+### C2. Presupuestos como contrato — hecho
 
 Hoy solo hay `budget.triangles`. Extender a `maxParts`, `maxBoundaryEdges`,
 `requireWatertight`, `maxSymmetryError`, `maxDegenerate`, y exponerlos también por
 línea de órdenes. Con eso el código de salida deja de ser informativo y pasa a ser una
 puerta: el agente sabe si su cambio cumple el contrato sin interpretar el JSON.
 
-**Coste**: ~60 líneas.
+Están los seis, en el modelo (`--max-triangles`, `--max-parts`,
+`--require-watertight`, `--max-boundary-edges`, `--max-degenerate`,
+`--max-symmetry-error`) y en la escena (mismos campos dentro de `budget`). Cada
+incumplimiento es un aviso con código propio, así que entra también en el delta de C1:
+un contrato que se rompe aparece en `new`.
+
+Una bandera ausente **no** es un límite infinito: es una cláusula que no está en el
+contrato. Por eso el presupuesto se construye solo con lo que se pasó.
+
+**Lo que costó decidir fue el precio.** Las cláusulas de topología no se pueden juzgar
+con la auditoría de las piezas seleccionadas: hay que auditar las 296, y eso son 1,2 s
+frente a los 0,16 s de una consulta. Se paga solo si se pide alguna de esas cláusulas;
+`--max-triangles` y `--max-parts` siguen costando nada.
+
+**Verificación.** Contrato holgado: cero avisos, salida 0. Contrato estrecho: avisos con
+las cifras de ambos lados —`296 piezas, 100 presupuestadas`— y salida 1. Con
+`--require-watertight`, el dron delata 32 piezas abiertas; con `--max-symmetry-error
+0.02`, 16 piezas, la peor al 186 %.
+
+**Coste**: ~140 líneas.
 
 ### C3. Parches componibles, ensayo y deshacer
 
@@ -309,12 +398,12 @@ Recomiendo la primera, con la segunda documentada como salida si algún día mol
 
 | # | Qué | Por qué ahí |
 |---|---|---|
-| 1 | **B1** `--inspect-only` | Media hora, y abarata la llamada más frecuente |
-| 2 | **A3** etiquetas | Elimina un error recurrente, no toca el motor |
-| 3 | **A2** cajas por pieza | Barato, y es requisito de A1 |
-| 4 | **A1** diff de renders | El que convierte «creo» en «sé» |
-| 5 | **A4** huella | Veinticinco líneas encima de A1 |
-| 6 | **C1 + C2** avisos nuevos y presupuestos | Cierran el bucle de iteración |
+| 1 | ~~**B1** `--inspect-only`~~ **hecho** | Media hora, y abarata la llamada más frecuente |
+| 2 | ~~**A3** etiquetas~~ **hecho** | Elimina un error recurrente, no toca el motor |
+| 3 | ~~**A2** cajas por pieza~~ **hecho** | Barato, y es requisito de A1 |
+| 4 | ~~**A1** diff de renders~~ **hecho** | El que convierte «creo» en «sé» |
+| 5 | ~~**A4** huella~~ **hecho** | Veinticinco líneas encima de A1 |
+| 6 | ~~**C1 + C2** avisos nuevos y presupuestos~~ **hecho** | Cierran el bucle de iteración |
 | 7 | **D5** escala | Una división, atrapa el error más común |
 | 8 | **B3** esquema | Lo que abre la herramienta a otros |
 | 9 | **D1–D4** auditorías espaciales | El mayor valor, y el mayor trabajo |
@@ -370,6 +459,52 @@ persona.
 
 Depende de C3 (parches componibles, ensayo y deshacer), que ya está en este plan. G1 es
 requisito de G2, y no depende de nada más.
+
+## Fase H — crear un objeto desde cero, no solo revisar el de otro
+
+Todo lo anterior nació de editar un GLB que ya existía. Pero la escena declarativa
+—primitivas más mallas crudas en arrays— ya permite **inventar** geometría sin fichero
+de partida, y ese camino tenía peores herramientas que el de edición, que es justo al
+revés de lo que conviene: quien crea se equivoca más.
+
+Comprobado escribiendo una torre a mano —cuatro primitivas y una pirámide de cinco
+vértices—: la auditoría cazó la pirámide abierta (`BORDE_ABIERTO`, 4 aristas) y el
+contrato `watertight` la rechazó. Cerrada la base, informe limpio.
+
+### H1. Paridad del camino de escena — hecho
+
+`--inspect-only`, `--baseline`, `--baseline-report`, `partScreenBoxes`, `renderHash` y
+`diff` funcionan ya igual con `--scene` que con `--model`. Consultar una escena baja de
+650 ms a 130 ms, y comparar dos versiones de lo que se está escribiendo da regiones y
+piezas responsables, como con un modelo.
+
+**El encuadre se hereda del informe anterior.** En el camino de modelo bastaba con
+guardar la caja envolvente de antes del parche, pero quien escribe una escena desde cero
+no tiene «antes»: solo el JSON nuevo. Por eso el informe publica ahora
+`sheet.frameAabb`, y `--baseline-report` la reutiliza. Medido subiendo la cubierta de la
+torre: **12,2 % del pliego cambiado sin heredar el encuadre, 8,2 % heredándolo**, y con
+la pieza que de verdad se movió —`cubierta`— la primera de la lista en vez de la cuarta.
+
+### H2. Lo que falta para que crear sea cómodo
+
+- **No hay operación `add`.** Los parches mueven, giran, escalan, ocultan, borran y
+  renombran lo que ya existe; no añaden geometría. Sin eso, crear es reemitir el JSON
+  entero en cada turno, que es exactamente lo que el formato de parches evita al editar.
+- **Los parches no se aplican a escenas**, solo a modelos. Con `add` y esto, C3
+  —componer, ensayar, deshacer— sirve igual para crear.
+- **El vocabulario son cuatro primitivas** —caja, esfera, toro, plano— y arrays crudos.
+  Faltan cilindro y cono para empezar, extrusión de polígono y revolucionado después.
+  Booleanas quedan lejos y probablemente no compensen.
+- **Solo se exporta OBJ**, que pierde color, material y jerarquía.
+
+### H3. Dos defectos que salieron al probarlo
+
+- **Una malla del revés no se detecta.** La primera pirámide tenía las caras bobinadas
+  hacia dentro: renderizaba oscura y ninguna comprobación saltó, porque las normales
+  eran coherentes *entre sí*. Se caza con el volumen firmado de una malla cerrada:
+  negativo significa invertida. Encaja con las auditorías espaciales de la fase D.
+- **`createSphere` emite 64 triángulos de área nula** en los polos, así que cualquier
+  escena con una esfera arrastra un aviso que no es culpa de quien la escribió.
 
 ## Cabos sueltos de infraestructura
 

@@ -1,31 +1,37 @@
 #!/usr/bin/env node
 /**
- * CLI headless para agentes: escena JSON dentro, pliego de contactos PNG y
+ * CLI headless para agentes: escena o modelo dentro, pliego de contactos PNG y
  * un informe JSON fuera. Sin GPU, sin navegador, sin servidor.
  *
+ *   npm run agent3d -- --model dron.glb --select "rotor-*" --out revision.png
  *   npm run agent3d -- --scene mi-objeto.json --out revision.png
  *   npm run agent3d                      (usa la escena de ejemplo)
+ *   npm run agent3d -- --help            (todas las opciones)
  *
  * Este fichero es solo entrada/salida: argumentos, lectura del fichero,
- * codificación PNG y escritura. Todo lo que decide algo está en
- * `src/soft/agent/`, tipado y comprobado por el compilador.
+ * codificación y descodificación PNG, y escritura. Todo lo que decide algo está
+ * en `src/soft/agent/`, tipado y comprobado por el compilador.
  *
  * El código de salida es 1 si el informe trae avisos, para poder usarlo como
- * verificación automática sin interpretar el JSON.
+ * verificación automática sin interpretar el JSON. Un error de datos —fichero
+ * ilegible, patrón sin coincidencias— sale con 2.
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { deflateSync } from "node:zlib";
+import { pathToFileURL } from "node:url";
+import { deflateSync, inflateSync } from "node:zlib";
 
 import {
   DEMO_SCENE,
   applyPatch,
+  computeSceneAabb,
   loadModel,
   reviewModel,
   reviewScene,
   serializeObj,
+  toSceneNodes,
 } from "../dist-node/agent3d.mjs";
 
 const CRC_TABLE = (() => {
@@ -89,6 +95,92 @@ function encodePng(pixels, width, height) {
   ]);
 }
 
+/**
+ * PNG RGBA de 8 bits sin entrelazar, que es exactamente lo que escribe
+ * `encodePng`. Deshacer un PNG es leer los bloques, concatenar los IDAT,
+ * descomprimir e invertir el filtro de cada fila.
+ *
+ * Los cinco filtros predicen cada byte a partir del de la izquierda (`a`), el de
+ * arriba (`b`) y el de la diagonal (`c`), y solo guardan el residuo; deshacerlos
+ * es sumar la predicción, en orden, porque cada fila se apoya en la ya
+ * reconstruida. Paeth elige entre los tres el que menos se desvía de `a+b-c`.
+ *
+ * No pretende leer cualquier PNG: entrelazado, paleta o 16 bits fallan con un
+ * mensaje que lo dice. Un decodificador general aquí sería código sin uso.
+ */
+export function decodePng(buffer) {
+  const SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  for (let index = 0; index < SIGNATURE.length; index += 1) {
+    if (buffer[index] !== SIGNATURE[index]) throw new Error("el fichero no es un PNG");
+  }
+
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  const parts = [];
+  while (offset < buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.toString("ascii", offset + 4, offset + 8);
+    const start = offset + 8;
+
+    if (type === "IHDR") {
+      width = buffer.readUInt32BE(start);
+      height = buffer.readUInt32BE(start + 4);
+      const bitDepth = buffer[start + 8];
+      const colorType = buffer[start + 9];
+      const interlace = buffer[start + 12];
+      if (bitDepth !== 8 || colorType !== 6 || interlace !== 0) {
+        throw new Error(
+          `solo se leen PNG RGBA de 8 bits sin entrelazar; este es ${bitDepth} bits, tipo de color ${colorType}, entrelazado ${interlace}`,
+        );
+      }
+    } else if (type === "IDAT") {
+      parts.push(buffer.subarray(start, start + length));
+    } else if (type === "IEND") {
+      break;
+    }
+
+    offset = start + length + 4; // los cuatro últimos son el CRC
+  }
+
+  const raw = inflateSync(Buffer.concat(parts));
+  const stride = width * 4;
+  const pixels = new Uint8ClampedArray(stride * height);
+
+  for (let row = 0; row < height; row += 1) {
+    const filter = raw[row * (stride + 1)];
+    const source = row * (stride + 1) + 1;
+    const target = row * stride;
+    for (let index = 0; index < stride; index += 1) {
+      const left = index >= 4 ? pixels[target + index - 4] : 0;
+      const up = row > 0 ? pixels[target - stride + index] : 0;
+      const upLeft = row > 0 && index >= 4 ? pixels[target - stride + index - 4] : 0;
+      const value = raw[source + index];
+      let prediction = 0;
+      if (filter === 1) prediction = left;
+      else if (filter === 2) prediction = up;
+      else if (filter === 3) prediction = (left + up) >> 1;
+      else if (filter === 4) {
+        const estimate = left + up - upLeft;
+        const distanceLeft = Math.abs(estimate - left);
+        const distanceUp = Math.abs(estimate - up);
+        const distanceUpLeft = Math.abs(estimate - upLeft);
+        prediction =
+          distanceLeft <= distanceUp && distanceLeft <= distanceUpLeft
+            ? left
+            : distanceUp <= distanceUpLeft
+              ? up
+              : upLeft;
+      } else if (filter !== 0) {
+        throw new Error(`filtro de fila desconocido (${filter}) en la fila ${row}`);
+      }
+      pixels[target + index] = (value + prediction) & 0xff;
+    }
+  }
+
+  return { pixels, width, height };
+}
+
 function parseArguments(argv) {
   const options = new Map();
   for (let index = 0; index < argv.length; index += 1) {
@@ -98,6 +190,62 @@ function parseArguments(argv) {
     options.set(token.slice(2), next !== undefined && !next.startsWith("--") ? next : "true");
   }
   return options;
+}
+
+/**
+ * Presupuesto a partir de las banderas. Solo entran las que se pasaron: un límite
+ * ausente no es un límite infinito, es una cláusula que no está en el contrato.
+ */
+function readBudget(options) {
+  const budget = {};
+  const number = (flag, field) => {
+    const value = options.get(flag);
+    if (value !== undefined && value !== "true") budget[field] = Number(value);
+  };
+  number("max-triangles", "triangles");
+  number("max-parts", "parts");
+  number("max-boundary-edges", "boundaryEdges");
+  number("max-degenerate", "degenerateTriangles");
+  number("max-symmetry-error", "symmetryError");
+  if (options.get("require-watertight") === "true") budget.watertight = true;
+  return Object.keys(budget).length > 0 ? budget : undefined;
+}
+
+/** Lo que da igual que la entrada sea un modelo o una escena. */
+function commonOptions(options) {
+  return {
+    tileSize: Number(options.get("tile") ?? 320),
+    ground: options.get("ground") !== "false",
+    inspectOnly: options.get("inspect-only") === "true",
+  };
+}
+
+/** Pliego anterior, ya descodificado. */
+async function readBaselinePng(options) {
+  const path = options.get("baseline");
+  return path ? decodePng(await readFile(resolve(path))) : undefined;
+}
+
+/**
+ * Informe anterior: de él salen los avisos con que comparar y el encuadre con que
+ * se renderizó. Lo segundo es lo que permite comparar imágenes de una escena que se
+ * está escribiendo desde cero, donde no hay «modelo antes del parche» al que
+ * volver: la cámara se recupera del propio informe.
+ *
+ * Se exige el formato nuevo —avisos como objetos con `code`— porque comparar por
+ * texto es justo lo que este campo viene a evitar.
+ */
+async function readBaselineReport(options) {
+  const path = options.get("baseline-report");
+  if (!path) return {};
+  const previous = JSON.parse(await readFile(resolve(path), "utf8"));
+  const warnings = previous.warnings ?? [];
+  if (warnings.some((warning) => typeof warning === "string")) {
+    throw new Error(
+      `${path} trae los avisos como texto, de una versión anterior; vuelve a generarlo para poder comparar por clave`,
+    );
+  }
+  return { warnings, frameAabb: previous.sheet?.frameAabb };
 }
 
 /**
@@ -132,6 +280,13 @@ async function reviewModelFile(options, outputPath) {
   const decoder = isBinary ? await loadMeshoptDecoder() : undefined;
   const model = loadModel(modelPath, data, decoder);
 
+  const baseline = await readBaselinePng(options);
+  const previous = await readBaselineReport(options);
+  // Encuadre con que se hizo el pliego anterior; si no viene en el informe, el del
+  // modelo **antes** del parche. Comparar exige que la cámara no se mueva, y la
+  // cámara se ajusta a la caja envolvente.
+  const frameAabb = previous.frameAabb ?? (baseline ? computeSceneAabb(toSceneNodes(model)) : undefined);
+
   let edits = null;
   const patchPath = options.get("patch");
   if (patchPath) {
@@ -141,14 +296,20 @@ async function reviewModelFile(options, outputPath) {
 
   const select = options.get("select");
   const { sheet, review } = reviewModel(model, {
-    tileSize: Number(options.get("tile") ?? 320),
+    ...commonOptions(options),
+    budget: readBudget(options),
+    baselineWarnings: previous.warnings,
     select: select ? select.split(",").map((pattern) => pattern.trim()) : [],
     isolate: options.get("isolate") === "true",
     auditLimit: Number(options.get("audit-limit") ?? 12),
+    baseline,
+    frameAabb,
   });
 
-  mkdirSync(dirname(outputPath), { recursive: true });
-  writeFileSync(outputPath, encodePng(sheet.pixels, sheet.width, sheet.height));
+  if (sheet) {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    writeFileSync(outputPath, encodePng(sheet.pixels, sheet.width, sheet.height));
+  }
 
   let exported = null;
   const exportPath = options.get("export");
@@ -158,11 +319,70 @@ async function reviewModelFile(options, outputPath) {
     writeFileSync(exported, serializeObj(model), "utf8");
   }
 
-  return { ...review, edits, file: outputPath, exported };
+  return { ...review, edits, file: sheet ? outputPath : null, exported };
 }
+
+/**
+ * Ayuda por stdout. Existe porque un agente que no escribió la herramienta no
+ * tiene forma de saber qué admite: hoy la única alternativa es leerse el código.
+ * No sustituye a `--schema` —la forma del JSON de escena y de parche—, que es
+ * otra cosa y está pendiente.
+ */
+const USAGE = `agent3d — revisión de modelos y escenas 3D, headless y determinista.
+
+  npm run agent3d -- --model <fichero.glb|.obj> [opciones]
+  npm run agent3d -- --scene <escena.json> [opciones]
+  npm run agent3d                              usa la escena de ejemplo
+
+Entrada
+  --model <ruta>          modelo GLB u OBJ; manda sobre --scene
+  --scene <ruta>          escena declarativa en JSON
+  --patch <ruta>          parche a aplicar antes de renderizar (solo con --model)
+
+Salida
+  --out <ruta.png>        pliego de contactos; por defecto artifacts/agent/contact-sheet.png
+  --export <ruta.obj>     exporta el modelo ya parcheado
+  --inspect-only          solo el informe JSON, sin renderizar: ~4 veces más rápido
+
+Selección y encuadre
+  --select "a-*,b-*"      resalta las piezas que encajan; el encuadre las sigue
+  --isolate true          dibuja solo lo seleccionado
+  --audit-limit <n>       piezas seleccionadas a auditar en detalle (12)
+  --tile <n>              lado del tile en píxeles (320)
+  --ground false          sin plano de referencia
+
+Verificación
+  --baseline <ruta.png>   compara con un pliego anterior y añade "diff" al informe.
+                          Fija el encuadre y la sombra al modelo previo al parche,
+                          sin lo cual cualquier cambio desplaza el pliego entero.
+  --baseline-report <j>   informe anterior; añade "warningsDelta" con lo nuevo,
+                          lo resuelto y cuántos persisten, y hereda su encuadre
+                          ("sheet.frameAabb") para que la comparación sea local
+
+Todas estas opciones valen igual con --scene que con --model.
+
+Presupuesto (cada bandera es una cláusula; incumplirla es un aviso y salida 1)
+  --max-triangles <n>     triángulos del modelo entero
+  --max-parts <n>         número de piezas
+  --require-watertight    todas las mallas cerradas
+  --max-boundary-edges <n>  aristas de borde sumadas
+  --max-degenerate <n>    triángulos de área nula sumados
+  --max-symmetry-error <x>  error de simetría en X, en fracción del radio (0.02 = 2 %)
+
+Otras
+  --debug                 vuelca la pila en los errores
+  --help                  esta ayuda
+
+stdout es JSON puro. Código de salida: 0 sin avisos, 1 con avisos o parches
+fallidos, 2 si hay un error de datos.`;
 
 async function main() {
   const options = parseArguments(process.argv.slice(2));
+
+  if (options.has("help")) {
+    process.stdout.write(`${USAGE}\n`);
+    return;
+  }
   const outputPath = resolve(options.get("out") ?? "artifacts/agent/contact-sheet.png");
 
   if (options.has("model")) {
@@ -175,25 +395,36 @@ async function main() {
 
   const scenePath = options.get("scene");
   const spec = scenePath ? JSON.parse(await readFile(resolve(scenePath), "utf8")) : DEMO_SCENE;
+  const previous = await readBaselineReport(options);
 
   const { sheet, review } = reviewScene(spec, {
-    tileSize: Number(options.get("tile") ?? 320),
-    ground: options.get("ground") !== "false",
+    ...commonOptions(options),
+    baseline: await readBaselinePng(options),
+    frameAabb: previous.frameAabb,
+    baselineWarnings: previous.warnings,
   });
 
-  mkdirSync(dirname(outputPath), { recursive: true });
-  writeFileSync(outputPath, encodePng(sheet.pixels, sheet.width, sheet.height));
+  if (sheet) {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    writeFileSync(outputPath, encodePng(sheet.pixels, sheet.width, sheet.height));
+  }
 
-  process.stdout.write(`${JSON.stringify({ ...review, file: outputPath }, null, 2)}\n`);
+  process.stdout.write(
+    `${JSON.stringify({ ...review, file: sheet ? outputPath : null }, null, 2)}\n`,
+  );
   process.exitCode = review.warnings.length > 0 ? 1 : 0;
 }
 
-main().catch((error) => {
-  // Mensaje limpio, no volcado de pila: los errores de este CLI son de datos
-  // —extensión no soportada, patrón sin coincidencias, fichero ilegible— y llevan
-  // la corrección dentro. La pila solo estorba, y con `--debug` sigue disponible.
-  const debug = process.argv.includes("--debug");
-  const message = error instanceof Error ? (debug ? error.stack : error.message) : String(error);
-  process.stderr.write(`${message}\n`);
-  process.exitCode = 2;
-});
+// Solo se ejecuta si es el programa invocado, no si alguien lo importa: así el
+// decodificador PNG se puede comprobar desde fuera sin que importarlo renderice.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    // Mensaje limpio, no volcado de pila: los errores de este CLI son de datos
+    // —extensión no soportada, patrón sin coincidencias, fichero ilegible— y llevan
+    // la corrección dentro. La pila solo estorba, y con `--debug` sigue disponible.
+    const debug = process.argv.includes("--debug");
+    const message = error instanceof Error ? (debug ? error.stack : error.message) : String(error);
+    process.stderr.write(`${message}\n`);
+    process.exitCode = 2;
+  });
+}

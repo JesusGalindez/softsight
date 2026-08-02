@@ -41,6 +41,30 @@ npm run dev
 En `/soft.html` puedes **soltar un `.glb` o un `.obj`** sobre el visor, o usar los
 botones para cargar los del repositorio.
 
+## Crear un objeto desde cero
+
+No hace falta un fichero de partida. La escena es JSON: primitivas con parámetros, o
+mallas crudas con sus posiciones e índices, que es lo que produce cualquier generador
+de geometría. El mismo informe —auditoría, contrato, pliego— juzga lo que acabas de
+inventar.
+
+```json
+{
+  "objects": [
+    { "name": "fuste", "geometry": { "primitive": "box", "parameters": [1.1, 1.6, 1.1] },
+      "position": [0, 1.05, 0] },
+    { "name": "cubierta",
+      "geometry": { "positions": [-0.7,0,-0.7, 0.7,0,-0.7, 0.7,0,0.7, -0.7,0,0.7, 0,0.85,0],
+                    "indices": [0,4,1, 1,4,2, 2,4,3, 3,4,0, 0,1,2, 0,2,3] },
+      "position": [0, 2.4, 0] }
+  ],
+  "budget": { "watertight": true }
+}
+```
+
+Si la pirámide se deja sin base, el informe no se lo calla: `BORDE_ABIERTO: 4 aristas de
+borde` y el contrato `watertight` incumplido, con salida 1.
+
 ## Banco de trabajo para agentes
 
 Escena o modelo dentro, pliego de contactos PNG y diagnóstico JSON fuera. Sin GPU,
@@ -60,16 +84,56 @@ npm run agent3d -- --model artifacts/export/drone.glb \
 ![Selección resaltada](docs/selection.png)
 
 *`--select "rotor-*,propeller-*"` resalta en naranja las 24 piezas que encajan y apaga
-el resto. El encuadre sigue a la selección.*
+el resto. El encuadre sigue a la selección. Cada tile lleva quemado su nombre y la
+altura de mundo que abarca, para comparar escalas entre vistas sin volver al JSON.*
+
+```bash
+# Solo diagnóstico: piezas, familias y auditoría, sin renderizar nada
+npm run agent3d -- --model artifacts/export/drone.glb --inspect-only
+
+# Verificar un cambio: qué se movió en la imagen, cuánto y de qué pieza
+npm run agent3d -- --model artifacts/export/drone.glb \
+  --patch cambio.json --baseline anterior.png --out despues.png
+```
+
+Todo informe con pliego trae un `renderHash` —FNV-1a del búfer de color, uno por vista y
+uno del pliego—, que responde «¿cambió algo?» comparando ocho caracteres, sin guardar
+imágenes. Es reproducible desde el PNG, así que sirve de prueba de no regresión en CI.
+
+Con `--baseline`, el informe trae además un `diff`: fracción del pliego que cambió,
+desglose por vista, y las regiones con las piezas responsables. Dos renders sin cambios
+dan **cero exacto**. Para que eso valga, con `--baseline` el encuadre y el volumen de la
+sombra quedan fijados a los del modelo *antes* del parche: si no, mover una pieza
+mueve la cámara y el pliego entero se desplaza un píxel.
 
 `stdout` es JSON puro y el código de salida es 1 si hay avisos, así que encadena en
-CI sin interpretar nada. Opciones: `--tile N`, `--isolate true`, `--audit-limit N`,
-`--ground false`, `--debug`.
+CI sin interpretar nada. `--help` lista todas las opciones: `--inspect-only`,
+`--baseline pliego.png`, `--baseline-report informe.json`, `--tile N`,
+`--isolate true`, `--audit-limit N`, `--ground false`, las de presupuesto y `--debug`.
 
 El informe trae, además del pliego: auditoría topológica por pieza —aristas de borde,
 no manifold, triángulos degenerados, normales invertidas, desviación del pivote,
-error de simetría—, resumen por familias de piezas y avisos redactados como
-diagnóstico, no como métricas.
+error de simetría—, resumen por familias de piezas, la caja en píxeles que ocupa cada
+pieza auditada en cada vista, y avisos redactados como diagnóstico, no como métricas.
+Cada aviso es `{ code, part, message }`: el texto lleva las cifras dentro y cambia en
+cada ejecución, así que lo que se compara es el código.
+
+### Presupuesto como contrato
+
+```bash
+npm run agent3d -- --model artifacts/export/drone.glb --inspect-only \
+  --max-parts 400 --require-watertight --max-symmetry-error 0.02
+```
+
+Cada bandera es una cláusula; incumplirla es un aviso con código propio y salida 1, así
+que el agente sabe si su cambio cumple sin interpretar el JSON. Hay `--max-triangles`,
+`--max-parts`, `--require-watertight`, `--max-boundary-edges`, `--max-degenerate` y
+`--max-symmetry-error`; una escena declarativa lleva los mismos campos en `budget`. Las
+cláusulas de topología auditan las 296 piezas —1,2 s frente a 0,16 s— y solo se pagan si
+se piden.
+
+Con `--baseline-report informe-anterior.json`, el informe trae `warningsDelta` con lo
+nuevo, lo resuelto y cuántos avisos persisten. El agente solo mira `new`.
 
 ## Qué hay dentro
 
@@ -85,7 +149,7 @@ diagnóstico, no como métricas.
 | `present.ts` | Buffer interno desacoplado del canvas visible |
 | `resolutionController.ts` | Resolución adaptativa con modelo de coste ajustado en vivo |
 | `parallel.ts`, `renderWorker.ts` | Paralelo por bandas con reparto adaptativo |
-| `agent/` | Lectores GLB/OBJ, modelo direccionable, auditoría, pliego de contactos |
+| `agent/` | Lectores GLB/OBJ, modelo direccionable, auditoría, pliego con rótulos, diff de renders |
 
 Dependencias: **ninguna** en el núcleo. `meshoptimizer` es opcional y se carga bajo
 demanda, solo si abres un GLB comprimido con `EXT_meshopt_compression`.
