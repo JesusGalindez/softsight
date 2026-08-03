@@ -95,7 +95,7 @@ export const SCENE_SCHEMA: ObjectSchema = {
 
 const EDIT_FIELDS: ObjectSchema = {
   op: {
-    type: '"add"|"translate"|"rotate"|"scale"|"color"|"hide"|"show"|"delete"|"rename"',
+    type: '"add"|"translate"|"rotate"|"scale"|"color"|"hide"|"show"|"delete"|"rename"|"align"|"setPivot"|"mirror"',
     required: true,
     description: "Operación a aplicar.",
   },
@@ -113,7 +113,14 @@ const EDIT_FIELDS: ObjectSchema = {
   degrees: { type: VECTOR3, description: "rotate: grados por eje, alrededor del origen de la pieza." },
   factor: { type: "number|number[3]", description: "scale: factor uniforme o por eje." },
   rgb: { type: VECTOR3, description: "color: albedo en 0..1." },
-  to: { type: "string", description: "rename: nombre nuevo; el patrón debe coincidir con una sola pieza." },
+  to: {
+    type: 'string|number[3]',
+    description:
+      "rename: nombre nuevo, con el patrón coincidiendo con una sola pieza. " +
+      "align: pieza contra la que pegarse. setPivot: origen nuevo en local, centro por defecto.",
+  },
+  axis: { type: '"x"|"y"|"z"', description: "align: eje por el que mover; mirror: plano de reflexión." },
+  gap: { type: "number", description: "align: separación que se deja, cero por defecto." },
 };
 
 export const PATCH_SCHEMA: ObjectSchema = {

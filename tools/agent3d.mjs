@@ -350,6 +350,7 @@ async function reviewModelFile(options, outputPath) {
     budget: readBudget(options),
     baselineWarnings: previous.warnings,
     select: select ? select.split(",").map((pattern) => pattern.trim()) : [],
+    selectWhere: options.get("select-where"),
     isolate: options.get("isolate") === "true",
     auditLimit: Number(options.get("audit-limit") ?? 12),
     baseline,
@@ -401,6 +402,8 @@ Salida
 
 Selección y encuadre
   --select "a-*,b-*"      resalta las piezas que encajan; el encuadre las sigue
+  --select-where <expr>   selección por propiedad: "triangles>1000",
+                          "boundaryEdges>0", "material=Vidrio"; varias con comas
   --isolate true          dibuja solo lo seleccionado
   --audit-limit <n>       piezas seleccionadas a auditar en detalle (12)
   --tile <n>              lado del tile en píxeles (320)

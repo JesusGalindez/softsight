@@ -1,8 +1,9 @@
 # Plan: mejores ojos y mejores manos para el agente
 
-Estado: en curso. Hechos los ocho primeros del orden recomendado —B1, A3, A2, A1, A4,
-C1, C2, D5, B3 y la fase D entera—, más F1 y la fase H de creación desde cero. Quedan
-B2, C3 y E1–E3. Escrito el 2026-07-30 desde la experiencia de haber usado
+Estado: **el orden recomendado, entero**. Con él, F1 y la fase H de creación desde
+cero. Lo que queda son cabos concretos, anotados en su sitio: extrusión y
+revolucionado, exportar GLB, `instance`, y los 64 triángulos degenerados de
+`createSphere`. Escrito el 2026-07-30 desde la experiencia de haber usado
 `tools/agent3d.mjs` durante una sesión larga de trabajo real sobre el dron. Cada
 apartado nace de una fricción concreta que costó tiempo, no de una lista de deseos.
 
@@ -505,13 +506,22 @@ que preguntar.
 
 ## Fase E — Herramientas de cambio más rápidas
 
-### E1. Selección por propiedad
+### E1. Selección por propiedad — hecho
 
 `--select-where "triangles>1000"`, `"boundaryEdges>0"`, `"material=Vidrio"`. Hoy la
 selección es solo por nombre o ruta. Para trabajo de optimización —«enséñame todo lo
 que pase de mil triángulos»— el nombre no sirve.
 
-### E2. Operaciones de parche que faltan
+Varias condiciones separadas por comas se cumplen todas, y se suma a `--select`: quien
+pide las dos cosas quiere las dos. Una condición mal escrita no selecciona cero piezas
+en silencio, dice qué forma esperaba.
+
+**El coste depende de la propiedad, y conviene saberlo**: `triangles` y `vertices` se
+leen del propio array —`triangles>200,triangles<400` tarda 0,16 s—, mientras que
+`boundaryEdges` obliga a auditar las 296 piezas y sube a 1,47 s. La distinción está en
+el código, no en la documentación: solo se audita si alguna condición lo pide.
+
+### E2. Operaciones de parche que faltan — hechas tres de cuatro
 
 `align` (llevar una pieza a tocar otra, que es la corrección natural de D2),
 `mirror` sobre un plano, `instance` (reemplazar geometría duplicada por referencias),
@@ -521,11 +531,39 @@ pivote descentrado).
 Cada operación de auditoría debería tener su operación de arreglo. Un diagnóstico sin
 acción correspondiente obliga al agente a improvisar.
 
-### E3. Avisos con arreglo ejecutable
+- **`align`** mueve por el eje en que menos hay que viajar, y por el lado que ya está
+  más cerca: acercar una pieza suelta es cerrar el hueco que hay, no cruzarla al otro
+  lado del vecino. Admite `axis` y `gap` para forzarlo. Está en los dos caminos, el de
+  modelo y el de escena, porque es el arreglo que propone el aviso de pieza flotante y
+  sería inaplicable justo donde el agente está creando.
+- **`setPivot`** desplaza las posiciones y compensa con la matriz, así que el pivote se
+  centra y **la pieza no se mueve**: comprobado, la caja en mundo no cambia.
+- **`mirror`** refleja y además **da la vuelta a cada triángulo**. Sin eso la pieza
+  espejada queda del revés, y ahora que existe `MALLA_INVERTIDA` la propia auditoría lo
+  cantaría: tras espejar, el volumen firmado sigue siendo positivo.
+- **`instance` no se hace.** El modelo ya comparte el objeto `Mesh` entre piezas cuando
+  el GLB venía instanciado, así que la operación no ahorraría memoria; lo que ahorraría
+  es tamaño de exportación, y exportar GLB todavía no existe. Cuando exista, aquí es
+  donde va.
+
+### E3. Avisos con arreglo ejecutable — hecho
 
 Que cada aviso lleve un campo `fix` con la orden o el fragmento de parche que lo
 corrige, como ya hace el error de meshopt. Un agente actúa sobre eso directamente en
 vez de deducirlo.
+
+Lo llevan cuatro: pieza flotante (`align` contra la más próxima), duplicado exacto
+(`delete` de la copia), hermano fuera de escala (`scale` al factor que lo lleva a la
+mediana) y pivote descentrado (`setPivot`).
+
+**Los demás no lo llevan, y eso también es una decisión.** Una malla abierta se cierra
+de muchas maneras y ninguna es automática; una interpenetración puede resolverse
+moviendo cualquiera de las dos piezas. Inventar un `fix` para esos casos sería
+proponerle al agente una corrección que la herramienta no puede defender.
+
+**Verificación del bucle entero**: se toma el informe, se filtran los avisos con `fix`,
+se escriben tal cual como parche, se aplica —y el aviso aparece en
+`warningsDelta.resolved`—. Sin que el agente tenga que interpretar nada.
 
 ---
 
@@ -573,7 +611,7 @@ Conviene ser exacto sobre qué garantiza esto, porque es fácil prometer de más
 | 7 | ~~**D5** escala~~ **hecho** | Una división, atrapa el error más común |
 | 8 | ~~**B3** esquema~~ **hecho** | Lo que abre la herramienta a otros |
 | 9 | ~~**D1–D4** auditorías espaciales~~ **hecha** | El mayor valor, y el mayor trabajo |
-| 10 | **E1–E3, B2, C3** | Comodidad y velocidad, ya con todo lo demás en pie |
+| 10 | ~~**E1–E3, B2, C3**~~ **hecho** | Comodidad y velocidad, ya con todo lo demás en pie |
 | — | ~~**F1**~~ **hecho** | Antes de prometer comparación de imágenes en CI |
 
 Los cinco primeros son una sesión corta y ya cambian cómo se siente la herramienta: el

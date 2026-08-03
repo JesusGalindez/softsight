@@ -97,6 +97,94 @@ export function matchesPattern(part: ModelPart, pattern: string): boolean {
   return matchesName(part.name, pattern) || matchesName(part.path, pattern);
 }
 
+/**
+ * Selección por propiedad: `triangles>1000`, `boundaryEdges>0`, `material=Vidrio`.
+ *
+ * El nombre no sirve para trabajo de optimización —«enséñame todo lo que pase de mil
+ * triángulos» no es un patrón de nombre—, y para eso hace falta consultar la
+ * geometría. Varias condiciones separadas por comas se cumplen todas.
+ *
+ * Las propiedades topológicas obligan a auditar la malla, que cuesta; por eso
+ * `triangles` y `vertices`, que se leen del propio array, se resuelven sin auditar y
+ * son las que se usan el 90 % de las veces.
+ */
+export interface PropertyQuery {
+  property: string;
+  operator: ">" | "<" | ">=" | "<=" | "=" | "!=";
+  value: string;
+}
+
+const CHEAP_PROPERTIES = new Set(["triangles", "vertices", "name", "path", "material", "visible"]);
+
+export function parseWhere(expression: string): PropertyQuery[] {
+  return expression
+    .split(",")
+    .map((clause) => clause.trim())
+    .filter((clause) => clause.length > 0)
+    .map((clause) => {
+      const match = /^([A-Za-z]+)\s*(>=|<=|!=|>|<|=)\s*(.+)$/.exec(clause);
+      if (match === null) {
+        throw new Error(
+          `no entiendo la condición "${clause}"; la forma es propiedad>valor, por ejemplo triangles>1000`,
+        );
+      }
+      return { property: match[1], operator: match[2] as PropertyQuery["operator"], value: match[3].trim() };
+    });
+}
+
+/** Si alguna condición mira la topología, hay que auditar; si no, se ahorra. */
+export function needsAudit(queries: readonly PropertyQuery[]): boolean {
+  return queries.some((query) => !CHEAP_PROPERTIES.has(query.property));
+}
+
+function compare(actual: number | string | boolean | null, query: PropertyQuery): boolean {
+  if (typeof actual === "number") {
+    const expected = Number(query.value);
+    if (Number.isNaN(expected)) return false;
+    switch (query.operator) {
+      case ">": return actual > expected;
+      case "<": return actual < expected;
+      case ">=": return actual >= expected;
+      case "<=": return actual <= expected;
+      case "=": return actual === expected;
+      case "!=": return actual !== expected;
+    }
+  }
+  const text = actual === null ? "" : String(actual);
+  const matches = matchesName(text, query.value);
+  return query.operator === "!=" ? !matches : matches;
+}
+
+/**
+ * Piezas que cumplen todas las condiciones. `audits` trae la auditoría por nombre
+ * cuando alguna condición la necesita; sin ella, esas condiciones no encuentran la
+ * propiedad y la pieza no entra.
+ */
+export function selectWhere(
+  model: Model,
+  queries: readonly PropertyQuery[],
+  audits: ReadonlyMap<string, Record<string, number | boolean | null>> = new Map(),
+): ModelPart[] {
+  return model.parts.filter((part) =>
+    queries.every((query) => {
+      switch (query.property) {
+        case "triangles": return compare(part.mesh.indices.length / 3, query);
+        case "vertices": return compare(part.mesh.positions.length / 3, query);
+        case "name": return compare(part.name, query);
+        case "path": return compare(part.path, query);
+        case "material": return compare(part.materialName, query);
+        case "visible": return compare(String(part.visible), query);
+        default: {
+          const audit = audits.get(part.name);
+          if (audit === undefined) return false;
+          const value = audit[query.property];
+          return value === undefined ? false : compare(value as number | boolean | null, query);
+        }
+      }
+    }),
+  );
+}
+
 export function selectParts(model: Model, patterns: readonly string[]): ModelPart[] {
   if (patterns.length === 0) return [];
   return model.parts.filter((part) => patterns.some((pattern) => matchesPattern(part, pattern)));
@@ -195,7 +283,24 @@ export type Edit =
   | { op: "hide"; target: string }
   | { op: "show"; target: string }
   | { op: "delete"; target: string }
-  | { op: "rename"; target: string; to: string };
+  | { op: "rename"; target: string; to: string }
+  /**
+   * Lleva una pieza a tocar otra. Es la corrección natural del aviso de pieza
+   * flotante: la auditoría dice a cuánto está y de quién, y esto lo cierra.
+   */
+  | { op: "align"; target: string; to: string; axis?: "x" | "y" | "z"; gap?: number }
+  /**
+   * Recentra el origen de la pieza sin mover la geometría: las posiciones se
+   * desplazan y la matriz compensa. Corrige el aviso de pivote descentrado, que es
+   * el que hace que girar una pieza la mande a dar una vuelta ancha.
+   */
+  | { op: "setPivot"; target: string; to?: [number, number, number] }
+  /**
+   * Espeja en un plano del propio objeto. Reflejar invierte el bobinado, así que
+   * además se da la vuelta a cada triángulo: si no, la pieza espejada queda del
+   * revés y `MALLA_INVERTIDA` lo cantaría.
+   */
+  | { op: "mirror"; target: string; axis: "x" | "y" | "z" };
 
 export interface Patch {
   edits: Edit[];
@@ -206,6 +311,70 @@ export interface EditResult {
   target: string;
   matched: number;
   error?: string;
+}
+
+/** Caja envolvente en mundo de un puñado de piezas. */
+function worldBounds(parts: readonly ModelPart[]): { min: number[]; max: number[] } {
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (const part of parts) {
+    const { positions } = part.mesh;
+    const m = part.matrix;
+    for (let offset = 0; offset < positions.length; offset += 3) {
+      const x = positions[offset];
+      const y = positions[offset + 1];
+      const z = positions[offset + 2];
+      const world = [
+        m[0] * x + m[1] * y + m[2] * z + m[3],
+        m[4] * x + m[5] * y + m[6] * z + m[7],
+        m[8] * x + m[9] * y + m[10] * z + m[11],
+      ];
+      for (let axis = 0; axis < 3; axis += 1) {
+        if (world[axis] < min[axis]) min[axis] = world[axis];
+        if (world[axis] > max[axis]) max[axis] = world[axis];
+      }
+    }
+  }
+  return { min, max };
+}
+
+/** Eje por el que menos hay que mover para juntar dos cajas. */
+function closestAxis(box: { min: number[]; max: number[] }, anchor: { min: number[]; max: number[] }): number {
+  let best = 1;
+  let shortest = Infinity;
+  for (let axis = 0; axis < 3; axis += 1) {
+    const travel = Math.min(
+      Math.abs(anchor.min[axis] - box.max[axis]),
+      Math.abs(anchor.max[axis] - box.min[axis]),
+    );
+    if (travel < shortest) {
+      shortest = travel;
+      best = axis;
+    }
+  }
+  return best;
+}
+
+function localCenter(mesh: Mesh): [number, number, number] {
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (let offset = 0; offset < mesh.positions.length; offset += 3) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      const value = mesh.positions[offset + axis];
+      if (value < min[axis]) min[axis] = value;
+      if (value > max[axis]) max[axis] = value;
+    }
+  }
+  return [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+}
+
+function radiusOf(positions: Float32Array): number {
+  let radius = 0;
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    const distance = Math.hypot(positions[offset], positions[offset + 1], positions[offset + 2]);
+    if (distance > radius) radius = distance;
+  }
+  return radius;
 }
 
 /** Pieza nueva a partir de su descripción declarativa, ya colocada en el mundo. */
@@ -317,6 +486,62 @@ export function applyPatch(model: Model, patch: Patch): EditResult[] {
       case "delete": {
         const removed = new Set(targets);
         model.parts = model.parts.filter((part) => !removed.has(part));
+        break;
+      }
+      case "align": {
+        const reference = model.parts.filter((part) => matchesPattern(part, edit.to));
+        if (reference.length === 0) {
+          result.error = `align: ningún nombre coincide con "${edit.to}"`;
+          break;
+        }
+        const anchor = worldBounds(reference);
+        for (const part of targets) {
+          const box = worldBounds([part]);
+          const axis = edit.axis !== undefined ? "xyz".indexOf(edit.axis) : closestAxis(box, anchor);
+          const gap = edit.gap ?? 0;
+          // Se mueve por el lado que ya está más cerca: acercar una pieza suelta es
+          // cerrar el hueco que hay, no cruzarla al otro lado del vecino.
+          const below = anchor.min[axis] - box.max[axis];
+          const above = anchor.max[axis] - box.min[axis];
+          const delta = Math.abs(below) <= Math.abs(above) ? below - gap : above + gap;
+          const move = [0, 0, 0];
+          move[axis] = delta;
+          multiply(translation(move[0], move[1], move[2], scratchA), part.matrix, scratchD);
+          part.matrix.set(scratchD);
+        }
+        break;
+      }
+      case "setPivot":
+        for (const part of targets) {
+          const local = localCenter(part.mesh);
+          const to = edit.to ?? [0, 0, 0];
+          const shift = [local[0] - to[0], local[1] - to[1], local[2] - to[2]];
+          const { positions } = part.mesh;
+          for (let offset = 0; offset < positions.length; offset += 3) {
+            positions[offset] -= shift[0];
+            positions[offset + 1] -= shift[1];
+            positions[offset + 2] -= shift[2];
+          }
+          part.mesh.boundingRadius = radiusOf(positions);
+          // La matriz compensa el desplazamiento para que la pieza no se mueva.
+          multiply(part.matrix, translation(shift[0], shift[1], shift[2], scratchA), scratchD);
+          part.matrix.set(scratchD);
+        }
+        break;
+      case "mirror": {
+        const axis = "xyz".indexOf(edit.axis);
+        for (const part of targets) {
+          const { positions, normals, indices } = part.mesh;
+          for (let offset = axis; offset < positions.length; offset += 3) {
+            positions[offset] = -positions[offset];
+            normals[offset] = -normals[offset];
+          }
+          for (let triangle = 0; triangle < indices.length; triangle += 3) {
+            const swap = indices[triangle + 1];
+            indices[triangle + 1] = indices[triangle + 2];
+            indices[triangle + 2] = swap;
+          }
+        }
         break;
       }
       case "rename":

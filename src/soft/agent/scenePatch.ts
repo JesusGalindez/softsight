@@ -20,9 +20,10 @@
  *   rechazan con ese motivo en vez de fingir que hacen algo.
  */
 
+import { computeSceneAabb, type SceneAabb } from "./contactSheet";
 import { matchesName, type EditResult, type Patch } from "./model";
 import { assertValid, PATCH_SCHEMA } from "./schema";
-import type { ObjectSpec, SceneSpec } from "./sceneSpec";
+import { resolveObject, type ObjectSpec, type SceneSpec } from "./sceneSpec";
 
 function nameOf(object: ObjectSpec, index: number): string {
   return object.name ?? `objeto${index}`;
@@ -30,6 +31,24 @@ function nameOf(object: ObjectSpec, index: number): string {
 
 function asTriple(value: number | [number, number, number]): [number, number, number] {
   return typeof value === "number" ? [value, value, value] : value;
+}
+
+/** Caja en mundo de un objeto del documento, resolviéndolo tal como está escrito. */
+function boundsOf(object: ObjectSpec, index: number): SceneAabb {
+  const { node } = resolveObject(object, index);
+  return computeSceneAabb([node]);
+}
+
+function unionOf(boxes: readonly SceneAabb[]): SceneAabb {
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+  for (const box of boxes) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      if (box.min[axis] < min[axis]) min[axis] = box.min[axis];
+      if (box.max[axis] > max[axis]) max[axis] = box.max[axis];
+    }
+  }
+  return { min, max };
 }
 
 /**
@@ -103,10 +122,52 @@ export function applyPatchToScene(spec: SceneSpec, patch: Patch): EditResult[] {
           targets[0].name = edit.to;
         }
         break;
+      case "align": {
+        // Es el arreglo que propone el aviso de pieza flotante, así que tiene que
+        // funcionar también aquí: si no, el `fix` del informe sería inaplicable justo
+        // en el camino donde el agente está creando.
+        const anchors = spec.objects
+          .map((object, index) => ({ object, index }))
+          .filter((entry) => matchesName(nameOf(entry.object, entry.index), edit.to));
+        if (anchors.length === 0) {
+          result.error = `align: ningún nombre coincide con "${edit.to}"`;
+          break;
+        }
+        const anchor = unionOf(anchors.map((entry) => boundsOf(entry.object, entry.index)));
+        for (const object of targets) {
+          const box = boundsOf(object, spec.objects.indexOf(object));
+          let axis = edit.axis !== undefined ? "xyz".indexOf(edit.axis) : 1;
+          if (edit.axis === undefined) {
+            let shortest = Infinity;
+            for (let candidate = 0; candidate < 3; candidate += 1) {
+              const travel = Math.min(
+                Math.abs(anchor.min[candidate] - box.max[candidate]),
+                Math.abs(anchor.max[candidate] - box.min[candidate]),
+              );
+              if (travel < shortest) {
+                shortest = travel;
+                axis = candidate;
+              }
+            }
+          }
+          const gap = edit.gap ?? 0;
+          const below = anchor.min[axis] - box.max[axis];
+          const above = anchor.max[axis] - box.min[axis];
+          const delta = Math.abs(below) <= Math.abs(above) ? below - gap : above + gap;
+          const position = [...(object.position ?? [0, 0, 0])] as [number, number, number];
+          position[axis] += delta;
+          object.position = position;
+        }
+        break;
+      }
       case "hide":
       case "show":
         result.error =
           "hide y show son de modelos cargados de fichero; en una escena, añade la pieza o bórrala";
+        break;
+      case "setPivot":
+      case "mirror":
+        result.error = `${edit.op} reescribe la malla y aquí solo se edita el documento; aplícalo sobre un modelo cargado de fichero`;
         break;
       default: {
         result.error = `operación desconocida: ${(edit as { op: string }).op}`;

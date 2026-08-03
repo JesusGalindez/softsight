@@ -26,7 +26,10 @@ import { parseGlb, type MeshoptDecoderLike } from "./glbLoader";
 import { auditMesh, type MeshAudit } from "./inspect";
 import {
   dedupeNames,
+  needsAudit,
+  parseWhere,
   selectParts,
+  selectWhere,
   summarizeFamilies,
   toSceneNodes,
   type Model,
@@ -34,6 +37,7 @@ import {
   type PartFamily,
 } from "./model";
 import { parseObj } from "./objLoader";
+import type { Edit } from "./model";
 import type { Mat4 } from "../math";
 import type { Mesh } from "../mesh";
 import { diffSheets, type RasterImage, type RenderDiff } from "./renderDiff";
@@ -60,11 +64,14 @@ export {
   dedupeNames,
   matchesName,
   matchesPattern,
+  needsAudit,
+  parseWhere,
   selectParts,
+  selectWhere,
   summarizeFamilies,
   toSceneNodes,
 } from "./model";
-export type { Model, ModelPart, PartFamily, Patch, Edit, EditResult } from "./model";
+export type { Model, ModelPart, PartFamily, Patch, Edit, EditResult, PropertyQuery } from "./model";
 export { diffSheets } from "./renderDiff";
 export type { RasterImage, RenderDiff, DiffRegion } from "./renderDiff";
 export { resolveScene, resolveObject, createGroundPlane } from "./sceneSpec";
@@ -95,6 +102,15 @@ export interface Warning {
   /** Pieza a la que se refiere, o `null` si el aviso es del conjunto. */
   part: string | null;
   message: string;
+  /**
+   * Operación de parche que lo corrige, cuando existe una.
+   *
+   * Un diagnóstico sin acción obliga al agente a improvisar la corrección, y esa
+   * improvisación es donde se cometen los errores. Los avisos **sin** `fix` no son un
+   * olvido: son aquellos para los que la herramienta no tiene nada honesto que
+   * ofrecer —una malla abierta se cierra de muchas maneras y ninguna es automática—.
+   */
+  fix?: Edit;
 }
 
 /**
@@ -235,6 +251,10 @@ function spatialWarnings(audit: SpatialAudit): Warning[] {
     warnings.push({
       code: "PIEZA_FLOTANTE",
       part: floating.part,
+      fix:
+        floating.nearest !== null
+          ? { op: "align", target: floating.part, to: floating.nearest }
+          : undefined,
       message:
         `${floating.part}: no toca ninguna otra pieza. ` +
         (floating.below !== null
@@ -249,6 +269,7 @@ function spatialWarnings(audit: SpatialAudit): Warning[] {
     warnings.push({
       code: "DUPLICADO_EXACTO",
       part: group.parts[0],
+      fix: { op: "delete", target: group.parts[1] },
       message: `${group.parts.length} piezas con la misma geometría en la misma posición —${nameList(group.parts)}—, ${group.triangles} triángulos cada una; no se ven y multiplican el coste.`,
     });
   }
@@ -256,6 +277,11 @@ function spatialWarnings(audit: SpatialAudit): Warning[] {
     warnings.push({
       code: "ESCALA_HERMANOS",
       part: outlier.part,
+      fix: {
+        op: "scale",
+        target: outlier.part,
+        factor: Number((outlier.median / outlier.diagonal).toFixed(4)),
+      },
       message: `${outlier.part}: su caja mide ${outlier.diagonal} de diagonal y la mediana de sus ${outlier.siblings} hermanos es ${outlier.median}, un factor ${outlier.factor}; o le sobra escala, o está en el grupo equivocado.`,
     });
   }
@@ -469,8 +495,8 @@ function buildWarnings(
   objectCoverage: number | null,
 ): Warning[] {
   const warnings: Warning[] = [];
-  const add = (code: string, part: string | null, message: string): void => {
-    warnings.push({ code, part, message });
+  const add = (code: string, part: string | null, message: string, fix?: Edit): void => {
+    warnings.push(fix !== undefined ? { code, part, message, fix } : { code, part, message });
   };
 
   for (const object of objects) {
@@ -520,6 +546,7 @@ function buildWarnings(
         "PIVOTE_DESCENTRADO",
         object.name,
         `${object.name}: el centro de la caja está a ${offsetMagnitude.toFixed(2)} del origen del objeto; el pivote quedará descentrado al rotar.`,
+        { op: "setPivot", target: object.name },
       );
     }
     if (object.inverted) {
@@ -680,6 +707,8 @@ export interface ModelReview {
   families: PartFamily[];
   selection: {
     patterns: string[];
+    /** Condición por propiedad, si se pasó. */
+    where: string | null;
     matched: string[];
     audits: ObjectReport[];
   };
@@ -718,6 +747,8 @@ export interface ModelReview {
 
 export interface ModelReviewOptions extends ReviewOptions {
   select?: string[];
+  /** Selección por propiedad: `triangles>1000`, `boundaryEdges>0`, `material=Vidrio`. */
+  selectWhere?: string;
   isolate?: boolean;
   /** Cuántas piezas seleccionadas auditar en detalle. */
   auditLimit?: number;
@@ -738,7 +769,20 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
 } {
   const tileSize = options.tileSize ?? 320;
   const patterns = options.select ?? [];
-  const selected = selectParts(model, patterns);
+  // Por nombre y por propiedad se suman: quien pide las dos cosas quiere las dos.
+  const queries = options.selectWhere !== undefined ? parseWhere(options.selectWhere) : [];
+  let byProperty: ModelPart[] = [];
+  if (queries.length > 0) {
+    // Auditar las 296 piezas solo si alguna condición mira la topología.
+    const audits = new Map<string, Record<string, number | boolean | null>>();
+    if (needsAudit(queries)) {
+      for (const part of model.parts) {
+        audits.set(part.name, auditMesh(part.mesh) as unknown as Record<string, number | boolean | null>);
+      }
+    }
+    byProperty = selectWhere(model, queries, audits);
+  }
+  const selected = [...new Set([...selectParts(model, patterns), ...byProperty])];
   const highlight = new Set(selected);
 
   const modelNodes = toSceneNodes(model, {
@@ -881,6 +925,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
       families: summarizeFamilies(model.parts),
       selection: {
         patterns,
+        where: options.selectWhere ?? null,
         matched: selected.map((part) => part.name),
         audits,
       },

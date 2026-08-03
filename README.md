@@ -132,7 +132,9 @@ dan **cero exacto**. Para que eso valga, con `--baseline` el encuadre y el volum
 sombra quedan fijados a los del modelo *antes* del parche: si no, mover una pieza
 mueve la cámara y el pliego entero se desplaza un píxel.
 
-`stdout` es JSON puro y el código de salida es 1 si hay avisos, así que encadena en
+`stdout` es JSON puro y el código de salida es 1 si hay avisos, así que encadena en CI
+sin interpretar nada.
+
 `--schema` imprime la forma aceptada de la escena y del parche, más un informe de
 ejemplo. No es documentación aparte: el esquema **es** lo que valida la entrada, así que
 no puede divergir del código, y una errata se caza con sugerencia en vez de ignorarse.
@@ -142,9 +144,14 @@ la escena no encaja con el esquema:
   - objects[0].positon no existe; ¿querías decir position?
 ```
 
-CI sin interpretar nada. `--help` lista todas las opciones: `--inspect-only`,
-`--baseline pliego.png`, `--baseline-report informe.json`, `--tile N`,
+`--help` lista todas las opciones: `--inspect-only`,
+`--baseline pliego.png`, `--baseline-report informe.json`, `--select-where "expr"`,
+`--patch` (repetible), `--undo`, `--dry-run`, `--save-scene`, `--no-cache`, `--tile N`,
 `--isolate true`, `--audit-limit N`, `--ground false`, las de presupuesto y `--debug`.
+
+El modelo analizado se guarda en `.cache/` con clave `(ruta, mtime, tamaño)`: analizar
+el GLB del dron son 56 ms y leer la caché, 5 ms. El informe dice en `cached` de dónde
+salió, y `--no-cache` la salta.
 
 El informe trae, además del pliego: auditoría topológica por pieza —aristas de borde,
 no manifold, triángulos degenerados, normales invertidas, desviación del pivote,
@@ -173,6 +180,32 @@ en el que una caja contiene entera a la otra es un alojamiento y calla; una piez
 mayor que sus hermanos que además los contiene es la que los aloja y calla; una hélice
 en el aire pero unida a su eje no flota, porque el criterio es **no tocar nada**, no
 estar elevada; y la misma malla en distinta posición es una instancia, no un duplicado.
+
+### El aviso trae su arreglo
+
+Cuando existe una corrección que la herramienta pueda defender, el aviso la lleva
+dentro como fragmento de parche. El agente lo aplica tal cual, sin deducir nada:
+
+```json
+{ "code": "PIEZA_FLOTANTE", "part": "volando",
+  "message": "volando: no toca ninguna otra pieza…",
+  "fix": { "op": "align", "target": "volando", "to": "base" } }
+```
+
+Los avisos **sin** `fix` no son un olvido: una malla abierta se cierra de muchas
+maneras y ninguna es automática. Operaciones de arreglo: `align`, `setPivot`, `mirror`,
+además de mover, girar, escalar, colorear, ocultar, borrar, renombrar y añadir.
+
+### Probar, mirar, deshacer
+
+```bash
+npm run agent3d -- --model dron.glb --patch a.json --patch b.json \
+  --undo deshacer.json --out revision.png
+```
+
+`--patch` es repetible y se aplica en orden. `--undo` escribe el parche inverso, que
+devuelve el modelo a su estado exacto —misma huella de render—. `--dry-run` informa de
+coincidencias y errores sin renderizar ni escribir nada.
 
 ### Escala absoluta
 
