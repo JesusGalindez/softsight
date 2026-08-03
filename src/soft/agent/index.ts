@@ -81,6 +81,13 @@ export { applyPatchToScene } from "./scenePatch";
 export { invertPatch } from "./invertPatch";
 export { auditSpatial } from "./spatialAudit";
 export type { SpatialAudit, Interpenetration, ScaleOutlier, PlacedPart } from "./spatialAudit";
+export { inspectGlbAnimation } from "./animation";
+export type {
+  AnimationClipSummary,
+  AnimationControlPose,
+  AnimationControlPoseReference,
+  SoftSightAnimationInspection,
+} from "./animation";
 export { SCENE_SCHEMA, PATCH_SCHEMA, validate, assertValid } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
 export type {

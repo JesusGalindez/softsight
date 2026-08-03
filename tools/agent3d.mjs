@@ -39,6 +39,7 @@ import {
   reviewScene,
   serializeObj,
   toSceneNodes,
+  inspectGlbAnimation,
 } from "../dist-node/agent3d.mjs";
 
 const CRC_TABLE = (() => {
@@ -290,19 +291,28 @@ async function loadMeshoptDecoder() {
 
 async function reviewModelFile(options, outputPath) {
   const modelPath = resolve(options.get("model"));
+  const isBinary = modelPath.toLowerCase().endsWith(".glb");
+  // `data` es el ArrayBuffer (GLB) o el texto (OBJ). Se lee a nivel de función —
+  // no dentro de la closure de la caché— para que el contrato de animación lo
+  // tenga disponible aunque el modelo salga de `.cache/` y la closure no corra.
+  const raw = await readFile(modelPath);
+  const data = isBinary
+    ? raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)
+    : raw.toString("utf8");
+  const decoder = isBinary ? await loadMeshoptDecoder() : undefined;
   const { model, cached } = await loadModelCached(
     modelPath,
-    async () => {
-      const isBinary = modelPath.toLowerCase().endsWith(".glb");
-      const raw = await readFile(modelPath);
-      const data = isBinary
-        ? raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)
-        : raw.toString("utf8");
-      const decoder = isBinary ? await loadMeshoptDecoder() : undefined;
-      return loadModel(modelPath, data, decoder);
-    },
+    async () => loadModel(modelPath, data, decoder),
     { enabled: options.get("no-cache") !== "true" },
   );
+
+  // Pose de control para el contrato determinista de animación GLB: referencia de
+  // fotogramas y huellas SHA-256 esperadas, que la herramienta certifica sin
+  // depender del renderer de turno. Solo con modelos binarios.
+  const controlPosePath = options.get("control-poses");
+  const controlPoseReference = controlPosePath
+    ? parseControlPoseReference(JSON.parse(await readFile(resolve(controlPosePath), "utf8")))
+    : null;
 
   const baseline = await readBaselinePng(options);
   const previous = await readBaselineReport(options);
@@ -377,7 +387,54 @@ async function reviewModelFile(options, outputPath) {
     }
   }
 
-  return { ...review, edits, cached, file: sheet ? outputPath : null, exported, undo: undoPath };
+  let animation;
+  let skinning;
+  let morphTargets;
+  let controlPoses;
+  let animationErrors;
+  if (isBinary) {
+    const inspection = await inspectGlbAnimation(data, controlPoseReference, decoder);
+    ({ animation, skinning, morphTargets, controlPoses, errors: animationErrors } = inspection);
+  }
+
+  return {
+    ...review,
+    edits,
+    cached,
+    file: sheet ? outputPath : null,
+    exported,
+    undo: undoPath,
+    animation,
+    skinning,
+    morphTargets,
+    controlPoses,
+    animationErrors,
+  };
+}
+
+/**
+ * Validación de la referencia de poses de control del contrato de animación.
+ * `schemaVersion` 1 y `fps` entero positivo son obligatorios; `clips` es un
+ * objeto indexado por nombre de clip cuyo valor es una lista de `{ frame,
+ * positionsHash }`. Cualquier fallo es un error de datos (salida 2), no un
+ * aviso del informe.
+ */
+function parseControlPoseReference(value) {
+  if (!value || value.schemaVersion !== 1 || !Number.isInteger(value.fps) || value.fps <= 0) {
+    throw new Error("control poses: schemaVersion 1 y fps entero positivo son obligatorios");
+  }
+  if (!value.clips || typeof value.clips !== "object" || Array.isArray(value.clips)) {
+    throw new Error("control poses: clips debe ser un objeto indexado por nombre de clip");
+  }
+  for (const [clipName, poses] of Object.entries(value.clips)) {
+    if (!Array.isArray(poses)) throw new Error(`control poses: ${clipName} debe ser una lista`);
+    for (const pose of poses) {
+      if (!Number.isInteger(pose.frame) || pose.frame < 0 || typeof pose.positionsHash !== "string") {
+        throw new Error(`control poses: ${clipName} contiene una pose inválida`);
+      }
+    }
+  }
+  return value;
 }
 
 /**
@@ -400,6 +457,11 @@ Entrada
                           Repetible: se aplican en orden
   --dry-run               informa de coincidencias y errores sin renderizar ni escribir
   --undo <ruta.json>      escribe el parche que deshace lo aplicado (solo con --model)
+
+Contrato de animación GLB (solo --model)
+  --control-poses <j>     referencia de poses: { schemaVersion:1, fps, clips } con
+                          fotogramas y huellas SHA-256 esperadas; la herramienta
+                          las certifica sin depender del renderer de turno
 
 Salida
   --out <ruta.png>        pliego de contactos; por defecto artifacts/agent/contact-sheet.png
