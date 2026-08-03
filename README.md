@@ -299,6 +299,8 @@ demanda, solo si abres un GLB comprimido con `EXT_meshopt_compression`.
 - [`docs/plan-agentes.md`](docs/plan-agentes.md) — plan para que un agente verifique
   sus cambios en vez de mirarlos: comparación de renders, auditorías espaciales entre
   piezas, consultas baratas y memoria entre llamadas.
+- [`docs/plan-fases-bcd.md`](docs/plan-fases-bcd.md) — animación certificada (hecha),
+  superficie animada para partículas adheridas y puente local entre el editor y el CLI.
 
 ## Cómo medir antes de optimizar
 
