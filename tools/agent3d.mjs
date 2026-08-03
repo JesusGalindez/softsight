@@ -42,6 +42,14 @@ import {
   inspectGlbAnimation,
 } from "../dist-node/agent3d.mjs";
 
+/**
+ * Versión del contrato del informe. Cada cambio de forma que rompe a los
+ * consumidores —como los warnings de `string[]` a `{ code, part, message }`—
+ * la sube: quien lee el informe compara contra esta cifra antes que contra los
+ * campos, y un informe de 4925240 se distingue de uno de hoy sin mirar nada más.
+ */
+const REPORT_CONTRACT_VERSION = 2;
+
 const CRC_TABLE = (() => {
   const table = new Int32Array(256);
   for (let index = 0; index < 256; index += 1) {
@@ -398,6 +406,7 @@ async function reviewModelFile(options, outputPath) {
   }
 
   return {
+    contractVersion: REPORT_CONTRACT_VERSION,
     ...review,
     edits,
     cached,
@@ -510,7 +519,11 @@ Otras
   --help                  esta ayuda
 
 stdout es JSON puro. Código de salida: 0 sin avisos, 1 con avisos o parches
-fallidos, 2 si hay un error de datos.`;
+fallidos, 2 si hay un error de datos.
+
+El informe declara contractVersion: 2. Los warnings son objetos
+{ code, part, message, fix? }; los consumidores los comparan por code|part, no
+por texto, y rechazan cualquier informe con otra contractVersion.`;
 
 /**
  * Esquema de entrada y ejemplo de salida.
@@ -526,7 +539,7 @@ function printSchema() {
       {
         scene: SCENE_SCHEMA,
         patch: PATCH_SCHEMA,
-        reportExample: review,
+        reportExample: { contractVersion: REPORT_CONTRACT_VERSION, ...review },
         notes: [
           "El esquema es el que valida la entrada: un campo que no esté aquí se rechaza.",
           "reportExample sale de revisar la escena de demostración con --inspect-only.",
@@ -620,7 +633,7 @@ async function main() {
 
   process.stdout.write(
     `${JSON.stringify(
-      { ...review, edits, file: sheet ? outputPath : null, exported, savedScene },
+      { contractVersion: REPORT_CONTRACT_VERSION, ...review, edits, file: sheet ? outputPath : null, exported, savedScene },
       null,
       2,
     )}\n`,

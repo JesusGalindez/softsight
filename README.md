@@ -258,6 +258,17 @@ se piden.
 Con `--baseline-report informe-anterior.json`, el informe trae `warningsDelta` con lo
 nuevo, lo resuelto y cuántos avisos persisten. El agente solo mira `new`.
 
+### Contrato del informe
+
+El informe declara `contractVersion: 2` en su raíz. Quien consume el informe lo
+comprueba primero: una versión distinta significa que la forma ha cambiado y que
+los campos se leen bajo otro contrato. En `contractVersion: 2` los avisos dejaron
+de ser `string[]` y son objetos `{ code, part, message, fix? }`, con la clave
+estable `code|part` para comparar entre informes —el texto del mensaje cambia en
+cada ejecución porque lleva las cifras dentro. La auditoría de animación añade los
+bloques `animation` (con `contractVersion: 1` propio), `skinning`, `morphTargets`
+y `controlPoses`, todos documentados en el contrato de animación del editor.
+
 ## Qué hay dentro
 
 | Módulo | Contenido |
