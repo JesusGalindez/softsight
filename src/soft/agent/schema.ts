@@ -50,13 +50,33 @@ const GEOMETRY_RAW: ObjectSchema = {
   uvs: { type: "number[]", description: "UVs intercaladas; si faltan, quedan a cero." },
 };
 
+const GEOMETRY_EXTRUDE: ObjectSchema = {
+  extrude: {
+    type: "number[]",
+    required: true,
+    description: "Polígono en el plano XZ, pares x,z; puede ser cóncavo y sin agujeros.",
+  },
+  height: { type: "number", description: "Altura de la extrusión; 1 por defecto." },
+};
+
+const GEOMETRY_REVOLVE: ObjectSchema = {
+  revolve: {
+    type: "number[]",
+    required: true,
+    description: "Perfil en pares radio,altura, girado alrededor de Y. Radio cero cierra en polo.",
+  },
+  segments: { type: "number", description: "Divisiones alrededor del eje; 32 por defecto." },
+};
+
 const OBJECT_FIELDS: ObjectSchema = {
   name: { type: "string", description: "Nombre de la pieza; si falta, `objetoN`." },
   geometry: {
     type: "object",
     required: true,
-    description: "Primitiva con parámetros, o malla cruda con sus arrays.",
-    anyOf: [GEOMETRY_PRIMITIVE, GEOMETRY_RAW],
+    description:
+      "Primitiva con parámetros, malla cruda con sus arrays, extrusión de un polígono " +
+      "o revolucionado de un perfil.",
+    anyOf: [GEOMETRY_PRIMITIVE, GEOMETRY_RAW, GEOMETRY_EXTRUDE, GEOMETRY_REVOLVE],
   },
   matrix: {
     type: "number[]",

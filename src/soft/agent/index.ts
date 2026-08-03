@@ -82,7 +82,15 @@ export { auditSpatial } from "./spatialAudit";
 export type { SpatialAudit, Interpenetration, ScaleOutlier, PlacedPart } from "./spatialAudit";
 export { SCENE_SCHEMA, PATCH_SCHEMA, validate, assertValid } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
-export type { SceneSpec, ObjectSpec, PrimitiveSpec, RawMeshSpec } from "./sceneSpec";
+export type {
+  SceneSpec,
+  ObjectSpec,
+  GeometrySpec,
+  PrimitiveSpec,
+  RawMeshSpec,
+  ExtrudeSpec,
+  RevolveSpec,
+} from "./sceneSpec";
 export type { MeshAudit } from "./inspect";
 export type { ContactSheet, ViewDefinition } from "./contactSheet";
 

@@ -1,8 +1,8 @@
 # Plan: mejores ojos y mejores manos para el agente
 
 Estado: **el orden recomendado, entero**. Con él, F1 y la fase H de creación desde
-cero. Lo que queda son cabos concretos, anotados en su sitio: extrusión y
-revolucionado, e `instance`. Escrito el 2026-07-30 desde la experiencia de haber usado
+cero. Lo que queda es un cabo concreto, anotado en su sitio: `instance`, que ahora sí
+tendría dónde ahorrar porque ya existe el exportador de GLB. Escrito el 2026-07-30 desde la experiencia de haber usado
 `tools/agent3d.mjs` durante una sesión larga de trabajo real sobre el dron. Cada
 apartado nace de una fricción concreta que costó tiempo, no de una lista de deseos.
 
@@ -732,9 +732,41 @@ tiene y queda dicha.
 De paso, `--material-colors` expone en el CLI la opción que ya existía en la API: sin
 ella no había forma de comprobar que el color había sobrevivido al viaje.
 
-Queda de esta fase: **extrusión de polígono y revolucionado** —las dos que de verdad
-amplían lo que se puede describir—. Las booleanas quedan lejos y probablemente no
-compensen.
+**Extrusión y revolucionado — hechos.** Son las dos formas que de verdad amplían lo
+descriptible: con caja, cilindro y esfera no se hace una escuadra, un perfil en L ni un
+jarrón. Van como formas propias de la geometría, no como primitivas con parámetros
+sueltos, porque un polígono es una lista de puntos y meterlo en `parameters` lo
+volvería ilegible.
+
+```json
+{ "geometry": { "extrude": [0,0, 1.6,0, 1.6,0.4, 0.4,0.4, 0.4,1.6, 0,1.6], "height": 0.35 } }
+{ "geometry": { "revolve": [0,0, 0.42,0, 0.5,0.25, 0.34,0.7, 0.26,1.25], "segments": 40 } }
+```
+
+La extrusión admite polígonos **cóncavos**, con recorte de orejas: es el algoritmo
+cuadrático, y es el correcto aquí porque un perfil escrito a mano tiene decenas de
+puntos, no miles. El revolucionado cierra en polo cuando el perfil toca el eje y deja
+la boca abierta cuando no —un jarrón lo está—, sin taparla por iniciativa propia:
+cerrar sin permiso es cambiar el diseño, y la auditoría ya avisa con `BORDE_ABIERTO`.
+
+**La auditoría cazó los tres fallos de la primera versión**, uno detrás de otro:
+
+1. **La extrusión salía entera del revés.** Un polígono antihorario dibujado en el
+   papel `x,z` se ve *horario* desde +Y, porque mirar desde arriba invierte el sentido
+   de giro del plano. Volumen firmado −8 en un cubo de lado 2.
+2. **El revolucionado dependía de cómo se escribiera el perfil.** La normal sale de
+   girar la tangente, así que un perfil de arriba abajo la produce hacia dentro: −3,98
+   en vez de +4,19. Se corrige ordenando la entrada, igual que el polígono.
+3. **Veinticuatro triángulos de área nula** en el polo sur, porque `Math.sin(Math.PI)`
+   vale 1,2·10⁻¹⁶ y no cero, y la comparación estricta no lo veía como polo.
+
+**Verificación por volumen, que es el juez exacto**: el cubo extruido da 8 clavado
+—y lo mismo con el polígono escrito al revés—, el perfil en L da 1,75, que es su área
+por la altura, y la esfera revolucionada da 4,1219, exactamente lo mismo que
+`createSphere` con la misma teselación. Todos cerrados, sin degenerados y sin normales
+invertidas.
+
+Las booleanas quedan lejos y probablemente no compensen.
 
 ### H3. Malla del revés — hecho, y un aviso retirado por medida
 

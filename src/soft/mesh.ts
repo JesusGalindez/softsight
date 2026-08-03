@@ -416,6 +416,288 @@ export function createCylinder(
 }
 
 /**
+ * Área firmada de un polígono en el plano XZ. El signo dice el sentido de giro, y
+ * hace falta porque un polígono escrito al revés genera un sólido del revés.
+ */
+function signedArea(polygon: readonly number[]): number {
+  let total = 0;
+  const count = polygon.length / 2;
+  for (let index = 0; index < count; index += 1) {
+    const next = (index + 1) % count;
+    total += polygon[index * 2] * polygon[next * 2 + 1] - polygon[next * 2] * polygon[index * 2 + 1];
+  }
+  return total / 2;
+}
+
+function isInsideTriangle(
+  px: number, py: number,
+  ax: number, ay: number,
+  bx: number, by: number,
+  cx: number, cy: number,
+): boolean {
+  const d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by);
+  const d2 = (px - cx) * (by - cy) - (bx - cx) * (py - cy);
+  const d3 = (px - ax) * (cy - ay) - (cx - ax) * (py - ay);
+  const negative = d1 < 0 || d2 < 0 || d3 < 0;
+  const positive = d1 > 0 || d2 > 0 || d3 > 0;
+  return !(negative && positive);
+}
+
+/**
+ * Triangulación por recorte de orejas.
+ *
+ * Es el algoritmo lento —cuadrático— y el correcto para lo que hace falta aquí: un
+ * perfil escrito a mano tiene decenas de vértices, no miles, y a cambio admite
+ * polígonos cóncavos, que es justo lo que distingue una pieza de verdad de una caja.
+ * Espera el polígono en sentido antihorario y sin agujeros.
+ */
+function earClip(polygon: readonly number[]): number[] {
+  const remaining: number[] = [];
+  for (let index = 0; index < polygon.length / 2; index += 1) remaining.push(index);
+  const triangles: number[] = [];
+
+  let guard = remaining.length * remaining.length;
+  while (remaining.length > 3 && guard-- > 0) {
+    let clipped = false;
+    for (let position = 0; position < remaining.length; position += 1) {
+      const previous = remaining[(position + remaining.length - 1) % remaining.length];
+      const current = remaining[position];
+      const next = remaining[(position + 1) % remaining.length];
+      const ax = polygon[previous * 2];
+      const ay = polygon[previous * 2 + 1];
+      const bx = polygon[current * 2];
+      const by = polygon[current * 2 + 1];
+      const cx = polygon[next * 2];
+      const cy = polygon[next * 2 + 1];
+
+      // Convexo en un polígono antihorario: el giro de A-B-C es a la izquierda.
+      if ((bx - ax) * (cy - ay) - (by - ay) * (cx - ax) <= 0) continue;
+
+      // Y sin ningún otro vértice dentro, o el recorte se comería geometría.
+      let contains = false;
+      for (const other of remaining) {
+        if (other === previous || other === current || other === next) continue;
+        if (isInsideTriangle(polygon[other * 2], polygon[other * 2 + 1], ax, ay, bx, by, cx, cy)) {
+          contains = true;
+          break;
+        }
+      }
+      if (contains) continue;
+
+      triangles.push(previous, current, next);
+      remaining.splice(position, 1);
+      clipped = true;
+      break;
+    }
+    // Un polígono que se cruza a sí mismo no tiene orejas: se corta aquí en vez de
+    // girar para siempre, y lo que salga lo dirá la auditoría.
+    if (!clipped) break;
+  }
+  if (remaining.length === 3) triangles.push(remaining[0], remaining[1], remaining[2]);
+  return triangles;
+}
+
+/**
+ * Extrusión de un polígono del plano XZ a lo largo de Y, cerrada por arriba y por
+ * abajo.
+ *
+ * Es la primera forma que amplía de verdad lo que se puede describir: una caja, un
+ * cilindro y una esfera no hacen una escuadra, un perfil en L ni una placa con
+ * pestaña. El polígono llega como pares `x,z` y se normaliza a sentido antihorario,
+ * porque escribirlo al revés es el error más fácil de cometer y produciría un sólido
+ * con las caras hacia dentro.
+ */
+export function createExtrusion(polygon: readonly number[], height = 1): Mesh {
+  const count = polygon.length / 2;
+  if (count < 3) throw new Error("una extrusión necesita al menos tres puntos");
+
+  const outline = signedArea(polygon) < 0 ? reversePolygon(polygon) : [...polygon];
+  const capTriangles = earClip(outline);
+  const half = height / 2;
+
+  // Los vértices del costado no se comparten con los de las tapas: comparten
+  // posición pero no normal, y soldarlos redondearía un canto vivo.
+  const vertexCount = count * 2 + count * 4;
+  const positions = new Float32Array(vertexCount * 3);
+  const normals = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  const indices: number[] = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const x = outline[index * 2];
+    const z = outline[index * 2 + 1];
+    for (const top of [false, true]) {
+      const vertex = index * 2 + (top ? 1 : 0);
+      positions[vertex * 3 + 0] = x;
+      positions[vertex * 3 + 1] = top ? half : -half;
+      positions[vertex * 3 + 2] = z;
+      normals[vertex * 3 + 1] = top ? 1 : -1;
+      uvs[vertex * 2 + 0] = index / count;
+      uvs[vertex * 2 + 1] = top ? 1 : 0;
+    }
+  }
+
+  for (let entry = 0; entry < capTriangles.length; entry += 3) {
+    const [a, b, c] = [capTriangles[entry], capTriangles[entry + 1], capTriangles[entry + 2]];
+    // Arriba mira a +Y y abajo a -Y, así que una de las dos tapas va al revés.
+    //
+    // Y las dos al contrario de lo que parece: un polígono antihorario dibujado en
+    // el papel `x,z` se ve **horario** desde +Y, porque mirar desde arriba invierte
+    // el sentido de giro del plano. Escritas del otro modo, el sólido salía entero
+    // hacia dentro —volumen firmado −8 en un cubo de lado 2— y la auditoría lo dijo
+    // a la primera.
+    indices.push(c * 2 + 1, b * 2 + 1, a * 2 + 1);
+    indices.push(a * 2, b * 2, c * 2);
+  }
+
+  let sideVertex = count * 2;
+  for (let index = 0; index < count; index += 1) {
+    const next = (index + 1) % count;
+    const x0 = outline[index * 2];
+    const z0 = outline[index * 2 + 1];
+    const x1 = outline[next * 2];
+    const z1 = outline[next * 2 + 1];
+    // Normal del costado: perpendicular a la arista, hacia fuera del polígono
+    // antihorario.
+    const nx = z1 - z0;
+    const nz = -(x1 - x0);
+    const length = Math.hypot(nx, nz) || 1;
+
+    const base = sideVertex;
+    const corners: Array<[number, number, number]> = [
+      [x0, -half, z0],
+      [x1, -half, z1],
+      [x1, half, z1],
+      [x0, half, z0],
+    ];
+    corners.forEach((corner, cornerIndex) => {
+      positions[sideVertex * 3 + 0] = corner[0];
+      positions[sideVertex * 3 + 1] = corner[1];
+      positions[sideVertex * 3 + 2] = corner[2];
+      normals[sideVertex * 3 + 0] = nx / length;
+      normals[sideVertex * 3 + 2] = nz / length;
+      uvs[sideVertex * 2 + 0] = cornerIndex < 2 ? index / count : next / count;
+      uvs[sideVertex * 2 + 1] = cornerIndex === 0 || cornerIndex === 1 ? 0 : 1;
+      sideVertex += 1;
+    });
+    indices.push(base, base + 2, base + 1, base, base + 3, base + 2);
+  }
+
+  return {
+    positions,
+    normals,
+    uvs,
+    indices: Uint32Array.from(indices),
+    boundingRadius: boundingRadiusOf(positions),
+  };
+}
+
+/** El perfil recorrido en sentido contrario, conservando los pares radio,altura. */
+function reverseProfile(profile: readonly number[]): number[] {
+  const out: number[] = [];
+  for (let ring = profile.length / 2 - 1; ring >= 0; ring -= 1) {
+    out.push(profile[ring * 2], profile[ring * 2 + 1]);
+  }
+  return out;
+}
+
+function reversePolygon(polygon: readonly number[]): number[] {
+  const out: number[] = [];
+  for (let index = polygon.length / 2 - 1; index >= 0; index -= 1) {
+    out.push(polygon[index * 2], polygon[index * 2 + 1]);
+  }
+  return out;
+}
+
+/**
+ * Revolucionado de un perfil alrededor del eje Y.
+ *
+ * El perfil llega como pares `radio,altura`. Si sus extremos tocan el eje —radio
+ * cero— la superficie se cierra en polos, como una esfera o un jarrón; si no, queda
+ * abierta por arriba, por abajo o por los dos lados, y la auditoría lo dirá con
+ * `BORDE_ABIERTO`. No se tapa por iniciativa propia: un perfil abierto puede ser
+ * exactamente lo que se quería, y cerrar sin permiso es cambiar el diseño.
+ *
+ * Los triángulos que degenerarían en un polo no se emiten, por lo mismo que en la
+ * esfera y el cono.
+ */
+export function createRevolution(profile: readonly number[], segments = 32): Mesh {
+  const rings = profile.length / 2;
+  if (rings < 2) throw new Error("un revolucionado necesita al menos dos puntos de perfil");
+
+  // El perfil se normaliza a ascendente. La normal de la superficie sale de girar la
+  // tangente del perfil, así que un perfil escrito de arriba abajo la produce hacia
+  // dentro y el sólido entero queda del revés: medido con media circunferencia, el
+  // volumen daba −3,98 en vez de +4,19. Es el mismo error que el polígono al revés en
+  // la extrusión, y se corrige igual: ordenando la entrada en vez de confiar en ella.
+  const ascending =
+    profile[(rings - 1) * 2 + 1] >= profile[1] ? [...profile] : reverseProfile(profile);
+  profile = ascending;
+
+  // Un polo es radio cero, pero `Math.sin(Math.PI)` vale 1,2·10⁻¹⁶ y no cero: con una
+  // comparación estricta, el anillo del polo sur emitía un triángulo de área nula por
+  // segmento. El umbral es relativo al radio mayor del propio perfil.
+  let maxRadius = 0;
+  for (let ring = 0; ring < rings; ring += 1) maxRadius = Math.max(maxRadius, profile[ring * 2]);
+  const axisEpsilon = Math.max(maxRadius, 1) * 1e-9;
+
+  const vertexCount = (segments + 1) * rings;
+  const positions = new Float32Array(vertexCount * 3);
+  const normals = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  const indices: number[] = [];
+
+  let vertex = 0;
+  for (let segment = 0; segment <= segments; segment += 1) {
+    const u = segment / segments;
+    const angle = u * Math.PI * 2;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    for (let ring = 0; ring < rings; ring += 1) {
+      const radius = profile[ring * 2];
+      const y = profile[ring * 2 + 1];
+      // Normal: perpendicular a la tangente del perfil, girada con el segmento.
+      const previous = Math.max(0, ring - 1);
+      const following = Math.min(rings - 1, ring + 1);
+      const dr = profile[following * 2] - profile[previous * 2];
+      const dy = profile[following * 2 + 1] - profile[previous * 2 + 1];
+      const length = Math.hypot(dr, dy) || 1;
+      const nr = dy / length;
+      const ny = -dr / length;
+
+      positions[vertex * 3 + 0] = cos * radius;
+      positions[vertex * 3 + 1] = y;
+      positions[vertex * 3 + 2] = sin * radius;
+      normals[vertex * 3 + 0] = cos * nr;
+      normals[vertex * 3 + 1] = ny;
+      normals[vertex * 3 + 2] = sin * nr;
+      uvs[vertex * 2 + 0] = u;
+      uvs[vertex * 2 + 1] = ring / (rings - 1);
+      vertex += 1;
+    }
+  }
+
+  for (let segment = 0; segment < segments; segment += 1) {
+    for (let ring = 0; ring < rings - 1; ring += 1) {
+      const current = segment * rings + ring;
+      const next = current + rings;
+      const radiusLow = profile[ring * 2];
+      const radiusHigh = profile[(ring + 1) * 2];
+      if (radiusLow > axisEpsilon) indices.push(current, current + 1, next);
+      if (radiusHigh > axisEpsilon) indices.push(current + 1, next + 1, next);
+    }
+  }
+
+  return {
+    positions,
+    normals,
+    uvs,
+    indices: Uint32Array.from(indices),
+    boundingRadius: boundingRadiusOf(positions),
+  };
+}
+
+/**
  * Plano subdividido. Las subdivisiones importan: un plano de 2 triángulos
  * gigantes es el caso donde más se nota la corrección de perspectiva, porque el
  * error de interpolación crece con el tamaño del triángulo en pantalla.

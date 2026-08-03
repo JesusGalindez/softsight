@@ -67,7 +67,18 @@ borde` y el contrato `watertight` incumplido, con salida 1. Y si se bobina del r
 —que no se ve en la imagen más que como una pieza oscura— salta `MALLA_INVERTIDA`, por
 el signo del volumen.
 
-Primitivas: `box`, `sphere`, `torus`, `plane`, `cylinder` y `cone`.
+Primitivas: `box`, `sphere`, `torus`, `plane`, `cylinder` y `cone`. Y dos formas que
+no caben en una primitiva —extrusión de un polígono, que puede ser cóncavo, y
+revolucionado de un perfil alrededor de Y—:
+
+```json
+{ "geometry": { "extrude": [0,0, 1.6,0, 1.6,0.4, 0.4,0.4, 0.4,1.6, 0,1.6], "height": 0.35 } }
+{ "geometry": { "revolve": [0,0, 0.42,0, 0.5,0.25, 0.34,0.7, 0.26,1.25], "segments": 40 } }
+```
+
+Da igual en qué sentido escribas el polígono o el perfil: se normalizan, porque
+escribirlos al revés produciría un sólido con las caras hacia dentro y ese es el error
+más fácil de cometer.
 
 Crear es **incremental**: un parche puede añadir piezas, y aplicado a una escena edita
 el documento, no la geometría. Lo que sale vuelve a ser una escena.

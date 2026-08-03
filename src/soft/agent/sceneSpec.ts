@@ -13,7 +13,9 @@ import {
   computeNormals,
   createBox,
   createCylinder,
+  createExtrusion,
   createPlane,
+  createRevolution,
   createSphere,
   createTorus,
   type Mesh,
@@ -42,6 +44,19 @@ export interface PrimitiveSpec {
   parameters?: number[];
 }
 
+export interface ExtrudeSpec {
+  /** Polígono en el plano XZ, pares `x,z`. Puede ser cóncavo; sin agujeros. */
+  extrude: number[];
+  /** Altura total; se reparte a ambos lados del origen. */
+  height?: number;
+}
+
+export interface RevolveSpec {
+  /** Perfil en pares `radio,altura`, girado alrededor del eje Y. */
+  revolve: number[];
+  segments?: number;
+}
+
 export interface RawMeshSpec {
   /** Posiciones intercaladas x,y,z. */
   positions: number[];
@@ -53,9 +68,11 @@ export interface RawMeshSpec {
   uvs?: number[];
 }
 
+export type GeometrySpec = PrimitiveSpec | RawMeshSpec | ExtrudeSpec | RevolveSpec;
+
 export interface ObjectSpec {
   name?: string;
-  geometry: PrimitiveSpec | RawMeshSpec;
+  geometry: GeometrySpec;
   /**
    * Colocación exacta, que manda sobre posición, rotación y escala.
    *
@@ -91,8 +108,16 @@ export interface ResolvedObject {
   node: SceneNode;
 }
 
-function isRawMesh(geometry: PrimitiveSpec | RawMeshSpec): geometry is RawMeshSpec {
+function isRawMesh(geometry: GeometrySpec): geometry is RawMeshSpec {
   return (geometry as RawMeshSpec).positions !== undefined;
+}
+
+function isExtrude(geometry: GeometrySpec): geometry is ExtrudeSpec {
+  return (geometry as ExtrudeSpec).extrude !== undefined;
+}
+
+function isRevolve(geometry: GeometrySpec): geometry is RevolveSpec {
+  return (geometry as RevolveSpec).revolve !== undefined;
 }
 
 function buildPrimitive(spec: PrimitiveSpec): Mesh {
@@ -193,9 +218,14 @@ function buildMaterial(spec: ObjectSpec): Material {
 
 /** Una pieza declarativa a nodo de escena. Suelta, para poder añadir de una en una. */
 export function resolveObject(object: ObjectSpec, index = 0): ResolvedObject {
-  const mesh = isRawMesh(object.geometry)
-    ? buildRawMesh(object.geometry)
-    : buildPrimitive(object.geometry);
+  const geometry = object.geometry;
+  const mesh = isRawMesh(geometry)
+    ? buildRawMesh(geometry)
+    : isExtrude(geometry)
+      ? createExtrusion(geometry.extrude, geometry.height ?? 1)
+      : isRevolve(geometry)
+        ? createRevolution(geometry.revolve, geometry.segments ?? 32)
+        : buildPrimitive(geometry);
   return {
     name: object.name ?? `objeto${index}`,
     node: { mesh, model: buildModelMatrix(object), material: buildMaterial(object) },
