@@ -1,8 +1,9 @@
 # Plan: mejores ojos y mejores manos para el agente
 
-Estado: en curso —hechos los seis primeros del orden recomendado (B1, A3, A2, A1, A4,
-C1 y C2), además de F1 y la paridad del camino de escena (H1); el resto, propuesta. Escrito el 2026-07-30 desde la experiencia de haber
-usado `tools/agent3d.mjs` durante una sesión larga de trabajo real sobre el dron. Cada
+Estado: en curso. Hechos los ocho primeros del orden recomendado —B1, A3, A2, A1, A4,
+C1, C2, D5, B3 y la fase D entera—, más F1 y la fase H de creación desde cero. Quedan
+B2, C3 y E1–E3. Escrito el 2026-07-30 desde la experiencia de haber usado
+`tools/agent3d.mjs` durante una sesión larga de trabajo real sobre el dron. Cada
 apartado nace de una fricción concreta que costó tiempo, no de una lista de deseos.
 
 ## Principio rector
@@ -341,7 +342,7 @@ Y el mínimo bajó del 30 % al 10 % del volumen de la pieza menor: separados los
 alojamientos, un umbral alto solo servía para perderse los cruces de verdad. Dos cajas
 unitarias desplazadas 0,6 solapan el 22 % y son un cruce evidente.
 
-### D2. Piezas flotando
+### D2. Piezas flotando — hecho
 
 Para cada pieza, buscar la superficie más alta por debajo entre las piezas cuya caja se
 solapa en XZ, y reportar la separación vertical.
@@ -351,11 +352,38 @@ solapa en XZ, y reportar la separación vertical.
 Es el fallo más habitual de un ensamblaje generado, y ninguna vista lo revela salvo que
 mires justo desde el lado correcto.
 
-### D3. Duplicados en la misma posición
+**La separación vertical es la cifra, pero no puede ser el criterio.** En un
+cuadricóptero las hélices están legítimamente en el aire sobre sus motores: avisar de
+eso es avisar del diseño. Lo que delata un ensamblaje mal montado es una pieza que no
+toca **nada**, ni por debajo ni por ningún lado. Así que el criterio es no tener
+contacto con ninguna caja —con una holgura de una milésima del tamaño del modelo, que
+a esa escala es tocarse—, y la cifra que se da es doble: cuánto hay hasta lo que tiene
+debajo, y a cuánto está la pieza más próxima en cualquier dirección, que es la que hay
+que acercar.
+
+**En el dron encontró una de verdad**, y no la habíamos visto en ninguna de las
+sesiones anteriores mirando pliegos:
+
+> `camera-front-element: no toca ninguna otra pieza. Está 0.3467 por encima del suelo
+> del modelo, sin nada debajo, y a 0.0907 de camera-catchlight, que es la pieza más
+> próxima.`
+
+El elemento frontal de la cámara está suelto en el aire, a nueve centésimas del cuerpo
+de la lente. Es exactamente el fallo que esta fase venía a cazar.
+
+### D3. Duplicados en la misma posición — hecho
 
 Misma malla y misma matriz dentro de un epsilon. No se ven —están exactamente
 superpuestos— y doblan el coste de todo el pipeline. En un modelo generado por
 acumulación de operaciones aparecen con facilidad.
+
+La malla se identifica con una huella FNV-1a de sus posiciones más el recuento de
+índices, y la colocación con la matriz redondeada. La distinción que importa es con las
+**instancias**: la misma malla en distinta matriz es reutilización legítima —y deseable—,
+no un duplicado. Solo cuenta la coincidencia de las dos cosas.
+
+El dron no tiene ninguno, que es la respuesta correcta y conviene comprobarla igual: una
+auditoría que solo se prueba con el caso que falla no está probada.
 
 ### D4. Escala incoherente entre hermanos — hecho
 
@@ -419,19 +447,29 @@ rango, con la suposición dicha—; una de 13,78 unidades esperando 0,35 —fact
 larga y la de mayor valor absoluto. Merece su propio ciclo de verificación, con casos
 construidos a propósito: dos cajas solapadas, una pieza flotando, un duplicado exacto.
 
-**Hechas D1 y D4** en `agent/spatialAudit.ts`, ~210 líneas, con cinco casos construidos
-a propósito: dos cajas cruzadas a medias (avisa), una pieza alojada dentro de otra (no
-avisa), dos piezas que solo se tocan (no avisa), cuatro hermanos iguales y uno diminuto
-—factor 50— (avisa), y un grupo disperso por diseño (no avisa). Los cinco pasan. La
-mitad del trabajo de una auditoría es **no** avisar, y por eso tres de los cinco casos
-comprueban silencio.
+**Hecha la fase entera** en `agent/spatialAudit.ts`, ~330 líneas, con **diez casos
+construidos a propósito**, de los que **seis comprueban silencio** —la mitad del trabajo
+de una auditoría es no avisar—:
 
-Cuestan 34 ms sobre el dron, y la consulta con `--inspect-only` pasa de ~160 ms a
-~250 ms. Van siempre, sin bandera: un ensamblaje mal montado no es algo que el agente
-sepa que tiene que preguntar.
+| caso | debe |
+|---|---|
+| dos cajas cruzadas a medias | avisar |
+| una pieza alojada dentro de otra | callar |
+| dos piezas que solo se tocan | callar |
+| cuatro hermanos iguales y uno diminuto (factor 50) | avisar |
+| un grupo disperso por diseño | callar |
+| una pieza en el aire sin tocar nada | avisar |
+| una pieza apoyada en otra | callar |
+| una hélice sobre su eje, en el aire pero unida | callar |
+| un duplicado exacto superpuesto | avisar |
+| la misma malla en dos sitios distintos | callar |
 
-Pendientes de la fase: **D2** (piezas flotando) y **D3** (duplicados en la misma
-posición).
+Los diez pasan. Sobre el dron entero: un solo aviso de pieza flotante —real—, dos
+candidatos de escala y ningún duplicado.
+
+Cuestan 34 ms, y la consulta con `--inspect-only` pasa de ~160 ms a ~250 ms. Van
+siempre, sin bandera: un ensamblaje mal montado no es algo que el agente sepa que tiene
+que preguntar.
 
 ---
 
@@ -504,7 +542,7 @@ Conviene ser exacto sobre qué garantiza esto, porque es fácil prometer de más
 | 6 | ~~**C1 + C2** avisos nuevos y presupuestos~~ **hecho** | Cierran el bucle de iteración |
 | 7 | ~~**D5** escala~~ **hecho** | Una división, atrapa el error más común |
 | 8 | ~~**B3** esquema~~ **hecho** | Lo que abre la herramienta a otros |
-| 9 | **D1–D4** auditorías espaciales | ~~D1 y D4 **hechas**~~; quedan D2 y D3 |
+| 9 | ~~**D1–D4** auditorías espaciales~~ **hecha** | El mayor valor, y el mayor trabajo |
 | 10 | **E1–E3, B2, C3** | Comodidad y velocidad, ya con todo lo demás en pie |
 | — | ~~**F1**~~ **hecho** | Antes de prometer comparación de imágenes en CI |
 

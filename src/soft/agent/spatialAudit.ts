@@ -44,9 +44,27 @@ export interface ScaleOutlier {
   siblings: number;
 }
 
+export interface FloatingPart {
+  part: string;
+  /** Separación vertical hasta lo que tiene debajo, en unidades del fichero. */
+  gap: number;
+  /** Pieza que tiene debajo, o `null` si no hay nada: el suelo del modelo. */
+  below: string | null;
+  /** Pieza más próxima en cualquier dirección, y a cuánto: es lo que hay que acercar. */
+  nearest: string | null;
+  distance: number;
+}
+
+export interface DuplicateGroup {
+  parts: string[];
+  triangles: number;
+}
+
 export interface SpatialAudit {
   interpenetration: Interpenetration[];
   scaleOutliers: ScaleOutlier[];
+  floating: FloatingPart[];
+  duplicates: DuplicateGroup[];
 }
 
 /**
@@ -97,6 +115,53 @@ function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+/** Cajas que se tocan o se cruzan, con holgura: contacto, no necesariamente cruce. */
+function touches(a: SceneAabb, b: SceneAabb, tolerance: number): boolean {
+  for (let axis = 0; axis < 3; axis += 1) {
+    if (a.min[axis] - tolerance > b.max[axis]) return false;
+    if (b.min[axis] - tolerance > a.max[axis]) return false;
+  }
+  return true;
+}
+
+/** Distancia entre dos cajas: cero si se tocan o se cruzan. */
+function gapBetween(a: SceneAabb, b: SceneAabb): number {
+  let squared = 0;
+  for (let axis = 0; axis < 3; axis += 1) {
+    const separation = Math.max(a.min[axis] - b.max[axis], b.min[axis] - a.max[axis], 0);
+    squared += separation * separation;
+  }
+  return Math.sqrt(squared);
+}
+
+/** Solape en planta, que es lo que decide si una pieza puede estar «debajo» de otra. */
+function overlapsInPlan(a: SceneAabb, b: SceneAabb): boolean {
+  if (a.min[0] >= b.max[0] || b.min[0] >= a.max[0]) return false;
+  if (a.min[2] >= b.max[2] || b.min[2] >= a.max[2]) return false;
+  return true;
+}
+
+/**
+ * Huella de la geometría en local: FNV-1a sobre las posiciones y el recuento de
+ * triángulos. Dos piezas con la misma huella **y** la misma matriz son la misma
+ * pieza dibujada dos veces.
+ */
+function geometryKey(mesh: Mesh): string {
+  let hash = 0x811c9dc5;
+  const bytes = new Uint8Array(mesh.positions.buffer, mesh.positions.byteOffset, mesh.positions.byteLength);
+  for (let index = 0; index < bytes.length; index += 1) {
+    hash = Math.imul(hash ^ bytes[index], 0x01000193);
+  }
+  return `${(hash >>> 0).toString(16)}:${mesh.indices.length}`;
+}
+
+/** La matriz redondeada: dos colocaciones iguales salvo error de coma flotante. */
+function placementKey(matrix: Mat4): string {
+  let key = "";
+  for (let index = 0; index < 16; index += 1) key += `${matrix[index].toFixed(5)},`;
+  return key;
 }
 
 export interface SpatialAuditOptions {
@@ -215,5 +280,109 @@ export function auditSpatial(
     scaleOutliers: [...worstByFamily.values()]
       .sort((a, b) => b.factor - a.factor)
       .slice(0, limit),
+    floating: findFloating(parts, boxes, limit),
+    duplicates: findDuplicates(parts, limit),
   };
+}
+
+/**
+ * D2: piezas que no tocan nada.
+ *
+ * El plan lo planteaba como «buscar la superficie más alta por debajo y reportar la
+ * separación vertical», y esa es la **cifra** que se da, porque es la que se corrige.
+ * Pero el **criterio** no puede ser esa separación: en un cuadricóptero las hélices
+ * están legítimamente en el aire sobre sus motores, y avisar de eso sería avisar del
+ * diseño. Lo que delata un ensamblaje mal montado es una pieza que no toca **nada**,
+ * ni por debajo ni por ningún lado.
+ *
+ * La holgura es relativa al tamaño del modelo: en un objeto de cuatro unidades, dos
+ * piezas a una milésima de distancia se están tocando a todos los efectos.
+ */
+function findFloating(
+  parts: readonly PlacedPart[],
+  boxes: readonly SceneAabb[],
+  limit: number,
+): FloatingPart[] {
+  if (parts.length < 2) return [];
+
+  let floor = Infinity;
+  let extent = 0;
+  for (const box of boxes) {
+    if (box.min[1] < floor) floor = box.min[1];
+    extent = Math.max(extent, diagonalOf(box));
+    for (let axis = 0; axis < 3; axis += 1) {
+      extent = Math.max(extent, box.max[axis] - box.min[axis]);
+    }
+  }
+  const tolerance = extent * 0.001;
+
+  const found: FloatingPart[] = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    const box = boxes[index];
+    let contacts = 0;
+    for (let other = 0; other < parts.length && contacts === 0; other += 1) {
+      if (other !== index && touches(box, boxes[other], tolerance)) contacts += 1;
+    }
+    if (contacts > 0) continue;
+    // Apoyada en el suelo del propio modelo: tampoco flota.
+    if (box.min[1] - floor <= tolerance) continue;
+
+    let support = floor;
+    let below: string | null = null;
+    let nearest: string | null = null;
+    let distance = Infinity;
+    for (let other = 0; other < parts.length; other += 1) {
+      if (other === index) continue;
+      const separation = gapBetween(box, boxes[other]);
+      if (separation < distance) {
+        distance = separation;
+        nearest = parts[other].name;
+      }
+      if (!overlapsInPlan(box, boxes[other])) continue;
+      const top = boxes[other].max[1];
+      if (top <= box.min[1] && top > support) {
+        support = top;
+        below = parts[other].name;
+      }
+    }
+
+    found.push({
+      part: parts[index].name,
+      gap: Number((box.min[1] - support).toFixed(4)),
+      below,
+      nearest,
+      // Lo que hay que cerrar para pegarla: la separación vertical dice dónde
+      // apoyarla, pero si la pieza está suelta en el aire lo accionable es a qué
+      // vecino acercarla y cuánto.
+      distance: Number.isFinite(distance) ? Number(distance.toFixed(4)) : 0,
+    });
+  }
+
+  return found.sort((a, b) => b.gap - a.gap).slice(0, limit);
+}
+
+/**
+ * D3: la misma geometría en la misma posición, dos veces.
+ *
+ * No se ven —están exactamente superpuestas— y doblan el coste de todo el camino:
+ * vértices, triángulos, sombreado. Aparecen con facilidad en un modelo generado por
+ * acumulación de operaciones, y en un GLB con instancias hay que distinguirlas de lo
+ * legítimo: la misma malla en **distinta** matriz es una instancia, no un duplicado.
+ */
+function findDuplicates(parts: readonly PlacedPart[], limit: number): DuplicateGroup[] {
+  const groups = new Map<string, { parts: string[]; triangles: number }>();
+  for (const part of parts) {
+    const key = `${geometryKey(part.mesh)}|${placementKey(part.model)}`;
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, { parts: [part.name], triangles: part.mesh.indices.length / 3 });
+    } else {
+      group.parts.push(part.name);
+    }
+  }
+
+  return [...groups.values()]
+    .filter((group) => group.parts.length > 1)
+    .sort((a, b) => b.triangles * b.parts.length - a.triangles * a.parts.length)
+    .slice(0, limit);
 }

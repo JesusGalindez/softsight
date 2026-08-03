@@ -230,6 +230,27 @@ function spatialWarnings(audit: SpatialAudit): Warning[] {
       message: `${pair.parts[0]} y ${pair.parts[1]}: sus cajas se cruzan y solapan el ${(pair.overlap * 100).toFixed(0)} % del volumen de la menor, sin que ninguna contenga a la otra; candidato a interpenetración, no comprobado malla contra malla.`,
     });
   }
+  for (const floating of audit.floating) {
+    warnings.push({
+      code: "PIEZA_FLOTANTE",
+      part: floating.part,
+      message:
+        `${floating.part}: no toca ninguna otra pieza. ` +
+        (floating.below !== null
+          ? `Está ${floating.gap} por encima de ${floating.below}`
+          : `Está ${floating.gap} por encima del suelo del modelo, sin nada debajo`) +
+        (floating.nearest !== null
+          ? `, y a ${floating.distance} de ${floating.nearest}, que es la pieza más próxima.`
+          : "."),
+    });
+  }
+  for (const group of audit.duplicates) {
+    warnings.push({
+      code: "DUPLICADO_EXACTO",
+      part: group.parts[0],
+      message: `${group.parts.length} piezas con la misma geometría en la misma posición —${nameList(group.parts)}—, ${group.triangles} triángulos cada una; no se ven y multiplican el coste.`,
+    });
+  }
   for (const outlier of audit.scaleOutliers) {
     warnings.push({
       code: "ESCALA_HERMANOS",

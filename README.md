@@ -156,14 +156,23 @@ cada ejecución, así que lo que se compara es el código.
 ### Auditoría entre piezas
 
 Lo que ninguna imagen revela y ninguna auditoría de malla puede ver, porque el fallo no
-está en una malla sino en la relación entre dos: piezas que se cruzan y hermanos fuera
-de escala. Va en `spatial` y en los avisos, siempre, sin bandera.
+está en una malla sino en la relación entre dos: piezas que se cruzan, piezas sueltas en
+el aire, duplicados invisibles y hermanos fuera de escala. Va en `spatial` y en los
+avisos, siempre, sin bandera.
 
-Las dos son de caja envolvente, y el aviso lo dice: son **candidatos**, no hechos
-comprobados malla contra malla. Un solape en el que una caja contiene entera a la otra
-es un alojamiento —un núcleo dentro de su carcasa— y no avisa; lo que avisa es el cruce
-parcial. Y una pieza mucho mayor que sus hermanos que además los contiene es la que los
-aloja, no una anomalía.
+En el dron de pruebas encontró esto, que llevaba ahí sin que nadie lo viera mirando
+renders:
+
+> `camera-front-element: no toca ninguna otra pieza. Está 0.3467 por encima del suelo
+> del modelo, sin nada debajo, y a 0.0907 de camera-catchlight, que es la pieza más
+> próxima.`
+
+Todas son de caja envolvente, y los avisos lo dicen: son **candidatos**, no hechos
+comprobados malla contra malla. El trabajo está en no avisar de lo legítimo: un solape
+en el que una caja contiene entera a la otra es un alojamiento y calla; una pieza mucho
+mayor que sus hermanos que además los contiene es la que los aloja y calla; una hélice
+en el aire pero unida a su eje no flota, porque el criterio es **no tocar nada**, no
+estar elevada; y la misma malla en distinta posición es una instancia, no un duplicado.
 
 ### Escala absoluta
 
