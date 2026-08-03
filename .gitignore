@@ -11,3 +11,6 @@ dist-node/
 # Pliegos generados por el banco de agentes; los ejemplos JSON sí entran
 artifacts/agent/*.png
 artifacts/agent/*.obj
+
+# Caché del modelo analizado: se rehace sola
+.cache/

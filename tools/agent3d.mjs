@@ -21,6 +21,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { loadModelCached } from "./modelCache.mjs";
 import { deflateSync, inflateSync } from "node:zlib";
 
 import {
@@ -276,14 +277,19 @@ async function loadMeshoptDecoder() {
 
 async function reviewModelFile(options, outputPath) {
   const modelPath = resolve(options.get("model"));
-  const isBinary = modelPath.toLowerCase().endsWith(".glb");
-  const raw = await readFile(modelPath);
-  const data = isBinary
-    ? raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)
-    : raw.toString("utf8");
-
-  const decoder = isBinary ? await loadMeshoptDecoder() : undefined;
-  const model = loadModel(modelPath, data, decoder);
+  const { model, cached } = await loadModelCached(
+    modelPath,
+    async () => {
+      const isBinary = modelPath.toLowerCase().endsWith(".glb");
+      const raw = await readFile(modelPath);
+      const data = isBinary
+        ? raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)
+        : raw.toString("utf8");
+      const decoder = isBinary ? await loadMeshoptDecoder() : undefined;
+      return loadModel(modelPath, data, decoder);
+    },
+    { enabled: options.get("no-cache") !== "true" },
+  );
 
   const baseline = await readBaselinePng(options);
   const previous = await readBaselineReport(options);
@@ -324,7 +330,7 @@ async function reviewModelFile(options, outputPath) {
     writeFileSync(exported, serializeObj(model), "utf8");
   }
 
-  return { ...review, edits, file: sheet ? outputPath : null, exported };
+  return { ...review, edits, cached, file: sheet ? outputPath : null, exported };
 }
 
 /**
@@ -381,6 +387,7 @@ Presupuesto (cada bandera es una cláusula; incumplirla es un aviso y salida 1)
   --max-symmetry-error <x>  error de simetría en X, en fracción del radio (0.02 = 2 %)
 
 Otras
+  --no-cache              rehace el análisis del modelo en vez de leer .cache/
   --schema                forma aceptada de la escena y del parche, y un informe
                           de ejemplo, todo generado por el propio código
   --debug                 vuelca la pila en los errores

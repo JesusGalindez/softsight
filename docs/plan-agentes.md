@@ -184,7 +184,7 @@ obliga a distinguir «no lo pedí» de «falló», y el nulo lo dice sin ambigü
 **Verificación.** Los dos informes, quitando `sheet`, `views` y `file`, son **idénticos
 carácter a carácter**; el modo rápido no cambia ningún diagnóstico.
 
-### B2. Caché del modelo analizado
+### B2. Caché del modelo analizado — hecho
 
 Lo que queda tras B1 es el análisis: 2,1 MB de GLB, 296 piezas, 100.006 vértices en
 cada llamada. En un bucle de diez parches son diez análisis idénticos.
@@ -194,11 +194,23 @@ matriz, nombre— a un único blob binario en `.cache/`, con clave `(ruta, mtime
 tamaño)`. Cargarlo es leer arrays tipados de una tirada, sin recorrer JSON ni
 descomprimir.
 
-**Verificación.** La revisión con caché y sin caché debe dar informes **idénticos**;
-compararlos es un `diff` de JSON.
+Medido en proceso: **analizar el GLB 56 ms, leer la caché 5 ms**. De extremo a extremo,
+la consulta baja de ~0,31 s a ~0,18 s, y lo que queda es el arranque de Node.
 
-**Coste**: ~120 líneas. **Trampa**: invalidar mal la caché da resultados fantasma. La
-clave debe incluir el tamaño además del mtime, y conviene un `--no-cache`.
+**El primer intento no leía la caché nunca y casi no se nota.** Los arrays tipados
+exigen que su desplazamiento sea múltiplo de cuatro, y la cabecera JSON dejaba el
+bloque binario en uno impar: construir el `Float32Array` lanzaba, el camino de respaldo
+rehacía el análisis y todo seguía funcionando —solo que sin caché—. La única señal era
+un `cached: false` permanente en el informe. Por eso el campo está en el informe, y no
+solo en la consola: un respaldo silencioso que nadie puede ver es una optimización que
+nadie sabe si existe.
+
+**Verificación.** Informes idénticos con y sin caché; piezas iguales campo a campo,
+incluidos los 100.006 vértices y las matrices. Tocar el fichero invalida: `cached`
+vuelve a `false` en la llamada siguiente.
+
+**Coste**: ~140 líneas en `tools/modelCache.mjs`, fuera del núcleo tipado porque es
+entrada y salida.
 
 ### B3. `--schema` — hecho
 
