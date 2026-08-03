@@ -174,7 +174,11 @@ export function createSphere(radius = 1, segments = 32, rings = 16): Mesh {
   const positions = new Float32Array(vertexCount * 3);
   const normals = new Float32Array(vertexCount * 3);
   const uvs = new Float32Array(vertexCount * 2);
-  const indices = new Uint32Array(segments * rings * 6);
+  // Dos triángulos por casilla salvo en los dos anillos polares, donde uno de los
+  // dos tiene sus dos vértices superiores —o inferiores— en el mismo punto del polo y
+  // por tanto área nula. Emitirlo costaba 64 triángulos degenerados en cada esfera,
+  // que la auditoría reportaba con razón en cualquier escena que usara una.
+  const indices = new Uint32Array((segments * rings - segments * 2) * 6 + segments * 2 * 3);
 
   let vertex = 0;
   for (let ring = 0; ring <= rings; ring += 1) {
@@ -212,13 +216,20 @@ export function createSphere(radius = 1, segments = 32, rings = 16): Mesh {
       // iluminado por normales que apuntan al lado opuesto de la luz — la esfera
       // se veía plana y apagada. Lo detectó `auditMesh` con un 94 % de caras
       // contradiciendo a sus propios vértices.
-      indices[index + 0] = current;
-      indices[index + 1] = current + 1;
-      indices[index + 2] = next;
-      indices[index + 3] = current + 1;
-      indices[index + 4] = next + 1;
-      indices[index + 5] = next;
-      index += 6;
+      // En el anillo del polo norte, `current` y `current + 1` son el mismo punto; en
+      // el del sur lo son `next` y `next + 1`. Se emite solo el triángulo que existe.
+      if (ring > 0) {
+        indices[index + 0] = current;
+        indices[index + 1] = current + 1;
+        indices[index + 2] = next;
+        index += 3;
+      }
+      if (ring < rings - 1) {
+        indices[index + 0] = current + 1;
+        indices[index + 1] = next + 1;
+        indices[index + 2] = next;
+        index += 3;
+      }
     }
   }
 

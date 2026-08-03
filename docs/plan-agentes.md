@@ -737,8 +737,17 @@ sólido cerrado lo normal es ~50 %». Las dos mitades de esa frase son falsas:
 Así que avisaba de lo que estaba bien y callaba ante lo que estaba mal. Fuera, y en su
 lugar el volumen firmado, que es exacto.
 
-Queda: **`createSphere` emite 64 triángulos de área nula** en los polos, así que
-cualquier escena con una esfera arrastra un aviso que no es culpa de quien la escribió.
+**`createSphere` emitía 64 triángulos de área nula** en los polos, así que cualquier
+escena con una esfera arrastraba un aviso que no era culpa de quien la escribió. En los
+dos anillos polares, uno de los dos triángulos de cada casilla tiene sus dos vértices
+superiores —o inferiores— en el mismo punto: ahora se emite solo el que existe.
+
+**Verificación con la propia herramienta**: la esfera pasa de 1.024 triángulos con 64
+degenerados a 960 con ninguno, sigue cerrada y con las normales coherentes, y su volumen
+firmado es 4,12 frente a los 4,189 de la esfera exacta —un poliedro de 16×32 la
+aproxima por dentro—. Y lo que importaba: renderizando la escena de ejemplo antes y
+después, **la huella es la misma y cambian cero píxeles**. Los triángulos degenerados no
+pintaban nada, que era la hipótesis, ahora medida.
 
 ## Cabos sueltos de infraestructura
 
