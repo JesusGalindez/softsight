@@ -115,7 +115,7 @@ export const SCENE_SCHEMA: ObjectSchema = {
 
 const EDIT_FIELDS: ObjectSchema = {
   op: {
-    type: '"add"|"translate"|"rotate"|"scale"|"color"|"hide"|"show"|"delete"|"rename"|"align"|"setPivot"|"mirror"',
+    type: '"add"|"translate"|"rotate"|"scale"|"color"|"hide"|"show"|"delete"|"rename"|"align"|"setPivot"|"mirror"|"instance"',
     required: true,
     description: "Operación a aplicar.",
   },

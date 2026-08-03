@@ -185,6 +185,20 @@ export function selectWhere(
   );
 }
 
+/**
+ * Huella del contenido de una malla: FNV-1a sobre las posiciones más el recuento de
+ * índices. Identifica geometrías iguales aunque sean objetos distintos, que es lo
+ * habitual: el cargador entrega una copia por pieza aunque el fichero la compartiera.
+ */
+export function geometryKeyOf(mesh: Mesh): string {
+  let hash = 0x811c9dc5;
+  const bytes = new Uint8Array(mesh.positions.buffer, mesh.positions.byteOffset, mesh.positions.byteLength);
+  for (let index = 0; index < bytes.length; index += 1) {
+    hash = Math.imul(hash ^ bytes[index], 0x01000193);
+  }
+  return `${(hash >>> 0).toString(16)}:${mesh.indices.length}`;
+}
+
 export function selectParts(model: Model, patterns: readonly string[]): ModelPart[] {
   if (patterns.length === 0) return [];
   return model.parts.filter((part) => patterns.some((pattern) => matchesPattern(part, pattern)));
@@ -300,7 +314,13 @@ export type Edit =
    * además se da la vuelta a cada triángulo: si no, la pieza espejada queda del
    * revés y `MALLA_INVERTIDA` lo cantaría.
    */
-  | { op: "mirror"; target: string; axis: "x" | "y" | "z" };
+  | { op: "mirror"; target: string; axis: "x" | "y" | "z" }
+  /**
+   * Hace que las piezas con la misma geometría **compartan** la malla en vez de
+   * llevar cada una su copia. No cambia ni un píxel: cambia cuánto ocupa el modelo
+   * en memoria, en la caché y sobre todo en el GLB exportado.
+   */
+  | { op: "instance"; target?: string };
 
 export interface Patch {
   edits: Edit[];
@@ -311,6 +331,25 @@ export interface EditResult {
   target: string;
   matched: number;
   error?: string;
+  /** `instance`: bytes de malla que dejan de estar duplicados. */
+  savedBytes?: number;
+}
+
+/**
+ * Separa la malla de una pieza si otra la comparte, para poder mutarla sin efectos a
+ * distancia. Si nadie más la usa, no copia nada.
+ */
+function detachMesh(model: Model, part: ModelPart): void {
+  const shared = model.parts.some((other) => other !== part && other.mesh === part.mesh);
+  if (!shared) return;
+  const source = part.mesh;
+  part.mesh = {
+    positions: Float32Array.from(source.positions),
+    normals: Float32Array.from(source.normals),
+    uvs: Float32Array.from(source.uvs),
+    indices: Uint32Array.from(source.indices),
+    boundingRadius: source.boundingRadius,
+  };
 }
 
 /** Caja envolvente en mundo de un puñado de piezas. */
@@ -430,13 +469,16 @@ export function applyPatch(model: Model, patch: Patch): EditResult[] {
       continue;
     }
 
-    if (edit.target === undefined) {
+    // `instance` sin objetivo se aplica al modelo entero, que es lo que se quiere el
+    // 99 % de las veces; las demás operaciones exigen decir sobre qué actúan.
+    if (edit.target === undefined && edit.op !== "instance") {
       results.push({ op: edit.op, target: "", matched: 0, error: "falta target" });
       continue;
     }
 
-    const targets = model.parts.filter((part) => matchesPattern(part, edit.target));
-    const result: EditResult = { op: edit.op, target: edit.target, matched: targets.length };
+    const pattern = edit.target ?? "*";
+    const targets = model.parts.filter((part) => matchesPattern(part, pattern));
+    const result: EditResult = { op: edit.op, target: pattern, matched: targets.length };
 
     // Un patrón que no encaja con nada es casi siempre un nombre mal escrito. Un
     // agente no puede corregirlo si la operación falla en silencio.
@@ -488,6 +530,33 @@ export function applyPatch(model: Model, patch: Patch): EditResult[] {
         model.parts = model.parts.filter((part) => !removed.has(part));
         break;
       }
+      case "instance": {
+        // Se agrupa por contenido, no por identidad: el cargador entrega una copia
+        // por pieza aunque el fichero compartiera la geometría.
+        const canonical = new Map<string, Mesh>();
+        let shared = 0;
+        let saved = 0;
+        for (const part of targets) {
+          const key = geometryKeyOf(part.mesh);
+          const existing = canonical.get(key);
+          if (existing === undefined) {
+            canonical.set(key, part.mesh);
+            continue;
+          }
+          if (existing === part.mesh) continue;
+          saved +=
+            part.mesh.positions.byteLength +
+            part.mesh.normals.byteLength +
+            part.mesh.uvs.byteLength +
+            part.mesh.indices.byteLength;
+          part.mesh = existing;
+          shared += 1;
+        }
+        result.matched = shared;
+        if (shared === 0) result.error = "no hay geometría repetida que compartir";
+        else result.savedBytes = saved;
+        break;
+      }
       case "align": {
         const reference = model.parts.filter((part) => matchesPattern(part, edit.to));
         if (reference.length === 0) {
@@ -513,6 +582,10 @@ export function applyPatch(model: Model, patch: Patch): EditResult[] {
       }
       case "setPivot":
         for (const part of targets) {
+          // Copia al escribir. Tras un `instance`, varias piezas comparten la misma
+          // malla, y recentrar el pivote de una movería la geometría de todas sus
+          // gemelas sin que nadie lo pidiera. Se separa antes de tocarla.
+          detachMesh(model, part);
           const local = localCenter(part.mesh);
           const to = edit.to ?? [0, 0, 0];
           const shift = [local[0] - to[0], local[1] - to[1], local[2] - to[2]];
@@ -531,6 +604,7 @@ export function applyPatch(model: Model, patch: Patch): EditResult[] {
       case "mirror": {
         const axis = "xyz".indexOf(edit.axis);
         for (const part of targets) {
+          detachMesh(model, part);
           const { positions, normals, indices } = part.mesh;
           for (let offset = axis; offset < positions.length; offset += 3) {
             positions[offset] = -positions[offset];

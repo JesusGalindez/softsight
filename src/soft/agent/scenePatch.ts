@@ -165,6 +165,10 @@ export function applyPatchToScene(spec: SceneSpec, patch: Patch): EditResult[] {
         result.error =
           "hide y show son de modelos cargados de fichero; en una escena, añade la pieza o bórrala";
         break;
+      case "instance":
+        result.error =
+          "instance comparte mallas ya resueltas y una escena es un documento: aquí la repetición se evita reutilizando la misma geometría al escribirla";
+        break;
       case "setPivot":
       case "mirror":
         result.error = `${edit.op} reescribe la malla y aquí solo se edita el documento; aplícalo sobre un modelo cargado de fichero`;

@@ -13,7 +13,7 @@
  */
 
 import { computeSceneAabb, type SceneAabb } from "./contactSheet";
-import { familyOf } from "./model";
+import { familyOf, geometryKeyOf } from "./model";
 import type { Mat4 } from "../math";
 import type { Mesh } from "../mesh";
 
@@ -144,18 +144,12 @@ function overlapsInPlan(a: SceneAabb, b: SceneAabb): boolean {
 }
 
 /**
- * Huella de la geometría en local: FNV-1a sobre las posiciones y el recuento de
- * triángulos. Dos piezas con la misma huella **y** la misma matriz son la misma
- * pieza dibujada dos veces.
+ * Huella de la geometría en local. Dos piezas con la misma huella **y** la misma
+ * matriz son la misma pieza dibujada dos veces; con la misma huella y distinta
+ * matriz son una instancia, que es legítimo. Vive en `model.ts` porque la usan tanto
+ * esta auditoría como el escritor de GLB, y dos copias divergirían.
  */
-function geometryKey(mesh: Mesh): string {
-  let hash = 0x811c9dc5;
-  const bytes = new Uint8Array(mesh.positions.buffer, mesh.positions.byteOffset, mesh.positions.byteLength);
-  for (let index = 0; index < bytes.length; index += 1) {
-    hash = Math.imul(hash ^ bytes[index], 0x01000193);
-  }
-  return `${(hash >>> 0).toString(16)}:${mesh.indices.length}`;
-}
+const geometryKey = geometryKeyOf;
 
 /** La matriz redondeada: dos colocaciones iguales salvo error de coma flotante. */
 function placementKey(matrix: Mat4): string {

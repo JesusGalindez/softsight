@@ -1,8 +1,8 @@
 # Plan: mejores ojos y mejores manos para el agente
 
 Estado: **el orden recomendado, entero**. Con él, F1 y la fase H de creación desde
-cero. Lo que queda es un cabo concreto, anotado en su sitio: `instance`, que ahora sí
-tendría dónde ahorrar porque ya existe el exportador de GLB. Escrito el 2026-07-30 desde la experiencia de haber usado
+cero. Del plan no queda nada pendiente; lo que hay son ideas anotadas en su sitio, como
+las booleanas o comprimir el GLB, que esperan a que una medida las justifique. Escrito el 2026-07-30 desde la experiencia de haber usado
 `tools/agent3d.mjs` durante una sesión larga de trabajo real sobre el dron. Cada
 apartado nace de una fricción concreta que costó tiempo, no de una lista de deseos.
 
@@ -540,10 +540,27 @@ acción correspondiente obliga al agente a improvisar.
 - **`mirror`** refleja y además **da la vuelta a cada triángulo**. Sin eso la pieza
   espejada queda del revés, y ahora que existe `MALLA_INVERTIDA` la propia auditoría lo
   cantaría: tras espejar, el volumen firmado sigue siendo positivo.
-- **`instance` no se hace.** El modelo ya comparte el objeto `Mesh` entre piezas cuando
-  el GLB venía instanciado, así que la operación no ahorraría memoria; lo que ahorraría
-  es tamaño de exportación, y exportar GLB todavía no existe. Cuando exista, aquí es
-  donde va.
+- **`instance` — hecho, y la razón para hacerlo apareció al medir.** Lo había
+  descartado suponiendo que el modelo ya compartía la malla cuando el GLB venía
+  instanciado. **No la comparte**: el cargador entrega una copia por pieza. Contadas,
+  el dron tiene 296 piezas y **56 geometrías distintas, una repetida 120 veces**; de
+  3,49 MB de malla, 1,13 MB son únicos.
+
+  Va en dos sitios, porque son dos ahorros distintos:
+
+  1. **El escritor de GLB agrupa por contenido siempre**, sin que nadie lo pida: una
+     malla por geometría y un nodo por pieza, que es lo que glTF llama instanciar. El
+     dron exportado pasa de **3,80 MB a 1,24 MB** —por debajo incluso de los 2,07 MB
+     del original comprimido con meshopt— y la ida y vuelta sigue dando las mismas 296
+     piezas, los mismos triángulos y la misma huella de render.
+  2. **La operación `instance`** hace que las piezas compartan el objeto en memoria:
+     240 piezas unificadas y 2,36 MB menos, sin que cambie un solo píxel.
+
+  **Y trae una trampa que hay que cerrar con ella**: si dos piezas comparten la malla,
+  recentrar el pivote de una movería la geometría de la otra sin que nadie lo pidiera.
+  `setPivot` y `mirror` separan la malla antes de tocarla —copia al escribir— y solo si
+  alguien más la usa. Comprobado sobre los 120 tornillos del dron: tras `setPivot` en
+  uno, deja de compartir y su gemela no se mueve.
 
 ### E3. Avisos con arreglo ejecutable — hecho
 
@@ -715,11 +732,11 @@ el pliego anterior localiza el cambio.
 es lo que cierra el círculo: hasta ahora un objeto inventado desde cero solo podía
 salir como imagen, porque crear y entregar eran caminos distintos.
 
-Es un escritor pequeño a propósito: una malla y un nodo por pieza con su matriz de
-mundo, material por color base, sin compresión. No reconstruye jerarquía —el modelo
+Es un escritor pequeño a propósito: **una malla por geometría** y un nodo por pieza con
+su matriz de mundo, material por color base, sin compresión. No reconstruye jerarquía —el modelo
 interno la aplana al cargar, así que inventarla sería mentir— ni escribe texturas, que
-tampoco tiene. El fichero sale más grande que el original comprimido con meshopt (3,8 MB
-frente a 2,1) y conviene decirlo en vez de esconderlo.
+tampoco tiene. Con las mallas repetidas agrupadas, el dron exportado pesa 1,24 MB —menos que los
+2,07 MB del original comprimido con meshopt, y eso que aquí no hay compresión—.
 
 **Verificación por ida y vuelta**, que es la que vale: exportado el dron y vuelto a
 cargar con nuestro propio lector, salen las mismas 296 piezas, 37.950 triángulos,

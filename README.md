@@ -103,9 +103,10 @@ Y sale en el formato que lee el resto del mundo:
 npm run agent3d -- --scene torre.json --export torre.glb
 ```
 
-El GLB lleva una malla y un nodo por pieza, con su nombre, su color y su colocación.
-Cargado de vuelta da las mismas piezas, los mismos triángulos y **la misma imagen** que
-la escena de la que salió.
+El GLB lleva **una malla por geometría** y un nodo por pieza, con su nombre, su color y
+su colocación: las piezas repetidas comparten los vértices en vez de copiarlos. El dron
+de pruebas exportado pesa 1,24 MB frente a los 2,07 MB del original comprimido, y
+cargado de vuelta da las mismas 296 piezas, los mismos triángulos y **la misma imagen**.
 
 ## Banco de trabajo para agentes
 

@@ -63,6 +63,7 @@ export { parseObj, serializeObj } from "./objLoader";
 export {
   applyPatch,
   dedupeNames,
+  geometryKeyOf,
   matchesName,
   matchesPattern,
   needsAudit,
