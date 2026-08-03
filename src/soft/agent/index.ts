@@ -38,6 +38,7 @@ import type { Mat4 } from "../math";
 import type { Mesh } from "../mesh";
 import { diffSheets, type RasterImage, type RenderDiff } from "./renderDiff";
 import { createGroundPlane, resolveScene, type SceneSpec } from "./sceneSpec";
+import { auditSpatial, type SpatialAudit } from "./spatialAudit";
 import type { SceneNode } from "../renderer";
 
 export {
@@ -68,6 +69,8 @@ export { diffSheets } from "./renderDiff";
 export type { RasterImage, RenderDiff, DiffRegion } from "./renderDiff";
 export { resolveScene, resolveObject, createGroundPlane } from "./sceneSpec";
 export { applyPatchToScene } from "./scenePatch";
+export { auditSpatial } from "./spatialAudit";
+export type { SpatialAudit, Interpenetration, ScaleOutlier, PlacedPart } from "./spatialAudit";
 export { SCENE_SCHEMA, PATCH_SCHEMA, validate, assertValid } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
 export type { SceneSpec, ObjectSpec, PrimitiveSpec, RawMeshSpec } from "./sceneSpec";
@@ -204,6 +207,37 @@ function checkScale(size: readonly [number, number, number], expectSize?: number
     ];
   }
   return [];
+}
+
+/**
+ * Avisos de la auditoría entre piezas. Se redactan diciendo **de qué son prueba y de
+ * qué no**: el solape de cajas es condición necesaria y no suficiente para que dos
+ * mallas se corten de verdad, y callarlo convertiría un candidato en una certeza que
+ * el agente no puede comprobar.
+ */
+function spatialWarnings(audit: SpatialAudit): Warning[] {
+  const warnings: Warning[] = [];
+  for (const pair of audit.interpenetration) {
+    // Una caja entera dentro de otra es un alojamiento —un motor dentro de su
+    // carcasa, una tira sobre una cubierta— y en un ensamblaje real es la mayoría
+    // de los solapes. Lo que delata un cruce es el solape **parcial**: dos piezas
+    // que se muerden sin que ninguna contenga a la otra. Los alojamientos siguen en
+    // `spatial.interpenetration` por si el agente los quiere, pero no avisan.
+    if (pair.contained) continue;
+    warnings.push({
+      code: "INTERPENETRACION",
+      part: pair.parts[0],
+      message: `${pair.parts[0]} y ${pair.parts[1]}: sus cajas se cruzan y solapan el ${(pair.overlap * 100).toFixed(0)} % del volumen de la menor, sin que ninguna contenga a la otra; candidato a interpenetración, no comprobado malla contra malla.`,
+    });
+  }
+  for (const outlier of audit.scaleOutliers) {
+    warnings.push({
+      code: "ESCALA_HERMANOS",
+      part: outlier.part,
+      message: `${outlier.part}: su caja mide ${outlier.diagonal} de diagonal y la mediana de sus ${outlier.siblings} hermanos es ${outlier.median}, un factor ${outlier.factor}; o le sobra escala, o está en el grupo equivocado.`,
+    });
+  }
+  return warnings;
 }
 
 /** Sufijo «y N más» para no volcar 200 nombres en un aviso. */
@@ -344,6 +378,8 @@ export interface SceneReview {
   views: ViewReport[];
   renderHash: RenderHash | null;
   partScreenBoxes: ScreenBoxes | null;
+  /** Auditoría entre piezas: solapes y hermanos fuera de escala. */
+  spatial: SpatialAudit;
   diff: RenderDiff | null;
   warnings: Warning[];
   warningsDelta: WarningsDelta | null;
@@ -558,10 +594,19 @@ export function reviewScene(
     Number((aabb.max[1] - aabb.min[1]).toFixed(4)),
     Number((aabb.max[2] - aabb.min[2]).toFixed(4)),
   ];
+  const spatial = auditSpatial(
+    resolved.map((entry) => ({
+      name: entry.name,
+      path: entry.name,
+      mesh: entry.node.mesh,
+      model: entry.node.model,
+    })),
+  );
   const warnings = [
     ...buildWarnings(objects, objectCoverage),
     ...budgetWarnings,
     ...checkScale(size, options.expectSize),
+    ...spatialWarnings(spatial),
   ];
 
   const review: SceneReview = {
@@ -581,6 +626,7 @@ export function reviewScene(
     views: sheet ? viewReports(sheet) : [],
     renderHash: sheet ? hashSheet(sheet) : null,
     partScreenBoxes: sheet ? screenBoxes(boxed, sheet) : null,
+    spatial,
     diff: sheet && options.baseline ? diffSheets(sheet, options.baseline, screenBoxes(boxed, sheet)) : null,
     warnings,
     warningsDelta: options.baselineWarnings
@@ -627,6 +673,8 @@ export interface ModelReview {
    * queda fuera del tile o que cruza el plano de la cámara.
    */
   partScreenBoxes: ScreenBoxes | null;
+  /** Auditoría entre piezas: solapes y hermanos fuera de escala. */
+  spatial: SpatialAudit;
   /**
    * Comparación con un pliego anterior, si se pasó uno. `null` cuando no lo hay.
    *
@@ -775,6 +823,18 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
     );
   }
 
+  // La auditoría entre piezas mira el modelo entero, no la selección: una pieza
+  // metida dentro de otra lo está aunque el agente esté trabajando en otra rama.
+  const spatial = auditSpatial(
+    model.parts.map((part) => ({
+      name: part.name,
+      path: part.path,
+      mesh: part.mesh,
+      model: part.matrix,
+    })),
+  );
+  warnings.push(...spatialWarnings(spatial));
+
   // Extensión real de la caja, no el diámetro de la esfera envolvente repetido tres
   // veces, que es lo que decía antes: un dron de 1,7 m de envergadura y 25 cm de alto
   // salía como un cubo de 12,9 m de lado, y sobre eso no se puede juzgar una escala.
@@ -804,6 +864,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
       },
       sheet: sheet ? sheetReport(sheet) : null,
       partScreenBoxes: sheet ? screenBoxes(boxSources(audited), sheet) : null,
+      spatial,
       renderHash: sheet ? hashSheet(sheet) : null,
       // La atribución mira todas las piezas aunque solo se publiquen las auditadas:
       // el cambio interesante suele estar justo fuera de la selección.

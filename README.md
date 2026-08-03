@@ -153,6 +153,18 @@ pieza auditada en cada vista, y avisos redactados como diagnóstico, no como mé
 Cada aviso es `{ code, part, message }`: el texto lleva las cifras dentro y cambia en
 cada ejecución, así que lo que se compara es el código.
 
+### Auditoría entre piezas
+
+Lo que ninguna imagen revela y ninguna auditoría de malla puede ver, porque el fallo no
+está en una malla sino en la relación entre dos: piezas que se cruzan y hermanos fuera
+de escala. Va en `spatial` y en los avisos, siempre, sin bandera.
+
+Las dos son de caja envolvente, y el aviso lo dice: son **candidatos**, no hechos
+comprobados malla contra malla. Un solape en el que una caja contiene entera a la otra
+es un alojamiento —un núcleo dentro de su carcasa— y no avisa; lo que avisa es el cruce
+parcial. Y una pieza mucho mayor que sus hermanos que además los contiene es la que los
+aloja, no una anomalía.
+
 ### Escala absoluta
 
 glTF mide en metros, así que un dron de 4,5 unidades **son 4,5 metros**, que es absurdo

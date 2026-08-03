@@ -316,7 +316,7 @@ La auditoría actual mira cada malla **por separado**. Los errores reales de geo
 generada o ensamblada están **entre piezas**, y no se ven en una imagen ni los detecta
 nada hoy.
 
-### D1. Interpenetración
+### D1. Interpenetración — hecho
 
 Solape de cajas envolventes en mundo, todos contra todos. Con 296 piezas son 43.660
 pruebas: irrelevante. Se reporta el par y la **fracción de volumen solapado respecto a
@@ -326,6 +326,20 @@ dentro de otra.
 Honestidad en el aviso: el solape de cajas es condición **necesaria y no suficiente**
 para intersección real. Se reporta como candidato. Refinarlo con pruebas
 triángulo-triángulo sobre los candidatos es posible y caro; queda como opción.
+
+**La primera versión era inservible y la medida lo dijo enseguida**: diez solapes en el
+dron, los diez al 100 %, todos legítimos. En un ensamblaje real, la mayoría de los
+solapes de caja son **alojamientos** —una tira sobre una cubierta, un núcleo dentro de
+su carcasa—, y todos dan el 100 % porque la caja pequeña cae entera dentro de la grande.
+
+Lo que separa un alojamiento de un cruce no es cuánto solapan, es **si una contiene a
+la otra**. Se calcula igual de barato, y con eso el dron pasa de diez avisos a cero. Los
+alojamientos siguen en `spatial.interpenetration` con `contained: true`, por si el
+agente los quiere; lo que no hacen es avisar.
+
+Y el mínimo bajó del 30 % al 10 % del volumen de la pieza menor: separados los
+alojamientos, un umbral alto solo servía para perderse los cruces de verdad. Dos cajas
+unitarias desplazadas 0,6 solapan el 22 % y son un cruce evidente.
 
 ### D2. Piezas flotando
 
@@ -343,11 +357,29 @@ Misma malla y misma matriz dentro de un epsilon. No se ven —están exactamente
 superpuestos— y doblan el coste de todo el pipeline. En un modelo generado por
 acumulación de operaciones aparecen con facilidad.
 
-### D4. Escala incoherente entre hermanos
+### D4. Escala incoherente entre hermanos — hecho
 
 Agrupar por prefijo de ruta jerárquica y reportar las piezas cuya diagonal de caja se
 desvía más de un factor 10 de la mediana del grupo. Es lo que detecta un tornillo del
 tamaño de un motor.
+
+Tal cual, en el dron daba cuatro avisos y los cuatro eran correctos-pero-inútiles,
+porque la premisa —que los hermanos son iguales entre sí— no se cumple en un modelo
+real. Dos condiciones lo arreglan:
+
+- **El grupo tiene que ser de iguales.** Si sus propias diagonales se dispersan más de
+  un factor 3 entre el primer y el tercer cuartil, no hay norma que romper y no se
+  juzga a nadie.
+- **Una pieza mucho mayor que sus hermanos y que los contiene no es una anomalía: es
+  la que los aloja.** `canopy-shell` mide 17 veces la mediana de los veintisiete
+  detalles que lleva encima, y no le pasa nada. Un tornillo con la escala mal puesta no
+  contiene a nadie.
+
+Quedan dos candidatos en el dron —`canopy-hatch-panel` y `motor-nacelle-front-left`,
+factores 13 y 10—, y son piezas grandes metidas en grupos de detalles pequeños. No son
+un fallo, pero tampoco son ruido puro: dicen algo cierto sobre cómo está agrupado el
+modelo. Se quedan como candidatos, y el `warningsDelta` de C1 hace que no estorben:
+aparecen como persistentes, no como nuevos.
 
 ### D5. Semántica de unidades y escala absoluta — hecho
 
@@ -386,6 +418,20 @@ rango, con la suposición dicha—; una de 13,78 unidades esperando 0,35 —fact
 **Coste de la fase D**: ~350 líneas en un nuevo `agent/spatialAudit.ts`. Es la fase más
 larga y la de mayor valor absoluto. Merece su propio ciclo de verificación, con casos
 construidos a propósito: dos cajas solapadas, una pieza flotando, un duplicado exacto.
+
+**Hechas D1 y D4** en `agent/spatialAudit.ts`, ~210 líneas, con cinco casos construidos
+a propósito: dos cajas cruzadas a medias (avisa), una pieza alojada dentro de otra (no
+avisa), dos piezas que solo se tocan (no avisa), cuatro hermanos iguales y uno diminuto
+—factor 50— (avisa), y un grupo disperso por diseño (no avisa). Los cinco pasan. La
+mitad del trabajo de una auditoría es **no** avisar, y por eso tres de los cinco casos
+comprueban silencio.
+
+Cuestan 34 ms sobre el dron, y la consulta con `--inspect-only` pasa de ~160 ms a
+~250 ms. Van siempre, sin bandera: un ensamblaje mal montado no es algo que el agente
+sepa que tiene que preguntar.
+
+Pendientes de la fase: **D2** (piezas flotando) y **D3** (duplicados en la misma
+posición).
 
 ---
 
@@ -458,7 +504,7 @@ Conviene ser exacto sobre qué garantiza esto, porque es fácil prometer de más
 | 6 | ~~**C1 + C2** avisos nuevos y presupuestos~~ **hecho** | Cierran el bucle de iteración |
 | 7 | ~~**D5** escala~~ **hecho** | Una división, atrapa el error más común |
 | 8 | ~~**B3** esquema~~ **hecho** | Lo que abre la herramienta a otros |
-| 9 | **D1–D4** auditorías espaciales | El mayor valor, y el mayor trabajo |
+| 9 | **D1–D4** auditorías espaciales | ~~D1 y D4 **hechas**~~; quedan D2 y D3 |
 | 10 | **E1–E3, B2, C3** | Comodidad y velocidad, ya con todo lo demás en pie |
 | — | ~~**F1**~~ **hecho** | Antes de prometer comparación de imágenes en CI |
 
