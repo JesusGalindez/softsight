@@ -86,6 +86,16 @@ npm run agent3d -- --scene torre.json --patch anade-chimenea.json \
 ] }
 ```
 
+Y sale en el formato que lee el resto del mundo:
+
+```bash
+npm run agent3d -- --scene torre.json --export torre.glb
+```
+
+El GLB lleva una malla y un nodo por pieza, con su nombre, su color y su colocación.
+Cargado de vuelta da las mismas piezas, los mismos triángulos y **la misma imagen** que
+la escena de la que salió.
+
 ## Banco de trabajo para agentes
 
 Escena o modelo dentro, pliego de contactos PNG y diagnóstico JSON fuera. Sin GPU,

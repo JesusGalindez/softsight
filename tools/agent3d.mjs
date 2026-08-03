@@ -31,9 +31,11 @@ import {
   applyPatch,
   applyPatchToScene,
   invertPatch,
+  modelFromScene,
   computeSceneAabb,
   loadModel,
   reviewModel,
+  serializeGlb,
   reviewScene,
   serializeObj,
   toSceneNodes,
@@ -351,6 +353,7 @@ async function reviewModelFile(options, outputPath) {
     baselineWarnings: previous.warnings,
     select: select ? select.split(",").map((pattern) => pattern.trim()) : [],
     selectWhere: options.get("select-where"),
+    useMaterialColors: options.get("material-colors") === "true",
     isolate: options.get("isolate") === "true",
     auditLimit: Number(options.get("audit-limit") ?? 12),
     baseline,
@@ -367,7 +370,11 @@ async function reviewModelFile(options, outputPath) {
   if (exportPath) {
     exported = resolve(exportPath);
     mkdirSync(dirname(exported), { recursive: true });
-    writeFileSync(exported, serializeObj(model), "utf8");
+    if (exported.toLowerCase().endsWith(".glb")) {
+      writeFileSync(exported, Buffer.from(serializeGlb(model)));
+    } else {
+      writeFileSync(exported, serializeObj(model), "utf8");
+    }
   }
 
   return { ...review, edits, cached, file: sheet ? outputPath : null, exported, undo: undoPath };
@@ -396,7 +403,8 @@ Entrada
 
 Salida
   --out <ruta.png>        pliego de contactos; por defecto artifacts/agent/contact-sheet.png
-  --export <ruta.obj>     exporta el modelo ya parcheado
+  --export <ruta>         exporta el modelo ya parcheado: .glb conserva color,
+                          material y colocación; .obj solo la geometría
   --save-scene <ruta>     guarda la escena ya parcheada, para seguir desde ahí
   --inspect-only          solo el informe JSON, sin renderizar: ~4 veces más rápido
 
@@ -408,6 +416,7 @@ Selección y encuadre
   --audit-limit <n>       piezas seleccionadas a auditar en detalle (12)
   --tile <n>              lado del tile en píxeles (320)
   --ground false          sin plano de referencia
+  --material-colors       pinta con el color del fichero en vez de arcilla neutra
 
 Verificación
   --baseline <ruta.png>   compara con un pliego anterior y añade "diff" al informe.
@@ -525,6 +534,20 @@ async function main() {
     writeFileSync(outputPath, encodePng(sheet.pixels, sheet.width, sheet.height));
   }
 
+  // Exportar lo inventado: crear y entregar dejan de ser caminos distintos.
+  let exported = null;
+  const exportPath = options.get("export");
+  if (exportPath) {
+    exported = resolve(exportPath);
+    mkdirSync(dirname(exported), { recursive: true });
+    const asModel = modelFromScene(spec, scenePath ?? "escena");
+    if (exported.toLowerCase().endsWith(".glb")) {
+      writeFileSync(exported, Buffer.from(serializeGlb(asModel)));
+    } else {
+      writeFileSync(exported, serializeObj(asModel), "utf8");
+    }
+  }
+
   let savedScene = null;
   const savePath = options.get("save-scene");
   if (savePath) {
@@ -535,7 +558,7 @@ async function main() {
 
   process.stdout.write(
     `${JSON.stringify(
-      { ...review, edits, file: sheet ? outputPath : null, savedScene },
+      { ...review, edits, file: sheet ? outputPath : null, exported, savedScene },
       null,
       2,
     )}\n`,

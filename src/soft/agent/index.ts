@@ -57,6 +57,7 @@ export {
 } from "./contactSheet";
 export { auditMesh } from "./inspect";
 export { parseGlb } from "./glbLoader";
+export { serializeGlb } from "./glbWriter";
 export type { MeshoptDecoderLike } from "./glbLoader";
 export { parseObj, serializeObj } from "./objLoader";
 export {
@@ -74,7 +75,7 @@ export {
 export type { Model, ModelPart, PartFamily, Patch, Edit, EditResult, PropertyQuery } from "./model";
 export { diffSheets } from "./renderDiff";
 export type { RasterImage, RenderDiff, DiffRegion } from "./renderDiff";
-export { resolveScene, resolveObject, createGroundPlane } from "./sceneSpec";
+export { resolveScene, resolveObject, modelFromScene, createGroundPlane } from "./sceneSpec";
 export { applyPatchToScene } from "./scenePatch";
 export { invertPatch } from "./invertPatch";
 export { auditSpatial } from "./spatialAudit";

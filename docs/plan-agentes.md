@@ -2,8 +2,7 @@
 
 Estado: **el orden recomendado, entero**. Con él, F1 y la fase H de creación desde
 cero. Lo que queda son cabos concretos, anotados en su sitio: extrusión y
-revolucionado, exportar GLB, `instance`, y los 64 triángulos degenerados de
-`createSphere`. Escrito el 2026-07-30 desde la experiencia de haber usado
+revolucionado, e `instance`. Escrito el 2026-07-30 desde la experiencia de haber usado
 `tools/agent3d.mjs` durante una sesión larga de trabajo real sobre el dron. Cada
 apartado nace de una fricción concreta que costó tiempo, no de una lista de deseos.
 
@@ -712,9 +711,30 @@ escena, porque una pieza que uno escribe o está o no está.
 cinco objetos pasan a siete, el documento guardado los trae en orden, y el diff contra
 el pliego anterior localiza el cambio.
 
+**Exportar GLB — hecho.** `--export salida.glb` en los dos caminos, y en el de escena
+es lo que cierra el círculo: hasta ahora un objeto inventado desde cero solo podía
+salir como imagen, porque crear y entregar eran caminos distintos.
+
+Es un escritor pequeño a propósito: una malla y un nodo por pieza con su matriz de
+mundo, material por color base, sin compresión. No reconstruye jerarquía —el modelo
+interno la aplana al cargar, así que inventarla sería mentir— ni escribe texturas, que
+tampoco tiene. El fichero sale más grande que el original comprimido con meshopt (3,8 MB
+frente a 2,1) y conviene decirlo en vez de esconderlo.
+
+**Verificación por ida y vuelta**, que es la que vale: exportado el dron y vuelto a
+cargar con nuestro propio lector, salen las mismas 296 piezas, 37.950 triángulos,
+100.006 vértices, la misma caja y **la misma huella de render**, con cero píxeles
+distintos. Con una escena creada desde cero, los nombres y los colores vuelven exactos
+—`0.42,0.44,0.48` sigue siendo `0.42,0.44,0.48`—; la imagen difiere un 5 % porque el
+escritor lleva el color base y no el especular ni el brillo, que es la limitación que
+tiene y queda dicha.
+
+De paso, `--material-colors` expone en el CLI la opción que ya existía en la API: sin
+ella no había forma de comprobar que el color había sobrevivido al viaje.
+
 Queda de esta fase: **extrusión de polígono y revolucionado** —las dos que de verdad
-amplían lo que se puede describir—, y **exportar GLB**, porque OBJ pierde color,
-material y jerarquía. Las booleanas quedan lejos y probablemente no compensen.
+amplían lo que se puede describir—. Las booleanas quedan lejos y probablemente no
+compensen.
 
 ### H3. Malla del revés — hecho, y un aviso retirado por medida
 

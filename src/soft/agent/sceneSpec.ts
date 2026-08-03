@@ -30,6 +30,7 @@ import {
   type Mat4,
 } from "../math";
 import { assertValid, SCENE_SCHEMA } from "./schema";
+import type { Model } from "./model";
 import type { Material, SceneNode } from "../renderer";
 
 export interface PrimitiveSpec {
@@ -210,6 +211,28 @@ export function resolveScene(spec: SceneSpec): ResolvedObject[] {
   }
 
   return spec.objects.map((object, index) => resolveObject(object, index));
+}
+
+/**
+ * La escena como modelo direccionable, que es lo que hace falta para exportarla.
+ *
+ * Sin esto, un objeto inventado desde cero solo podía salir como imagen: crear y
+ * entregar eran caminos distintos, y el segundo no existía.
+ */
+export function modelFromScene(spec: SceneSpec, source = "escena"): Model {
+  return {
+    source,
+    notes: [],
+    parts: resolveScene(spec).map((entry) => ({
+      name: entry.name,
+      path: entry.name,
+      mesh: entry.node.mesh,
+      matrix: entry.node.model,
+      materialName: null,
+      baseColor: [...entry.node.material.albedo] as [number, number, number],
+      visible: true,
+    })),
+  };
 }
 
 /** Suelo de referencia: sin él no hay escala visible ni sombra de contacto. */
