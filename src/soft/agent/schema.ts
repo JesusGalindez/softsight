@@ -58,6 +58,10 @@ const OBJECT_FIELDS: ObjectSchema = {
     description: "Primitiva con parámetros, o malla cruda con sus arrays.",
     anyOf: [GEOMETRY_PRIMITIVE, GEOMETRY_RAW],
   },
+  matrix: {
+    type: "number[]",
+    description: "Colocación exacta, 16 números en fila; manda sobre position, rotation y scale.",
+  },
   position: { type: VECTOR3, description: "Traslación en unidades del fichero." },
   rotation: { type: VECTOR3, description: "Rotación en grados, orden Y·X·Z." },
   scale: { type: "number|number[3]", description: "Escala uniforme o por eje." },

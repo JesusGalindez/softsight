@@ -55,6 +55,14 @@ export interface RawMeshSpec {
 export interface ObjectSpec {
   name?: string;
   geometry: PrimitiveSpec | RawMeshSpec;
+  /**
+   * Colocación exacta, que manda sobre posición, rotación y escala.
+   *
+   * Existe para poder **deshacer un borrado**: la pieza que se recupera tenía una
+   * matriz cualquiera, y descomponerla en traslación, giro y escala pierde el
+   * cizallamiento y redondea el resto. Para escribir a mano se usan los otros tres.
+   */
+  matrix?: number[];
   position?: [number, number, number];
   /** Rotación en grados, orden Y·X·Z. */
   rotation?: [number, number, number];
@@ -145,6 +153,10 @@ function buildRawMesh(spec: RawMeshSpec): Mesh {
 const DEGREES_TO_RADIANS = Math.PI / 180;
 
 function buildModelMatrix(spec: ObjectSpec): Mat4 {
+  if (spec.matrix !== undefined) {
+    if (spec.matrix.length !== 16) throw new Error("matrix debe tener 16 números");
+    return Float32Array.from(spec.matrix);
+  }
   const out = mat4();
   const scratchA = mat4();
   const scratchB = mat4();

@@ -30,6 +30,7 @@ import {
   SCENE_SCHEMA,
   applyPatch,
   applyPatchToScene,
+  invertPatch,
   computeSceneAabb,
   loadModel,
   reviewModel,
@@ -185,14 +186,24 @@ export function decodePng(buffer) {
   return { pixels, width, height };
 }
 
+/**
+ * Argumentos. `get` devuelve el último valor de cada bandera y `all` todos, porque
+ * `--patch a.json --patch b.json` es una pila de cambios en orden y quedarse con el
+ * último los perdería en silencio.
+ */
 function parseArguments(argv) {
   const options = new Map();
+  const repeated = new Map();
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (!token.startsWith("--")) continue;
+    const flag = token.slice(2);
     const next = argv[index + 1];
-    options.set(token.slice(2), next !== undefined && !next.startsWith("--") ? next : "true");
+    const value = next !== undefined && !next.startsWith("--") ? next : "true";
+    options.set(flag, value);
+    repeated.set(flag, [...(repeated.get(flag) ?? []), value]);
   }
+  options.all = (flag) => repeated.get(flag) ?? [];
   return options;
 }
 
@@ -299,10 +310,38 @@ async function reviewModelFile(options, outputPath) {
   const frameAabb = previous.frameAabb ?? (baseline ? computeSceneAabb(toSceneNodes(model)) : undefined);
 
   let edits = null;
-  const patchPath = options.get("patch");
-  if (patchPath) {
-    const patch = JSON.parse(await readFile(resolve(patchPath), "utf8"));
-    edits = applyPatch(model, patch);
+  let undoPath = null;
+  const patchPaths = options.all("patch");
+  if (patchPaths.length > 0) {
+    edits = [];
+    const undo = [];
+    for (const patchPath of patchPaths) {
+      const patch = JSON.parse(await readFile(resolve(patchPath), "utf8"));
+      // El inverso se calcula antes de aplicar: después ya no existe el estado que
+      // hay que restituir. Los de varios parches se acumulan al revés.
+      undo.unshift(...invertPatch(model, patch).edits);
+      edits.push(...applyPatch(model, patch));
+    }
+    const requestedUndo = options.get("undo");
+    if (requestedUndo && requestedUndo !== "true") {
+      undoPath = resolve(requestedUndo);
+      mkdirSync(dirname(undoPath), { recursive: true });
+      writeFileSync(undoPath, `${JSON.stringify({ edits: undo }, null, 2)}\n`, "utf8");
+    }
+  }
+
+  // Ensayo: se informa de coincidencias y errores, y no se renderiza ni se escribe.
+  if (options.get("dry-run") === "true") {
+    return {
+      source: model.source,
+      parts: model.parts.length,
+      edits,
+      dryRun: true,
+      file: null,
+      exported: null,
+      undo: undoPath,
+      warnings: [],
+    };
   }
 
   const select = options.get("select");
@@ -330,7 +369,7 @@ async function reviewModelFile(options, outputPath) {
     writeFileSync(exported, serializeObj(model), "utf8");
   }
 
-  return { ...review, edits, cached, file: sheet ? outputPath : null, exported };
+  return { ...review, edits, cached, file: sheet ? outputPath : null, exported, undo: undoPath };
 }
 
 /**
@@ -349,7 +388,10 @@ Entrada
   --model <ruta>          modelo GLB u OBJ; manda sobre --scene
   --scene <ruta>          escena declarativa en JSON
   --patch <ruta>          parche a aplicar antes de renderizar. En un modelo mueve
-                          matrices; en una escena edita el documento JSON
+                          matrices; en una escena edita el documento JSON.
+                          Repetible: se aplican en orden
+  --dry-run               informa de coincidencias y errores sin renderizar ni escribir
+  --undo <ruta.json>      escribe el parche que deshace lo aplicado (solo con --model)
 
 Salida
   --out <ruta.png>        pliego de contactos; por defecto artifacts/agent/contact-sheet.png
@@ -452,9 +494,20 @@ async function main() {
   // El parche edita el documento, no la geometría: lo que sale vuelve a ser una
   // escena, y con --save-scene se guarda para seguir a partir de ella.
   let edits = null;
-  const patchPath = options.get("patch");
-  if (patchPath) {
-    edits = applyPatchToScene(spec, JSON.parse(await readFile(resolve(patchPath), "utf8")));
+  const patchPaths = options.all("patch");
+  if (patchPaths.length > 0) {
+    edits = [];
+    for (const patchPath of patchPaths) {
+      edits.push(...applyPatchToScene(spec, JSON.parse(await readFile(resolve(patchPath), "utf8"))));
+    }
+  }
+
+  if (options.get("dry-run") === "true") {
+    process.stdout.write(
+      `${JSON.stringify({ objects: spec.objects.length, edits, dryRun: true }, null, 2)}\n`,
+    );
+    process.exitCode = (edits ?? []).some((edit) => edit.error) ? 1 : 0;
+    return;
   }
 
   const { sheet, review } = reviewScene(spec, {

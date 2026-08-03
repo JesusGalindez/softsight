@@ -69,6 +69,7 @@ export { diffSheets } from "./renderDiff";
 export type { RasterImage, RenderDiff, DiffRegion } from "./renderDiff";
 export { resolveScene, resolveObject, createGroundPlane } from "./sceneSpec";
 export { applyPatchToScene } from "./scenePatch";
+export { invertPatch } from "./invertPatch";
 export { auditSpatial } from "./spatialAudit";
 export type { SpatialAudit, Interpenetration, ScaleOutlier, PlacedPart } from "./spatialAudit";
 export { SCENE_SCHEMA, PATCH_SCHEMA, validate, assertValid } from "./schema";

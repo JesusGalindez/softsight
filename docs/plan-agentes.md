@@ -310,7 +310,7 @@ las cifras de ambos lados —`296 piezas, 100 presupuestadas`— y salida 1. Con
 
 **Coste**: ~140 líneas.
 
-### C3. Parches componibles, ensayo y deshacer
+### C3. Parches componibles, ensayo y deshacer — hecho
 
 - `--patch a.json --patch b.json` en orden.
 - `--dry-run`: informa de coincidencias y errores sin renderizar ni escribir.
@@ -319,7 +319,25 @@ las cifras de ambos lados —`296 piezas, 100 presupuestadas`— y salida 1. Con
 
 Es lo que convierte la exploración en barata: probar, mirar, deshacer.
 
-**Coste**: ~130 líneas.
+El inverso se calcula **antes** de aplicar nada, porque necesita el estado que va a
+desaparecer: el color que tenía cada pieza, la geometría de la que se va a borrar, el
+nombre que se va a cambiar. Y sale como otro parche, así que se guarda, se lee y se
+aplica en otra máquina igual que el original.
+
+**Deshacer un giro no es negar los tres ángulos.** La rotación se compone `Y·X·Z` y su
+inversa es `Z⁻¹·X⁻¹·Y⁻¹`: los mismos ángulos con el signo cambiado pero **en orden
+contrario**, que en este formato son tres operaciones. La primera versión lo tenía en
+cuenta y aun así fallaba, porque la lista entera se invierte al final —así se deshace
+una pila— y eso volvía a dar la vuelta al trío. El caso de un solo eje volvía exacto y
+el de tres no: exactamente la clase de error que solo aparece midiendo.
+
+**Verificación.** Aplicar un parche y su inverso devuelve la **misma huella de render**
+y `changedPixels: 0`, probado operación a operación —giro de un eje, giro de tres,
+traslación, escala, borrado— y con los tres juntos. `--dry-run` informa de las
+coincidencias sin dejar ningún PNG en el disco.
+
+**Coste**: ~150 líneas, nuevo `agent/invertPatch.ts`, más `matrix` en la descripción de
+una pieza para poder restituir una matriz cualquiera sin descomponerla.
 
 ---
 
