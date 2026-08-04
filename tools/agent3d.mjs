@@ -32,12 +32,16 @@ import {
   applyPatch,
   applyPatchToScene,
   assertValid,
+  bindModelToSkeleton,
+  bvhToSkinnedScene,
   invertPatch,
   modelFromScene,
   computeSceneAabb,
   loadModel,
   reviewModel,
+  parseBvh,
   serializeGlb,
+  serializeSkinnedGlb,
   reviewScene,
   serializeObj,
   toSceneNodes,
@@ -438,16 +442,46 @@ async function reviewModelFile(options, outputPath) {
     writeFileSync(outputPath, encodePng(sheet.pixels, sheet.width, sheet.height));
   }
 
+  // Atar la malla a un esqueleto: no calcula pesos, aplica el vínculo declarado.
+  // Se resuelve antes de exportar porque cambia lo que se escribe, no lo que se
+  // revisa: el informe sigue siendo el del modelo, con su auditoría y su pliego.
+  let binding = null;
+  const bindPath = options.get("bind");
+  if (bindPath) {
+    const skeletonPath = options.get("skeleton");
+    if (!skeletonPath || skeletonPath === "true") {
+      throw new Error("--bind necesita --skeleton con el GLB del esqueleto");
+    }
+    if (!skeletonPath.toLowerCase().endsWith(".glb")) {
+      throw new Error(`--skeleton solo lee .glb; '${skeletonPath}' no lo es`);
+    }
+    const skeletonBytes = await readFile(resolve(skeletonPath));
+    const skeleton = parseGlbAnimation(
+      skeletonBytes.buffer.slice(skeletonBytes.byteOffset, skeletonBytes.byteOffset + skeletonBytes.byteLength),
+      await loadMeshoptDecoder(),
+    );
+    const document = JSON.parse(await readFile(resolve(bindPath), "utf8"));
+    binding = bindModelToSkeleton(model, skeleton, document);
+  }
+
   let exported = null;
   const exportPath = options.get("export");
   if (exportPath) {
     exported = resolve(exportPath);
     mkdirSync(dirname(exported), { recursive: true });
-    if (exported.toLowerCase().endsWith(".glb")) {
+    if (binding) {
+      if (!exported.toLowerCase().endsWith(".glb")) {
+        throw new Error(`--bind solo exporta .glb; '${exportPath}' no lo es (OBJ no guarda esqueleto)`);
+      }
+      writeFileSync(exported, Buffer.from(serializeSkinnedGlb(binding.scene)));
+    } else if (exported.toLowerCase().endsWith(".glb")) {
       writeFileSync(exported, Buffer.from(serializeGlb(model)));
     } else {
       writeFileSync(exported, serializeObj(model), "utf8");
     }
+  }
+  if (binding && !exportPath) {
+    throw new Error("--bind necesita --export: el modelo atado solo existe en el fichero de salida");
   }
 
   let animation;
@@ -463,6 +497,19 @@ async function reviewModelFile(options, outputPath) {
   return {
     contractVersion: REPORT_CONTRACT_VERSION,
     ...review,
+    ...(binding
+      ? {
+          binding: {
+            joints: binding.scene.skins[0].joints.length,
+            boundParts: binding.bound.length,
+            unusedJoints: binding.unusedJoints,
+            clips: binding.scene.animations?.length ?? 0,
+            // Atado rígido: un hueso por vértice. Decirlo en el informe evita que
+            // alguien lo confunda con pesos calculados, que aquí no se calculan.
+            mode: "rigid",
+          },
+        }
+      : {}),
     edits,
     cached,
     file: sheet ? outputPath : null,
@@ -512,11 +559,14 @@ const USAGE = `agent3d — revisión de modelos y escenas 3D, headless y determi
 
   npm run agent3d -- --model <fichero.glb|.obj> [opciones]
   npm run agent3d -- --scene <escena.json> [opciones]
+  npm run agent3d -- --bvh <captura.bvh> --export <esqueleto.glb>
   npm run agent3d                              usa la escena de ejemplo
 
 Entrada
   --model <ruta>          modelo GLB u OBJ; manda sobre --scene
   --scene <ruta>          escena declarativa en JSON
+  --bvh <ruta.bvh>        captura de movimiento; solo convierte, no revisa. Manda
+                          sobre --model y --scene, y exige --export .glb
   --patch <ruta>          parche a aplicar antes de renderizar. En un modelo mueve
                           matrices; en una escena edita el documento JSON.
                           Repetible: se aplican en orden
@@ -532,6 +582,22 @@ Contrato de animación GLB (solo --model)
                           herramienta las evalúa en cada fotograma de --frames
   --frames "0,15,30,37"   fotogramas para --sample, en el fps del clip (--fps)
   --fps <n>               fotogramas por segundo para --sample (30)
+
+Atar una malla a un esqueleto (solo --model)
+  --skeleton <ruta.glb>   GLB con el árbol de huesos y sus clips, p. ej. el que
+                          produce --bvh
+  --bind <ruta.json>      vínculo declarado: { schemaVersion:1, bindings:[
+                          { part:"rotor-*", joint:"Brazo" } ] }. Gana la primera
+                          regla que encaja; una pieza sin regla es un error, no
+                          se ata a la raíz por si acaso. Atado RÍGIDO: un hueso
+                          por vértice, peso 1. Aquí no se calculan pesos, se
+                          aplican los que declaras. Exige --export .glb
+
+Conversión de BVH (solo --bvh)
+  --bvh-scale <n>         factor sobre desplazamientos y traslaciones (1). Un BVH
+                          en centímetros pasa a metros —la unidad de glTF— con
+                          0.01. No se aplica solo: el formato no declara su unidad
+  --bvh-clip <nombre>     nombre del clip resultante ("BVH")
 
 Salida
   --out <ruta.png>        pliego de contactos; por defecto artifacts/agent/contact-sheet.png
@@ -614,6 +680,91 @@ function printSchema() {
   );
 }
 
+/**
+ * Convierte un BVH en un GLB con esqueleto y clip.
+ *
+ * No revisa nada: un BVH no trae malla, y fingir un informe de topología sobre
+ * un esqueleto sería rellenar campos vacíos. Lo que devuelve es la cuenta de lo
+ * convertido —articulaciones, nodos, fotogramas, canales— para que quien lo
+ * llame sepa qué salió sin volver a abrir el fichero.
+ *
+ * El GLB resultante no tiene malla, y eso es correcto: lleva el árbol de huesos
+ * y el clip, que es exactamente lo que traía el BVH. Quien quiera verlo le ata
+ * su propia piel y lo vuelve a pasar por `--model`.
+ */
+async function convertBvhFile(options) {
+  const bvhPath = resolve(options.get("bvh"));
+  const exported = options.get("export");
+  if (!exported || exported === "true") {
+    throw new Error("--bvh necesita --export con la ruta del .glb de salida");
+  }
+  if (!exported.toLowerCase().endsWith(".glb")) {
+    throw new Error(`--bvh solo exporta .glb; '${exported}' no lo es`);
+  }
+
+  const scaleFlag = options.get("bvh-scale");
+  const scale = scaleFlag === undefined || scaleFlag === "true" ? 1 : Number(scaleFlag);
+  if (!Number.isFinite(scale) || scale <= 0) {
+    throw new Error(`--bvh-scale inválido: '${scaleFlag}'; debe ser un número positivo`);
+  }
+  const clipFlag = options.get("bvh-clip");
+  const clipName = clipFlag === undefined || clipFlag === "true" ? "BVH" : clipFlag;
+
+  const bvh = parseBvh(await readFile(bvhPath, "utf8"));
+  const scene = bvhToSkinnedScene(bvh, { clipName, scale });
+  const glb = serializeSkinnedGlb(scene);
+
+  const exportPath = resolve(exported);
+  mkdirSync(dirname(exportPath), { recursive: true });
+  writeFileSync(exportPath, Buffer.from(glb));
+
+  const clip = scene.animations?.[0];
+  return {
+    contractVersion: REPORT_CONTRACT_VERSION,
+    source: bvhPath,
+    export: exportPath,
+    bytes: glb.byteLength,
+    bvh: {
+      joints: bvh.joints.length,
+      roots: bvh.roots.length,
+      frames: bvh.frameCount,
+      frameTime: bvh.frameTime,
+      // El fps es derivado, no declarado: BVH solo dice el segundo por fotograma.
+      fps: 1 / bvh.frameTime,
+      channels: bvh.channelCount,
+      // El orden de rotación es por articulación, y que varíe no es un error:
+      // decirlo aquí evita que alguien suponga uno solo para todo el esqueleto.
+      rotationOrders: [
+        ...new Set(
+          bvh.joints
+            .map((joint) =>
+              joint.channels
+                .filter((channel) => channel.endsWith("rotation"))
+                .map((channel) => channel[0])
+                .join(""),
+            )
+            .filter((order) => order.length > 0),
+        ),
+      ],
+    },
+    scene: {
+      clip: clip?.name ?? null,
+      // Un nodo por articulación más uno por cada extremo terminal.
+      nodes: scene.nodes.length,
+      animatedChannels: clip?.channels.length ?? 0,
+      // Sin malla a propósito: el BVH no la trae y aquí no se inventa.
+      meshes: scene.meshes.length,
+    },
+    scale,
+    notes: [
+      "El GLB sale sin malla porque el BVH no la trae: es esqueleto y clip.",
+      "Por eso --model lo rechaza con 'el modelo no tiene geometría visible', y las" +
+        " poses de control tampoco aplican: evalúan vértices, y aquí no hay ninguno.",
+      "Se certifica cuando alguien le ata una piel; a partir de ahí es un GLB normal.",
+    ],
+  };
+}
+
 async function main() {
   const options = parseArguments(process.argv.slice(2));
 
@@ -626,6 +777,15 @@ async function main() {
     printSchema();
     return;
   }
+  // El BVH va antes que todo lo demás porque no es un modelo: no tiene malla, así
+  // que no hay nada que encuadrar, rasterizar ni auditar. Es una conversión, y
+  // lo que produce sí entra después por --model como cualquier GLB.
+  if (options.has("bvh")) {
+    const report = await convertBvhFile(options);
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    return;
+  }
+
   const outputPath = resolve(options.get("out") ?? "artifacts/agent/contact-sheet.png");
 
   if (options.has("model")) {

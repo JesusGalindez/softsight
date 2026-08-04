@@ -445,6 +445,22 @@ function evaluateMeshPositionsAtNode(
 }
 
 /**
+ * Valores de un accesor, ya decodificados y desnormalizados, en doble precisión.
+ *
+ * Es el lector que usan por dentro el evaluador y el muestreo, publicado para
+ * que quien quiera **reescribir** un GLB no tenga que reimplementarlo: sabe de
+ * `byteStride`, de tipos normalizados y de vistas descomprimidas con meshopt, y
+ * cada uno de esos tres detalles es una forma distinta de leer basura sin que
+ * salte ningún error.
+ *
+ * Los valores salen en el orden en que están en el fichero: una matriz `MAT4`
+ * sale **por columnas**, como la guarda glTF, no por filas.
+ */
+export function readAccessorValues(parsed: ParsedGlb, accessorIndex: number): Float64Array {
+  return readAccessor(parsed.document, parsed.binary, accessorIndex, new Map(), parsed.decodedViews);
+}
+
+/**
  * Posiciones deformadas de una malla en un tiempo dado, para todas sus instancias
  * en orden de escena. La cadena —base, morph targets, skinning— es la misma que
  * certifica las poses de control; la única diferencia es que el clip se resuelve

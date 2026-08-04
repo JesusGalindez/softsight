@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "bindings": [
+    { "part": "propeller-*", "joint": "Brazo" },
+    { "part": "rotor-*", "joint": "Pecho" },
+    { "part": "*", "joint": "Cadera" }
+  ]
+}

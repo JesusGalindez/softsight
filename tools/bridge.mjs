@@ -9,9 +9,14 @@
  *
  * Petición:
  *
- *   { "bridgeContractVersion": 1, "command": "inspect"|"render"|"patch"|"sample"|"schema",
+ *   { "bridgeContractVersion": 1,
+ *     "command": "inspect"|"render"|"patch"|"sample"|"bvh"|"schema",
  *     "files": { "model": { "name": "drone.glb", "data": "<base64>" }, ... },
  *     "options": { ... } }
+ *
+ * `bvh` es el único que no recibe `model`: recibe `bvh` y devuelve el GLB con
+ * esqueleto y clip como artefacto. Es una conversión, no una revisión, así que
+ * su informe no trae ni auditoría ni pliego.
  *
  * Respuesta:
  *
@@ -52,7 +57,7 @@ const MAX_ARTIFACT_BYTES = Number(process.env.SOFTSIGHT_BRIDGE_MAX_ARTIFACT_MB ?
 const TIMEOUT_MS = Number(process.env.SOFTSIGHT_BRIDGE_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-const COMMANDS = new Set(["inspect", "render", "patch", "sample", "schema"]);
+const COMMANDS = new Set(["inspect", "render", "patch", "sample", "bvh", "schema"]);
 
 // Opciones del CLI que el puente acepta, con su tipo. Todo lo demás se rechaza:
 // el puente no expande variables ni patrones, y solo ejecuta con argumentos fijos.
@@ -74,6 +79,8 @@ const PASSTHROUGH = {
   noCache: "boolean",
   frames: "string",
   fps: "number",
+  bvhScale: "number",
+  bvhClip: "string",
 };
 
 const OPTION_TO_FLAG = {
@@ -94,6 +101,8 @@ const OPTION_TO_FLAG = {
   noCache: "--no-cache",
   frames: "--frames",
   fps: "--fps",
+  bvhScale: "--bvh-scale",
+  bvhClip: "--bvh-clip",
 };
 
 // Ficheros que admite cada comando: los opcionales solo se escriben si vienen.
@@ -102,6 +111,8 @@ const FILE_SLOTS = {
   render: { model: false, controlPoses: true },
   patch: { model: false, controlPoses: true, patches: false, baseline: true, baselineReport: true },
   sample: { model: false, controlPoses: true, references: false },
+  // El único comando sin `model`: convierte una captura, no revisa un modelo.
+  bvh: { bvh: false },
   schema: {},
 };
 
@@ -223,6 +234,14 @@ function buildArgs(request, workDir) {
     files[slot] = writeFilePayload(workDir, slot, payload);
   }
 
+  if (request.command === "bvh") {
+    // No lleva --model: el CLI distingue la conversión de la revisión por la
+    // bandera de entrada, no por la extensión del fichero.
+    const converted = ["--bvh", files.bvh, "--export", join(workDir, "esqueleto.glb")];
+    converted.push(...parseOptions(request.options));
+    return converted;
+  }
+
   const flags = ["--model", files.model];
   if (files.controlPoses) flags.push("--control-poses", files.controlPoses);
 
@@ -288,6 +307,9 @@ async function runCommand(request) {
     }
 
     const artifacts = [];
+    if (request.command === "bvh") {
+      artifacts.push(readArtifact(workDir, "esqueleto.glb", "model/gltf-binary"));
+    }
     if (request.command === "render" || request.command === "patch") {
       artifacts.push(readArtifact(workDir, "contact-sheet.png", "image/png"));
       if (request.command === "patch") {

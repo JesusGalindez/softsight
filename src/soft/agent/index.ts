@@ -57,7 +57,22 @@ export {
 } from "./contactSheet";
 export { auditMesh } from "./inspect";
 export { parseGlb } from "./glbLoader";
-export { serializeGlb } from "./glbWriter";
+export { parseBvh, bvhToSkinnedScene } from "./bvhLoader";
+export { bindModelToSkeleton } from "./skinBinding";
+export type { BindResult, SkinBinding, SkinBindingRule } from "./skinBinding";
+export type { BvhChannel, BvhDocument, BvhJoint, BvhToSceneOptions } from "./bvhLoader";
+export { serializeGlb, serializeSkinnedGlb } from "./glbWriter";
+export type {
+  SkinnedGlbAnimation,
+  SkinnedGlbChannel,
+  SkinnedGlbMesh,
+  SkinnedGlbMorphTarget,
+  SkinnedGlbNode,
+  SkinnedGlbPrimitive,
+  SkinnedGlbSampler,
+  SkinnedGlbScene,
+  SkinnedGlbSkin,
+} from "./glbWriter";
 export type { MeshoptDecoderLike } from "./glbLoader";
 export { parseObj, serializeObj } from "./objLoader";
 export {
@@ -92,6 +107,7 @@ export {
   hashSamplesAtFrames,
   inspectGlbAnimation,
   parseGlbAnimation,
+  readAccessorValues,
   sampleSurface,
   validateSampleReference,
 } from "./animation";

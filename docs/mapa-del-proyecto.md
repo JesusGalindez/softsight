@@ -86,6 +86,9 @@ hecho por los dos lados, da el mismo hash.
 |---|---|---|
 | `test:animation` | El evaluador contra sus propios fixtures y contra GLB defectuosos | `npm run test:animation` (softsight) |
 | `test:bridge` | El puente contra el CLI real: sample, inspect, render, patch y schema | `npm run test:bridge` (softsight), también dentro de `test:animation` |
+| `test:glb-writer` | Un GLB reescrito por nosotros contra los hashes de control del original | `npm run test:glb-writer` (softsight), también dentro de `test:animation` |
+| `test:bind` | El atado en reposo y con el hueso movido, exacto, y las 296 piezas del dron sin deformar | `npm run test:bind` (softsight), también dentro de `test:animation` |
+| `test:bvh` | La cinemática de un BVH contra el evaluador certificado por dos caminos, y la conversión por API, CLI y puente byte a byte | `npm run test:bvh` (softsight), también dentro de `test:animation` |
 | `softsight:gate` | Poses de control: SoftSight contra Three.js | `npm run softsight:gate` (editor) |
 | `softsight:sample-gate` | Muestras de superficie: posiciones y normales | `npm run softsight:sample-gate` (editor) |
 | `softsight:gates` | Las dos anteriores, en cadena | `npm run softsight:gates` (editor) |
@@ -116,10 +119,43 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
    devuelve JSON por stdout con sandbox sin shell; el editor lo consume con
    `softsight-import.mjs`, una sola ruta de importación. Detalle en
    [`plan-fases-bcd.md`](plan-fases-bcd.md).
-3. **UI de estudio.** El editor tiene todas las piezas de un editor profesional
-   pero las presenta como una página centrada. Detalle en §6.
-4. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
+3. **E1 — escritura de esqueleto y clips** (hecho). `serializeSkinnedGlb` en
+   `glbWriter.ts` cierra la asimetría de la que se partía: softsight sabía
+   verificar animación con skinning que no sabía escribir. La puerta
+   `test:glb-writer` reescribe el fixture y comprueba los cuatro hashes de
+   control; el fichero resultante pasa además el gate del editor con `accepted`
+   4/4, así que Three.js valida un GLB nuestro. Detalle en §7.
+4. **E2 — lector de BVH** (hecho). `bvhLoader.ts`: `parseBvh` lee `HIERARCHY` y
+   `MOTION` sin dependencias, y `bvhToSkinnedScene` alimenta directamente al
+   escritor de E1. La tubería `BVH → GLB con esqueleto` está cerrada, así que
+   entra en el pipeline certificado toda la biblioteca de captura de movimiento
+   que existe, incluida la salida de generadores como Kimodo. La puerta
+   `test:bvh` compara la cinemática directa contra el evaluador certificado por
+   dos caminos independientes; el cierre cruzado con Three.js se hizo sobre un
+   esqueleto con tres órdenes de rotación distintos, 4/4 hashes. Detalle en §7.
+5. **E3 — la tubería en la superficie** (hecho). `--bvh captura.bvh --export
+   esqueleto.glb`, con `--bvh-scale` y `--bvh-clip`; comando `bvh` en el puente,
+   el único que no recibe `model`; y un fixture versionado en
+   `artifacts/agent/captura-ejemplo.bvh` con tres órdenes de rotación distintos.
+   La puerta comprueba que **API, CLI y puente producen el mismo GLB byte a
+   byte**: los dos últimos son envoltorios y no deben decidir nada. El
+   `bridgeContractVersion` sigue en 1 porque añadir un comando no rompe a nadie.
+6. **E4 — atado de malla a esqueleto** (hecho). `bindModelToSkeleton` en
+   `skinBinding.ts`, y `--skeleton` + `--bind` en el CLI. Cierra la tubería:
+   BVH → esqueleto → modelo animado que **se puede mirar**. Ver el aviso de
+   alcance más abajo.
+7. **UI de estudio** (en marcha, en el repo del editor). Detalle en §6.
+8. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
+
+**Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
+el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un
+vínculo declarado y verifica que es completo y coherente, que es trabajo de
+banco de verificación. La línea queda donde estaba, y conviene no cruzarla: en
+cuanto la herramienta decida por su cuenta a qué hueso va un vértice, deja de
+poder afirmar que el resultado es exacto, y con ello se va el valor de todo lo
+demás. Lo que falte de pesos suaves lo trae quien los tenga, por `JOINTS_0` y
+`WEIGHTS_0`.
 
 Riesgo declarado: D era el mayor cuello de botella, porque el editor dependía
 del CLI por proceso. El puente lo cierra: el editor habla con un proceso local
@@ -167,7 +203,49 @@ funcionalidad no se toca en ningún paso y `npm run check` pasa entre paso y pas
 
 ---
 
-## 7. Higiene del entorno
+## 7. Fuentes de movimiento externas
+
+Analizados el 2026-08-03: [nv-tlabs/kimodo](https://github.com/nv-tlabs/kimodo)
+—generación de movimiento humanoide desde texto y restricciones— y
+[NVlabs/SOMA-X](https://github.com/NVlabs/SOMA-X) —topología y rig canónico de
+cuerpo humano, y el esqueleto sobre el que Kimodo genera—.
+
+**Como biblioteca dentro de cualquiera de las dos mitades: no.** Son Python con
+PyTorch, CUDA y Warp. El núcleo vende «sin GPU y sin dependencias»; meter torch
+dentro borraría el producto.
+
+**Como fuente de assets aguas arriba: sí**, y en el sitio que ya existe. Kimodo
+produce un fichero; el fichero se congela y se le calcula el hash; entra por el
+puente como cualquier otro asset. Esto **no es negociable**: un modelo de
+difusión da el mismo resultado con la misma semilla solo sobre la misma GPU, el
+mismo driver y la misma versión de torch. La generación queda **fuera** de la
+línea determinista, igual que un GLB descargado de internet.
+
+Ninguno de los dos se instala en la máquina actual, y conviene no volver a
+comprobarlo: la última rueda de PyTorch para macOS x86_64 es la 2.2.2 y SOMA
+pide la 2.10.0; `warp-lang` no publica rueda de macOS x86_64, solo arm64; y
+Kimodo pide GPU NVIDIA. Cuando haya una caja con GPU, el Python vive en un
+tercer directorio que no es ninguna de las dos mitades, y lo único que cruza la
+frontera son ficheros.
+
+Licencias: el código de los dos es Apache-2.0. Los pesos `Kimodo-SOMA-*` son
+NVIDIA Open Model —comercialmente usables, sin reclamación sobre las salidas—,
+pero `Kimodo-SMPLX-RP-v1` es licencia de investigación y los cuerpos SMPL/SMPL-X
+exigen registro aparte y no se redistribuyen. **La rama SOMA es la limpia.**
+
+Lo que sacamos de ahí sin instalar nada es el orden de trabajo de §5: E1
+(escribir esqueleto y clips, hecho) y E2 (leer BVH, siguiente). BVH es la salida
+estándar de Kimodo y de casi todo el mocap del mundo; `kimodo/exports/bvh.py` es
+Apache-2.0 y sirve de referencia para no equivocarse con el orden de rotación y
+la convención de ejes, que es donde todo el mundo se equivoca.
+
+Lo que **no** se hace: los correctivos por pose de SOMA. Son deformación
+dependiente de la pose por encima del LBS y el evaluador certificado no los
+contempla; certificarlos sería una fase entera, no un añadido.
+
+---
+
+## 8. Higiene del entorno
 
 Cosas que ya estaban rotas y conviene no volver a romper:
 
