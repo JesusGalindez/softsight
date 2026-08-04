@@ -152,8 +152,20 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
 8. **E6 — la escena por el puente** (hecho). Comando `scene` en `bridge.mjs`:
    antes todo lo declarativo solo se alcanzaba llamando al CLI a mano, y por la
    vía con sandbox —la que usa el editor— no se llegaba.
-9. **UI de estudio** (hecha, F0–F4 en el repo del editor). Detalle en §6.
-10. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
+9. **UI de estudio** (hecha, F0–F5 en el repo del editor). Detalle en §6.
+10. **Vida del movimiento** (hecha, en el editor, commit `5217497`). `wiggle.ts`
+    con ruido suave y determinista —puro en `(semilla, tiempo)`, no el PRNG con
+    estado—, `timeOffsetFrames` por capa para el desfase en cascada, e
+    interpolación `spring` en forma cerrada. Pestaña **Vida** en el inspector.
+    Esquema del proyecto 10 → 11.
+11. **Plan del motor** (en curso, otro proceso, en el repo del editor).
+    `docs/PLAN_MOTOR.md` y `AGENTS.md` mandan allí. F0 —gestor de calidad GPU
+    con tiers, presupuesto, muestreo y caché de frames— está hecho localmente y
+    sin commitear. Lo siguiente sin marcar es F1.
+12. **Historias por agentes** (siguiente, planificada). Ver
+    [`plan-historias.md`](plan-historias.md). El keystone es pequeño:
+    `activeScene` y `sceneProgress` en el evaluador del editor.
+13. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
@@ -168,6 +180,17 @@ demás. Lo que falte de pesos suaves lo trae quien los tenga, por `JOINTS_0` y
 Riesgo declarado: D era el mayor cuello de botella, porque el editor dependía
 del CLI por proceso. El puente lo cierra: el editor habla con un proceso local
 por JSON, y la forma del contrato sale de `--schema`, que no puede divergir.
+
+**Sobre medir fluidez.** No se puede desde el panel del navegador integrado:
+estrangula `requestAnimationFrame` a cero cuando no está en primer plano, lo que
+congela también los bucles de la aplicación. Cualquier percentil de fotograma
+medido así mide el panel, no el editor. Lo que sí es fiable son los bucles
+síncronos: medido así, `evaluateAt` cuesta 0,005 ms y ~0 KB por fotograma —no es
+el cuello de botella— y `evaluateParticleMorph` con 50.000 partículas cuesta
+**6,16 ms**, el 37 % del presupuesto de un fotograma. Ese es el número que manda,
+y el mando que lo mueve es `setParticleCap` del gestor de calidad. Para medir de
+verdad: Chrome propio, en primer plano, leyendo `mediana` y `p1` de la barra de
+estado, que es el instrumento del propio renderer.
 
 Trabajo de eficiencia identificado, sin fase asignada todavía:
 
