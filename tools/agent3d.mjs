@@ -27,9 +27,11 @@ import { deflateSync, inflateSync } from "node:zlib";
 import {
   DEMO_SCENE,
   PATCH_SCHEMA,
+  SAMPLE_REFERENCE_SCHEMA,
   SCENE_SCHEMA,
   applyPatch,
   applyPatchToScene,
+  assertValid,
   invertPatch,
   modelFromScene,
   computeSceneAabb,
@@ -40,6 +42,9 @@ import {
   serializeObj,
   toSceneNodes,
   inspectGlbAnimation,
+  hashSamplesAtFrames,
+  parseGlbAnimation,
+  validateSampleReference,
 } from "../dist-node/agent3d.mjs";
 
 /**
@@ -322,6 +327,56 @@ async function reviewModelFile(options, outputPath) {
     ? parseControlPoseReference(JSON.parse(await readFile(resolve(controlPosePath), "utf8")))
     : null;
 
+  // Muestras de superficie para el contrato de Fase C: referencias de triángulos
+  // evaluadas en unos fotogramas, con huella por frame. Repetible, como las poses
+  // de control; el `sample-gate` del editor evalúa las mismas referencias con el
+  // renderer y compara las huellas.
+  let sample = null;
+  const samplePath = options.get("sample");
+  if (samplePath) {
+    if (!isBinary) throw new Error("--sample solo vale con --model .glb (referencias a mallas animadas)");
+    const framesFlag = options.get("frames");
+    if (!framesFlag || framesFlag === "true") {
+      throw new Error("--sample necesita --frames con los fotogramas, p. ej. \"0,15,30,37\"");
+    }
+    const frames = framesFlag.split(",").map((entry) => {
+      const frame = Number(entry.trim());
+      if (!Number.isInteger(frame) || frame < 0) {
+        throw new Error(`fotograma '${entry.trim()}' inválido; deben ser enteros no negativos separados por comas`);
+      }
+      return frame;
+    });
+    const fpsFlag = options.get("fps");
+    const fps = fpsFlag === undefined || fpsFlag === "true" ? 30 : Number(fpsFlag);
+    if (!Number.isInteger(fps) || fps <= 0) throw new Error(`fps inválido: ${fps}`);
+    const references = JSON.parse(await readFile(resolve(samplePath), "utf8"));
+    if (!Array.isArray(references) || references.length === 0) {
+      throw new Error("--sample: el fichero de referencias debe ser una lista no vacía");
+    }
+    references.forEach((reference, index) =>
+      assertValid(reference, SAMPLE_REFERENCE_SCHEMA, `referencia ${index}`),
+    );
+    const parsed = parseGlbAnimation(data, decoder);
+    references.forEach((reference, index) => {
+      try {
+        validateSampleReference(parsed.document, parsed.binary, parsed.decodedViews, reference);
+      } catch (error) {
+        throw new Error(`referencia ${index} inválida: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+    sample = {
+      references: references.length,
+      frames: await hashSamplesAtFrames(
+        parsed.document,
+        parsed.binary,
+        parsed.decodedViews,
+        references,
+        frames,
+        fps,
+      ),
+    };
+  }
+
   const baseline = await readBaselinePng(options);
   const previous = await readBaselineReport(options);
   // Encuadre con que se hizo el pliego anterior; si no viene en el informe, el del
@@ -418,6 +473,7 @@ async function reviewModelFile(options, outputPath) {
     morphTargets,
     controlPoses,
     animationErrors,
+    sample,
   };
 }
 
@@ -471,6 +527,11 @@ Contrato de animación GLB (solo --model)
   --control-poses <j>     referencia de poses: { schemaVersion:1, fps, clips } con
                           fotogramas y huellas SHA-256 esperadas; la herramienta
                           las certifica sin depender del renderer de turno
+  --sample <j>            referencias de superficie (Fase C): lista de
+                          { mesh, primitive, triangle, barycentric }; la
+                          herramienta las evalúa en cada fotograma de --frames
+  --frames "0,15,30,37"   fotogramas para --sample, en el fps del clip (--fps)
+  --fps <n>               fotogramas por segundo para --sample (30)
 
 Salida
   --out <ruta.png>        pliego de contactos; por defecto artifacts/agent/contact-sheet.png
@@ -539,6 +600,7 @@ function printSchema() {
       {
         scene: SCENE_SCHEMA,
         patch: PATCH_SCHEMA,
+        sampleReference: SAMPLE_REFERENCE_SCHEMA,
         reportExample: { contractVersion: REPORT_CONTRACT_VERSION, ...review },
         notes: [
           "El esquema es el que valida la entrada: un campo que no esté aquí se rechaza.",

@@ -5,7 +5,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  applyAnimation,
+  buildNodeStates,
+  evaluatePose,
+  evaluatePoseWithNormals,
   inspectGlbAnimation,
+  parseGlbAnimation,
 } from "../dist-node/agent3d.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -59,6 +64,62 @@ await assert.rejects(
   /EXT_meshopt_compression/,
 );
 
+// B-R1: la API pública evalua los 4 frames de control del fixture con los mismos
+// hashes que la certificación del CLI. Una sola malla con una sola instancia, así
+// que evaluarla entera cubre exactamente lo que certifica `controlPoses`.
+const parsed = parseGlbAnimation(toArrayBuffer(model));
+assert.equal(parsed.document.meshes.length, 1);
+const meshIndex = parsed.document.meshes.findIndex((mesh) =>
+  mesh.primitives.some((primitive) => primitive.attributes.POSITION !== undefined),
+);
+assert.ok(meshIndex >= 0, "el fixture no declara una malla con POSITION");
+const clipNames = (parsed.document.animations ?? []).map((animation) => animation.name ?? "");
+assert.deepEqual(clipNames, Object.keys(reference.clips));
+for (const clipName of Object.keys(reference.clips)) {
+  const clipIndex = clipNames.indexOf(clipName);
+  assert.ok(clipIndex >= 0, `clip ${clipName} no encontrado`);
+  for (const pose of reference.clips[clipName]) {
+    const positions = evaluatePose(
+      parsed.document,
+      parsed.binary,
+      parsed.decodedViews,
+      pose.frame / reference.fps,
+      meshIndex,
+      clipIndex,
+    );
+    assert.equal(
+      hashFloat32(positions),
+      pose.positionsHash,
+      `evaluatePose de ${clipName} frame ${pose.frame}`,
+    );
+  }
+}
+// El morfo por la misma API: frame 0 y 30 dan las posiciones del contrato.
+const morphParsed = parseGlbAnimation(morph);
+const morphPose0 = evaluatePose(morphParsed.document, morphParsed.binary, morphParsed.decodedViews, 0, 0, 0);
+const morphPose30 = evaluatePose(morphParsed.document, morphParsed.binary, morphParsed.decodedViews, 1, 0, 0);
+assert.equal(hashFloat32(morphPose0), hashPositions([1, 2, 3]));
+assert.equal(hashFloat32(morphPose30), hashPositions([3, 2, 3]));
+// Normales deformadas: misma longitud que las posiciones; el morfo no declara
+// NORMAL y por eso devuelve vacío en vez de inventar normales.
+const normals = evaluatePoseWithNormals(
+  parsed.document,
+  parsed.binary,
+  parsed.decodedViews,
+  15 / reference.fps,
+  meshIndex,
+  0,
+);
+assert.equal(normals.length, 3 * 7399);
+assert.ok(normals.every((value) => Number.isFinite(value)));
+const morphNormals = evaluatePoseWithNormals(morphParsed.document, morphParsed.binary, morphParsed.decodedViews, 0, 0, 0);
+assert.equal(morphNormals.length, 0);
+// Las piezas exportadas se componen como documenta el plan: estados por clip y
+// tiempo, y de ahí las posiciones del frame 15, que ya quedó certificado arriba.
+const states = buildNodeStates(parsed.document);
+applyAnimation(parsed.document, parsed.binary, parsed.decodedViews, parsed.document.animations[0], states, 15 / reference.fps);
+assert.equal(states.length, parsed.document.nodes.length);
+
 console.log("animation contract: ok");
 
 function toArrayBuffer(bytes) {
@@ -66,6 +127,10 @@ function toArrayBuffer(bytes) {
 }
 
 function hashPositions(values) {
+  return hashFloat32(values);
+}
+
+function hashFloat32(values) {
   const hash = createHash("sha256");
   const bytes = Buffer.alloc(values.length * 4);
   values.forEach((value, index) => bytes.writeFloatLE(value, index * 4));

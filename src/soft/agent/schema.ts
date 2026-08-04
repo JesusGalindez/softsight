@@ -152,6 +152,29 @@ export const PATCH_SCHEMA: ObjectSchema = {
   },
 };
 
+export const SAMPLE_REFERENCE_SCHEMA: ObjectSchema = {
+  mesh: {
+    type: "string",
+    required: true,
+    description: "Nombre de la malla: el suyo o el del primer nodo que la instancia.",
+  },
+  primitive: {
+    type: "number",
+    required: true,
+    description: "Índice de la primitiva dentro de la malla.",
+  },
+  triangle: {
+    type: "number",
+    required: true,
+    description: "Índice del triángulo en el búfer de índices de la primitiva.",
+  },
+  barycentric: {
+    type: "number[]",
+    required: true,
+    description: "Pesos del punto dentro del triángulo; dos o tres valores no negativos que sumen 1 (el tercero se puede omitir).",
+  },
+};
+
 /** Distancia de edición acotada: solo sirve para sugerir el campo que se quiso escribir. */
 function closeEnough(typo: string, candidate: string): boolean {
   if (Math.abs(typo.length - candidate.length) > 2) return false;

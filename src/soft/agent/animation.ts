@@ -12,6 +12,7 @@ interface GltfAccessor {
   normalized?: boolean;
   min?: number[];
   max?: number[];
+  sparse?: unknown;
 }
 
 interface MeshoptExtension {
@@ -34,6 +35,7 @@ interface GltfBufferView {
 
 interface GltfPrimitive {
   attributes: Record<string, number>;
+  indices?: number;
   targets?: Array<Record<string, number>>;
 }
 
@@ -61,7 +63,7 @@ interface GltfSkin {
   skeleton?: number;
 }
 
-interface GltfDocument {
+export interface GltfDocument {
   accessors?: GltfAccessor[];
   bufferViews?: GltfBufferView[];
   buffers?: Array<{ byteLength: number; uri?: string }>;
@@ -74,7 +76,7 @@ interface GltfDocument {
   extensionsRequired?: string[];
 }
 
-interface GltfAnimation {
+export interface GltfAnimation {
   name?: string;
   channels: GltfChannel[];
   samplers: GltfSampler[];
@@ -91,7 +93,7 @@ interface GltfSampler {
   interpolation?: "STEP" | "LINEAR" | "CUBICSPLINE";
 }
 
-interface NodeState {
+export interface NodeState {
   translation: number[];
   rotation: number[];
   scale: number[];
@@ -167,10 +169,51 @@ const NORMALIZE_DIVISOR: Record<number, number> = {
   5125: 4294967295,
 };
 
-interface ParsedGlb {
+export interface ParsedGlb {
   document: GltfDocument;
   binary: Uint8Array;
   decodedViews: Map<number, Uint8Array>;
+}
+
+/**
+ * Resultado de evaluar una malla en un tiempo dado: `Float32Array` de 3
+ * componentes por vértice, una por instancia de la malla en orden de escena.
+ *
+ * `clipIndex` elige el clip: 0 es el primero; fuera de rango devuelve la pose
+ * estática (ningún clip aplicado). `time` va en segundos, como los samplers.
+ */
+export type EvaluatedPose = Float32Array;
+
+/**
+ * Referencia a un punto de la superficie (Fase C): malla, primitiva y triángulo
+ * en el búfer de índices, con el peso baricéntrico del punto dentro del
+ * triángulo. `barycentric` trae dos o tres valores no negativos que sumen 1; el
+ * tercero se puede omitir.
+ */
+export interface SampleReference {
+  mesh: string;
+  primitive: number;
+  triangle: number;
+  barycentric: number[];
+}
+
+/**
+ * Punto de una referencia evaluada en un tiempo dado. `positions` trae 3
+ * componentes por **instancia** de la malla en orden de escena (el mismo punto
+ * existe en cada copia de la malla); `normals` y `uvs` son nulos cuando la
+ * primitiva no los declara.
+ */
+export interface SampleEvaluation {
+  positions: Float32Array;
+  normals: Float32Array | null;
+  uvs: Float32Array | null;
+}
+
+/** Huellas de un frame para el informe de muestreo (C2). */
+export interface SampleFrameHash {
+  frame: number;
+  positionsHash: string;
+  normalsHash: string | null;
 }
 
 /** Inspecciona la animación y, si se entrega una referencia, certifica poses. */
@@ -180,7 +223,7 @@ export async function inspectGlbAnimation(
   decoder?: MeshoptDecoderLike,
 ): Promise<SoftSightAnimationInspection> {
   if (decoder) await decoder.ready;
-  const parsed = parseGlb(buffer, decoder);
+  const parsed = parseGlbAnimation(buffer, decoder);
   const { document, binary, decodedViews } = parsed;
   const clips = (document.animations ?? []).map((animation, index) =>
     summarizeClip(document, animation, index),
@@ -299,8 +342,27 @@ async function hashSkinnedVertices(
   states: NodeState[],
   worlds: Mat4[],
 ): Promise<string> {
-  const cache = new Map<number, NumericArray>();
   const positions: number[] = [];
+  visitMeshNodes(document, (nodeIndex) => {
+    const evaluated = evaluateMeshAtNode(document, binary, decodedViews, nodeIndex, states, worlds);
+    for (let index = 0; index < evaluated.length; index += 1) positions.push(evaluated[index]);
+  });
+  const bytes = new Uint8Array(positions.length * 4);
+  const view = new DataView(bytes.buffer);
+  positions.forEach((value, index) => view.setFloat32(index * 4, value, true));
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * Nodos con malla en orden de escena: primero el recorrido desde las raíces de la
+ * escena activa, después los que quedaran fuera, en orden de índice.
+ *
+ * Es el orden que certifican los hashes de las poses de control: el mismo modelo
+ * recorre siempre los mismos nodos en el mismo orden, y evaluar una malla fuera
+ * de la escena activa no la convierte en invisible para el contrato.
+ */
+function visitMeshNodes(document: GltfDocument, visitor: (nodeIndex: number) => void): void {
   const nodes = document.nodes ?? [];
   const sceneRoots = document.scenes?.[document.scene ?? 0]?.nodes ?? nodes.map((_node, index) => index);
   const visiting = new Set<number>();
@@ -310,42 +372,595 @@ async function hashSkinnedVertices(
     visiting.add(nodeIndex);
     const node = nodes[nodeIndex];
     if (!node) return;
-    const mesh = node.mesh === undefined ? undefined : document.meshes?.[node.mesh];
-    const skin = node.skin === undefined ? undefined : document.skins?.[node.skin];
-    if (mesh) {
-      for (const primitive of mesh.primitives) {
-        const positionIndex = primitive.attributes.POSITION;
-        if (positionIndex === undefined) continue;
-        const base = readAccessor(document, binary, positionIndex, cache, decodedViews);
-        const joints = primitive.attributes.JOINTS_0 === undefined
-          ? null
-          : readAccessor(document, binary, primitive.attributes.JOINTS_0, cache, decodedViews);
-        const weights = primitive.attributes.WEIGHTS_0 === undefined
-          ? null
-          : readAccessor(document, binary, primitive.attributes.WEIGHTS_0, cache, decodedViews);
-        const jointMatrices = skin ? buildJointMatrices(document, binary, decodedViews, skin, worlds, cache) : null;
-        const morphWeights = resolveMorphWeights(mesh, states[nodeIndex]);
-        for (let vertex = 0; vertex < base.length / 3; vertex += 1) {
-          const offset = vertex * 3;
-          const local = [base[offset], base[offset + 1], base[offset + 2]];
-          applyMorphTargets(document, binary, decodedViews, primitive, local, morphWeights, vertex, cache);
-          const transformed = joints && weights && jointMatrices
-            ? applySkin(local, joints, weights, vertex, jointMatrices)
-            : transformPoint(worlds[nodeIndex] ?? identity(), local);
-          positions.push(transformed[0], transformed[1], transformed[2]);
-        }
-      }
-    }
+    if (node.mesh !== undefined) visitor(nodeIndex);
     for (const child of node.children ?? []) visit(child);
   };
 
   for (const root of sceneRoots) visit(root);
   for (let index = 0; index < nodes.length; index += 1) visit(index);
-  const bytes = new Uint8Array(positions.length * 4);
+}
+
+/**
+ * Posiciones deformadas de una instancia de malla: base → morph → skinning, con
+ * la misma cadena y el mismo redondeo que la certificación de poses.
+ */
+function evaluateMeshAtNode(
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+  nodeIndex: number,
+  states: NodeState[],
+  worlds: Mat4[],
+): Float32Array {
+  return Float32Array.from(evaluateMeshPositionsAtNode(document, binary, decodedViews, nodeIndex, states, worlds));
+}
+
+/**
+ * La misma cadena en doble precisión: base → morph → skinning, sin el redondeo
+ * final a float32. Es lo que usa el evaluador de muestras (C3), que interpola
+ * baricéntricamente y solo redondea al escribir la huella: redondear antes de
+ * interpolar cambiaría el resultado respecto a interpolar en doble precisión.
+ */
+function evaluateMeshPositionsAtNode(
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+  nodeIndex: number,
+  states: NodeState[],
+  worlds: Mat4[],
+): number[] {
+  const cache = new Map<number, NumericArray>();
+  const node = document.nodes?.[nodeIndex];
+  if (!node) return [];
+  const mesh = node.mesh === undefined ? undefined : document.meshes?.[node.mesh];
+  if (!mesh) return [];
+  const skin = node.skin === undefined ? undefined : document.skins?.[node.skin];
+  const jointMatrices = skin ? buildJointMatrices(document, binary, decodedViews, skin, worlds, cache) : null;
+  const morphWeights = resolveMorphWeights(mesh, states[nodeIndex]);
+  const positions: number[] = [];
+  for (const primitive of mesh.primitives) {
+    const positionIndex = primitive.attributes.POSITION;
+    if (positionIndex === undefined) continue;
+    if (primitive.attributes.JOINTS_1 !== undefined || primitive.attributes.WEIGHTS_1 !== undefined) {
+      throw new Error("la primitiva usa JOINTS_1/WEIGHTS_1; solo se soportan 4 influencias por vértice (JOINTS_0/WEIGHTS_0)");
+    }
+    const base = readAccessor(document, binary, positionIndex, cache, decodedViews);
+    const joints = primitive.attributes.JOINTS_0 === undefined
+      ? null
+      : readAccessor(document, binary, primitive.attributes.JOINTS_0, cache, decodedViews);
+    const weights = primitive.attributes.WEIGHTS_0 === undefined
+      ? null
+      : readAccessor(document, binary, primitive.attributes.WEIGHTS_0, cache, decodedViews);
+    for (let vertex = 0; vertex < base.length / 3; vertex += 1) {
+      const offset = vertex * 3;
+      const local = [base[offset], base[offset + 1], base[offset + 2]];
+      applyMorphTargets(document, binary, decodedViews, primitive, local, morphWeights, vertex, cache);
+      const transformed = joints && weights && jointMatrices
+        ? applySkin(local, joints, weights, vertex, jointMatrices)
+        : transformPoint(worlds[nodeIndex] ?? identity(), local);
+      positions.push(transformed[0], transformed[1], transformed[2]);
+    }
+  }
+  return positions;
+}
+
+/**
+ * Posiciones deformadas de una malla en un tiempo dado, para todas sus instancias
+ * en orden de escena. La cadena —base, morph targets, skinning— es la misma que
+ * certifica las poses de control; la única diferencia es que el clip se resuelve
+ * aquí en vez de precomprimirse.
+ */
+export function evaluatePose(
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+  time: number,
+  meshIndex: number,
+  clipIndex = 0,
+): Float32Array {
+  const states = buildNodeStates(document);
+  const clip = (document.animations ?? [])[clipIndex];
+  if (clip) applyAnimation(document, binary, decodedViews, clip, states, time);
+  const worlds = computeWorlds(document, states);
+  const parts: Float32Array[] = [];
+  let total = 0;
+  visitMeshNodes(document, (nodeIndex) => {
+    if (document.nodes?.[nodeIndex]?.mesh !== meshIndex) return;
+    const evaluated = evaluateMeshAtNode(document, binary, decodedViews, nodeIndex, states, worlds);
+    parts.push(evaluated);
+    total += evaluated.length;
+  });
+  const result = new Float32Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    result.set(part, offset);
+    offset += part.length;
+  }
+  return result;
+}
+
+/**
+ * Normales deformadas de una malla en un tiempo dado: base → morph → skinning
+ * como direcciones (sin traslación) → normalización, la misma semántica que la
+ * de los sombreadores de Three.js. Pendiente de certificación cruzada (Fase C).
+ */
+export function evaluatePoseWithNormals(
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+  time: number,
+  meshIndex: number,
+  clipIndex = 0,
+): Float32Array {
+  const states = buildNodeStates(document);
+  const clip = (document.animations ?? [])[clipIndex];
+  if (clip) applyAnimation(document, binary, decodedViews, clip, states, time);
+  const worlds = computeWorlds(document, states);
+  const normals: number[] = [];
+  visitMeshNodes(document, (nodeIndex) => {
+    const node = document.nodes?.[nodeIndex];
+    if (!node || node.mesh !== meshIndex) return;
+    normals.push(...evaluateNormalsAtNode(document, binary, decodedViews, nodeIndex, states, worlds));
+  });
+  return Float32Array.from(normals);
+}
+
+function evaluateNormalsAtNode(
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+  nodeIndex: number,
+  states: NodeState[],
+  worlds: Mat4[],
+): number[] {
+  const cache = new Map<number, NumericArray>();
+  const node = document.nodes?.[nodeIndex];
+  if (!node) return [];
+  const mesh = node.mesh === undefined ? undefined : document.meshes?.[node.mesh];
+  if (!mesh) return [];
+  const skin = node.skin === undefined ? undefined : document.skins?.[node.skin];
+  const jointMatrices = skin ? buildJointMatrices(document, binary, decodedViews, skin, worlds, cache) : null;
+  const morphWeights = resolveMorphWeights(mesh, states[nodeIndex]);
+  const normals: number[] = [];
+  for (const primitive of mesh.primitives) {
+    const normalIndex = primitive.attributes.NORMAL;
+    if (normalIndex === undefined) continue;
+    const base = readAccessor(document, binary, normalIndex, cache, decodedViews);
+    const joints = primitive.attributes.JOINTS_0 === undefined
+      ? null
+      : readAccessor(document, binary, primitive.attributes.JOINTS_0, cache, decodedViews);
+    const weights = primitive.attributes.WEIGHTS_0 === undefined
+      ? null
+      : readAccessor(document, binary, primitive.attributes.WEIGHTS_0, cache, decodedViews);
+    for (let vertex = 0; vertex < base.length / 3; vertex += 1) {
+      const offset = vertex * 3;
+      const normal = [base[offset], base[offset + 1], base[offset + 2]];
+      for (let targetIndex = 0; targetIndex < (primitive.targets?.length ?? 0); targetIndex += 1) {
+        const deltaIndex = primitive.targets?.[targetIndex]?.NORMAL;
+        const weight = morphWeights[targetIndex] ?? 0;
+        if (deltaIndex === undefined || weight === 0) continue;
+        const delta = readAccessor(document, binary, deltaIndex, cache, decodedViews);
+        normal[0] += (delta[offset] ?? 0) * weight;
+        normal[1] += (delta[offset + 1] ?? 0) * weight;
+        normal[2] += (delta[offset + 2] ?? 0) * weight;
+      }
+      const transformed = joints && weights && jointMatrices
+        ? applySkinNormal(normal, joints, weights, vertex, jointMatrices)
+        : normalize(transformDirection(worlds[nodeIndex] ?? identity(), normal));
+      normals.push(transformed[0], transformed[1], transformed[2]);
+    }
+  }
+  return normals;
+}
+
+// ---------------------------------------------------------------------------
+// Fase C — superficie animada: referencias, muestreo y evaluación de muestras
+// ---------------------------------------------------------------------------
+
+/**
+ * Nombre por el que se identifica una malla en una referencia: el suyo, o el del
+ * primer nodo que la instancia —GLTF no obliga a nombrar las mallas, y el
+ * exportador del fixture deja la malla anónima y nombra su nodo—.
+ */
+function meshIndexByReferenceName(document: GltfDocument, name: string): number {
+  const nodes = document.nodes ?? [];
+  const byName = document.meshes?.findIndex((mesh) => mesh.name === name);
+  if (byName !== undefined && byName >= 0) return byName;
+  const viaNode = nodes.findIndex((node) => node.name === name && node.mesh !== undefined);
+  if (viaNode >= 0 && nodes[viaNode]?.mesh !== undefined) return nodes[viaNode].mesh as number;
+  const byFallback = document.meshes?.findIndex((mesh, index) =>
+    (mesh.name === undefined || mesh.name === "") && `malla ${index}` === name,
+  );
+  if (byFallback !== undefined && byFallback >= 0) return byFallback;
+  const candidates = [
+    ...(document.meshes ?? []).flatMap((mesh, index) => (mesh.name ? [`${mesh.name} (malla ${index})`] : [`malla ${index}`])),
+    ...nodes.filter((node) => node.name && node.mesh !== undefined).map((node) => `${node.name} (nodo)`),
+  ];
+  throw new Error(
+    `no hay malla llamada '${name}'; las mallas de este GLB: ${candidates.length > 0 ? candidates.join(", ") : "ninguna"}`,
+  );
+}
+
+/**
+ * Validación semántica de una referencia contra el documento: malla existente,
+ * primitiva en rango, triángulo dentro del búfer de índices y baricéntricas no
+ * negativas que sumen ~1. Devuelve las baricéntricas completadas a tres valores.
+ * La forma ya la valida `SAMPLE_REFERENCE_SCHEMA`; esto caza la referencia
+ * escrita a mano que no apunta a ningún sitio.
+ */
+export function validateSampleReference(
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+  reference: SampleReference,
+): number[] {
+  const meshIndex = meshIndexByReferenceName(document, reference.mesh);
+  const mesh = document.meshes?.[meshIndex];
+  const primitive = mesh?.primitives[reference.primitive];
+  if (!mesh || !primitive) {
+    throw new Error(`la malla ${reference.mesh} no tiene primitiva ${reference.primitive} (tiene ${mesh?.primitives.length ?? 0})`);
+  }
+  if (!Number.isInteger(reference.triangle) || reference.triangle < 0) {
+    throw new Error(`la referencia pide el triángulo ${reference.triangle}; debe ser un entero no negativo`);
+  }
+  const positionIndex = primitive.attributes.POSITION;
+  if (positionIndex === undefined) {
+    throw new Error(`la primitiva ${reference.primitive} de ${reference.mesh} no declara POSITION; no se puede muestrear`);
+  }
+  const cache = new Map<number, NumericArray>();
+  const base = readAccessor(document, binary, positionIndex, cache, decodedViews);
+  const triangleCount = triangleCountOf(document, binary, decodedViews, primitive, base);
+  if (reference.triangle >= triangleCount) {
+    throw new Error(
+      `la referencia pide el triángulo ${reference.triangle}; la primitiva ${reference.primitive} tiene ${triangleCount}`,
+    );
+  }
+  const barycentric = reference.barycentric;
+  if (barycentric.length < 2 || barycentric.length > 3) {
+    throw new Error("barycentric debe traer dos o tres pesos; el tercero se puede omitir");
+  }
+  if (barycentric.some((value) => !Number.isFinite(value) || value < 0)) {
+    throw new Error("los pesos baricéntricos deben ser finitos y no negativos");
+  }
+  const sum = barycentric.reduce((total, value) => total + value, 0);
+  if (Math.abs(sum - 1) > 1e-3) {
+    throw new Error(`los pesos baricéntricos suman ${sum}; deben sumar ~1`);
+  }
+  return [barycentric[0] ?? 0, barycentric[1] ?? 0, barycentric.length === 3 ? barycentric[2] ?? 0 : 1 - (barycentric[0] ?? 0) - (barycentric[1] ?? 0)];
+}
+
+/** Número de triángulos de una primitiva: el búfer de índices, o secuencial. */
+function triangleCountOf(
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+  primitive: GltfPrimitive,
+  base: NumericArray,
+): number {
+  if (primitive.indices === undefined) return Math.floor(base.length / 9);
+  const cache = new Map<number, NumericArray>();
+  const indices = readAccessor(document, binary, primitive.indices, cache, decodedViews);
+  return Math.floor(indices.length / 3);
+}
+
+/** PRNG determinista mulberry32: el contrato de muestreo depende de su secuencia. */
+function mulberry32(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Referencias uniformes por área (ponderadas por raíz de área, como el
+ * `findWeightedTriangle` del editor) con semilla fija: la misma semilla y el
+ * mismo GLB producen siempre la misma lista, en el mismo orden. El orden es el
+ * del contrato: una sola lista global de triángulos —todas las mallas distintas
+ * en orden de escena, y sus primitivas en orden— y un peso por triángulo;
+ * los triángulos degenerados (área nula) no se sortean jamás.
+ */
+export function sampleSurface(
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+  options: { count: number; seed: number },
+): SampleReference[] {
+  const random = mulberry32(options.seed);
+  const cache = new Map<number, NumericArray>();
+  const entries: Array<{ meshIndex: number; primitiveIndex: number; triangle: number; weight: number }> = [];
+  const seenMesh = new Set<number>();
+  const meshOrder: number[] = [];
+  visitMeshNodes(document, (nodeIndex) => {
+    const meshIndex = document.nodes?.[nodeIndex]?.mesh;
+    if (meshIndex !== undefined && !seenMesh.has(meshIndex)) {
+      seenMesh.add(meshIndex);
+      meshOrder.push(meshIndex);
+    }
+  });
+  for (const meshIndex of meshOrder) {
+    const mesh = document.meshes?.[meshIndex];
+    for (const [primitiveIndex, primitive] of (mesh?.primitives ?? []).entries()) {
+      const positionIndex = primitive.attributes.POSITION;
+      if (positionIndex === undefined) continue;
+      const base = readAccessor(document, binary, positionIndex, cache, decodedViews);
+      const count = triangleCountOf(document, binary, decodedViews, primitive, base);
+      for (let triangle = 0; triangle < count; triangle += 1) {
+        const [a, b, c] = triangleVertices(primitive, triangle, document, binary, decodedViews);
+        const area = crossProductLength(base, a, b, c);
+        if (area === 0) continue;
+        entries.push({ meshIndex, primitiveIndex, triangle, weight: Math.sqrt(area) });
+      }
+    }
+  }
+  if (entries.length === 0) {
+    throw new Error("el GLB no tiene triángulos muestreables (sin POSITION o sin área)");
+  }
+  const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
+  const nodes = document.nodes ?? [];
+  const nameOf = (meshIndex: number): string => {
+    const mesh = document.meshes?.[meshIndex];
+    if (mesh?.name) return mesh.name;
+    const instance = nodes.findIndex((node) => node.mesh === meshIndex);
+    return instance >= 0 && nodes[instance]?.name ? nodes[instance].name as string : `malla ${meshIndex}`;
+  };
+  const references: SampleReference[] = [];
+  for (let index = 0; index < options.count; index += 1) {
+    let pick = random() * total;
+    let entry = entries[entries.length - 1];
+    for (const candidate of entries) {
+      pick -= candidate.weight;
+      if (pick <= 0) {
+        entry = candidate;
+        break;
+      }
+    }
+    const u = random();
+    const v = random();
+    const root = Math.sqrt(u);
+    references.push({
+      mesh: nameOf(entry.meshIndex),
+      primitive: entry.primitiveIndex,
+      triangle: entry.triangle,
+      barycentric: [1 - root, root * (1 - v), root * v],
+    });
+  }
+  return references;
+}
+
+/** Los tres índices de un triángulo en el búfer de índices de la primitiva. */
+function triangleVertices(
+  primitive: GltfPrimitive,
+  triangle: number,
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+): [number, number, number] {
+  if (primitive.indices === undefined) return [triangle * 3, triangle * 3 + 1, triangle * 3 + 2];
+  const cache = new Map<number, NumericArray>();
+  const indices = readAccessor(document, binary, primitive.indices, cache, decodedViews);
+  return [indices[triangle * 3] ?? 0, indices[triangle * 3 + 1] ?? 0, indices[triangle * 3 + 2] ?? 0];
+}
+
+/** Doble del área (producto vectorial) de un triángulo, en doble precisión. */
+function crossProductLength(base: NumericArray, a: number, b: number, c: number): number {
+  const abx = base[b * 3] - base[a * 3];
+  const aby = base[b * 3 + 1] - base[a * 3 + 1];
+  const abz = base[b * 3 + 2] - base[a * 3 + 2];
+  const acx = base[c * 3] - base[a * 3];
+  const acy = base[c * 3 + 1] - base[a * 3 + 1];
+  const acz = base[c * 3 + 2] - base[a * 3 + 2];
+  const x = aby * acz - abz * acy;
+  const y = abz * acx - abx * acz;
+  const z = abx * acy - aby * acx;
+  return Math.hypot(x, y, z);
+}
+
+/** Desplazamiento de vértice de una primitiva dentro de un atributo concatenado. */
+function attributeOffsets(
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+  mesh: GltfMesh,
+  primitiveIndex: number,
+): { positions: number; normals: number; uvs: number } {
+  const cache = new Map<number, NumericArray>();
+  let positions = 0;
+  let normals = 0;
+  let uvs = 0;
+  for (let index = 0; index < primitiveIndex; index += 1) {
+    const primitive = mesh.primitives[index];
+    if (primitive.attributes.POSITION !== undefined) {
+      positions += readAccessor(document, binary, primitive.attributes.POSITION, cache, decodedViews).length / 3;
+    }
+    if (primitive.attributes.NORMAL !== undefined) {
+      normals += readAccessor(document, binary, primitive.attributes.NORMAL, cache, decodedViews).length / 3;
+    }
+    if (primitive.attributes.TEXCOORD_0 !== undefined) {
+      uvs += readAccessor(document, binary, primitive.attributes.TEXCOORD_0, cache, decodedViews).length / 2;
+    }
+  }
+  return { positions, normals, uvs };
+}
+
+/**
+ * Punto de una referencia en un tiempo dado: base → morph → skinning (y normal
+ * deformada) con la misma cadena que las poses de control, interpolación
+ * baricéntrica en doble precisión —`b0·P0 + b1·P1 + b2·P2`, de izquierda a
+ * derecha— y redondeo a float32 solo al devolver. Los UV no se deforman: son
+ * por vértice y estáticos.
+ */
+export function evaluateSample(
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+  time: number,
+  reference: SampleReference,
+  clipIndex = 0,
+): SampleEvaluation {
+  const states = buildNodeStates(document);
+  const clip = (document.animations ?? [])[clipIndex];
+  if (clip) applyAnimation(document, binary, decodedViews, clip, states, time);
+  const worlds = computeWorlds(document, states);
+  const meshIndex = meshIndexByReferenceName(document, reference.mesh);
+  const mesh = document.meshes?.[meshIndex];
+  if (!mesh) throw new Error(`no hay malla llamada ${reference.mesh}`);
+  const primitive = mesh.primitives[reference.primitive];
+  const barycentric = validateSampleReference(document, binary, decodedViews, reference);
+  const offsets = attributeOffsets(document, binary, decodedViews, mesh, reference.primitive);
+  const [v0, v1, v2] = triangleVertices(
+    primitive,
+    reference.triangle,
+    document,
+    binary,
+    decodedViews,
+  );
+  const hasNormals = primitive.attributes.NORMAL !== undefined;
+  const hasUvs = primitive.attributes.TEXCOORD_0 !== undefined;
+
+  const cache = new Map<number, NumericArray>();
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  visitMeshNodes(document, (nodeIndex) => {
+    const node = document.nodes?.[nodeIndex];
+    if (!node || node.mesh !== meshIndex) return;
+    const instancePositions = evaluateMeshPositionsAtNode(document, binary, decodedViews, nodeIndex, states, worlds);
+    positions.push(...samplePoint(instancePositions, v0 + offsets.positions, v1 + offsets.positions, v2 + offsets.positions, barycentric));
+    if (hasNormals) {
+      const instanceNormals = evaluateNormalsAtNode(document, binary, decodedViews, nodeIndex, states, worlds);
+      normals.push(...samplePoint(instanceNormals, v0 + offsets.normals, v1 + offsets.normals, v2 + offsets.normals, barycentric));
+    }
+    if (hasUvs) {
+      const baseUvs = readAccessor(document, binary, primitive.attributes.TEXCOORD_0, cache, decodedViews);
+      uvs.push(...samplePoint2(baseUvs, v0 + offsets.uvs, v1 + offsets.uvs, v2 + offsets.uvs, barycentric));
+    }
+  });
+
+  return {
+    positions: Float32Array.from(positions),
+    normals: hasNormals ? Float32Array.from(normals) : null,
+    uvs: hasUvs ? Float32Array.from(uvs) : null,
+  };
+}
+
+/** Baricéntrica sobre tres vértices evaluados: `b0·P0 + b1·P1 + b2·P2`, en orden. */
+function samplePoint(values: number[], v0: number, v1: number, v2: number, barycentric: number[]): number[] {
+  const x = barycentric[0] * (values[v0 * 3] ?? 0) + barycentric[1] * (values[v1 * 3] ?? 0) + barycentric[2] * (values[v2 * 3] ?? 0);
+  const y = barycentric[0] * (values[v0 * 3 + 1] ?? 0) + barycentric[1] * (values[v1 * 3 + 1] ?? 0) + barycentric[2] * (values[v2 * 3 + 1] ?? 0);
+  const z = barycentric[0] * (values[v0 * 3 + 2] ?? 0) + barycentric[1] * (values[v1 * 3 + 2] ?? 0) + barycentric[2] * (values[v2 * 3 + 2] ?? 0);
+  return [x, y, z];
+}
+
+/** Baricéntrica en dos componentes (UV): la misma suma, en el mismo orden. */
+function samplePoint2(values: NumericArray, v0: number, v1: number, v2: number, barycentric: number[]): number[] {
+  const u = barycentric[0] * (values[v0 * 2] ?? 0) + barycentric[1] * (values[v1 * 2] ?? 0) + barycentric[2] * (values[v2 * 2] ?? 0);
+  const v = barycentric[0] * (values[v0 * 2 + 1] ?? 0) + barycentric[1] * (values[v1 * 2 + 1] ?? 0) + barycentric[2] * (values[v2 * 2 + 1] ?? 0);
+  return [u, v];
+}
+
+/**
+ * Huellas de las referencias en unos fotogramas, como las poses de control: por
+ * fotograma, las posiciones de todas las referencias —en el orden del fichero,
+ * y por instancia de la malla en orden de escena— concatenadas y con SHA-256.
+ * `normalsHash` es nulo cuando alguna referencia apunta a una primitiva sin
+ * NORMAL: no se inventan normales.
+ */
+export async function hashSamplesAtFrames(
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+  references: SampleReference[],
+  frames: number[],
+  fps: number,
+  clipIndex = 0,
+): Promise<SampleFrameHash[]> {
+  const result: SampleFrameHash[] = [];
+  for (const frame of frames) {
+    const positions: number[] = [];
+    const normals: number[] = [];
+    let allNormals = true;
+    for (const reference of references) {
+      const evaluation = evaluateSample(document, binary, decodedViews, frame / fps, reference, clipIndex);
+      positions.push(...evaluation.positions);
+      if (evaluation.normals) normals.push(...evaluation.normals);
+      else allNormals = false;
+    }
+    result.push({
+      frame,
+      positionsHash: await hashFloat32Array(positions),
+      normalsHash: allNormals ? await hashFloat32Array(normals) : null,
+    });
+  }
+  return result;
+}
+
+async function hashFloat32Array(values: number[]): Promise<string> {
+  const bytes = new Uint8Array(values.length * 4);
   const view = new DataView(bytes.buffer);
-  positions.forEach((value, index) => view.setFloat32(index * 4, value, true));
+  values.forEach((value, index) => view.setFloat32(index * 4, value, true));
   const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
   return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/**
+ * Valida las influencias de un vértice: pesos finitos y no negativos. Devuelve
+ * la suma de pesos para la normalización que hace el skinning.
+ */
+function totalInfluenceWeight(joints: NumericArray, weights: NumericArray, vertex: number, jointCount: number): number {
+  let totalWeight = 0;
+  for (let influence = 0; influence < 4; influence += 1) {
+    const rawWeight = weights[vertex * 4 + influence] ?? 0;
+    if (!Number.isFinite(rawWeight) || rawWeight < 0) {
+      throw new Error(`peso de influencia inválido en el vértice ${vertex}: ${rawWeight}; los pesos deben ser finitos y no negativos`);
+    }
+    const joint = joints[vertex * 4 + influence] ?? -1;
+    if (!Number.isFinite(joint) || joint < 0 || joint >= jointCount) {
+      throw new Error(`joint ${joint} fuera de rango en el vértice ${vertex}: la skin tiene ${jointCount} joints`);
+    }
+    totalWeight += rawWeight;
+  }
+  return totalWeight;
+}
+
+/** Normales deformadas con skinning: la matriz del joint como dirección, sin traslación. */
+function applySkinNormal(
+  local: number[],
+  joints: NumericArray,
+  weights: NumericArray,
+  vertex: number,
+  jointMatrices: Mat4[],
+): number[] {
+  const result = [0, 0, 0];
+  const totalWeight = totalInfluenceWeight(joints, weights, vertex, jointMatrices.length);
+  if (totalWeight === 0) return local;
+  for (let influence = 0; influence < 4; influence += 1) {
+    const weight = Math.fround((weights[vertex * 4 + influence] ?? 0) / totalWeight);
+    const joint = joints[vertex * 4 + influence] ?? -1;
+    if (weight === 0) continue;
+    const direction = transformDirection(jointMatrices[joint], local);
+    result[0] += direction[0] * weight;
+    result[1] += direction[1] * weight;
+    result[2] += direction[2] * weight;
+  }
+  return normalize(result);
+}
+
+function transformDirection(matrix: Mat4, vector: number[]): number[] {
+  return [
+    matrix[0] * vector[0] + matrix[1] * vector[1] + matrix[2] * vector[2],
+    matrix[4] * vector[0] + matrix[5] * vector[1] + matrix[6] * vector[2],
+    matrix[8] * vector[0] + matrix[9] * vector[1] + matrix[10] * vector[2],
+  ];
+}
+
+function normalize(vector: number[]): number[] {
+  const length = Math.hypot(vector[0], vector[1], vector[2]);
+  if (length === 0) return vector;
+  return [vector[0] / length, vector[1] / length, vector[2] / length];
 }
 
 function buildJointMatrices(
@@ -356,16 +971,28 @@ function buildJointMatrices(
   worlds: Mat4[],
   cache: Map<number, NumericArray>,
 ): Mat4[] {
-  if (skin.inverseBindMatrices === undefined) return [];
+  if (skin.inverseBindMatrices === undefined) {
+    throw new Error("la skin no declara inverseBindMatrices; no se puede evaluar la pose deformada");
+  }
+  const accessor = document.accessors?.[skin.inverseBindMatrices];
+  if (!accessor || accessor.type !== "MAT4") {
+    throw new Error(`inverseBindMatrices (accesor ${skin.inverseBindMatrices}) debe ser MAT4, no ${accessor?.type ?? "ninguno"}`);
+  }
   const inverse = readAccessor(document, binary, skin.inverseBindMatrices, cache, decodedViews);
+  if (inverse.length < skin.joints.length * 16) {
+    throw new Error(`inverseBindMatrices incompletas: ${inverse.length} componentes para ${skin.joints.length} joints (se necesitan ${skin.joints.length * 16})`);
+  }
   return skin.joints.map((joint, index) => {
+    if (!worlds[joint]) {
+      throw new Error(`joint ${joint} fuera de rango: el documento tiene ${worlds.length} nodos`);
+    }
     const inverseBind = matrixFromColumnMajor(inverse.slice(index * 16, index * 16 + 16));
     const matrix = multiply(worlds[joint] ?? identity(), inverseBind);
     return matrix;
   });
 }
 
-function applySkin(
+export function applySkin(
   local: number[],
   joints: NumericArray,
   weights: NumericArray,
@@ -373,16 +1000,15 @@ function applySkin(
   jointMatrices: Mat4[],
 ): number[] {
   const result = [0, 0, 0];
-  let totalWeight = 0;
-  for (let influence = 0; influence < 4; influence += 1) totalWeight += weights[vertex * 4 + influence] ?? 0;
-  if (totalWeight === 0 || !Number.isFinite(totalWeight)) return local;
+  const totalWeight = totalInfluenceWeight(joints, weights, vertex, jointMatrices.length);
+  if (totalWeight === 0) return local;
   for (let influence = 0; influence < 4; influence += 1) {
     // GLTFLoader normalizes skin weights on load and writes them back to a
     // Float32BufferAttribute. Reproduce that rounding so the checksum agrees
     // with the reference renderer even for sums just below one.
     const weight = Math.fround((weights[vertex * 4 + influence] ?? 0) / totalWeight);
     const joint = joints[vertex * 4 + influence] ?? -1;
-    if (weight === 0 || joint < 0 || !jointMatrices[joint]) continue;
+    if (weight === 0) continue;
     const point = transformPoint(jointMatrices[joint], local);
     result[0] += point[0] * weight;
     result[1] += point[1] * weight;
@@ -391,7 +1017,7 @@ function applySkin(
   return result;
 }
 
-function buildNodeStates(document: GltfDocument): NodeState[] {
+export function buildNodeStates(document: GltfDocument): NodeState[] {
   return (document.nodes ?? []).map((node) => ({
     translation: [...(node.translation ?? [0, 0, 0])],
     rotation: [...(node.rotation ?? [0, 0, 0, 1])],
@@ -411,7 +1037,7 @@ function resolveMorphWeights(mesh: GltfMesh, state: NodeState | undefined): numb
   return Array.from({ length: targetCount }, (_value, index) => configured[index] ?? defaults[index] ?? 0);
 }
 
-function applyMorphTargets(
+export function applyMorphTargets(
   document: GltfDocument,
   binary: Uint8Array,
   decodedViews: Map<number, Uint8Array>,
@@ -433,7 +1059,7 @@ function applyMorphTargets(
   }
 }
 
-function applyAnimation(
+export function applyAnimation(
   document: GltfDocument,
   binary: Uint8Array,
   decodedViews: Map<number, Uint8Array>,
@@ -442,15 +1068,24 @@ function applyAnimation(
   time: number,
 ): void {
   const cache = new Map<number, NumericArray>();
-  for (const channel of animation.channels) {
+  for (const [channelIndex, channel] of animation.channels.entries()) {
     const nodeIndex = channel.target.node;
+    const clipName = animation.name ?? "sin nombre";
+    if (nodeIndex === undefined || !states[nodeIndex]) {
+      throw new Error(`canal ${channelIndex} del clip ${clipName}: nodo objetivo ${String(nodeIndex)} inexistente`);
+    }
     const sampler = animation.samplers[channel.sampler];
-    if (nodeIndex === undefined || !sampler || !states[nodeIndex]) continue;
+    if (!sampler) {
+      throw new Error(`canal ${channelIndex} del clip ${clipName}: sampler ${channel.sampler} inexistente`);
+    }
+    const path = channel.target.path;
+    if (path !== "translation" && path !== "rotation" && path !== "scale" && path !== "weights") {
+      throw new Error(`canal ${channelIndex} del clip ${clipName}: path '${path}' desconocido; se admite translation, rotation, scale o weights`);
+    }
     const input = readAccessor(document, binary, sampler.input, cache, decodedViews);
     const output = readAccessor(document, binary, sampler.output, cache, decodedViews);
     const interpolation = sampler.interpolation ?? "LINEAR";
     const outputStride = interpolation === "CUBICSPLINE" ? 3 : 1;
-    const path = channel.target.path;
     const valueSize = path === "rotation"
       ? 4
       : path === "weights"
@@ -573,6 +1208,9 @@ function readAccessor(
   if (cached) return cached;
   const accessor = document.accessors?.[accessorIndex];
   if (!accessor) throw new Error(`accesor ${accessorIndex} inexistente`);
+  if (accessor.sparse) {
+    throw new Error(`accesor ${accessorIndex} es sparse; los accesors sparse no se soportan`);
+  }
   const componentCount = COMPONENTS[accessor.type];
   const componentBytes = COMPONENT_BYTES[accessor.componentType];
   if (!componentCount || !componentBytes) {
@@ -625,7 +1263,13 @@ function normalizeComponent(value: number, componentType: number): number {
   }
 }
 
-function parseGlb(buffer: ArrayBuffer, decoder?: MeshoptDecoderLike): ParsedGlb {
+/**
+ * Parsea un GLB para la evaluación de animación, con las vistas meshopt ya
+ * decodificadas. Se distingue de `parseGlb` (glbLoader) porque devuelve el árbol
+ * de nodos tal cual —necesario para resolver el skinning— en vez de aplastarlo a
+ * piezas de modelo.
+ */
+export function parseGlbAnimation(buffer: ArrayBuffer, decoder?: MeshoptDecoderLike): ParsedGlb {
   const header = new DataView(buffer);
   if (header.byteLength < 20 || header.getUint32(0, true) !== 0x46546c67) {
     throw new Error("no es un GLB: falta la firma 'glTF'");
@@ -643,6 +1287,10 @@ function parseGlb(buffer: ArrayBuffer, decoder?: MeshoptDecoderLike): ParsedGlb 
     offset = start + length + ((4 - (length % 4)) % 4);
   }
   if (!document) throw new Error("GLB sin bloque JSON");
+  const sceneCount = document.scenes?.length ?? 0;
+  if (sceneCount > 1) {
+    throw new Error(`el GLB tiene ${sceneCount} escenas; el contrato solo evalúa la activa (${document.scene ?? 0})`);
+  }
   if ((document.buffers ?? []).some((entry) => entry.uri !== undefined)) {
     throw new Error("GLB con búfer externo (.bin aparte); solo se admite autocontenido");
   }

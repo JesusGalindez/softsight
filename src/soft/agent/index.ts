@@ -81,14 +81,35 @@ export { applyPatchToScene } from "./scenePatch";
 export { invertPatch } from "./invertPatch";
 export { auditSpatial } from "./spatialAudit";
 export type { SpatialAudit, Interpenetration, ScaleOutlier, PlacedPart } from "./spatialAudit";
-export { inspectGlbAnimation } from "./animation";
+export {
+  applyAnimation,
+  applyMorphTargets,
+  applySkin,
+  buildNodeStates,
+  evaluatePose,
+  evaluatePoseWithNormals,
+  evaluateSample,
+  hashSamplesAtFrames,
+  inspectGlbAnimation,
+  parseGlbAnimation,
+  sampleSurface,
+  validateSampleReference,
+} from "./animation";
 export type {
   AnimationClipSummary,
   AnimationControlPose,
   AnimationControlPoseReference,
+  EvaluatedPose,
+  GltfAnimation,
+  GltfDocument,
+  NodeState,
+  ParsedGlb,
+  SampleEvaluation,
+  SampleFrameHash,
+  SampleReference,
   SoftSightAnimationInspection,
 } from "./animation";
-export { SCENE_SCHEMA, PATCH_SCHEMA, validate, assertValid } from "./schema";
+export { SCENE_SCHEMA, PATCH_SCHEMA, SAMPLE_REFERENCE_SCHEMA, validate, assertValid } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
 export type {
   SceneSpec,
