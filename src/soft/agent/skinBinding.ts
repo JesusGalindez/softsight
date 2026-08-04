@@ -340,7 +340,11 @@ export function bindModelToSkeleton(model: Model, skeleton: SkeletonSource, bind
   const nodes: SkinnedGlbNode[] = skeletonNodes.map((node) => ({ ...node }));
 
   const meshNode = nodes.length;
-  nodes.push({ name: `${model.source || "modelo"}-piel`, mesh: 0, skin: 0 });
+  // El nombre no lleva `model.source` a propósito: es la ruta del fichero de
+  // entrada, y meterla dentro haría que el mismo modelo diera bytes distintos
+  // según en qué carpeta estuviera. La salida no depende de dónde vive la
+  // entrada; lo cazó la puerta al comparar el GLB del CLI con el del puente.
+  nodes.push({ name: "piel", mesh: 0, skin: 0 });
 
   const animations = skeleton.animations;
   const roots = rootsOf(skeleton);

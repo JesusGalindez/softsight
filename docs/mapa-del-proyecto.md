@@ -88,6 +88,7 @@ hecho por los dos lados, da el mismo hash.
 | `test:bridge` | El puente contra el CLI real: sample, inspect, render, patch y schema | `npm run test:bridge` (softsight), también dentro de `test:animation` |
 | `test:glb-writer` | Un GLB reescrito por nosotros contra los hashes de control del original | `npm run test:glb-writer` (softsight), también dentro de `test:animation` |
 | `test:bind` | El atado en reposo y con el hueso movido, exacto, y las 296 piezas del dron sin deformar | `npm run test:bind` (softsight), también dentro de `test:animation` |
+| `test:rig` | Esqueleto y clips declarados, la auditoría de animación, y la escena por el puente byte a byte | `npm run test:rig` (softsight), también dentro de `test:animation` |
 | `test:bvh` | La cinemática de un BVH contra el evaluador certificado por dos caminos, y la conversión por API, CLI y puente byte a byte | `npm run test:bvh` (softsight), también dentro de `test:animation` |
 | `softsight:gate` | Poses de control: SoftSight contra Three.js | `npm run softsight:gate` (editor) |
 | `softsight:sample-gate` | Muestras de superficie: posiciones y normales | `npm run softsight:sample-gate` (editor) |
@@ -144,8 +145,15 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
    `skinBinding.ts`, y `--skeleton` + `--bind` en el CLI. Cierra la tubería:
    BVH → esqueleto → modelo animado que **se puede mirar**. Ver el aviso de
    alcance más abajo.
-7. **UI de estudio** (en marcha, en el repo del editor). Detalle en §6.
-8. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
+7. **E5 — esqueleto, clips y auditoría de animación declarativos** (hecho).
+   `skeleton`, `bindings` y `clips` en la escena; `rigSpec.ts` los comprueba y
+   traduce, `animationAudit.ts` audita el movimiento. Un agente construye un
+   personaje animado entero en JSON y recibe hechos comprobables sobre él.
+8. **E6 — la escena por el puente** (hecho). Comando `scene` en `bridge.mjs`:
+   antes todo lo declarativo solo se alcanzaba llamando al CLI a mano, y por la
+   vía con sandbox —la que usa el editor— no se llegaba.
+9. **UI de estudio** (hecha, F0–F4 en el repo del editor). Detalle en §6.
+10. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y

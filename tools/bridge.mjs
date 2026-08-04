@@ -10,13 +10,16 @@
  * Petición:
  *
  *   { "bridgeContractVersion": 1,
- *     "command": "inspect"|"render"|"patch"|"sample"|"bvh"|"schema",
+ *     "command": "inspect"|"render"|"patch"|"sample"|"scene"|"bvh"|"schema",
  *     "files": { "model": { "name": "drone.glb", "data": "<base64>" }, ... },
  *     "options": { ... } }
  *
- * `bvh` es el único que no recibe `model`: recibe `bvh` y devuelve el GLB con
- * esqueleto y clip como artefacto. Es una conversión, no una revisión, así que
- * su informe no trae ni auditoría ni pliego.
+ * Dos comandos no reciben `model`. `bvh` recibe una captura y devuelve el GLB
+ * con esqueleto y clip; es una conversión, no una revisión, así que su informe
+ * no trae ni auditoría ni pliego. `scene` recibe una escena declarativa —la
+ * misma que valida `--schema`, con sus `objects` y, si los trae, su `skeleton`,
+ * sus `bindings` y sus `clips`— y devuelve el informe completo, el pliego y el
+ * GLB. Es la vía por la que un agente construye desde cero sin tocar el disco.
  *
  * Respuesta:
  *
@@ -57,7 +60,7 @@ const MAX_ARTIFACT_BYTES = Number(process.env.SOFTSIGHT_BRIDGE_MAX_ARTIFACT_MB ?
 const TIMEOUT_MS = Number(process.env.SOFTSIGHT_BRIDGE_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-const COMMANDS = new Set(["inspect", "render", "patch", "sample", "bvh", "schema"]);
+const COMMANDS = new Set(["inspect", "render", "patch", "sample", "scene", "bvh", "schema"]);
 
 // Opciones del CLI que el puente acepta, con su tipo. Todo lo demás se rechaza:
 // el puente no expande variables ni patrones, y solo ejecuta con argumentos fijos.
@@ -81,6 +84,7 @@ const PASSTHROUGH = {
   fps: "number",
   bvhScale: "number",
   bvhClip: "string",
+  auditFrames: "number",
 };
 
 const OPTION_TO_FLAG = {
@@ -103,6 +107,7 @@ const OPTION_TO_FLAG = {
   fps: "--fps",
   bvhScale: "--bvh-scale",
   bvhClip: "--bvh-clip",
+  auditFrames: "--audit-frames",
 };
 
 // Ficheros que admite cada comando: los opcionales solo se escriben si vienen.
@@ -111,7 +116,9 @@ const FILE_SLOTS = {
   render: { model: false, controlPoses: true },
   patch: { model: false, controlPoses: true, patches: false, baseline: true, baselineReport: true },
   sample: { model: false, controlPoses: true, references: false },
-  // El único comando sin `model`: convierte una captura, no revisa un modelo.
+  // Los dos que no reciben `model`: uno convierte una captura, el otro parte de
+  // una escena declarativa en vez de un fichero 3D.
+  scene: { scene: false, patches: true },
   bvh: { bvh: false },
   schema: {},
 };
@@ -242,6 +249,21 @@ function buildArgs(request, workDir) {
     return converted;
   }
 
+  if (request.command === "scene") {
+    // Siempre exporta: una escena que un agente acaba de inventar no existe en
+    // ningún fichero suyo, así que devolver solo el informe le dejaría sin lo
+    // único que puede volver a cargar.
+    const built = ["--scene", files.scene, "--export", join(workDir, "escena.glb")];
+    if (files.patches) for (const patchPath of files.patches) built.push("--patch", patchPath);
+    // `inspectOnly` no es una opción del CLI sino una forma de pedir el informe
+    // sin pliego, así que se consume aquí y no se reenvía.
+    const { inspectOnly, ...rest } = request.options ?? {};
+    if (inspectOnly === true) built.push("--inspect-only", "true");
+    else built.push("--out", join(workDir, "contact-sheet.png"));
+    built.push(...parseOptions(rest));
+    return built;
+  }
+
   const flags = ["--model", files.model];
   if (files.controlPoses) flags.push("--control-poses", files.controlPoses);
 
@@ -309,6 +331,12 @@ async function runCommand(request) {
     const artifacts = [];
     if (request.command === "bvh") {
       artifacts.push(readArtifact(workDir, "esqueleto.glb", "model/gltf-binary"));
+    }
+    if (request.command === "scene") {
+      artifacts.push(readArtifact(workDir, "escena.glb", "model/gltf-binary"));
+      if (request.options?.inspectOnly !== true) {
+        artifacts.push(readArtifact(workDir, "contact-sheet.png", "image/png"));
+      }
     }
     if (request.command === "render" || request.command === "patch") {
       artifacts.push(readArtifact(workDir, "contact-sheet.png", "image/png"));

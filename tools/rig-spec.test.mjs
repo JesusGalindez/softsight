@@ -16,6 +16,12 @@
  */
 
 import assert from "node:assert/strict";
+import { execFile, spawn } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import {
   auditAnimation,
@@ -27,6 +33,10 @@ import {
   resolveRig,
   serializeSkinnedGlb,
 } from "../dist-node/agent3d.mjs";
+
+const execFileAsync = promisify(execFile);
+const here = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(here, "..");
 
 // --- 1. La rotación declarada significa lo mismo en un hueso que en una pieza
 
@@ -231,6 +241,93 @@ console.log(
   `rig spec: ok (${rig.skeleton.nodes.length} huesos, ${audit.clips[0].sampled.length} fotogramas auditados, ` +
     `${audit.crossings.length} cruce(s) cazado(s))`,
 );
+
+// --- 7. La escena declarativa llega hasta el puente -------------------------
+// Sin esto, todo lo declarativo solo se alcanza llamando al CLI a mano: por la
+// vía con sandbox —la que usa el editor— no se llegaba. El criterio vuelve a ser
+// de identidad: el GLB del puente y el del CLI tienen que ser el mismo fichero.
+
+const fixture = resolve(projectRoot, "artifacts/agent/muneco.json");
+const workDir = mkdtempSync(join(tmpdir(), "softsight-scene-test-"));
+try {
+  const cliOut = join(workDir, "cli.glb");
+  const { stdout } = await execFileAsync(process.execPath, [
+    resolve(here, "agent3d.mjs"),
+    "--scene",
+    fixture,
+    "--export",
+    cliOut,
+    "--inspect-only",
+    "--audit-frames",
+    "6",
+  ]).catch((error) => {
+    // El fixture trae dos avisos estáticos, así que el CLI sale con 1. Es
+    // éxito con informe, no un fallo.
+    if (error.code !== 1) throw error;
+    return { stdout: error.stdout };
+  });
+
+  const report = JSON.parse(stdout);
+  assert.equal(report.rig.joints, 7);
+  assert.equal(report.rig.mode, "rigid");
+  assert.equal(report.rig.clips[0].name, "saludo");
+  assert.equal(report.animationAudit.crossings.length, 0, "el muñeco versionado tiene que estar limpio");
+  assert.equal(report.animationAudit.groundBreaches.length, 0);
+  assert.deepEqual(report.animationAudit.staticBones, []);
+  assert.equal(report.animationAudit.clips[0].sampled.length, 6);
+
+  const bridged = await runBridge({
+    bridgeContractVersion: 1,
+    command: "scene",
+    files: { scene: { name: "muneco.json", data: readFileSync(fixture).toString("base64") } },
+    options: { inspectOnly: true, auditFrames: 6 },
+  });
+  assert.equal(bridged.command, "scene");
+  assert.equal(bridged.exitCode, 1, "el puente debe devolver el mismo código que el CLI");
+  assert.deepEqual(bridged.report.rig, report.rig);
+  assert.deepEqual(bridged.report.animationAudit, report.animationAudit);
+  assert.equal(bridged.artifacts.length, 1);
+  assert.equal(bridged.artifacts[0].name, "escena.glb");
+  assert.equal(bridged.artifacts[0].mimeType, "model/gltf-binary");
+
+  const fromBridge = Buffer.from(bridged.artifacts[0].data, "base64");
+  assert.ok(
+    fromBridge.equals(readFileSync(cliOut)),
+    "el GLB del puente no coincide byte a byte con el del CLI",
+  );
+
+  // Una escena con esqueleto y sin vínculo no se ata a ojo: es un error.
+  const sinVinculo = join(workDir, "sin-vinculo.json");
+  writeFileSync(
+    sinVinculo,
+    JSON.stringify({
+      objects: [{ name: "a", geometry: { primitive: "box", parameters: [1, 1, 1] } }],
+      skeleton: { joints: [{ name: "raiz" }] },
+    }),
+  );
+  await assert.rejects(
+    () => execFileAsync(process.execPath, [resolve(here, "agent3d.mjs"), "--scene", sinVinculo]),
+    (error) => {
+      assert.match(String(error.stderr), /necesita `bindings`/);
+      assert.equal(error.code, 2);
+      return true;
+    },
+  );
+} finally {
+  rmSync(workDir, { recursive: true, force: true });
+}
+
+console.log("rig e6: ok (escena declarativa por el puente, CLI == puente byte a byte)");
+
+/** Ejecuta el puente con una petición y devuelve su respuesta ya parseada. */
+async function runBridge(request) {
+  const bridge = spawn(process.execPath, [resolve(here, "bridge.mjs")], { stdio: ["pipe", "pipe", "pipe"] });
+  bridge.stdin.end(JSON.stringify(request));
+  const chunks = [];
+  for await (const chunk of bridge.stdout) chunks.push(chunk);
+  await new Promise((done) => bridge.on("close", done));
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
 
 /** Matriz fila-mayor de un cuaternión `xyzw`, para comparar convenciones. */
 function matrixFromQuaternion([x, y, z, w]) {
