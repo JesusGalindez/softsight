@@ -27,6 +27,7 @@ import {
   modelFromScene,
   parseGlbAnimation,
   serializeSkinnedGlb,
+  skeletonFromParsedGlb,
 } from "../dist-node/agent3d.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -44,22 +45,24 @@ assert.equal(model.parts.length, 2);
 
 // El hueso «Brazo» cuelga de «Raiz» y está en (2,0,0), justo donde la pieza que
 // va a llevar. El clip lo sube 3 en Y entre t=0 y t=1.
-const skeleton = parseGlbAnimation(
-  serializeSkinnedGlb({
-    nodes: [
-      { name: "Raiz", translation: [0, 0, 0], rotation: [0, 0, 0, 1], children: [1] },
-      { name: "Brazo", translation: [2, 0, 0], rotation: [0, 0, 0, 1] },
-    ],
-    meshes: [],
-    animations: [
-      {
-        name: "Subir",
-        samplers: [{ times: Float32Array.from([0, 1]), values: Float32Array.from([2, 0, 0, 2, 3, 0]) }],
-        channels: [{ sampler: 0, node: 1, path: "translation" }],
-      },
-    ],
-    roots: [0],
-  }),
+const skeleton = skeletonFromParsedGlb(
+  parseGlbAnimation(
+    serializeSkinnedGlb({
+      nodes: [
+        { name: "Raiz", translation: [0, 0, 0], rotation: [0, 0, 0, 1], children: [1] },
+        { name: "Brazo", translation: [2, 0, 0], rotation: [0, 0, 0, 1] },
+      ],
+      meshes: [],
+      animations: [
+        {
+          name: "Subir",
+          samplers: [{ times: Float32Array.from([0, 1]), values: Float32Array.from([2, 0, 0, 2, 3, 0]) }],
+          channels: [{ sampler: 0, node: 1, path: "translation" }],
+        },
+      ],
+      roots: [0],
+    }),
+  ),
 );
 
 const { scene, bound, unusedJoints } = bindModelToSkeleton(model, skeleton, {
@@ -114,12 +117,14 @@ const drone = await loadModel(
 );
 assert.ok(drone.parts.length > 100, `el dron trae ${drone.parts.length} piezas`);
 
-const quieto = parseGlbAnimation(
-  serializeSkinnedGlb({
-    nodes: [{ name: "Raiz", translation: [0, 0, 0], rotation: [0, 0, 0, 1] }],
-    meshes: [],
-    roots: [0],
-  }),
+const quieto = skeletonFromParsedGlb(
+  parseGlbAnimation(
+    serializeSkinnedGlb({
+      nodes: [{ name: "Raiz", translation: [0, 0, 0], rotation: [0, 0, 0, 1] }],
+      meshes: [],
+      roots: [0],
+    }),
+  ),
 );
 const droneBound = bindModelToSkeleton(drone, quieto, {
   schemaVersion: 1,

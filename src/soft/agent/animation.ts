@@ -1194,7 +1194,15 @@ function slerp(a: number[], b: number[], factor: number): number[] {
   return [ax, ay, az, aw];
 }
 
-function computeWorlds(document: GltfDocument, states: NodeState[]): Mat4[] {
+/**
+ * Matrices de mundo de cada nodo, con la jerarquía ya acumulada, en fila-mayor.
+ *
+ * Publicada para que auditar movimiento no obligue a reimplementar la cadena de
+ * transformaciones: la que hay aquí es la que está certificada contra Three.js,
+ * y una segunda copia divergiría en el primer detalle que alguien arreglara solo
+ * en una.
+ */
+export function computeWorlds(document: GltfDocument, states: NodeState[]): Mat4[] {
   const nodes = document.nodes ?? [];
   const worlds = nodes.map(() => identity());
   const roots = document.scenes?.[document.scene ?? 0]?.nodes ?? nodes.map((_node, index) => index);

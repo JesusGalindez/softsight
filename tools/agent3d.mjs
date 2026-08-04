@@ -32,6 +32,7 @@ import {
   applyPatch,
   applyPatchToScene,
   assertValid,
+  auditAnimation,
   bindModelToSkeleton,
   bvhToSkinnedScene,
   invertPatch,
@@ -40,8 +41,10 @@ import {
   loadModel,
   reviewModel,
   parseBvh,
+  resolveRig,
   serializeGlb,
   serializeSkinnedGlb,
+  skeletonFromParsedGlb,
   reviewScene,
   serializeObj,
   toSceneNodes,
@@ -456,9 +459,11 @@ async function reviewModelFile(options, outputPath) {
       throw new Error(`--skeleton solo lee .glb; '${skeletonPath}' no lo es`);
     }
     const skeletonBytes = await readFile(resolve(skeletonPath));
-    const skeleton = parseGlbAnimation(
-      skeletonBytes.buffer.slice(skeletonBytes.byteOffset, skeletonBytes.byteOffset + skeletonBytes.byteLength),
-      await loadMeshoptDecoder(),
+    const skeleton = skeletonFromParsedGlb(
+      parseGlbAnimation(
+        skeletonBytes.buffer.slice(skeletonBytes.byteOffset, skeletonBytes.byteOffset + skeletonBytes.byteLength),
+        await loadMeshoptDecoder(),
+      ),
     );
     const document = JSON.parse(await readFile(resolve(bindPath), "utf8"));
     binding = bindModelToSkeleton(model, skeleton, document);
@@ -592,6 +597,15 @@ Atar una malla a un esqueleto (solo --model)
                           se ata a la raíz por si acaso. Atado RÍGIDO: un hueso
                           por vértice, peso 1. Aquí no se calculan pesos, se
                           aplican los que declaras. Exige --export .glb
+
+Esqueleto y clips declarados en la escena (solo --scene)
+  La escena admite skeleton (huesos por nombre, con padre y offset),
+  bindings (qué pieza a qué hueso) y clips (pistas con fotogramas clave).
+  Con esqueleto, --export escribe el GLB atado y animado, y el informe trae
+  rig y animationAudit. Ver --schema para la forma exacta.
+  --audit-frames <n>      fotogramas a muestrear por clip en la auditoría (8).
+                          La auditoría muestrea, no recorre: puede perderse un
+                          cruce que solo ocurra entre dos fotogramas mirados
 
 Conversión de BVH (solo --bvh)
   --bvh-scale <n>         factor sobre desplazamientos y traslaciones (1). Un BVH
@@ -831,6 +845,43 @@ async function main() {
     writeFileSync(outputPath, encodePng(sheet.pixels, sheet.width, sheet.height));
   }
 
+  // Esqueleto y clips declarados en la propia escena: un agente construye el
+  // personaje y lo anima sin salir del JSON que ya sabe escribir. El atado sigue
+  // siendo rígido y el vínculo lo declara él; aquí no se calcula ningún peso.
+  let rig = null;
+  let riggedScene = null;
+  let animationAudit = null;
+  if (spec.skeleton) {
+    if (!Array.isArray(spec.bindings) || spec.bindings.length === 0) {
+      throw new Error("una escena con `skeleton` necesita `bindings`: qué pieza va a qué hueso");
+    }
+    const asModel = modelFromScene(spec, scenePath ?? "escena");
+    rig = resolveRig(spec.skeleton, spec.clips ?? []);
+    const bound = bindModelToSkeleton(asModel, rig.skeleton, {
+      schemaVersion: 1,
+      bindings: spec.bindings,
+    });
+    riggedScene = bound.scene;
+
+    // La auditoría de movimiento: lo que ninguna imagen revela porque ocurre en
+    // un fotograma que nadie miró. Se apoya en el evaluador certificado.
+    if ((spec.clips ?? []).length > 0) {
+      const framesFlag = options.get("audit-frames");
+      const sampleFrames =
+        framesFlag === undefined || framesFlag === "true" ? 8 : Number(framesFlag);
+      if (!Number.isInteger(sampleFrames) || sampleFrames < 2) {
+        throw new Error(`--audit-frames inválido: '${framesFlag}'; debe ser un entero de 2 en adelante`);
+      }
+      const parsedRig = parseGlbAnimation(serializeSkinnedGlb(riggedScene));
+      animationAudit = auditAnimation(
+        asModel,
+        parsedRig,
+        new Map(bound.bound.map((entry) => [entry.part, entry.joint])),
+        { sampleFrames, fps: rig.clips[0]?.fps ?? 30 },
+      );
+    }
+  }
+
   // Exportar lo inventado: crear y entregar dejan de ser caminos distintos.
   let exported = null;
   const exportPath = options.get("export");
@@ -838,7 +889,12 @@ async function main() {
     exported = resolve(exportPath);
     mkdirSync(dirname(exported), { recursive: true });
     const asModel = modelFromScene(spec, scenePath ?? "escena");
-    if (exported.toLowerCase().endsWith(".glb")) {
+    if (riggedScene) {
+      if (!exported.toLowerCase().endsWith(".glb")) {
+        throw new Error(`una escena con esqueleto solo exporta .glb; '${exportPath}' no lo es`);
+      }
+      writeFileSync(exported, Buffer.from(serializeSkinnedGlb(riggedScene)));
+    } else if (exported.toLowerCase().endsWith(".glb")) {
       writeFileSync(exported, Buffer.from(serializeGlb(asModel)));
     } else {
       writeFileSync(exported, serializeObj(asModel), "utf8");
@@ -855,7 +911,16 @@ async function main() {
 
   process.stdout.write(
     `${JSON.stringify(
-      { contractVersion: REPORT_CONTRACT_VERSION, ...review, edits, file: sheet ? outputPath : null, exported, savedScene },
+      {
+        contractVersion: REPORT_CONTRACT_VERSION,
+        ...review,
+        ...(rig ? { rig: { joints: rig.skeleton.nodes.length, clips: rig.clips, mode: "rigid" } } : {}),
+        ...(animationAudit ? { animationAudit } : {}),
+        edits,
+        file: sheet ? outputPath : null,
+        exported,
+        savedScene,
+      },
       null,
       2,
     )}\n`,

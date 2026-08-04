@@ -30,7 +30,7 @@
 import { invertAffine, mat4, multiply, normalMatrix, transformDirection, transformPoint } from "../math";
 import type { Mat4 } from "../math";
 import { readAccessorValues } from "./animation";
-import type { GltfDocument, ParsedGlb } from "./animation";
+import type { ParsedGlb } from "./animation";
 import type {
   SkinnedGlbAnimation,
   SkinnedGlbNode,
@@ -56,6 +56,63 @@ export interface SkinBindingRule {
 export interface SkinBinding {
   schemaVersion: 1;
   bindings: SkinBindingRule[];
+}
+
+/**
+ * Un esqueleto, venga de donde venga.
+ *
+ * El atado no debe saber si los huesos salieron de un GLB o de una escena
+ * declarativa. Si lo supiera habría dos caminos que mantener, y acabarían
+ * divergiendo en el primer detalle que alguien arreglara solo en uno.
+ */
+export interface SkeletonSource {
+  nodes: SkinnedGlbNode[];
+  /** Nodos raíz. Vacío significa «los que nadie declara como hijos». */
+  roots: number[];
+  animations: SkinnedGlbAnimation[];
+}
+
+/** Raíces declaradas, o las deducidas si no hay ninguna declarada. */
+function rootsOf(skeleton: SkeletonSource): number[] {
+  if (skeleton.roots.length > 0) return skeleton.roots;
+  const declaredAsChild = new Set(skeleton.nodes.flatMap((node) => node.children ?? []));
+  return skeleton.nodes.map((_node, index) => index).filter((index) => !declaredAsChild.has(index));
+}
+
+/**
+ * Levanta el esqueleto de un GLB ya parseado a la forma que entiende el atado.
+ *
+ * Leer aquí los muestreadores, y no dentro del atado, es lo que permite que una
+ * escena declarativa entre por la misma puerta sin pasar por un fichero.
+ */
+export function skeletonFromParsedGlb(parsed: ParsedGlb): SkeletonSource {
+  const document = parsed.document;
+  return {
+    nodes: (document.nodes ?? []).map((node) => ({
+      ...(node.name !== undefined ? { name: node.name } : {}),
+      ...(node.matrix ? { matrix: [...node.matrix] } : {}),
+      ...(node.translation ? { translation: [...node.translation] } : {}),
+      ...(node.rotation ? { rotation: [...node.rotation] } : {}),
+      ...(node.scale ? { scale: [...node.scale] } : {}),
+      ...(node.children ? { children: [...node.children] } : {}),
+    })),
+    roots: document.scenes?.[document.scene ?? 0]?.nodes ?? [],
+    animations: (document.animations ?? []).map((animation) => ({
+      ...(animation.name !== undefined ? { name: animation.name } : {}),
+      samplers: animation.samplers.map((sampler) => ({
+        times: Float32Array.from(readAccessorValues(parsed, sampler.input)),
+        values: Float32Array.from(readAccessorValues(parsed, sampler.output)),
+        ...(sampler.interpolation ? { interpolation: sampler.interpolation } : {}),
+      })),
+      channels: animation.channels
+        .filter((channel) => channel.target.node !== undefined)
+        .map((channel) => ({
+          sampler: channel.sampler,
+          node: channel.target.node!,
+          path: channel.target.path as "translation" | "rotation" | "scale" | "weights",
+        })),
+    })),
+  };
 }
 
 export interface BindResult {
@@ -118,11 +175,11 @@ function localMatrixOf(node: {
 }
 
 /** Matrices de mundo de la pose de reposo, con la jerarquía ya acumulada. */
-function restWorldMatrices(document: GltfDocument): Mat4[] {
-  const nodes = document.nodes ?? [];
+export function restWorldMatrices(skeleton: SkeletonSource): Mat4[] {
+  const nodes = skeleton.nodes;
   const worlds: Mat4[] = nodes.map(() => mat4());
   const seen = new Array<boolean>(nodes.length).fill(false);
-  const roots = document.scenes?.[document.scene ?? 0]?.nodes ?? nodes.map((_node, index) => index);
+  const roots = rootsOf(skeleton);
 
   const walk = (index: number, parent: Mat4): void => {
     if (seen[index]) throw new Error(`el esqueleto tiene un ciclo en el nodo ${index}`);
@@ -154,7 +211,7 @@ function toColumnMajor(matrix: Mat4, out: Float32Array, offset: number): void {
  * clips: los clips viajan tal cual, porque atar una malla no cambia el
  * movimiento.
  */
-export function bindModelToSkeleton(model: Model, skeleton: ParsedGlb, binding: SkinBinding): BindResult {
+export function bindModelToSkeleton(model: Model, skeleton: SkeletonSource, binding: SkinBinding): BindResult {
   if (binding.schemaVersion !== 1) {
     throw new Error(`vínculo: schemaVersion ${binding.schemaVersion} desconocida; se espera 1`);
   }
@@ -162,8 +219,7 @@ export function bindModelToSkeleton(model: Model, skeleton: ParsedGlb, binding: 
     throw new Error("vínculo: 'bindings' debe ser una lista no vacía de { part, joint }");
   }
 
-  const document = skeleton.document;
-  const skeletonNodes = document.nodes ?? [];
+  const skeletonNodes = skeleton.nodes;
   if (skeletonNodes.length === 0) throw new Error("el esqueleto no tiene nodos");
 
   const indexByName = new Map<string, number>();
@@ -203,7 +259,7 @@ export function bindModelToSkeleton(model: Model, skeleton: ParsedGlb, binding: 
 
   // El esqueleto entero es la lista de joints de la piel: animar un hueso
   // intermedio tiene que arrastrar a sus hijos aunque no lleve ninguna pieza.
-  const worlds = restWorldMatrices(document);
+  const worlds = restWorldMatrices(skeleton);
   const inverseBindMatrices = new Float32Array(skeletonNodes.length * 16);
   const inverse = mat4();
   for (let index = 0; index < skeletonNodes.length; index += 1) {
@@ -281,35 +337,13 @@ export function bindModelToSkeleton(model: Model, skeleton: ParsedGlb, binding: 
     };
   });
 
-  const nodes: SkinnedGlbNode[] = skeletonNodes.map((node) => ({
-    ...(node.name !== undefined ? { name: node.name } : {}),
-    ...(node.matrix ? { matrix: [...node.matrix] } : {}),
-    ...(node.translation ? { translation: [...node.translation] } : {}),
-    ...(node.rotation ? { rotation: [...node.rotation] } : {}),
-    ...(node.scale ? { scale: [...node.scale] } : {}),
-    ...(node.children ? { children: [...node.children] } : {}),
-  }));
+  const nodes: SkinnedGlbNode[] = skeletonNodes.map((node) => ({ ...node }));
 
   const meshNode = nodes.length;
   nodes.push({ name: `${model.source || "modelo"}-piel`, mesh: 0, skin: 0 });
 
-  const animations: SkinnedGlbAnimation[] = (document.animations ?? []).map((animation) => ({
-    ...(animation.name !== undefined ? { name: animation.name } : {}),
-    samplers: animation.samplers.map((sampler) => ({
-      times: Float32Array.from(readAccessorValues(skeleton, sampler.input)),
-      values: Float32Array.from(readAccessorValues(skeleton, sampler.output)),
-      ...(sampler.interpolation ? { interpolation: sampler.interpolation } : {}),
-    })),
-    channels: animation.channels
-      .filter((channel) => channel.target.node !== undefined)
-      .map((channel) => ({
-        sampler: channel.sampler,
-        node: channel.target.node!,
-        path: channel.target.path as "translation" | "rotation" | "scale" | "weights",
-      })),
-  }));
-
-  const roots = document.scenes?.[document.scene ?? 0]?.nodes ?? [];
+  const animations = skeleton.animations;
+  const roots = rootsOf(skeleton);
   const used = new Set(resolved.map((entry) => entry.joint));
 
   return {

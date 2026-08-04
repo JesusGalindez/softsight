@@ -58,8 +58,17 @@ export {
 export { auditMesh } from "./inspect";
 export { parseGlb } from "./glbLoader";
 export { parseBvh, bvhToSkinnedScene } from "./bvhLoader";
-export { bindModelToSkeleton } from "./skinBinding";
-export type { BindResult, SkinBinding, SkinBindingRule } from "./skinBinding";
+export { bindModelToSkeleton, restWorldMatrices, skeletonFromParsedGlb } from "./skinBinding";
+export { resolveRig, eulerToQuaternion } from "./rigSpec";
+export type { ClipSpec, JointSpec, KeySpec, ResolvedRig, SkeletonSpec, TrackSpec } from "./rigSpec";
+export { auditAnimation } from "./animationAudit";
+export type {
+  AnimationAudit,
+  AnimationAuditOptions,
+  AnimationCrossing,
+  GroundBreach,
+} from "./animationAudit";
+export type { BindResult, SkeletonSource, SkinBinding, SkinBindingRule } from "./skinBinding";
 export type { BvhChannel, BvhDocument, BvhJoint, BvhToSceneOptions } from "./bvhLoader";
 export { serializeGlb, serializeSkinnedGlb } from "./glbWriter";
 export type {
@@ -101,6 +110,7 @@ export {
   applyMorphTargets,
   applySkin,
   buildNodeStates,
+  computeWorlds,
   evaluatePose,
   evaluatePoseWithNormals,
   evaluateSample,
