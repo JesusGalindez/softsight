@@ -269,6 +269,42 @@ cada ejecución porque lleva las cifras dentro. La auditoría de animación aña
 bloques `animation` (con `contractVersion: 1` propio), `skinning`, `morphTargets`
 y `controlPoses`, todos documentados en el contrato de animación del editor.
 
+### Evaluar una pose
+
+El evaluador de animación es API pública del núcleo. `parseGlbAnimation` parsa el
+GLB conservando el árbol de nodos (a diferencia de `parseGlb`, que aplasta la
+jerarquía a piezas de modelo), y `evaluatePose` devuelve las posiciones
+deformadas de una malla en un tiempo dado con la misma cadena que certifica las
+poses de control —base, morph targets y skinning con el mismo redondeo de
+pesos—. Los 4 frames del fixture dan los mismos hashes por la API que por el CLI
+(`test:animation` lo comprueba). `evaluatePoseWithNormals` hace lo mismo para
+normales, pendiente de certificación cruzada.
+
+### Muestrear la superficie
+
+Una referencia de superficie identifica un punto del modelo sin depender de un
+vértice: malla, primitiva, triángulo y pesos baricéntricos
+(`SAMPLE_REFERENCE_SCHEMA` en el esquema publicado). `sampleSurface` genera
+referencias uniformes por área con semilla fija —misma semilla y mismo GLB,
+misma lista—, y `evaluateSample` evalúa una referencia en cualquier frame con la
+misma cadena que las poses de control, interpolando la baricéntrica en doble
+precisión. El CLI certifica listas de referencias con
+`--sample refs.json --frames "0,15,30,37"`: por frame, un `positionsHash` y un
+`normalsHash` (nulo si alguna primitiva no declara NORMAL), con los mismos
+fotogramas y huellas que usará el `sample-gate` del editor para certificar su
+propio evaluador.
+
+### Puente local
+
+El navegador no ejecuta el CLI: `tools/bridge.mjs` recibe una petición JSON por
+stdin y devuelve JSON por stdout —informe + artefactos— con un sandbox por
+petición (rutas planas, límites de tamaño y timeout, sin shell). Comandos:
+`inspect`, `render`, `patch`, `sample` y `schema` (el contrato en vivo). La
+respuesta declara `bridgeContractVersion: 1`; los errores de datos salen como
+JSON con `code` y salida 2. El editor lo consume con `softsight-import.mjs`
+para regenerar en un paso el paquete de importación. `npm run test:bridge`
+verifica que cada caso por el puente da el mismo resultado que el CLI directo.
+
 ## Qué hay dentro
 
 | Módulo | Contenido |
@@ -290,6 +326,9 @@ demanda, solo si abres un GLB comprimido con `EXT_meshopt_compression`.
 
 ## Documentación
 
+- [`docs/mapa-del-proyecto.md`](docs/mapa-del-proyecto.md) — **empieza aquí**: las dos
+  mitades del producto, dónde vive cada dato, las puertas de verificación cruzada y
+  qué toca ahora.
 - [`docs/software-renderer.md`](docs/software-renderer.md) — cómo funciona y por qué:
   la matemática de la proyección, cada optimización con su medida, el banco de
   agentes, y qué formato conviene importar.
@@ -300,7 +339,8 @@ demanda, solo si abres un GLB comprimido con `EXT_meshopt_compression`.
   sus cambios en vez de mirarlos: comparación de renders, auditorías espaciales entre
   piezas, consultas baratas y memoria entre llamadas.
 - [`docs/plan-fases-bcd.md`](docs/plan-fases-bcd.md) — animación certificada (hecha),
-  superficie animada para partículas adheridas y puente local entre el editor y el CLI.
+  superficie animada para partículas adheridas (hecha) y puente local entre el editor
+  y el CLI (hecho).
 
 ## Cómo medir antes de optimizar
 
