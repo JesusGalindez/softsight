@@ -206,7 +206,7 @@ exactamente para lo que sirve:
   sostiene. **Arreglarlo cae en `src/engine/cpu/`, territorio del plan del
   motor**, y no se toca desde aquí.
 
-**A4. Arreglar lo que la puerta encuentre** (medido el 2026-08-05; **abierto**).
+**A4. Arreglar lo que la puerta encuentre** (cerrado el 2026-08-05).
 Cada arreglo sube la versión del contrato de paridad, y la rendición del color
 está en §3.3.
 
@@ -241,11 +241,23 @@ Tres cosas quedan establecidas, y ninguna es la que se sospechaba:
    más, nunca de menos**, y un giro daría diferencia en los dos sentidos. Lo que
    hay es una franja de anchura constante en el borde cercano de cada caja.
 
-El siguiente experimento, concreto: comparar la silueta rasterizada de softsight
-en `superior` contra su **propia** caja analítica proyectada. Si su render cubre
-menos que su propia caja, lo que falta está en su lado —cara casi de canto que
-se descarta por reverso o por área— y no en el editor. Es una medida dentro de
-softsight y no necesita tocar `src/engine/cpu/`.
+Ese experimento se hizo, y respondió: softsight pintaba **menos que su propia
+caja proyectada** —cinco y siete píxeles por abajo, creciendo con la altura de
+la pieza—, y para un sólido convexo esa caja **es** su silueta. La causa: el
+descarte de caras en espacio de objeto probaba `dot(normalCara, cámara −
+vértice)`, que es el test de **perspectiva**. En ortográfica no hay posición de
+cámara que restar —todos los rayos son paralelos— y restar una finita inclina el
+vector según lo lejos del eje que esté la cara; a incidencia rasante eso descarta
+caras que sí se ven.
+
+Arreglado en softsight con el vector constante hacia la cámara. **Las ocho vistas
+de los dos fixtures dan cero píxeles de diferencia** y la puerta pasa a
+`accepted`. Y explicaba también la esfera: no eran dos causas, era una.
+
+`contractVersion` sube a **3** —cambian los `renderHash` de las vistas
+ortográficas, y la política del proyecto es que un cambio de hash obliga a
+subirla—. La evidencia congelada del editor se regeneró: poses, muestras,
+animación y avisos salen **idénticos**; solo se mueven los píxeles.
 
 **Lo que no se toca**: la prueba de profundidad del rasterizador del editor
 —interpola `clipZ` sin dividir por w y lo compara contra `depthClear`— sigue

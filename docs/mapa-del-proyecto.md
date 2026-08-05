@@ -225,9 +225,11 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     (`ViewReport.camera`), que antes se tiraba al serializar. **A3 hecho el
     2026-08-05**: `npm run softsight:parity-gate` en el editor enfrenta los dos
     rasterizadores. La vista en perspectiva da paridad exacta —0 píxeles sobre
-    9.251—; las ortográficas dejan entre 4 y 188 píxeles sobre el arco de la
-    esfera, que es regla de borde y no geometría, así que la puerta queda en
-    `rejected` a la espera de A4. De paso destapó que la prueba de profundidad
+    9.251—; **A3 y A4 cerrados el mismo día**: la puerta destapó que
+    softsight descartaba caras visibles a incidencia rasante en proyección
+    ortográfica —usaba el test de perspectiva—, y con el arreglo las ocho vistas
+    de los dos fixtures dan **cero píxeles de diferencia**. `contractVersion`
+    sube a 3 porque se mueven los `renderHash`. De paso destapó que la prueba de profundidad
     del rasterizador del editor compara `clipZ` sin dividir por w — arreglo del
     plan del motor, no de este. **A4 medido el 2026-08-05 y abierto**: con la
     tolerancia implementada como dilatación de un píxel, las bandas llegan a
