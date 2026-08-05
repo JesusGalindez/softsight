@@ -29,7 +29,7 @@ dueño; quien no es el dueño no escribe, aunque le venga de paso:
 | Territorio | Dueño | Notas |
 |---|---|---|
 | `src/engine/**`, `src/export/**`, `docs/PLAN_MOTOR.md`, `THIRD_PARTY.md` | plan del motor | Incluye el rasterizador CPU y los backends |
-| `src/core/**`, `src/ui/**`, `public/fixtures/softsight-*`, `scripts/create-story-*`, `scripts/*parity*` | este plan | Guion, roles, interfaz y puertas de paridad |
+| `src/core/**`, `src/ui/**`, `src/assets/softsight-*`, `public/fixtures/softsight-*` y los del contrato, `scripts/softsight-import.mjs`, `scripts/create-story-*`, `scripts/*parity*`, `SOFTSIGHT_*.md` | este plan | Guion, roles, interfaz, el pin y las puertas de paridad |
 | `package.json` | compartido | Solo se añaden líneas de `scripts` o dependencias; nadie reordena ni reformatea |
 | `src/styles.css` | compartido | Todo el estilo del editor vive en un fichero. Se **añaden bloques al final de su sección**; no se toca una regla ajena |
 | `AGENTS.md`, `README.md` | compartido | Se añade sección, no se reescribe la ajena |

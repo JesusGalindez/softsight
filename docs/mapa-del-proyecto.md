@@ -68,7 +68,8 @@ La regla es una fuente por dato. Estas son las fuentes:
 | Forma del puente (petición/respuesta) | `tools/bridge.mjs` (el código que valida) | el cliente del editor la comprueba por `bridgeContractVersion` y esquema |
 | Forma del informe | `contractVersion` en la raíz del informe | el consumidor comprueba la versión antes de leer campos |
 | Semántica de animación certificada | `src/soft/agent/animation.ts` | el editor la verifica, no la reimplementa |
-| Contrato de integración | `SOFTSIGHT_CONTRACT.md` (editor) | fija el commit de softsight que consume |
+| Commit de softsight que consume el editor | `src/assets/softsight-pin.ts` (editor) | los documentos de contrato apuntan ahí; el puente publica su versión y el pin se comprueba solo |
+| Contrato de integración | `SOFTSIGHT_CONTRACT.md` (editor) | describe la integración; el commit no lo repite |
 | Contrato de animación | `SOFTSIGHT_ANIMATION_CONTRACT.md` (editor) | el README de softsight apunta aquí |
 | Fixtures certificados | `public/fixtures/` (editor) | se regeneran con los scripts `softsight:*` |
 | Estado y orden del trabajo | **este fichero** (§5) y `plan-fases-bcd.md` | ningún otro sitio lleva la cuenta |
@@ -102,14 +103,16 @@ hecho por los dos lados, da el mismo hash.
 Las dos puertas llevan los fixtures y `--strict` en el propio script, así que se
 ejecutan sin argumentos; pasar los tuyos después de `--` los sustituye.
 
-Estado hoy, verificado el 2026-08-04: **ambas puertas en `accepted`; 344 pruebas
-del editor y las diecinueve comprobaciones de softsight en verde** (trece del
-banco —contrato, robustez, muestreo, escritor, BVH, E3, atado, pliego, E6, las
-tres del guion y la auditoría de la historia— y seis del puente).
+Estado hoy, verificado el 2026-08-05: **ambas puertas en `accepted`; las
+diecinueve comprobaciones de softsight en verde** (trece del banco —contrato,
+robustez, muestreo, escritor, BVH, E3, atado, pliego, E6, las tres del guion y la
+auditoría de la historia— y seis del puente).
 
-Dos trabajos del editor están verdes pero **sin commitear**: F1 del motor
-(`src/engine/scene/`) y los pasos 1–2 de las historias (`src/core/`). Hasta que
-se commiteen, ese 312 no se puede reproducir desde un clon limpio.
+En el editor, **410 pruebas en verde y 6 en rojo**: las seis son de `mcp/`, el
+sidecar del paso F4.4 del plan del motor, que está a medio escribir y sin
+commitear. Todo lo demás —tipos, build y las dos puertas cruzadas— pasa. Se
+anota en rojo a propósito: un número que esconde el trabajo a medias de otro
+proceso no es el estado, es una foto favorecedora.
 
 Política de versionado: cambiar la aritmética o el hash **obliga** a subir
 `contractVersion`. Las puertas rechazan versiones viejas, así que el olvido se
