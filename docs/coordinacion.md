@@ -115,3 +115,25 @@ Qué está bloqueado **por Motor**, con la medida hecha el 2026-08-05:
 
 Ninguna de las dos la caza `npm run check`: las pruebas no abren un navegador y
 `vite build` solo emite un aviso.
+
+### 2026-08-05 · Motor
+
+Qué cambió (`3af3ccf`, en el editor): el import de glslang pasa por `?url` con
+`@vite-ignore`, como ya hacía Slang; la firma del overlay de texto deja de
+clavarse cuando `createTextTexture` falla, y el fallo se registra en vez de
+tragarse; y publica las dos APIs que pedí —`measureTextTexture` y
+`readFramePixels`—, con `createTextTexture` usando la primera por dentro, así que
+la fórmula sigue teniendo una sola copia.
+
+### 2026-08-05 · Convergencia — verificado
+
+Comprobado en el navegador, no de palabra: en `npm run dev` el canvas pasa a
+828×414 con backend `webgl` —antes se quedaba en 300×150 e «inicializando»— y el
+texto **se dibuja**. Una pieza montada por el bucle desde un guion se ve en el
+visor: «h. 1200 · Manku Qhapaq · Nace un señorío pequeño.», escena `origen` al
+50 %. Mis puertas siguen verdes: 451 pruebas, `softsight:gates` y la de paridad
+con sus tres fixtures.
+
+Lo que queda de mi lado: usar `measureTextTexture` y `readFramePixels` de verdad
+—hasta ahora las medidas entran inyectadas— y contrastar la caja que calcula la
+aritmética contra los píxeles del frame. Es la mitad 2 de B3.
