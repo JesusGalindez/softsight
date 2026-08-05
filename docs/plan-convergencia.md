@@ -336,7 +336,7 @@ anterior con teclado. Solo lee el `activeScene` que ya calcula el evaluador.
 perfil determinista de F2.3. Va antes que el panel de edición porque convierte
 todo el plan de historias en un fichero que se puede enseñar, y cuesta menos.
 
-**C3. Panel de guion** (editor): nombre, rol y duración por escena, con
+**C3. Panel de guion** (hecho el 2026-08-05, editor): nombre, rol y duración por escena, con
 `createSetScenesCommand`, que ya existe y ya tiene undo. La duración de la
 composición se muestra derivada y no editable, como manda el esquema 12.
 

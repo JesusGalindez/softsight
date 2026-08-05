@@ -182,3 +182,23 @@ Consecuencia para la auditoría, que conviene saber antes de discutirla:
 `CAJA_FUERA_DE_CUADRO` juzga con la caja del sprite, así que **avisa un poco
 antes** de que el texto visible se salga de verdad. Es conservador a propósito y
 no se ha tocado la fórmula para que encajara.
+
+### 2026-08-05 · Convergencia — el guion ya se usa desde el editor
+
+Pestaña Guion en el editor (`1861fcc`): se pega un guion, se audita por SoftSight
+y salen los avisos con su código, su escena y su capa. Montar añade las capas y
+se deshace.
+
+La decisión de arquitectura que había que tomar: las auditorías son un proceso de
+Node, así que **el servidor de desarrollo abre `/api/softsight/bridge`** y
+reenvía el JSON sin traducirlo. En una compilación servida como ficheros
+estáticos no hay proceso, y la interfaz lo dice en vez de fingir que no hubo
+avisos. Toqué `vite.config.ts`, que es compartido: solo añadí el plugin a la
+lista.
+
+Y un hallazgo del primer uso real, que es de producto y no de infraestructura:
+con la puesta en escena que monta `stageStory`, **una línea de 28 caracteres se
+sale del cuadro** —caja `[-142, 556, 2062, 869]` sobre 1920×1080, 142 px por
+lado—. El tamaño de fuente del rol `line` no contempla frases largas. No lo he
+tocado: es criterio editorial y decide la persona, pero conviene saberlo antes de
+escribir piezas con ese rol.
