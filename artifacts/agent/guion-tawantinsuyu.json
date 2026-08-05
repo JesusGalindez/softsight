@@ -1,0 +1,61 @@
+{
+  "storyVersion": 1,
+  "title": "Tawantinsuyu",
+  "fps": 30,
+  "scenes": [
+    {
+      "name": "origen",
+      "role": "apertura",
+      "durationFrames": 180,
+      "data": {
+        "headline": "h. 1200",
+        "subject": "Manku Qhapaq",
+        "line": "En el valle del Qosqo nace un señorío pequeño."
+      }
+    },
+    {
+      "name": "cuatro-suyus",
+      "role": "desarrollo",
+      "durationFrames": 240,
+      "data": {
+        "line": "Cuatro regiones parten del centro y le dan nombre: Tawantinsuyu."
+      }
+    },
+    {
+      "name": "chankas",
+      "role": "giro",
+      "durationFrames": 300,
+      "data": {
+        "headline": "1438",
+        "subject": "Pachakutiq Inka Yupanki",
+        "line": "Tras vencer a los chankas, el Qosqo deja de defenderse y conquista."
+      }
+    },
+    {
+      "name": "caminos",
+      "role": "desarrollo",
+      "durationFrames": 300,
+      "data": {
+        "line": "El imperio se sostiene sobre caminos y depósitos, no sobre escritura."
+      }
+    },
+    {
+      "name": "cajamarca",
+      "role": "giro",
+      "durationFrames": 270,
+      "data": {
+        "headline": "1532",
+        "subject": "Cajamarca",
+        "line": "Todo el mando cabe en una plaza, y una emboscada se lo lleva."
+      }
+    },
+    {
+      "name": "lo-que-queda",
+      "role": "cierre",
+      "durationFrames": 210,
+      "data": {
+        "line": "Los caminos siguen ahí. El quechua lo hablan ocho millones."
+      }
+    }
+  ]
+}

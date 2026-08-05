@@ -430,16 +430,64 @@ el pliego del dron atado y el del dron original dan **el mismo `renderHash`,
 puerta `test:bind` compara posición a posición en reposo y con el hueso movido,
 donde el resultado del atado rígido es exacto y se puede afirmar en cerrado.
 
+### Auditar un guion
+
+El paso previo a cualquier render. Un guion es texto y tiempo, no geometría:
+quién pone la pieza en escena es el editor, y aquí lo único que se hace es
+medir si el guion funciona —con números, no con opiniones—.
+
+```bash
+npm run agent3d -- --story guion.json
+```
+
+```json
+{ "storyVersion": 1, "title": "Tawantinsuyu", "fps": 30,
+  "scenes": [
+    { "name": "origen", "role": "apertura", "durationFrames": 210,
+      "data": { "headline": "h. 1200", "subject": "Manku Qhapaq",
+                "line": "En el valle del Qosqo nace un señorío pequeño." } },
+    { "name": "final", "role": "cierre", "durationFrames": 150,
+      "data": { "line": "En 1532 el imperio entero cabe en una emboscada." } }
+  ] }
+```
+
+`role` es el vocabulario narrativo —`apertura`, `desarrollo`, `giro`, `cierre`—
+y decide qué campos de `data` necesita la escena: esa tabla también se publica
+en `--schema` como `storyRoles`, para que quien ponga el guion en escena no la
+copie sin comparar. `data` son los datos, no la maqueta: campos de más se
+admiten, y un rol que exige `headline` sin que el agente lo ponga es un error
+de validación, no un hueco en el render.
+
+La duración de la pieza **se deriva de la suma** y cada escena sabe dónde
+empieza; nadie declara el total, así que el descuadre no es posible. `--story`
+no escribe nada y no toca geometría: devuelve hechos medidos y sale con 1 si
+hay avisos, como la auditoría espacial. Los avisos son tres, todos exactos:
+
+- `TEXTO_ILEGIBLE` — el texto de la escena no se puede leer en su duración, y
+  el aviso dice cuántos frames harían falta.
+- `ROL_AUSENTE` — la pieza no tiene los roles que necesita (una historia sin
+  cierre).
+- `ROLES_CONSECUTIVOS` — dos escenas seguidas con el mismo papel.
+
+La legibilidad parte de un ritmo de lectura **declarado, no medido** —15
+caracteres por segundo— y el aviso lo dice; `--reading-rate` lo sube o baja.
+El puente lo expone como el comando `story`: entra el guion, salen los hechos,
+y nunca artefactos.
+
 ### Puente local
 
 El navegador no ejecuta el CLI: `tools/bridge.mjs` recibe una petición JSON por
 stdin y devuelve JSON por stdout —informe + artefactos— con un sandbox por
 petición (rutas planas, límites de tamaño y timeout, sin shell). Comandos:
-`inspect`, `render`, `patch`, `sample` y `schema` (el contrato en vivo). La
-respuesta declara `bridgeContractVersion: 1`; los errores de datos salen como
-JSON con `code` y salida 2. El editor lo consume con `softsight-import.mjs`
-para regenerar en un paso el paquete de importación. `npm run test:bridge`
-verifica que cada caso por el puente da el mismo resultado que el CLI directo.
+`inspect`, `render`, `patch`, `sample`, `scene`, `bvh`, `story` y `schema` (el
+contrato en vivo). `scene` recibe una escena declarativa —la misma que valida
+`--schema`— y devuelve informe, pliego y GLB; `bvh` recibe una captura y
+devuelve el GLB con esqueleto y clip; `story` recibe un guion y devuelve
+hechos, sin artefactos. La respuesta declara `bridgeContractVersion: 1`; los
+errores de datos salen como JSON con `code` y salida 2. El editor lo consume
+con `softsight-import.mjs` para regenerar en un paso el paquete de importación.
+`npm run test:bridge` verifica que cada caso por el puente da el mismo
+resultado que el CLI directo.
 
 ## Qué hay dentro
 

@@ -1,0 +1,51 @@
+{
+  "storyVersion": 1,
+  "title": "La sala donde no se moría",
+  "fps": 30,
+  "scenes": [
+    {
+      "name": "dos-salas",
+      "role": "apertura",
+      "durationFrames": 210,
+      "data": {
+        "headline": "1847",
+        "subject": "Hospital General de Viena",
+        "line": "Dos salas de partos, la misma ciudad, distinta suerte."
+      }
+    },
+    {
+      "name": "la-diferencia",
+      "role": "desarrollo",
+      "durationFrames": 240,
+      "data": {
+        "line": "En la de los médicos moría mucha más gente que en la de las matronas."
+      }
+    },
+    {
+      "name": "kolletschka",
+      "role": "giro",
+      "durationFrames": 330,
+      "data": {
+        "headline": "El corte",
+        "subject": "Jakob Kolletschka",
+        "line": "Un colega se corta en una autopsia y muere igual que las parturientas."
+      }
+    },
+    {
+      "name": "el-cloro",
+      "role": "desarrollo",
+      "durationFrames": 240,
+      "data": {
+        "line": "Semmelweis obliga a lavarse con cloro al salir del depósito."
+      }
+    },
+    {
+      "name": "hoy",
+      "role": "cierre",
+      "durationFrames": 270,
+      "data": {
+        "line": "Los números cayeron y el hospital lo apartó igual. Tardó décadas."
+      }
+    }
+  ]
+}

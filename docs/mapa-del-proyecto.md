@@ -90,6 +90,8 @@ hecho por los dos lados, da el mismo hash.
 | `test:bind` | El atado en reposo y con el hueso movido, exacto, y las 296 piezas del dron sin deformar | `npm run test:bind` (softsight), también dentro de `test:animation` |
 | `test:rig` | Esqueleto y clips declarados, la auditoría de animación, y la escena por el puente byte a byte | `npm run test:rig` (softsight), también dentro de `test:animation` |
 | `test:bvh` | La cinemática de un BVH contra el evaluador certificado por dos caminos, y la conversión por API, CLI y puente byte a byte | `npm run test:bvh` (softsight), también dentro de `test:animation` |
+| `test:story` | El guion: duración derivada de la suma, guiones malos rechazados por su motivo, que `--schema` publique el mismo esquema que valida, la auditoría con sus tres avisos, que API, CLI y puente digan lo mismo, y que los dos ejemplares estén limpios y no compartan forma | `npm run test:story` (softsight), también dentro de `test:animation` |
+| `scene-roles.contract` | El vocabulario de roles y los campos que exige cada uno, del editor contra el contrato que publica softsight | dentro de `npm run check` (editor); el fixture se regenera con `npm run softsight:story-schema` |
 | `softsight:gate` | Poses de control: SoftSight contra Three.js | `npm run softsight:gate` (editor) |
 | `softsight:sample-gate` | Muestras de superficie: posiciones y normales | `npm run softsight:sample-gate` (editor) |
 | `softsight:gates` | Las dos anteriores, en cadena | `npm run softsight:gates` (editor) |
@@ -98,9 +100,14 @@ hecho por los dos lados, da el mismo hash.
 Las dos puertas llevan los fixtures y `--strict` en el propio script, así que se
 ejecutan sin argumentos; pasar los tuyos después de `--` los sustituye.
 
-Estado hoy, verificado el 2026-08-03: **ambas puertas en `accepted`, 4 compro-
-baciones cada una; 135 pruebas del editor y las nueve de softsight en verde**
-(tres del evaluador y seis del puente).
+Estado hoy, verificado el 2026-08-04: **ambas puertas en `accepted`; 344 pruebas
+del editor y las diecinueve comprobaciones de softsight en verde** (trece del
+banco —contrato, robustez, muestreo, escritor, BVH, E3, atado, pliego, E6, las
+tres del guion y la auditoría de la historia— y seis del puente).
+
+Dos trabajos del editor están verdes pero **sin commitear**: F1 del motor
+(`src/engine/scene/`) y los pasos 1–2 de las historias (`src/core/`). Hasta que
+se commiteen, ese 312 no se puede reproducir desde un clon limpio.
 
 Política de versionado: cambiar la aritmética o el hash **obliga** a subir
 `contractVersion`. Las puertas rechazan versiones viejas, así que el olvido se
@@ -160,11 +167,37 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     Esquema del proyecto 10 → 11.
 11. **Plan del motor** (en curso, otro proceso, en el repo del editor).
     `docs/PLAN_MOTOR.md` y `AGENTS.md` mandan allí. F0 —gestor de calidad GPU
-    con tiers, presupuesto, muestreo y caché de frames— está hecho localmente y
-    sin commitear. Lo siguiente sin marcar es F1.
-12. **Historias por agentes** (siguiente, planificada). Ver
-    [`plan-historias.md`](plan-historias.md). El keystone es pequeño:
-    `activeScene` y `sceneProgress` en el evaluador del editor.
+    con tiers, presupuesto, muestreo y caché de frames— es el commit `1184cba`.
+    F1 —grafo de escena, registro de recursos y puente con Three— está hecho
+    localmente y sin commitear.
+12. **Historias por agentes** (en curso). Ver
+    [`plan-historias.md`](plan-historias.md), §9 para el orden. Hechos en el
+    editor y sin commitear los pasos 1 y 2: `activeSceneAt` en
+    `src/core/evaluator.ts` —qué escena está activa en un frame y su progreso
+    local, que empieza en 0 y nunca llega a 1 porque el 1 es el primer frame de
+    la siguiente— y `scenes` en el documento, con `composition.durationFrames`
+    derivada de la suma en la validación, que es por donde pasan todas las
+    mutaciones. Esquema del proyecto 11 → 12. Hecho también el paso 3, en
+    softsight y sin commitear: `storySpec.ts` resuelve el guion —roles,
+    duraciones, campos que cada rol exige— y `STORY_SCHEMA` sale por `--schema`
+    con el vocabulario de roles generado de una sola lista. La duración de la
+    pieza se deriva en los dos lados y ninguno la declara. Y el paso 4:
+    `storyAudit.ts` mide texto ilegible por tiempo, rol obligatorio ausente y
+    dos escenas seguidas con el mismo papel, con el ritmo de lectura declarado
+    en el propio informe. Sin heurísticas: los candidatos entran después y
+    marcados. Y el paso 5, en el editor: `scene-roles.ts` convierte los datos de
+    cada escena en capas de texto colocadas en su rango, con el vocabulario
+    congelado en `public/fixtures/softsight-story-schema.json` —traído por el
+    puente con `npm run softsight:story-schema`— y comparado por una prueba, así
+    que los roles del editor no son una copia sin comparar. Y el paso 6: `story`
+    en el puente y `--story` en el CLI —el puente solo ejecuta el CLI, así que
+    sin la bandera no había comando—, con `--reading-rate` para mover la
+    suposición. Sin `model` y sin artefactos: una historia no produce fichero.
+    `bridgeContractVersion` sigue en 1. Y el paso 7, con lo que se cierra el
+    plan: dos ejemplares versionados en `artifacts/agent/guion-*.json`, limpios
+    de avisos y **con formas distintas**, porque dos piezas con la misma
+    secuencia de roles enseñarían una plantilla. La puerta los audita: un
+    ejemplar con avisos enseñaría justo lo que la puerta rechaza.
 13. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
 

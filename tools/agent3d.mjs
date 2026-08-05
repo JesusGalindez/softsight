@@ -17,7 +17,7 @@
  * ilegible, patrón sin coincidencias— sale con 2.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -27,12 +27,15 @@ import { deflateSync, inflateSync } from "node:zlib";
 import {
   DEMO_SCENE,
   PATCH_SCHEMA,
+  ROLE_REQUIRED_DATA,
   SAMPLE_REFERENCE_SCHEMA,
   SCENE_SCHEMA,
+  STORY_SCHEMA,
   applyPatch,
   applyPatchToScene,
   assertValid,
   auditAnimation,
+  auditStory,
   bindModelToSkeleton,
   bvhToSkinnedScene,
   invertPatch,
@@ -613,6 +616,17 @@ Conversión de BVH (solo --bvh)
                           0.01. No se aplica solo: el formato no declara su unidad
   --bvh-clip <nombre>     nombre del clip resultante ("BVH")
 
+Guion (solo --story)
+  --story <ruta.json>     audita un guion: { storyVersion, title, fps, scenes }
+                          con el rol de cada escena y sus datos. No escribe nada
+                          y no toca geometría; devuelve hechos y sale 1 si avisa
+  --reading-rate <n>      caracteres por segundo que se suponen legibles (15).
+                          Es una suposición declarada, no una medida
+
+  Ejemplares en artifacts/agent/guion-*.json: dos piezas completas y limpias.
+  Se leen antes de escribir, para saber a qué suena esto cuando está bien; no
+  se rellenan, que para eso harían falta huecos y aquí no los hay.
+
 Salida
   --out <ruta.png>        pliego de contactos; por defecto artifacts/agent/contact-sheet.png
   --export <ruta>         exporta el modelo ya parcheado: .glb conserva color,
@@ -681,11 +695,15 @@ function printSchema() {
         scene: SCENE_SCHEMA,
         patch: PATCH_SCHEMA,
         sampleReference: SAMPLE_REFERENCE_SCHEMA,
+        story: STORY_SCHEMA,
+        storyRoles: ROLE_REQUIRED_DATA,
         reportExample: { contractVersion: REPORT_CONTRACT_VERSION, ...review },
         notes: [
           "El esquema es el que valida la entrada: un campo que no esté aquí se rechaza.",
           "reportExample sale de revisar la escena de demostración con --inspect-only.",
           "Con pliego, el informe trae además sheet, views, renderHash y partScreenBoxes.",
+          "story es el guion: la duración de la pieza es la suma de sus escenas, no se declara.",
+          "storyRoles dice qué campos de data exige cada rol; quien ponga el guion en escena los necesita.",
         ],
       },
       null,
@@ -706,6 +724,23 @@ function printSchema() {
  * y el clip, que es exactamente lo que traía el BVH. Quien quiera verlo le ata
  * su propia piel y lo vuelve a pasar por `--model`.
  */
+/**
+ * Audita un guion. No escribe nada: una historia no produce fichero, produce
+ * hechos sobre sí misma, y quien la pone en escena es el editor.
+ */
+function auditStoryFile(options) {
+  const storyPath = resolve(options.get("story"));
+  const story = JSON.parse(readFileSync(storyPath, "utf8"));
+
+  const rateFlag = options.get("reading-rate");
+  const readingRate = rateFlag === undefined || rateFlag === "true" ? undefined : Number(rateFlag);
+  if (rateFlag !== undefined && rateFlag !== "true" && (!Number.isFinite(readingRate) || readingRate <= 0)) {
+    throw new Error(`--reading-rate inválido: '${rateFlag}'; debe ser un número positivo`);
+  }
+
+  return { source: storyPath, ...auditStory(story, readingRate === undefined ? {} : { readingRate }) };
+}
+
 async function convertBvhFile(options) {
   const bvhPath = resolve(options.get("bvh"));
   const exported = options.get("export");
@@ -789,6 +824,14 @@ async function main() {
 
   if (options.has("schema")) {
     printSchema();
+    return;
+  }
+  // El guion tampoco es un modelo: no hay geometría que mirar, solo texto y
+  // tiempo. Va antes por el mismo motivo que el BVH.
+  if (options.has("story")) {
+    const report = auditStoryFile(options);
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    process.exitCode = report.warnings.length > 0 ? 1 : 0;
     return;
   }
   // El BVH va antes que todo lo demás porque no es un modelo: no tiene malla, así

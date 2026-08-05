@@ -129,6 +129,14 @@ El **ritmo de lectura** es una suposición declarada, no una ley —del orden de
 caracteres por segundo en pantalla—, y el aviso lo dice, igual que el aviso de
 escala absoluta dice de qué unidad parte.
 
+De esa tabla, la auditoría del paso 4 mide tres: texto ilegible por tiempo, rol
+obligatorio ausente y dos escenas consecutivas del mismo rol. Las otras tres
+—escena sin capa visible, texto fuera de su caja y contraste— necesitan la
+puesta en escena, así que son de una puerta posterior. Y la primera fila **ya no
+puede fallar**: al derivarse la duración de la suma en los dos lados, el
+descuadre dejó de ser posible; queda aquí como aviso de por qué no hay código
+que la compruebe.
+
 **Candidatos** —heurísticas que se declaran como tales, con el precedente de la
 auditoría espacial:
 
@@ -202,7 +210,15 @@ Cada punto deja los dos repos verdes y se puede parar ahí.
 2. **`scenes` en el documento del proyecto**, con la duración de la composición
    derivada de la suma.
 3. **Contrato del guion y su esquema en softsight**, publicado por `--schema`
-   como todo lo demás.
+   como todo lo demás. Aquí se decide algo que el paso 2 dejó abierto: el
+   documento del editor guarda escenas con `name` y `durationFrames`, y el
+   contrato añade `role` y `data`. O lo del editor es una **proyección** —solo
+   lo que el evaluador necesita para situar frames— o crece hasta el contrato
+   entero. La proyección deja al evaluador sin saber qué es un rol, igual que el
+   núcleo de render no sabe qué es un GLB. **Se tomó la proyección**: softsight
+   valida el guion completo con `role` y `data`, y el documento del editor
+   guarda solo nombre y duración. Dónde aterrizan `role` y `data` en el editor
+   lo decide el paso 5, que es quien los usa.
 4. **Auditoría de la historia**: primero los hechos exactos, sin heurísticas.
 5. **Tres roles de escena** en el editor, sacados de una pieza real.
 6. **Comando `story` en el puente**, para que el agente llegue por la vía con

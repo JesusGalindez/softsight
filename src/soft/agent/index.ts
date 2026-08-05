@@ -135,7 +135,25 @@ export type {
   SampleReference,
   SoftSightAnimationInspection,
 } from "./animation";
-export { SCENE_SCHEMA, PATCH_SCHEMA, SAMPLE_REFERENCE_SCHEMA, validate, assertValid } from "./schema";
+export { resolveStory, ROLE_REQUIRED_DATA, STORY_VERSION } from "./storySpec";
+export type { ResolvedScene, ResolvedStory, StoryScene, StorySpec } from "./storySpec";
+export {
+  auditStory,
+  DEFAULT_READING_RATE,
+  REQUIRED_ROLES,
+  STORY_AUDIT_CONTRACT_VERSION,
+} from "./storyAudit";
+export type { SceneReading, StoryAudit, StoryAuditOptions, StoryWarning } from "./storyAudit";
+export {
+  SCENE_SCHEMA,
+  PATCH_SCHEMA,
+  SAMPLE_REFERENCE_SCHEMA,
+  SCENE_ROLES,
+  STORY_SCHEMA,
+  validate,
+  assertValid,
+} from "./schema";
+export type { SceneRole } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
 export type {
   SceneSpec,

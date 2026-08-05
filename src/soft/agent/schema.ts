@@ -179,6 +179,54 @@ export const SCENE_SCHEMA: ObjectSchema = {
   },
 };
 
+/**
+ * El vocabulario narrativo, aquí y en ningún otro sitio: de esta lista sale el
+ * tipo que valida `role` y la tabla de campos que exige cada rol. Escribir la
+ * unión a mano garantizaría que un rol nuevo entrase por un lado y no por el
+ * otro.
+ *
+ * Es corta a propósito. Con roles para describir cualquier cosa, ninguno
+ * significa nada y la auditoría de estructura no puede decir si falta un cierre.
+ */
+export const SCENE_ROLES = ["apertura", "desarrollo", "giro", "cierre"] as const;
+
+export type SceneRole = (typeof SCENE_ROLES)[number];
+
+const STORY_SCENE_FIELDS: ObjectSchema = {
+  name: { type: "string", required: true, description: "Nombre de la escena; identifica, así que es único." },
+  role: {
+    type: SCENE_ROLES.map((role) => `"${role}"`).join("|"),
+    required: true,
+    description: "Papel narrativo. Decide qué campos de data hacen falta y cómo se pone en escena.",
+  },
+  durationFrames: {
+    type: "number",
+    required: true,
+    description:
+      "Frames que dura. Las escenas van seguidas desde el frame 0, así que el inicio no se declara: " +
+      "se deduce, y la duración de la composición es la suma.",
+  },
+  data: {
+    type: "object",
+    required: true,
+    description:
+      "Lo que cuenta la escena, en texto: `line` siempre, y `headline` además en apertura y giro. " +
+      "Campos de más se admiten; son datos, no maqueta.",
+  },
+};
+
+export const STORY_SCHEMA: ObjectSchema = {
+  storyVersion: { type: "number", required: true, description: "Versión del contrato del guion; hoy 1." },
+  title: { type: "string", required: true, description: "Título de la pieza." },
+  fps: { type: "number", required: true, description: "Fotogramas por segundo con los que se leen las duraciones." },
+  scenes: {
+    type: "object[]",
+    required: true,
+    description: "Escenas en el orden en que se ven; al menos una.",
+    fields: STORY_SCENE_FIELDS,
+  },
+};
+
 const EDIT_FIELDS: ObjectSchema = {
   op: {
     type: '"add"|"translate"|"rotate"|"scale"|"color"|"hide"|"show"|"delete"|"rename"|"align"|"setPivot"|"mirror"|"instance"',

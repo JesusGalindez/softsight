@@ -10,16 +10,18 @@
  * Petición:
  *
  *   { "bridgeContractVersion": 1,
- *     "command": "inspect"|"render"|"patch"|"sample"|"scene"|"bvh"|"schema",
+ *     "command": "inspect"|"render"|"patch"|"sample"|"scene"|"bvh"|"story"|"schema",
  *     "files": { "model": { "name": "drone.glb", "data": "<base64>" }, ... },
  *     "options": { ... } }
  *
- * Dos comandos no reciben `model`. `bvh` recibe una captura y devuelve el GLB
+ * Tres comandos no reciben `model`. `bvh` recibe una captura y devuelve el GLB
  * con esqueleto y clip; es una conversión, no una revisión, así que su informe
  * no trae ni auditoría ni pliego. `scene` recibe una escena declarativa —la
  * misma que valida `--schema`, con sus `objects` y, si los trae, su `skeleton`,
  * sus `bindings` y sus `clips`— y devuelve el informe completo, el pliego y el
  * GLB. Es la vía por la que un agente construye desde cero sin tocar el disco.
+ * `story` recibe un guion y devuelve hechos medidos sobre él, sin artefactos:
+ * una historia no produce fichero, y ponerla en escena es del editor.
  *
  * Respuesta:
  *
@@ -60,7 +62,7 @@ const MAX_ARTIFACT_BYTES = Number(process.env.SOFTSIGHT_BRIDGE_MAX_ARTIFACT_MB ?
 const TIMEOUT_MS = Number(process.env.SOFTSIGHT_BRIDGE_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-const COMMANDS = new Set(["inspect", "render", "patch", "sample", "scene", "bvh", "schema"]);
+const COMMANDS = new Set(["inspect", "render", "patch", "sample", "scene", "bvh", "story", "schema"]);
 
 // Opciones del CLI que el puente acepta, con su tipo. Todo lo demás se rechaza:
 // el puente no expande variables ni patrones, y solo ejecuta con argumentos fijos.
@@ -85,6 +87,7 @@ const PASSTHROUGH = {
   bvhScale: "number",
   bvhClip: "string",
   auditFrames: "number",
+  readingRate: "number",
 };
 
 const OPTION_TO_FLAG = {
@@ -108,6 +111,7 @@ const OPTION_TO_FLAG = {
   bvhScale: "--bvh-scale",
   bvhClip: "--bvh-clip",
   auditFrames: "--audit-frames",
+  readingRate: "--reading-rate",
 };
 
 // Ficheros que admite cada comando: los opcionales solo se escriben si vienen.
@@ -120,6 +124,8 @@ const FILE_SLOTS = {
   // una escena declarativa en vez de un fichero 3D.
   scene: { scene: false, patches: true },
   bvh: { bvh: false },
+  // El guion no trae geometría ni produce fichero: entra texto y salen hechos.
+  story: { story: false },
   schema: {},
 };
 
@@ -247,6 +253,12 @@ function buildArgs(request, workDir) {
     const converted = ["--bvh", files.bvh, "--export", join(workDir, "esqueleto.glb")];
     converted.push(...parseOptions(request.options));
     return converted;
+  }
+
+  if (request.command === "story") {
+    // Ni --model ni --export: una historia no produce artefacto, produce hechos
+    // sobre sí misma. Quien la pone en escena es el editor.
+    return ["--story", files.story, ...parseOptions(request.options)];
   }
 
   if (request.command === "scene") {
