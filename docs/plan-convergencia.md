@@ -206,9 +206,51 @@ exactamente para lo que sirve:
   sostiene. **Arreglarlo cae en `src/engine/cpu/`, territorio del plan del
   motor**, y no se toca desde aquí.
 
-**A4. Arreglar lo que la puerta encuentre** (donde toque). Su alcance **es** lo
-que A0 y A3 descubran; detallarlo antes sería inventarlo. Cada arreglo sube la
-versión del contrato de paridad, y la rendición del color está en §3.3.
+**A4. Arreglar lo que la puerta encuentre** (medido el 2026-08-05; **abierto**).
+Cada arreglo sube la versión del contrato de paridad, y la rendición del color
+está en §3.3.
+
+Primero se cambió el medidor, porque el anterior no podía responder a la
+pregunta: clasificaba mirando la vecindad de 8 del contorno, que no distingue
+una banda de un píxel de una de dos. Ahora mide lo que §3.1 dice —**la
+diferencia tiene que caber en una dilatación de un píxel de la otra
+silueta**— con distancia de Chebyshev, e informa de la anchura máxima de banda.
+El umbral no se ha tocado: sigue siendo un píxel.
+
+Con el medidor bueno, y con un segundo fixture de **solo caras planas** para
+separar causas:
+
+| Vista | Esfera + caja | Solo cajas |
+|---|---|---|
+| 3/4 (perspectiva) | **0 px** | **0 px** |
+| frontal | banda 3 px, 46 fuera | **0 px** |
+| lateral | banda 5 px, 616 fuera | **0 px** |
+| superior | banda 3 px, 162 fuera | banda 5 px, 474 fuera |
+
+Tres cosas quedan establecidas, y ninguna es la que se sospechaba:
+
+1. **No era el clasificador.** Con la medida correcta las bandas llegan a cinco
+   píxeles, muy por encima del píxel tolerado. La divergencia es real.
+2. **No es la curvatura sola.** Con caras planas, frontal y lateral dan cero
+   exacto; la esfera añade diferencia en esas dos vistas, así que las aristas
+   casi tangentes **son una** de las causas.
+3. **La vista superior falla también con caras planas**, y esa es una causa
+   distinta. Descartado que sea recorte: ni el plano cercano ni el lejano cortan
+   el objeto (`near 3.780 < 3.853` y `far 5.366 > 5.293`). Descartada también
+   una rotación: el mapa de discrepancias marca **solo cobertura del editor de
+   más, nunca de menos**, y un giro daría diferencia en los dos sentidos. Lo que
+   hay es una franja de anchura constante en el borde cercano de cada caja.
+
+El siguiente experimento, concreto: comparar la silueta rasterizada de softsight
+en `superior` contra su **propia** caja analítica proyectada. Si su render cubre
+menos que su propia caja, lo que falta está en su lado —cara casi de canto que
+se descarta por reverso o por área— y no en el editor. Es una medida dentro de
+softsight y no necesita tocar `src/engine/cpu/`.
+
+**Lo que no se toca**: la prueba de profundidad del rasterizador del editor
+—interpola `clipZ` sin dividir por w y lo compara contra `depthClear`— sigue
+siendo del plan del motor. La puerta la esquiva entregando coordenadas ya
+divididas, y está anotado en el código.
 
 **A5. El fixture difícil entra en la puerta.** Con skinning y 296 piezas es donde
 la paridad significa algo.

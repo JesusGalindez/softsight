@@ -221,7 +221,11 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     esfera, que es regla de borde y no geometría, así que la puerta queda en
     `rejected` a la espera de A4. De paso destapó que la prueba de profundidad
     del rasterizador del editor compara `clipZ` sin dividir por w — arreglo del
-    plan del motor, no de este.
+    plan del motor, no de este. **A4 medido el 2026-08-05 y abierto**: con la
+    tolerancia implementada como dilatación de un píxel, las bandas llegan a
+    cinco, así que la divergencia es real y no del medidor. Un fixture de solo
+    caras planas separa dos causas: las aristas curvas casi tangentes, y algo
+    propio de la vista superior que no es recorte ni rotación.
 14. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
 
