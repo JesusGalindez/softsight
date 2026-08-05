@@ -17,10 +17,11 @@
  * ilegible, patrón sin coincidencias— sale con 2.
  */
 
+import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadModelCached } from "./modelCache.mjs";
 import { deflateSync, inflateSync } from "node:zlib";
 
@@ -687,11 +688,50 @@ por texto, y rechazan cualquier informe con otra contractVersion.`;
  * entrada, y el ejemplo de informe se genera revisando la escena de demostración.
  * Escribir cualquiera de los dos a mano garantizaría que divergiesen.
  */
+/**
+ * Qué versión de SoftSight está respondiendo.
+ *
+ * El consumidor fija un commit nuestro en su repositorio —así puede avanzar
+ * SoftSight sin romperle— pero hasta ahora ese pin era una cadena escrita a mano
+ * en su documentación, que nadie comprobaba contra nada. Un pin que no se
+ * verifica no protege: envejece en silencio y el día que importa señala a un
+ * commit que ya no existe.
+ *
+ * `commit` sale de git y es `null` fuera de un repositorio —un tarball, un
+ * paquete instalado—, que es información honesta y no un error: quien exige pin
+ * decide qué hacer con la ausencia.
+ */
+function softsightVersion() {
+  let commit = null;
+  try {
+    commit = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: dirname(fileURLToPath(import.meta.url)),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    commit = null;
+  }
+
+  let version = null;
+  try {
+    const manifest = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+    );
+    version = typeof manifest.version === "string" ? manifest.version : null;
+  } catch {
+    version = null;
+  }
+
+  return { version, commit };
+}
+
 function printSchema() {
   const { review } = reviewScene(DEMO_SCENE, { inspectOnly: true });
   process.stdout.write(
     `${JSON.stringify(
       {
+        softsight: softsightVersion(),
         scene: SCENE_SCHEMA,
         patch: PATCH_SCHEMA,
         sampleReference: SAMPLE_REFERENCE_SCHEMA,
@@ -704,6 +744,7 @@ function printSchema() {
           "Con pliego, el informe trae además sheet, views, renderHash y partScreenBoxes.",
           "story es el guion: la duración de la pieza es la suma de sus escenas, no se declara.",
           "storyRoles dice qué campos de data exige cada rol; quien ponga el guion en escena los necesita.",
+          "softsight dice qué versión responde: el consumidor compara su pin contra este commit, no contra un texto.",
         ],
       },
       null,
