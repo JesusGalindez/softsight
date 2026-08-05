@@ -176,10 +176,35 @@ El fácil entra en la puerta primero; el difícil entra después, pero se declar
 ahora porque lo que no se declara al principio no lo añade nadie luego. Una
 puerta que solo mira dos cubos no protege nada.
 
-**A3. Puerta de paridad** (editor, consumiendo softsight por el puente). Las tres
-vías —softsight, CPU del editor, GPU del editor— sobre el fixture fácil, con los
-criterios de §3.1 y la configuración de §3.2. Se apoya en `frame-parity.ts`, que
-ya existe. *Cierra: `npm run softsight:parity-gate` en `accepted`.*
+**A3. Puerta de paridad** (hecha el 2026-08-05; `npm run softsight:parity-gate`).
+Enfrenta softsight con el rasterizador CPU del editor sobre el fixture fácil, con
+los criterios de §3.1 y la configuración de §3.2.
+
+**La GPU del editor no entra**, y no por olvido: una puerta en Node no tiene
+contexto WebGL. El editor ya compara su CPU contra su GPU en `cpu-parity.ts`, así
+que la cadena se cierra por transitividad —softsight ↔ CPU ↔ GPU— y lo que
+faltaba era el primer eslabón, que es este.
+
+Estado: **rejected**, y con motivo medido. La vista en perspectiva da **paridad
+exacta: 0 píxeles de diferencia sobre 9.251 cubiertos**. Las tres ortográficas
+dejan un resto pequeño —4, 78 y 188 píxeles sobre 13.422, 13.484 y 44.250— y el
+mapa de discrepancias dibuja **el arco de la esfera**: es la regla de inclusión
+de borde en siluetas curvas, no geometría. La máscara del editor sale
+sistemáticamente un píxel más gorda, y donde la arista queda casi tangente a la
+rejilla la banda llega a dos píxeles, que es más de lo que §3.1 tolera.
+
+Por el camino la puerta cazó dos cosas que no eran del rasterizador, que es
+exactamente para lo que sirve:
+
+- **El suelo de referencia.** softsight lo añade como contexto y no entra en el
+  GLB exportado; compararlo era comparar dos escenas distintas. Se pide sin él.
+- **La profundidad del rasterizador del editor.** `drawTriangle` interpola
+  `clipZ` **sin dividir por w** y lo compara contra `depthClear`, así que con una
+  perspectiva de verdad la prueba de profundidad ocurre en el espacio equivocado
+  y descarta fragmentos: la vista 3/4 perdía la mitad de su cobertura. La puerta
+  entrega las coordenadas ya divididas, único régimen donde ese contrato se
+  sostiene. **Arreglarlo cae en `src/engine/cpu/`, territorio del plan del
+  motor**, y no se toca desde aquí.
 
 **A4. Arreglar lo que la puerta encuentre** (donde toque). Su alcance **es** lo
 que A0 y A3 descubran; detallarlo antes sería inventarlo. Cada arreglo sube la

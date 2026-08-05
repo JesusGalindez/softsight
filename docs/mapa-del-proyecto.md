@@ -214,8 +214,14 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     de puesta en escena, y solo entonces optimiza. **A0 hecho el 2026-08-05: las
     dos proyecciones coinciden al píxel** —cero de desviación en 12 cajas y seis
     vistas—, y para lograrlo el informe publica ahora la cámara de cada vista
-    (`ViewReport.camera`), que antes se tiraba al serializar. Lo siguiente es la
-    silueta rasterizada.
+    (`ViewReport.camera`), que antes se tiraba al serializar. **A3 hecho el
+    2026-08-05**: `npm run softsight:parity-gate` en el editor enfrenta los dos
+    rasterizadores. La vista en perspectiva da paridad exacta —0 píxeles sobre
+    9.251—; las ortográficas dejan entre 4 y 188 píxeles sobre el arco de la
+    esfera, que es regla de borde y no geometría, así que la puerta queda en
+    `rejected` a la espera de A4. De paso destapó que la prueba de profundidad
+    del rasterizador del editor compara `clipZ` sin dividir por w — arreglo del
+    plan del motor, no de este.
 14. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
 
