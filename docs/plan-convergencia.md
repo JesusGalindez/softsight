@@ -277,7 +277,7 @@ sería reimplementar el evaluador que ya tiene su propia puerta byte a byte
 
 ### Fase B — El bucle de historias se cierra
 
-**B1. Informe de puesta en escena** (editor). Por escena y por frame de muestra:
+**B1. Informe de puesta en escena** (hecho, editor). Por escena y por frame de muestra:
 caja de cada capa de texto, color medio del fondo bajo esa caja, y qué capas son
 visibles.
 
@@ -288,6 +288,18 @@ pantalla sale por aritmética exacta. Solo el **color de fondo** necesita un fra
 ya rasterizado, y para eso vale la lectura del framebuffer que ya existe. El
 rasterizador CPU recibe vértices e interpolantes: no tiene ruta de sprite ni de
 texto, y apoyarse en él aquí sería empezar por el sitio equivocado.
+
+Hecho el 2026-08-05, y con un matiz que condiciona B3: **el informe no se puede
+producir entero fuera de un navegador**. Medir glifos necesita un canvas y el
+color del fondo necesita un frame pintado, así que las dos cosas entran como
+dependencias —el motor las da en el editor, una prueba las fija—. Todo lo demás,
+incluida la caja, es aritmética: sprite de dos unidades de alto, y a distancia
+`d` la mitad del cuadro cubre `d · tan(fov/2)` unidades de mundo.
+
+La prueba hace el viaje completo —documento, informe, puente, auditoría— y los
+tres avisos salen **solos**: la escena vacía porque el guion la declara y nadie
+la montó, y el texto desbordado porque su caja cae fuera del cuadro. Retocar el
+informe a mano habría probado la auditoría, que ya tiene su puerta.
 
 **B2. Auditoría de puesta en escena** (hecha el 2026-08-05). Las tres
 comprobaciones que el plan de historias dejó por imposibles ya existen:
