@@ -28,6 +28,14 @@ va en [`plan-historias.md`](plan-historias.md) y [`plan-convergencia.md`](plan-c
 Se comunica solo por el contrato público —CLI, JSON, `--schema`, fixtures— y lo
 hace por un único fichero, `src/assets/softsight-adapter.ts`.
 
+**Y hay dos rasterizadores por software, a propósito.** El de softsight
+(`src/soft/`) **certifica**: produce la verdad contra la que se mide, y su salida
+es la que llevan los hashes. El del editor (`src/engine/cpu/`) da **paridad de
+export** y funciona sin GPU, para renderizar igual donde no hay contexto WebGL.
+Ninguno sustituye al otro y **no se escribe un tercero**. Que no diverjan no es
+una promesa: lo comprueba `npm run softsight:parity-gate` en el editor,
+comparando silueta y cajas de pantalla sobre los fixtures de paridad.
+
 Corolario: si el editor calcula algo por su cuenta que softsight también sabe
 calcular, y nadie ha comparado los dos números, eso es **deuda certificada**, no
 una funcionalidad. El principio rector completo está en
