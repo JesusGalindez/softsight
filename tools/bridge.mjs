@@ -88,6 +88,7 @@ const PASSTHROUGH = {
   bvhClip: "string",
   auditFrames: "number",
   readingRate: "number",
+  parity: "boolean",
 };
 
 const OPTION_TO_FLAG = {
@@ -112,6 +113,7 @@ const OPTION_TO_FLAG = {
   bvhClip: "--bvh-clip",
   auditFrames: "--audit-frames",
   readingRate: "--reading-rate",
+  parity: "--parity",
 };
 
 // Ficheros que admite cada comando: los opcionales solo se escriben si vienen.

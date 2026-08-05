@@ -436,6 +436,18 @@ export function renderContactSheet(
    * cambia en la imagen es lo que cambió en el modelo.
    */
   frameAabb?: SceneAabb,
+  /**
+   * Modo de comparación: el pliego deja de estar hecho para que lo mire una
+   * persona y pasa a estar hecho para compararlo con otro rasterizador.
+   *
+   * Apaga el suavizado, las sombras y el rótulo, y limpia a negro. No es
+   * cosmética: el suavizado tiñe un anillo alrededor de cada arista, la sombra
+   * pinta el fondo, y el rótulo son píxeles encendidos que no son geometría —los
+   * tres convierten «qué píxeles cubre el objeto» en una pregunta sin respuesta.
+   * Con el ambiente encendido ninguna superficie sale negra pura, así que el
+   * fondo se distingue de la geometría por igualdad exacta.
+   */
+  parityMode = false,
 ): ContactSheet {
   const aabb = frameAabb ?? computeSceneAabb(framingNodes ?? nodes);
   const rows = Math.ceil(views.length / columns);
@@ -454,6 +466,11 @@ export function renderContactSheet(
     // Con el encuadre fijado se fija también el volumen de la sombra: si no, mover
     // una pieza desplaza la rejilla del mapa y cambian las sombras de todas.
     if (frameAabb) options.shadowBounds = frameAabb;
+    if (parityMode) {
+      options.antialias = false;
+      options.shadows = false;
+      options.clearColor = [0, 0, 0];
+    }
 
     const camera = frameCameraFromAabb(aabb, view);
     const start = performance.now();
@@ -470,19 +487,22 @@ export function renderContactSheet(
     }
 
     // Rótulo quemado: nombre de la vista y altura de mundo del tile, para que la
-    // imagen se explique sola sin el informe al lado.
-    const labelScale = Math.max(1, Math.round(tileSize / 320));
-    const margin = 4 * labelScale;
-    drawLabel(
-      pixels,
-      width,
-      height,
-      column * tileSize + margin,
-      row * tileSize + margin,
-      `${view.name} · ${tileSize}PX · ${formatUnits(visibleWorldHeight(camera))}U`,
-      labelScale,
-      tileSize - margin * 2,
-    );
+    // imagen se explique sola sin el informe al lado. En comparación no se
+    // dibuja: son píxeles encendidos que no son geometría.
+    if (!parityMode) {
+      const labelScale = Math.max(1, Math.round(tileSize / 320));
+      const margin = 4 * labelScale;
+      drawLabel(
+        pixels,
+        width,
+        height,
+        column * tileSize + margin,
+        row * tileSize + margin,
+        `${view.name} · ${tileSize}PX · ${formatUnits(visibleWorldHeight(camera))}U`,
+        labelScale,
+        tileSize - margin * 2,
+      );
+    }
 
     const drawn = stats.trianglesRasterized + stats.trianglesCulled;
     rendered.push({

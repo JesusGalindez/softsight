@@ -547,6 +547,13 @@ export interface ReviewOptions {
   /** Avisos de una revisión anterior, para separar lo nuevo de lo que ya estaba. */
   baselineWarnings?: readonly Warning[];
   /**
+   * Render de comparación en vez de render para mirar: sin suavizado, sin
+   * sombras, sin rótulo y sobre negro. Es lo que hace comparable el pliego con
+   * el de otro rasterizador; para revisar una escena no sirve, porque quita
+   * justo lo que ayuda a un humano a juzgarla.
+   */
+  parity?: boolean;
+  /**
    * Tamaño plausible del objeto en metros, para juzgar la escala. glTF mide en
    * metros, así que sin esto solo se puede avisar de lo insostenible.
    */
@@ -714,7 +721,15 @@ export function reviewScene(
   // Encuadre sobre el objeto, no sobre la escena dibujada: el suelo es contexto.
   const sheet = options.inspectOnly
     ? null
-    : renderContactSheet(nodes, tileSize, undefined, undefined, objectNodes, options.frameAabb);
+    : renderContactSheet(
+        nodes,
+        tileSize,
+        undefined,
+        undefined,
+        objectNodes,
+        options.frameAabb,
+        options.parity ?? false,
+      );
   const objectCoverage = options.inspectOnly
     ? null
     : Number(measureObjectCoverage(objectNodes).toFixed(4));
@@ -911,6 +926,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
       undefined,
       framingNodes,
       options.frameAabb,
+      options.parity ?? false,
     );
   }
 

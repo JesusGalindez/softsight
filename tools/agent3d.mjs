@@ -260,6 +260,9 @@ function commonOptions(options) {
     tileSize: Number(options.get("tile") ?? 320),
     ground: options.get("ground") !== "false",
     inspectOnly: options.get("inspect-only") === "true",
+    // Render para comparar con otro rasterizador, no para mirarlo: sin suavizado,
+    // sin sombras, sin rótulo y sobre negro.
+    parity: options.get("parity") === "true" || options.has("parity"),
     expectSize: expectSize !== undefined && expectSize !== "true" ? Number(expectSize) : undefined,
   };
 }
@@ -668,6 +671,9 @@ Presupuesto (cada bandera es una cláusula; incumplirla es un aviso y salida 1)
   --max-symmetry-error <x>  error de simetría en X, en fracción del radio (0.02 = 2 %)
 
 Otras
+  --parity                render de comparación: sin suavizado, sin sombras, sin
+                          rótulo y sobre negro. Sirve para enfrentar el pliego
+                          con el de otro rasterizador, no para revisarlo a ojo
   --no-cache              rehace el análisis del modelo en vez de leer .cache/
   --schema                forma aceptada de la escena y del parche, y un informe
                           de ejemplo, todo generado por el propio código
