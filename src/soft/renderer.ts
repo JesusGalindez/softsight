@@ -35,6 +35,7 @@ import {
   transformDirection,
   transformPoint,
   type Mat4,
+  type Vec3,
   vec3,
 } from "./math";
 import { ensureFaceNormals, type Mesh } from "./mesh";
@@ -232,6 +233,12 @@ export class SoftwareRenderer {
   /** Apoyo del descarte en espacio de objeto. */
   private readonly inverseModelMatrix = mat4();
   private readonly cameraPosition = vec3();
+  /**
+   * Dirección hacia la cámara con proyección ortográfica, donde todos los rayos
+   * son paralelos y no existe «posición» que reste. `null` en perspectiva.
+   */
+  private orthographicToCamera: Vec3 | null = null;
+  private readonly orthographicToCameraObject = vec3();
   private vertexStamp = new Int32Array(0);
   private survivingTriangles = new Uint32Array(0);
   /**
@@ -283,6 +290,15 @@ export class SoftwareRenderer {
     );
 
     this.cameraPosition.set(camera.position);
+    if (camera.projection === "orthographic") {
+      const dx = camera.position[0] - camera.target[0];
+      const dy = camera.position[1] - camera.target[1];
+      const dz = camera.position[2] - camera.target[2];
+      const length = Math.hypot(dx, dy, dz) || 1;
+      this.orthographicToCamera = vec3(dx / length, dy / length, dz / length);
+    } else {
+      this.orthographicToCamera = null;
+    }
     this.eyeVector.set(camera.position);
     this.targetVector.set(camera.target);
     this.upVector.set(camera.up);
@@ -520,14 +536,41 @@ export class SoftwareRenderer {
       const current = this.stampCounter;
       survivorCount = 0;
 
+      /**
+       * Con proyección ortográfica no hay «posición de cámara» que restar: todos
+       * los rayos son paralelos, así que el vector hacia el observador es
+       * constante. Restar una posición finita inclina ese vector según lo lejos
+       * del eje que esté la cara, y a incidencia rasante eso **descarta caras
+       * que sí se ven**: en la vista superior del pliego faltaban 647 píxeles de
+       * silueta —el 4 % del objeto—, medidos por la puerta de paridad.
+       */
+      const parallel = this.orthographicToCamera;
+      let parallelX = 0;
+      let parallelY = 0;
+      let parallelZ = 0;
+      if (parallel) {
+        const direction = transformDirection(
+          inverse,
+          parallel[0],
+          parallel[1],
+          parallel[2],
+          this.orthographicToCameraObject,
+        );
+        parallelX = direction[0];
+        parallelY = direction[1];
+        parallelZ = direction[2];
+      }
+
       for (let i = 0; i < indices.length; i += 3) {
         const anchor = indices[i] * 3;
-        if (
-          faceNormals[i] * (cameraX - positions[anchor]) +
+        const towardsCamera = parallel
+          ? faceNormals[i] * parallelX +
+            faceNormals[i + 1] * parallelY +
+            faceNormals[i + 2] * parallelZ
+          : faceNormals[i] * (cameraX - positions[anchor]) +
             faceNormals[i + 1] * (cameraY - positions[anchor + 1]) +
-            faceNormals[i + 2] * (cameraZ - positions[anchor + 2]) <=
-          0
-        ) {
+            faceNormals[i + 2] * (cameraZ - positions[anchor + 2]);
+        if (towardsCamera <= 0) {
           stats.trianglesCulled += 1;
           continue;
         }

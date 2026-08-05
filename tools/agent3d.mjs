@@ -63,8 +63,15 @@ import {
  * consumidores —como los warnings de `string[]` a `{ code, part, message }`—
  * la sube: quien lee el informe compara contra esta cifra antes que contra los
  * campos, y un informe de 4925240 se distingue de uno de hoy sin mirar nada más.
+ *
+ * La 3 llega por un cambio de píxeles, no de forma: el descarte de caras en
+ * proyección ortográfica usaba el test de perspectiva y tiraba caras visibles a
+ * incidencia rasante, así que los `renderHash` de las vistas ortográficas se
+ * mueven. La política del proyecto es explícita —cambiar la aritmética o el
+ * hash obliga a subir la versión— para que el consumidor falle en la puerta en
+ * vez de comparar contra un hash que ya no significa lo mismo.
  */
-const REPORT_CONTRACT_VERSION = 2;
+const REPORT_CONTRACT_VERSION = 3;
 
 const CRC_TABLE = (() => {
   const table = new Int32Array(256);
@@ -683,7 +690,7 @@ Otras
 stdout es JSON puro. Código de salida: 0 sin avisos, 1 con avisos o parches
 fallidos, 2 si hay un error de datos.
 
-El informe declara contractVersion: 2. Los warnings son objetos
+El informe declara contractVersion: 3. Los warnings son objetos
 { code, part, message, fix? }; los consumidores los comparan por code|part, no
 por texto, y rechazan cualquier informe con otra contractVersion.`;
 
