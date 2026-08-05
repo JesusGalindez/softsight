@@ -17,27 +17,38 @@
  * ilegible, patrón sin coincidencias— sale con 2.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadModelCached } from "./modelCache.mjs";
 import { deflateSync, inflateSync } from "node:zlib";
 
 import {
   DEMO_SCENE,
   PATCH_SCHEMA,
+  ROLE_REQUIRED_DATA,
   SAMPLE_REFERENCE_SCHEMA,
   SCENE_SCHEMA,
+  STORY_SCHEMA,
   applyPatch,
   applyPatchToScene,
   assertValid,
+  auditAnimation,
+  auditStory,
+  bindModelToSkeleton,
+  bvhToSkinnedScene,
   invertPatch,
   modelFromScene,
   computeSceneAabb,
   loadModel,
   reviewModel,
+  parseBvh,
+  resolveRig,
   serializeGlb,
+  serializeSkinnedGlb,
+  skeletonFromParsedGlb,
   reviewScene,
   serializeObj,
   toSceneNodes,
@@ -52,8 +63,15 @@ import {
  * consumidores —como los warnings de `string[]` a `{ code, part, message }`—
  * la sube: quien lee el informe compara contra esta cifra antes que contra los
  * campos, y un informe de 4925240 se distingue de uno de hoy sin mirar nada más.
+ *
+ * La 3 llega por un cambio de píxeles, no de forma: el descarte de caras en
+ * proyección ortográfica usaba el test de perspectiva y tiraba caras visibles a
+ * incidencia rasante, así que los `renderHash` de las vistas ortográficas se
+ * mueven. La política del proyecto es explícita —cambiar la aritmética o el
+ * hash obliga a subir la versión— para que el consumidor falle en la puerta en
+ * vez de comparar contra un hash que ya no significa lo mismo.
  */
-const REPORT_CONTRACT_VERSION = 2;
+const REPORT_CONTRACT_VERSION = 3;
 
 const CRC_TABLE = (() => {
   const table = new Int32Array(256);
@@ -249,6 +267,9 @@ function commonOptions(options) {
     tileSize: Number(options.get("tile") ?? 320),
     ground: options.get("ground") !== "false",
     inspectOnly: options.get("inspect-only") === "true",
+    // Render para comparar con otro rasterizador, no para mirarlo: sin suavizado,
+    // sin sombras, sin rótulo y sobre negro.
+    parity: options.get("parity") === "true" || options.has("parity"),
     expectSize: expectSize !== undefined && expectSize !== "true" ? Number(expectSize) : undefined,
   };
 }
@@ -438,16 +459,48 @@ async function reviewModelFile(options, outputPath) {
     writeFileSync(outputPath, encodePng(sheet.pixels, sheet.width, sheet.height));
   }
 
+  // Atar la malla a un esqueleto: no calcula pesos, aplica el vínculo declarado.
+  // Se resuelve antes de exportar porque cambia lo que se escribe, no lo que se
+  // revisa: el informe sigue siendo el del modelo, con su auditoría y su pliego.
+  let binding = null;
+  const bindPath = options.get("bind");
+  if (bindPath) {
+    const skeletonPath = options.get("skeleton");
+    if (!skeletonPath || skeletonPath === "true") {
+      throw new Error("--bind necesita --skeleton con el GLB del esqueleto");
+    }
+    if (!skeletonPath.toLowerCase().endsWith(".glb")) {
+      throw new Error(`--skeleton solo lee .glb; '${skeletonPath}' no lo es`);
+    }
+    const skeletonBytes = await readFile(resolve(skeletonPath));
+    const skeleton = skeletonFromParsedGlb(
+      parseGlbAnimation(
+        skeletonBytes.buffer.slice(skeletonBytes.byteOffset, skeletonBytes.byteOffset + skeletonBytes.byteLength),
+        await loadMeshoptDecoder(),
+      ),
+    );
+    const document = JSON.parse(await readFile(resolve(bindPath), "utf8"));
+    binding = bindModelToSkeleton(model, skeleton, document);
+  }
+
   let exported = null;
   const exportPath = options.get("export");
   if (exportPath) {
     exported = resolve(exportPath);
     mkdirSync(dirname(exported), { recursive: true });
-    if (exported.toLowerCase().endsWith(".glb")) {
+    if (binding) {
+      if (!exported.toLowerCase().endsWith(".glb")) {
+        throw new Error(`--bind solo exporta .glb; '${exportPath}' no lo es (OBJ no guarda esqueleto)`);
+      }
+      writeFileSync(exported, Buffer.from(serializeSkinnedGlb(binding.scene)));
+    } else if (exported.toLowerCase().endsWith(".glb")) {
       writeFileSync(exported, Buffer.from(serializeGlb(model)));
     } else {
       writeFileSync(exported, serializeObj(model), "utf8");
     }
+  }
+  if (binding && !exportPath) {
+    throw new Error("--bind necesita --export: el modelo atado solo existe en el fichero de salida");
   }
 
   let animation;
@@ -463,6 +516,19 @@ async function reviewModelFile(options, outputPath) {
   return {
     contractVersion: REPORT_CONTRACT_VERSION,
     ...review,
+    ...(binding
+      ? {
+          binding: {
+            joints: binding.scene.skins[0].joints.length,
+            boundParts: binding.bound.length,
+            unusedJoints: binding.unusedJoints,
+            clips: binding.scene.animations?.length ?? 0,
+            // Atado rígido: un hueso por vértice. Decirlo en el informe evita que
+            // alguien lo confunda con pesos calculados, que aquí no se calculan.
+            mode: "rigid",
+          },
+        }
+      : {}),
     edits,
     cached,
     file: sheet ? outputPath : null,
@@ -512,11 +578,14 @@ const USAGE = `agent3d — revisión de modelos y escenas 3D, headless y determi
 
   npm run agent3d -- --model <fichero.glb|.obj> [opciones]
   npm run agent3d -- --scene <escena.json> [opciones]
+  npm run agent3d -- --bvh <captura.bvh> --export <esqueleto.glb>
   npm run agent3d                              usa la escena de ejemplo
 
 Entrada
   --model <ruta>          modelo GLB u OBJ; manda sobre --scene
   --scene <ruta>          escena declarativa en JSON
+  --bvh <ruta.bvh>        captura de movimiento; solo convierte, no revisa. Manda
+                          sobre --model y --scene, y exige --export .glb
   --patch <ruta>          parche a aplicar antes de renderizar. En un modelo mueve
                           matrices; en una escena edita el documento JSON.
                           Repetible: se aplican en orden
@@ -532,6 +601,42 @@ Contrato de animación GLB (solo --model)
                           herramienta las evalúa en cada fotograma de --frames
   --frames "0,15,30,37"   fotogramas para --sample, en el fps del clip (--fps)
   --fps <n>               fotogramas por segundo para --sample (30)
+
+Atar una malla a un esqueleto (solo --model)
+  --skeleton <ruta.glb>   GLB con el árbol de huesos y sus clips, p. ej. el que
+                          produce --bvh
+  --bind <ruta.json>      vínculo declarado: { schemaVersion:1, bindings:[
+                          { part:"rotor-*", joint:"Brazo" } ] }. Gana la primera
+                          regla que encaja; una pieza sin regla es un error, no
+                          se ata a la raíz por si acaso. Atado RÍGIDO: un hueso
+                          por vértice, peso 1. Aquí no se calculan pesos, se
+                          aplican los que declaras. Exige --export .glb
+
+Esqueleto y clips declarados en la escena (solo --scene)
+  La escena admite skeleton (huesos por nombre, con padre y offset),
+  bindings (qué pieza a qué hueso) y clips (pistas con fotogramas clave).
+  Con esqueleto, --export escribe el GLB atado y animado, y el informe trae
+  rig y animationAudit. Ver --schema para la forma exacta.
+  --audit-frames <n>      fotogramas a muestrear por clip en la auditoría (8).
+                          La auditoría muestrea, no recorre: puede perderse un
+                          cruce que solo ocurra entre dos fotogramas mirados
+
+Conversión de BVH (solo --bvh)
+  --bvh-scale <n>         factor sobre desplazamientos y traslaciones (1). Un BVH
+                          en centímetros pasa a metros —la unidad de glTF— con
+                          0.01. No se aplica solo: el formato no declara su unidad
+  --bvh-clip <nombre>     nombre del clip resultante ("BVH")
+
+Guion (solo --story)
+  --story <ruta.json>     audita un guion: { storyVersion, title, fps, scenes }
+                          con el rol de cada escena y sus datos. No escribe nada
+                          y no toca geometría; devuelve hechos y sale 1 si avisa
+  --reading-rate <n>      caracteres por segundo que se suponen legibles (15).
+                          Es una suposición declarada, no una medida
+
+  Ejemplares en artifacts/agent/guion-*.json: dos piezas completas y limpias.
+  Se leen antes de escribir, para saber a qué suena esto cuando está bien; no
+  se rellenan, que para eso harían falta huecos y aquí no los hay.
 
 Salida
   --out <ruta.png>        pliego de contactos; por defecto artifacts/agent/contact-sheet.png
@@ -573,6 +678,9 @@ Presupuesto (cada bandera es una cláusula; incumplirla es un aviso y salida 1)
   --max-symmetry-error <x>  error de simetría en X, en fracción del radio (0.02 = 2 %)
 
 Otras
+  --parity                render de comparación: sin suavizado, sin sombras, sin
+                          rótulo y sobre negro. Sirve para enfrentar el pliego
+                          con el de otro rasterizador, no para revisarlo a ojo
   --no-cache              rehace el análisis del modelo en vez de leer .cache/
   --schema                forma aceptada de la escena y del parche, y un informe
                           de ejemplo, todo generado por el propio código
@@ -582,7 +690,7 @@ Otras
 stdout es JSON puro. Código de salida: 0 sin avisos, 1 con avisos o parches
 fallidos, 2 si hay un error de datos.
 
-El informe declara contractVersion: 2. Los warnings son objetos
+El informe declara contractVersion: 3. Los warnings son objetos
 { code, part, message, fix? }; los consumidores los comparan por code|part, no
 por texto, y rechazan cualquier informe con otra contractVersion.`;
 
@@ -593,25 +701,171 @@ por texto, y rechazan cualquier informe con otra contractVersion.`;
  * entrada, y el ejemplo de informe se genera revisando la escena de demostración.
  * Escribir cualquiera de los dos a mano garantizaría que divergiesen.
  */
+/**
+ * Qué versión de SoftSight está respondiendo.
+ *
+ * El consumidor fija un commit nuestro en su repositorio —así puede avanzar
+ * SoftSight sin romperle— pero hasta ahora ese pin era una cadena escrita a mano
+ * en su documentación, que nadie comprobaba contra nada. Un pin que no se
+ * verifica no protege: envejece en silencio y el día que importa señala a un
+ * commit que ya no existe.
+ *
+ * `commit` sale de git y es `null` fuera de un repositorio —un tarball, un
+ * paquete instalado—, que es información honesta y no un error: quien exige pin
+ * decide qué hacer con la ausencia.
+ */
+function softsightVersion() {
+  let commit = null;
+  try {
+    commit = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: dirname(fileURLToPath(import.meta.url)),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    commit = null;
+  }
+
+  let version = null;
+  try {
+    const manifest = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+    );
+    version = typeof manifest.version === "string" ? manifest.version : null;
+  } catch {
+    version = null;
+  }
+
+  return { version, commit };
+}
+
 function printSchema() {
   const { review } = reviewScene(DEMO_SCENE, { inspectOnly: true });
   process.stdout.write(
     `${JSON.stringify(
       {
+        softsight: softsightVersion(),
         scene: SCENE_SCHEMA,
         patch: PATCH_SCHEMA,
         sampleReference: SAMPLE_REFERENCE_SCHEMA,
+        story: STORY_SCHEMA,
+        storyRoles: ROLE_REQUIRED_DATA,
         reportExample: { contractVersion: REPORT_CONTRACT_VERSION, ...review },
         notes: [
           "El esquema es el que valida la entrada: un campo que no esté aquí se rechaza.",
           "reportExample sale de revisar la escena de demostración con --inspect-only.",
           "Con pliego, el informe trae además sheet, views, renderHash y partScreenBoxes.",
+          "story es el guion: la duración de la pieza es la suma de sus escenas, no se declara.",
+          "storyRoles dice qué campos de data exige cada rol; quien ponga el guion en escena los necesita.",
+          "softsight dice qué versión responde: el consumidor compara su pin contra este commit, no contra un texto.",
         ],
       },
       null,
       2,
     )}\n`,
   );
+}
+
+/**
+ * Convierte un BVH en un GLB con esqueleto y clip.
+ *
+ * No revisa nada: un BVH no trae malla, y fingir un informe de topología sobre
+ * un esqueleto sería rellenar campos vacíos. Lo que devuelve es la cuenta de lo
+ * convertido —articulaciones, nodos, fotogramas, canales— para que quien lo
+ * llame sepa qué salió sin volver a abrir el fichero.
+ *
+ * El GLB resultante no tiene malla, y eso es correcto: lleva el árbol de huesos
+ * y el clip, que es exactamente lo que traía el BVH. Quien quiera verlo le ata
+ * su propia piel y lo vuelve a pasar por `--model`.
+ */
+/**
+ * Audita un guion. No escribe nada: una historia no produce fichero, produce
+ * hechos sobre sí misma, y quien la pone en escena es el editor.
+ */
+function auditStoryFile(options) {
+  const storyPath = resolve(options.get("story"));
+  const story = JSON.parse(readFileSync(storyPath, "utf8"));
+
+  const rateFlag = options.get("reading-rate");
+  const readingRate = rateFlag === undefined || rateFlag === "true" ? undefined : Number(rateFlag);
+  if (rateFlag !== undefined && rateFlag !== "true" && (!Number.isFinite(readingRate) || readingRate <= 0)) {
+    throw new Error(`--reading-rate inválido: '${rateFlag}'; debe ser un número positivo`);
+  }
+
+  return { source: storyPath, ...auditStory(story, readingRate === undefined ? {} : { readingRate }) };
+}
+
+async function convertBvhFile(options) {
+  const bvhPath = resolve(options.get("bvh"));
+  const exported = options.get("export");
+  if (!exported || exported === "true") {
+    throw new Error("--bvh necesita --export con la ruta del .glb de salida");
+  }
+  if (!exported.toLowerCase().endsWith(".glb")) {
+    throw new Error(`--bvh solo exporta .glb; '${exported}' no lo es`);
+  }
+
+  const scaleFlag = options.get("bvh-scale");
+  const scale = scaleFlag === undefined || scaleFlag === "true" ? 1 : Number(scaleFlag);
+  if (!Number.isFinite(scale) || scale <= 0) {
+    throw new Error(`--bvh-scale inválido: '${scaleFlag}'; debe ser un número positivo`);
+  }
+  const clipFlag = options.get("bvh-clip");
+  const clipName = clipFlag === undefined || clipFlag === "true" ? "BVH" : clipFlag;
+
+  const bvh = parseBvh(await readFile(bvhPath, "utf8"));
+  const scene = bvhToSkinnedScene(bvh, { clipName, scale });
+  const glb = serializeSkinnedGlb(scene);
+
+  const exportPath = resolve(exported);
+  mkdirSync(dirname(exportPath), { recursive: true });
+  writeFileSync(exportPath, Buffer.from(glb));
+
+  const clip = scene.animations?.[0];
+  return {
+    contractVersion: REPORT_CONTRACT_VERSION,
+    source: bvhPath,
+    export: exportPath,
+    bytes: glb.byteLength,
+    bvh: {
+      joints: bvh.joints.length,
+      roots: bvh.roots.length,
+      frames: bvh.frameCount,
+      frameTime: bvh.frameTime,
+      // El fps es derivado, no declarado: BVH solo dice el segundo por fotograma.
+      fps: 1 / bvh.frameTime,
+      channels: bvh.channelCount,
+      // El orden de rotación es por articulación, y que varíe no es un error:
+      // decirlo aquí evita que alguien suponga uno solo para todo el esqueleto.
+      rotationOrders: [
+        ...new Set(
+          bvh.joints
+            .map((joint) =>
+              joint.channels
+                .filter((channel) => channel.endsWith("rotation"))
+                .map((channel) => channel[0])
+                .join(""),
+            )
+            .filter((order) => order.length > 0),
+        ),
+      ],
+    },
+    scene: {
+      clip: clip?.name ?? null,
+      // Un nodo por articulación más uno por cada extremo terminal.
+      nodes: scene.nodes.length,
+      animatedChannels: clip?.channels.length ?? 0,
+      // Sin malla a propósito: el BVH no la trae y aquí no se inventa.
+      meshes: scene.meshes.length,
+    },
+    scale,
+    notes: [
+      "El GLB sale sin malla porque el BVH no la trae: es esqueleto y clip.",
+      "Por eso --model lo rechaza con 'el modelo no tiene geometría visible', y las" +
+        " poses de control tampoco aplican: evalúan vértices, y aquí no hay ninguno.",
+      "Se certifica cuando alguien le ata una piel; a partir de ahí es un GLB normal.",
+    ],
+  };
 }
 
 async function main() {
@@ -626,6 +880,23 @@ async function main() {
     printSchema();
     return;
   }
+  // El guion tampoco es un modelo: no hay geometría que mirar, solo texto y
+  // tiempo. Va antes por el mismo motivo que el BVH.
+  if (options.has("story")) {
+    const report = auditStoryFile(options);
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    process.exitCode = report.warnings.length > 0 ? 1 : 0;
+    return;
+  }
+  // El BVH va antes que todo lo demás porque no es un modelo: no tiene malla, así
+  // que no hay nada que encuadrar, rasterizar ni auditar. Es una conversión, y
+  // lo que produce sí entra después por --model como cualquier GLB.
+  if (options.has("bvh")) {
+    const report = await convertBvhFile(options);
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    return;
+  }
+
   const outputPath = resolve(options.get("out") ?? "artifacts/agent/contact-sheet.png");
 
   if (options.has("model")) {
@@ -671,6 +942,43 @@ async function main() {
     writeFileSync(outputPath, encodePng(sheet.pixels, sheet.width, sheet.height));
   }
 
+  // Esqueleto y clips declarados en la propia escena: un agente construye el
+  // personaje y lo anima sin salir del JSON que ya sabe escribir. El atado sigue
+  // siendo rígido y el vínculo lo declara él; aquí no se calcula ningún peso.
+  let rig = null;
+  let riggedScene = null;
+  let animationAudit = null;
+  if (spec.skeleton) {
+    if (!Array.isArray(spec.bindings) || spec.bindings.length === 0) {
+      throw new Error("una escena con `skeleton` necesita `bindings`: qué pieza va a qué hueso");
+    }
+    const asModel = modelFromScene(spec, scenePath ?? "escena");
+    rig = resolveRig(spec.skeleton, spec.clips ?? []);
+    const bound = bindModelToSkeleton(asModel, rig.skeleton, {
+      schemaVersion: 1,
+      bindings: spec.bindings,
+    });
+    riggedScene = bound.scene;
+
+    // La auditoría de movimiento: lo que ninguna imagen revela porque ocurre en
+    // un fotograma que nadie miró. Se apoya en el evaluador certificado.
+    if ((spec.clips ?? []).length > 0) {
+      const framesFlag = options.get("audit-frames");
+      const sampleFrames =
+        framesFlag === undefined || framesFlag === "true" ? 8 : Number(framesFlag);
+      if (!Number.isInteger(sampleFrames) || sampleFrames < 2) {
+        throw new Error(`--audit-frames inválido: '${framesFlag}'; debe ser un entero de 2 en adelante`);
+      }
+      const parsedRig = parseGlbAnimation(serializeSkinnedGlb(riggedScene));
+      animationAudit = auditAnimation(
+        asModel,
+        parsedRig,
+        new Map(bound.bound.map((entry) => [entry.part, entry.joint])),
+        { sampleFrames, fps: rig.clips[0]?.fps ?? 30 },
+      );
+    }
+  }
+
   // Exportar lo inventado: crear y entregar dejan de ser caminos distintos.
   let exported = null;
   const exportPath = options.get("export");
@@ -678,7 +986,12 @@ async function main() {
     exported = resolve(exportPath);
     mkdirSync(dirname(exported), { recursive: true });
     const asModel = modelFromScene(spec, scenePath ?? "escena");
-    if (exported.toLowerCase().endsWith(".glb")) {
+    if (riggedScene) {
+      if (!exported.toLowerCase().endsWith(".glb")) {
+        throw new Error(`una escena con esqueleto solo exporta .glb; '${exportPath}' no lo es`);
+      }
+      writeFileSync(exported, Buffer.from(serializeSkinnedGlb(riggedScene)));
+    } else if (exported.toLowerCase().endsWith(".glb")) {
       writeFileSync(exported, Buffer.from(serializeGlb(asModel)));
     } else {
       writeFileSync(exported, serializeObj(asModel), "utf8");
@@ -695,7 +1008,16 @@ async function main() {
 
   process.stdout.write(
     `${JSON.stringify(
-      { contractVersion: REPORT_CONTRACT_VERSION, ...review, edits, file: sheet ? outputPath : null, exported, savedScene },
+      {
+        contractVersion: REPORT_CONTRACT_VERSION,
+        ...review,
+        ...(rig ? { rig: { joints: rig.skeleton.nodes.length, clips: rig.clips, mode: "rigid" } } : {}),
+        ...(animationAudit ? { animationAudit } : {}),
+        edits,
+        file: sheet ? outputPath : null,
+        exported,
+        savedScene,
+      },
       null,
       2,
     )}\n`,

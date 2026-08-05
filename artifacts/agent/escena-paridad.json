@@ -1,0 +1,16 @@
+{
+  "objects": [
+    {
+      "name": "caja",
+      "geometry": { "primitive": "box", "parameters": [1, 1, 1] },
+      "position": [-0.9, 0.5, 0],
+      "color": [0.82, 0.32, 0.24]
+    },
+    {
+      "name": "esfera",
+      "geometry": { "primitive": "sphere", "parameters": [0.6] },
+      "position": [0.9, 0.6, 0],
+      "color": [0.28, 0.46, 0.78]
+    }
+  ]
+}

@@ -9,9 +9,19 @@
  *
  * Petición:
  *
- *   { "bridgeContractVersion": 1, "command": "inspect"|"render"|"patch"|"sample"|"schema",
+ *   { "bridgeContractVersion": 1,
+ *     "command": "inspect"|"render"|"patch"|"sample"|"scene"|"bvh"|"story"|"schema",
  *     "files": { "model": { "name": "drone.glb", "data": "<base64>" }, ... },
  *     "options": { ... } }
+ *
+ * Tres comandos no reciben `model`. `bvh` recibe una captura y devuelve el GLB
+ * con esqueleto y clip; es una conversión, no una revisión, así que su informe
+ * no trae ni auditoría ni pliego. `scene` recibe una escena declarativa —la
+ * misma que valida `--schema`, con sus `objects` y, si los trae, su `skeleton`,
+ * sus `bindings` y sus `clips`— y devuelve el informe completo, el pliego y el
+ * GLB. Es la vía por la que un agente construye desde cero sin tocar el disco.
+ * `story` recibe un guion y devuelve hechos medidos sobre él, sin artefactos:
+ * una historia no produce fichero, y ponerla en escena es del editor.
  *
  * Respuesta:
  *
@@ -52,7 +62,7 @@ const MAX_ARTIFACT_BYTES = Number(process.env.SOFTSIGHT_BRIDGE_MAX_ARTIFACT_MB ?
 const TIMEOUT_MS = Number(process.env.SOFTSIGHT_BRIDGE_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-const COMMANDS = new Set(["inspect", "render", "patch", "sample", "schema"]);
+const COMMANDS = new Set(["inspect", "render", "patch", "sample", "scene", "bvh", "story", "schema"]);
 
 // Opciones del CLI que el puente acepta, con su tipo. Todo lo demás se rechaza:
 // el puente no expande variables ni patrones, y solo ejecuta con argumentos fijos.
@@ -74,6 +84,11 @@ const PASSTHROUGH = {
   noCache: "boolean",
   frames: "string",
   fps: "number",
+  bvhScale: "number",
+  bvhClip: "string",
+  auditFrames: "number",
+  readingRate: "number",
+  parity: "boolean",
 };
 
 const OPTION_TO_FLAG = {
@@ -94,6 +109,11 @@ const OPTION_TO_FLAG = {
   noCache: "--no-cache",
   frames: "--frames",
   fps: "--fps",
+  bvhScale: "--bvh-scale",
+  bvhClip: "--bvh-clip",
+  auditFrames: "--audit-frames",
+  readingRate: "--reading-rate",
+  parity: "--parity",
 };
 
 // Ficheros que admite cada comando: los opcionales solo se escriben si vienen.
@@ -102,6 +122,12 @@ const FILE_SLOTS = {
   render: { model: false, controlPoses: true },
   patch: { model: false, controlPoses: true, patches: false, baseline: true, baselineReport: true },
   sample: { model: false, controlPoses: true, references: false },
+  // Los dos que no reciben `model`: uno convierte una captura, el otro parte de
+  // una escena declarativa en vez de un fichero 3D.
+  scene: { scene: false, patches: true },
+  bvh: { bvh: false },
+  // El guion no trae geometría ni produce fichero: entra texto y salen hechos.
+  story: { story: false },
   schema: {},
 };
 
@@ -223,6 +249,35 @@ function buildArgs(request, workDir) {
     files[slot] = writeFilePayload(workDir, slot, payload);
   }
 
+  if (request.command === "bvh") {
+    // No lleva --model: el CLI distingue la conversión de la revisión por la
+    // bandera de entrada, no por la extensión del fichero.
+    const converted = ["--bvh", files.bvh, "--export", join(workDir, "esqueleto.glb")];
+    converted.push(...parseOptions(request.options));
+    return converted;
+  }
+
+  if (request.command === "story") {
+    // Ni --model ni --export: una historia no produce artefacto, produce hechos
+    // sobre sí misma. Quien la pone en escena es el editor.
+    return ["--story", files.story, ...parseOptions(request.options)];
+  }
+
+  if (request.command === "scene") {
+    // Siempre exporta: una escena que un agente acaba de inventar no existe en
+    // ningún fichero suyo, así que devolver solo el informe le dejaría sin lo
+    // único que puede volver a cargar.
+    const built = ["--scene", files.scene, "--export", join(workDir, "escena.glb")];
+    if (files.patches) for (const patchPath of files.patches) built.push("--patch", patchPath);
+    // `inspectOnly` no es una opción del CLI sino una forma de pedir el informe
+    // sin pliego, así que se consume aquí y no se reenvía.
+    const { inspectOnly, ...rest } = request.options ?? {};
+    if (inspectOnly === true) built.push("--inspect-only", "true");
+    else built.push("--out", join(workDir, "contact-sheet.png"));
+    built.push(...parseOptions(rest));
+    return built;
+  }
+
   const flags = ["--model", files.model];
   if (files.controlPoses) flags.push("--control-poses", files.controlPoses);
 
@@ -288,6 +343,15 @@ async function runCommand(request) {
     }
 
     const artifacts = [];
+    if (request.command === "bvh") {
+      artifacts.push(readArtifact(workDir, "esqueleto.glb", "model/gltf-binary"));
+    }
+    if (request.command === "scene") {
+      artifacts.push(readArtifact(workDir, "escena.glb", "model/gltf-binary"));
+      if (request.options?.inspectOnly !== true) {
+        artifacts.push(readArtifact(workDir, "contact-sheet.png", "image/png"));
+      }
+    }
     if (request.command === "render" || request.command === "patch") {
       artifacts.push(readArtifact(workDir, "contact-sheet.png", "image/png"));
       if (request.command === "patch") {

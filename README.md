@@ -294,16 +294,200 @@ precisión. El CLI certifica listas de referencias con
 fotogramas y huellas que usará el `sample-gate` del editor para certificar su
 propio evaluador.
 
+### Escribir un GLB con esqueleto
+
+`serializeGlb` escribe el modelo interno, que está aplanado y no guarda ni
+esqueleto ni clips: no puede escribir lo que no tiene. `serializeSkinnedGlb`
+parte de una descripción declarativa —`SkinnedGlbScene`: árbol de nodos, mallas
+con `JOINTS_0`/`WEIGHTS_0`, morph targets, pieles con sus matrices de enlace y
+clips con sus muestreadores— porque quien produce esos datos no es el modelo
+interno sino lo que venga de fuera: un GLB releído, un BVH, o un generador de
+movimiento. `readAccessorValues` publica el lector de accesores que usan por
+dentro el evaluador y el muestreo, para que reescribir un GLB no obligue a
+reimplementar `byteStride`, los tipos normalizados y las vistas de meshopt.
+
+Las matrices de enlace inversas entran y salen **por columnas**, como las guarda
+glTF, sin transponer en ningún punto del viaje: transponerlas dos veces es el
+error clásico y no se ve hasta que el modelo se retuerce al animar. Por eso la
+puerta no mira el fichero, mira el número: `npm run test:glb-writer` lee el
+fixture, lo levanta a `SkinnedGlbScene`, lo vuelve a escribir y comprueba que
+`evaluatePose` da **los mismos cuatro hashes de control**. El fichero reescrito
+pasa además el gate del editor con `accepted` y 4/4, así que Three.js deforma
+con su propia implementación un GLB que escribimos nosotros y llega al mismo
+número.
+
+El escritor rechaza antes de escribir lo que produciría un fichero que abre y
+anima mal: `JOINTS_0` sin `WEIGHTS_0`, pesos desalineados con los vértices,
+matrices de enlace incompletas, joints o nodos fuera de la escena, `matrix`
+declarada junto a la terna TRS, y un muestreador compartido entre rutas de
+distinto tipo. El CLI todavía no lo usa —no hay productor de esqueletos que
+alimentarlo—; es API del núcleo, como el evaluador.
+
+### Leer un BVH
+
+BVH es texto plano con un esqueleto y una tabla de números —sin malla, sin pesos,
+sin materiales— y es el formato en el que sale la captura de movimiento y lo que
+exportan los generadores de movimiento actuales. `parseBvh` lo lee sin ninguna
+dependencia y `bvhToSkinnedScene` lo pasa a la escena que traga
+`serializeSkinnedGlb`, así que **BVH dentro, GLB con esqueleto y clip fuera**:
+
+```bash
+npm run agent3d -- --bvh artifacts/agent/captura-ejemplo.bvh \
+  --export esqueleto.glb --bvh-scale 0.01 --bvh-clip Salto
+```
+
+`--bvh` **convierte, no revisa**, y por eso no admite `--out` ni auditorías: un
+BVH no tiene malla, así que no hay nada que encuadrar, rasterizar ni auditar. El
+informe dice lo convertido —articulaciones, fotogramas, canales, y **los órdenes
+de rotación que encontró**, que suelen ser varios en el mismo esqueleto— y el
+GLB que sale tampoco tiene malla, porque aquí no se inventa lo que no venía.
+
+Consecuencia que conviene decir antes de que sorprenda: ese GLB **todavía no se
+puede certificar**. `--model` lo rechaza con «el modelo no tiene geometría
+visible» y las poses de control tampoco aplican, porque evalúan vértices y no
+hay ninguno. Se certifica cuando alguien le ata una piel; desde ese momento es un
+GLB normal y entra por el camino de siempre. El propio informe de conversión lo
+avisa en `notes`.
+
+El puente lo expone como el comando `bvh`: recibe el fichero, devuelve el mismo
+informe y el GLB como artefacto `model/gltf-binary`. Es el único comando que no
+recibe `model`, por lo mismo. La puerta comprueba que **la API, el CLI y el
+puente producen el mismo fichero byte a byte**: los dos últimos son envoltorios y
+no deben decidir nada por su cuenta.
+
+Tres detalles del formato que no están escritos en ningún sitio y son la causa
+habitual de que un esqueleto salga retorcido:
+
+- **El orden de rotación lo declara cada articulación**, en el orden en que lista
+  sus canales, y las matrices se componen en ese orden:
+  `R = R_primero · R_segundo · R_tercero`. `Zrotation Xrotation Yrotation` no es
+  lo mismo que `Xrotation Yrotation Zrotation`, y dos ficheros con los mismos
+  números y distinto orden describen poses distintas.
+- **Los ángulos van en grados**, aunque el formato no lo declare.
+- **Las distancias suelen ir en centímetros**, tampoco declarado: un esqueleto
+  humano sale midiendo 170 unidades. No se convierte a escondidas —hay una opción
+  `scale`— porque el proyecto ya tiene quien avise: la auditoría de escala
+  absoluta salta fuera del rango de 1 cm a 100 m y dice de qué suposición parte.
+
+Un BVH no trae malla, así que la puerta le ata una **sonda**: un vértice por
+articulación, con peso 1 sobre su joint y colocado en su pose de reposo. Con la
+matriz de enlace inversa siendo la inversa de esa pose, el vértice deformado *es*
+la posición mundial de la articulación, y el evaluador de skinning acaba
+respondiendo a una pregunta de cinemática. `npm run test:bvh` compara esas
+posiciones contra una cinemática directa escrita aparte con matrices 4×4: dos
+caminos independientes que solo coinciden si el orden de rotación, los grados y
+la acumulación de desplazamientos son correctos.
+
+El cierre cruzado se hizo sobre un esqueleto con **tres órdenes de rotación
+distintos** y giros en los tres ejes: el editor generó la referencia de poses con
+Three.js sobre el GLB derivado del BVH y SoftSight reprodujo los cuatro hashes
+exactos, con el gate en `accepted` y `reasons: []`.
+
+### Atar una malla a un esqueleto
+
+El eslabón entre leer movimiento y escribirlo. Hasta aquí lo que salía eran
+esqueletos, que no se pueden mirar.
+
+```bash
+npm run agent3d -- --bvh captura.bvh --export esqueleto.glb --bvh-scale 0.01
+npm run agent3d -- --model dron.glb --skeleton esqueleto.glb \
+  --bind vinculo.json --export dron-animado.glb
+```
+
+```json
+{ "schemaVersion": 1,
+  "bindings": [
+    { "part": "propeller-*", "joint": "Brazo" },
+    { "part": "rotor-*",     "joint": "Pecho" },
+    { "part": "*",           "joint": "Cadera" }
+  ] }
+```
+
+**Esto no es rigging automático, y la diferencia es la razón de que exista.** El
+plan excluye a propósito el rigging, la IK y el retargeting: convierten un banco
+de verificación en un Blender para agentes. Aquí **no se calcula ni un solo
+peso**. El vínculo lo declaras tú —qué pieza a qué hueso, con la misma sintaxis
+de patrón que `--select`— y la herramienta hace las tres cosas que sí son suyas:
+comprobar que el vínculo cubre todas las piezas y que todos los huesos existen,
+llevar los vértices a espacio de modelo y calcular las matrices de enlace desde
+la pose de reposo, y ensamblar el resultado.
+
+Gana la primera regla que encaja, así que lo específico va antes que lo general.
+Una pieza sin regla es un **error**, no se ata a la raíz por si acaso: un modelo
+mal atado se ve bien quieto y se rompe al animar. Si de verdad quieres un cajón
+de sastre, `{ "part": "*" }` al final lo dice a propósito.
+
+El atado es **rígido**: cada vértice pesa 1 sobre un solo hueso, y el informe lo
+declara en `binding.mode`. No es una simplificación de algo mejor, es lo único
+que se puede afirmar sin inventar. Un modelo mecánico —el dron, con sus 296
+piezas con nombre— se ata así y queda exacto, porque sus piezas son rígidas de
+verdad. Una malla orgánica continua necesita pesos suaves, y esos los trae quien
+los tenga: `serializeSkinnedGlb` acepta `JOINTS_0` y `WEIGHTS_0` directamente.
+
+La prueba de que no deforma nada por su cuenta es la más corta del repositorio:
+el pliego del dron atado y el del dron original dan **el mismo `renderHash`,
+`bd2d0e3d`**, con las mismas 296 piezas y los mismos 37.950 triángulos. Y la
+puerta `test:bind` compara posición a posición en reposo y con el hueso movido,
+donde el resultado del atado rígido es exacto y se puede afirmar en cerrado.
+
+### Auditar un guion
+
+El paso previo a cualquier render. Un guion es texto y tiempo, no geometría:
+quién pone la pieza en escena es el editor, y aquí lo único que se hace es
+medir si el guion funciona —con números, no con opiniones—.
+
+```bash
+npm run agent3d -- --story guion.json
+```
+
+```json
+{ "storyVersion": 1, "title": "Tawantinsuyu", "fps": 30,
+  "scenes": [
+    { "name": "origen", "role": "apertura", "durationFrames": 210,
+      "data": { "headline": "h. 1200", "subject": "Manku Qhapaq",
+                "line": "En el valle del Qosqo nace un señorío pequeño." } },
+    { "name": "final", "role": "cierre", "durationFrames": 150,
+      "data": { "line": "En 1532 el imperio entero cabe en una emboscada." } }
+  ] }
+```
+
+`role` es el vocabulario narrativo —`apertura`, `desarrollo`, `giro`, `cierre`—
+y decide qué campos de `data` necesita la escena: esa tabla también se publica
+en `--schema` como `storyRoles`, para que quien ponga el guion en escena no la
+copie sin comparar. `data` son los datos, no la maqueta: campos de más se
+admiten, y un rol que exige `headline` sin que el agente lo ponga es un error
+de validación, no un hueco en el render.
+
+La duración de la pieza **se deriva de la suma** y cada escena sabe dónde
+empieza; nadie declara el total, así que el descuadre no es posible. `--story`
+no escribe nada y no toca geometría: devuelve hechos medidos y sale con 1 si
+hay avisos, como la auditoría espacial. Los avisos son tres, todos exactos:
+
+- `TEXTO_ILEGIBLE` — el texto de la escena no se puede leer en su duración, y
+  el aviso dice cuántos frames harían falta.
+- `ROL_AUSENTE` — la pieza no tiene los roles que necesita (una historia sin
+  cierre).
+- `ROLES_CONSECUTIVOS` — dos escenas seguidas con el mismo papel.
+
+La legibilidad parte de un ritmo de lectura **declarado, no medido** —15
+caracteres por segundo— y el aviso lo dice; `--reading-rate` lo sube o baja.
+El puente lo expone como el comando `story`: entra el guion, salen los hechos,
+y nunca artefactos.
+
 ### Puente local
 
 El navegador no ejecuta el CLI: `tools/bridge.mjs` recibe una petición JSON por
 stdin y devuelve JSON por stdout —informe + artefactos— con un sandbox por
 petición (rutas planas, límites de tamaño y timeout, sin shell). Comandos:
-`inspect`, `render`, `patch`, `sample` y `schema` (el contrato en vivo). La
-respuesta declara `bridgeContractVersion: 1`; los errores de datos salen como
-JSON con `code` y salida 2. El editor lo consume con `softsight-import.mjs`
-para regenerar en un paso el paquete de importación. `npm run test:bridge`
-verifica que cada caso por el puente da el mismo resultado que el CLI directo.
+`inspect`, `render`, `patch`, `sample`, `scene`, `bvh`, `story` y `schema` (el
+contrato en vivo). `scene` recibe una escena declarativa —la misma que valida
+`--schema`— y devuelve informe, pliego y GLB; `bvh` recibe una captura y
+devuelve el GLB con esqueleto y clip; `story` recibe un guion y devuelve
+hechos, sin artefactos. La respuesta declara `bridgeContractVersion: 1`; los
+errores de datos salen como JSON con `code` y salida 2. El editor lo consume
+con `softsight-import.mjs` para regenerar en un paso el paquete de importación.
+`npm run test:bridge` verifica que cada caso por el puente da el mismo
+resultado que el CLI directo.
 
 ## Qué hay dentro
 
@@ -319,7 +503,7 @@ verifica que cada caso por el puente da el mismo resultado que el CLI directo.
 | `present.ts` | Buffer interno desacoplado del canvas visible |
 | `resolutionController.ts` | Resolución adaptativa con modelo de coste ajustado en vivo |
 | `parallel.ts`, `renderWorker.ts` | Paralelo por bandas con reparto adaptativo |
-| `agent/` | Lectores GLB/OBJ, modelo direccionable, auditoría, pliego con rótulos, diff de renders |
+| `agent/` | Lectores GLB/OBJ/BVH, escritor GLB con esqueleto, modelo direccionable, auditoría, pliego con rótulos, diff de renders |
 
 Dependencias: **ninguna** en el núcleo. `meshoptimizer` es opcional y se carga bajo
 demanda, solo si abres un GLB comprimido con `EXT_meshopt_compression`.

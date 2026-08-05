@@ -33,6 +33,8 @@ import {
 } from "../math";
 import { assertValid, SCENE_SCHEMA } from "./schema";
 import type { Model } from "./model";
+import type { ClipSpec, SkeletonSpec } from "./rigSpec";
+import type { SkinBindingRule } from "./skinBinding";
 import type { Material, SceneNode } from "../renderer";
 
 export interface PrimitiveSpec {
@@ -92,6 +94,15 @@ export interface ObjectSpec {
 
 export interface SceneSpec {
   objects: ObjectSpec[];
+  /**
+   * Huesos que animarán las piezas. Declararlo no calcula pesos: el atado es
+   * rígido y el vínculo se dice pieza a pieza en `bindings`.
+   */
+  skeleton?: SkeletonSpec;
+  /** Qué pieza va a qué hueso. Obligatorio si hay `skeleton`. */
+  bindings?: SkinBindingRule[];
+  /** Animaciones sobre los huesos declarados. */
+  clips?: ClipSpec[];
   /** Contrato que la escena debe cumplir; mismos campos que `--max-*` en el CLI. */
   budget?: {
     triangles?: number;

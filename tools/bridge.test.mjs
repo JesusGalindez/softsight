@@ -98,7 +98,7 @@ console.log("puente: schema publicado");
   for (const key of ["scene", "patch", "sampleReference", "reportExample"]) {
     assert.ok(response.report[key], `el esquema publicado debe traer ${key}`);
   }
-  assert.equal(response.report.reportExample.contractVersion, 2);
+  assert.equal(response.report.reportExample.contractVersion, 3);
 }
 
 console.log("puente: inspect == CLI directo (informe nativo, poses certificadas)");

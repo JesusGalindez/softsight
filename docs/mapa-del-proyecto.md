@@ -14,17 +14,27 @@ El producto son **dos repositorios**, con una frontera que no se cruza.
 
 | | **softsight** | **softsight-motion-editor** |
 |---|---|---|
-| Ruta local | `~/Documents/Dron/softsight` | `~/Documents/Codex/After effect ThreeJS` |
-| Remoto | [`JesusGalindez/softsight`](https://github.com/JesusGalindez/softsight) (público) | ninguno todavía |
+| Remoto | [`JesusGalindez/softsight`](https://github.com/JesusGalindez/softsight) (público) | [`JesusGalindez/softsight-motion-editor`](https://github.com/JesusGalindez/softsight-motion-editor) (privado) |
 | Qué es | Núcleo verificador: rasterizador por software + banco headless para agentes | Editor de motion graphics 3D, local-first, React + Three.js |
 | Motor | CPU, cero dependencias en el núcleo | Three.js (WebGL/WebGPU) |
 | Salida | JSON determinista + PNG | Composición `.morphfx`, JSON, WebM |
 | Papel | **Produce verdad**: mide, audita y certifica | **Consume verdad**: importa lo ya certificado |
-| Plan propio | [`plan-fases-bcd.md`](plan-fases-bcd.md), [`plan-agentes.md`](plan-agentes.md), [`plan-renderizador.md`](plan-renderizador.md) | `PLAN.md` en su repo |
+| Plan propio | [`plan-fases-bcd.md`](plan-fases-bcd.md), [`plan-agentes.md`](plan-agentes.md), [`plan-renderizador.md`](plan-renderizador.md) | `PLAN.md` y `docs/PLAN_MOTOR.md` en su repo |
+
+Lo que cae **entre** los dos repos —y por eso no cabe en ninguno de esos planes—
+va en [`plan-historias.md`](plan-historias.md) y [`plan-convergencia.md`](plan-convergencia.md).
 
 **Regla de la frontera:** el editor nunca importa módulos internos de softsight.
 Se comunica solo por el contrato público —CLI, JSON, `--schema`, fixtures— y lo
 hace por un único fichero, `src/assets/softsight-adapter.ts`.
+
+**Y hay dos rasterizadores por software, a propósito.** El de softsight
+(`src/soft/`) **certifica**: produce la verdad contra la que se mide, y su salida
+es la que llevan los hashes. El del editor (`src/engine/cpu/`) da **paridad de
+export** y funciona sin GPU, para renderizar igual donde no hay contexto WebGL.
+Ninguno sustituye al otro y **no se escribe un tercero**. Que no diverjan no es
+una promesa: lo comprueba `npm run softsight:parity-gate` en el editor,
+comparando silueta y cajas de pantalla sobre los fixtures de paridad.
 
 Corolario: si el editor calcula algo por su cuenta que softsight también sabe
 calcular, y nadie ha comparado los dos números, eso es **deuda certificada**, no
@@ -66,7 +76,8 @@ La regla es una fuente por dato. Estas son las fuentes:
 | Forma del puente (petición/respuesta) | `tools/bridge.mjs` (el código que valida) | el cliente del editor la comprueba por `bridgeContractVersion` y esquema |
 | Forma del informe | `contractVersion` en la raíz del informe | el consumidor comprueba la versión antes de leer campos |
 | Semántica de animación certificada | `src/soft/agent/animation.ts` | el editor la verifica, no la reimplementa |
-| Contrato de integración | `SOFTSIGHT_CONTRACT.md` (editor) | fija el commit de softsight que consume |
+| Commit de softsight que consume el editor | `src/assets/softsight-pin.ts` (editor) | los documentos de contrato apuntan ahí; el puente publica su versión y el pin se comprueba solo |
+| Contrato de integración | `SOFTSIGHT_CONTRACT.md` (editor) | describe la integración; el commit no lo repite |
 | Contrato de animación | `SOFTSIGHT_ANIMATION_CONTRACT.md` (editor) | el README de softsight apunta aquí |
 | Fixtures certificados | `public/fixtures/` (editor) | se regeneran con los scripts `softsight:*` |
 | Estado y orden del trabajo | **este fichero** (§5) y `plan-fases-bcd.md` | ningún otro sitio lleva la cuenta |
@@ -86,6 +97,12 @@ hecho por los dos lados, da el mismo hash.
 |---|---|---|
 | `test:animation` | El evaluador contra sus propios fixtures y contra GLB defectuosos | `npm run test:animation` (softsight) |
 | `test:bridge` | El puente contra el CLI real: sample, inspect, render, patch y schema | `npm run test:bridge` (softsight), también dentro de `test:animation` |
+| `test:glb-writer` | Un GLB reescrito por nosotros contra los hashes de control del original | `npm run test:glb-writer` (softsight), también dentro de `test:animation` |
+| `test:bind` | El atado en reposo y con el hueso movido, exacto, y las 296 piezas del dron sin deformar | `npm run test:bind` (softsight), también dentro de `test:animation` |
+| `test:rig` | Esqueleto y clips declarados, la auditoría de animación, y la escena por el puente byte a byte | `npm run test:rig` (softsight), también dentro de `test:animation` |
+| `test:bvh` | La cinemática de un BVH contra el evaluador certificado por dos caminos, y la conversión por API, CLI y puente byte a byte | `npm run test:bvh` (softsight), también dentro de `test:animation` |
+| `test:story` | El guion: duración derivada de la suma, guiones malos rechazados por su motivo, que `--schema` publique el mismo esquema que valida, la auditoría con sus tres avisos, que API, CLI y puente digan lo mismo, y que los dos ejemplares estén limpios y no compartan forma | `npm run test:story` (softsight), también dentro de `test:animation` |
+| `scene-roles.contract` | El vocabulario de roles y los campos que exige cada uno, del editor contra el contrato que publica softsight | dentro de `npm run check` (editor); el fixture se regenera con `npm run softsight:story-schema` |
 | `softsight:gate` | Poses de control: SoftSight contra Three.js | `npm run softsight:gate` (editor) |
 | `softsight:sample-gate` | Muestras de superficie: posiciones y normales | `npm run softsight:sample-gate` (editor) |
 | `softsight:gates` | Las dos anteriores, en cadena | `npm run softsight:gates` (editor) |
@@ -94,9 +111,16 @@ hecho por los dos lados, da el mismo hash.
 Las dos puertas llevan los fixtures y `--strict` en el propio script, así que se
 ejecutan sin argumentos; pasar los tuyos después de `--` los sustituye.
 
-Estado hoy, verificado el 2026-08-03: **ambas puertas en `accepted`, 4 compro-
-baciones cada una; 135 pruebas del editor y las nueve de softsight en verde**
-(tres del evaluador y seis del puente).
+Estado hoy, verificado el 2026-08-05: **ambas puertas en `accepted`; las
+diecinueve comprobaciones de softsight en verde** (trece del banco —contrato,
+robustez, muestreo, escritor, BVH, E3, atado, pliego, E6, las tres del guion y la
+auditoría de la historia— y seis del puente).
+
+En el editor, **410 pruebas en verde y 6 en rojo**: las seis son de `mcp/`, el
+sidecar del paso F4.4 del plan del motor, que está a medio escribir y sin
+commitear. Todo lo demás —tipos, build y las dos puertas cruzadas— pasa. Se
+anota en rojo a propósito: un número que esconde el trabajo a medias de otro
+proceso no es el estado, es una foto favorecedora.
 
 Política de versionado: cambiar la aritmética o el hash **obliga** a subir
 `contractVersion`. Las puertas rechazan versiones viejas, así que el olvido se
@@ -116,14 +140,128 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
    devuelve JSON por stdout con sandbox sin shell; el editor lo consume con
    `softsight-import.mjs`, una sola ruta de importación. Detalle en
    [`plan-fases-bcd.md`](plan-fases-bcd.md).
-3. **UI de estudio.** El editor tiene todas las piezas de un editor profesional
-   pero las presenta como una página centrada. Detalle en §6.
-4. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
+3. **E1 — escritura de esqueleto y clips** (hecho). `serializeSkinnedGlb` en
+   `glbWriter.ts` cierra la asimetría de la que se partía: softsight sabía
+   verificar animación con skinning que no sabía escribir. La puerta
+   `test:glb-writer` reescribe el fixture y comprueba los cuatro hashes de
+   control; el fichero resultante pasa además el gate del editor con `accepted`
+   4/4, así que Three.js valida un GLB nuestro. Detalle en §7.
+4. **E2 — lector de BVH** (hecho). `bvhLoader.ts`: `parseBvh` lee `HIERARCHY` y
+   `MOTION` sin dependencias, y `bvhToSkinnedScene` alimenta directamente al
+   escritor de E1. La tubería `BVH → GLB con esqueleto` está cerrada, así que
+   entra en el pipeline certificado toda la biblioteca de captura de movimiento
+   que existe, incluida la salida de generadores como Kimodo. La puerta
+   `test:bvh` compara la cinemática directa contra el evaluador certificado por
+   dos caminos independientes; el cierre cruzado con Three.js se hizo sobre un
+   esqueleto con tres órdenes de rotación distintos, 4/4 hashes. Detalle en §7.
+5. **E3 — la tubería en la superficie** (hecho). `--bvh captura.bvh --export
+   esqueleto.glb`, con `--bvh-scale` y `--bvh-clip`; comando `bvh` en el puente,
+   el único que no recibe `model`; y un fixture versionado en
+   `artifacts/agent/captura-ejemplo.bvh` con tres órdenes de rotación distintos.
+   La puerta comprueba que **API, CLI y puente producen el mismo GLB byte a
+   byte**: los dos últimos son envoltorios y no deben decidir nada. El
+   `bridgeContractVersion` sigue en 1 porque añadir un comando no rompe a nadie.
+6. **E4 — atado de malla a esqueleto** (hecho). `bindModelToSkeleton` en
+   `skinBinding.ts`, y `--skeleton` + `--bind` en el CLI. Cierra la tubería:
+   BVH → esqueleto → modelo animado que **se puede mirar**. Ver el aviso de
+   alcance más abajo.
+7. **E5 — esqueleto, clips y auditoría de animación declarativos** (hecho).
+   `skeleton`, `bindings` y `clips` en la escena; `rigSpec.ts` los comprueba y
+   traduce, `animationAudit.ts` audita el movimiento. Un agente construye un
+   personaje animado entero en JSON y recibe hechos comprobables sobre él.
+8. **E6 — la escena por el puente** (hecho). Comando `scene` en `bridge.mjs`:
+   antes todo lo declarativo solo se alcanzaba llamando al CLI a mano, y por la
+   vía con sandbox —la que usa el editor— no se llegaba.
+9. **UI de estudio** (hecha, F0–F5 en el repo del editor). Detalle en §6.
+10. **Vida del movimiento** (hecha, en el editor, commit `5217497`). `wiggle.ts`
+    con ruido suave y determinista —puro en `(semilla, tiempo)`, no el PRNG con
+    estado—, `timeOffsetFrames` por capa para el desfase en cascada, e
+    interpolación `spring` en forma cerrada. Pestaña **Vida** en el inspector.
+    Esquema del proyecto 10 → 11.
+11. **Plan del motor** (en curso, otro proceso, en el repo del editor).
+    `docs/PLAN_MOTOR.md` y `AGENTS.md` mandan allí. F0 —gestor de calidad GPU
+    con tiers, presupuesto, muestreo y caché de frames— es el commit `1184cba`.
+    F1 —grafo de escena, registro de recursos y puente con Three— está hecho
+    localmente y sin commitear.
+12. **Historias por agentes** (en curso). Ver
+    [`plan-historias.md`](plan-historias.md), §9 para el orden. Hechos en el
+    editor y sin commitear los pasos 1 y 2: `activeSceneAt` en
+    `src/core/evaluator.ts` —qué escena está activa en un frame y su progreso
+    local, que empieza en 0 y nunca llega a 1 porque el 1 es el primer frame de
+    la siguiente— y `scenes` en el documento, con `composition.durationFrames`
+    derivada de la suma en la validación, que es por donde pasan todas las
+    mutaciones. Esquema del proyecto 11 → 12. Hecho también el paso 3, en
+    softsight y sin commitear: `storySpec.ts` resuelve el guion —roles,
+    duraciones, campos que cada rol exige— y `STORY_SCHEMA` sale por `--schema`
+    con el vocabulario de roles generado de una sola lista. La duración de la
+    pieza se deriva en los dos lados y ninguno la declara. Y el paso 4:
+    `storyAudit.ts` mide texto ilegible por tiempo, rol obligatorio ausente y
+    dos escenas seguidas con el mismo papel, con el ritmo de lectura declarado
+    en el propio informe. Sin heurísticas: los candidatos entran después y
+    marcados. Y el paso 5, en el editor: `scene-roles.ts` convierte los datos de
+    cada escena en capas de texto colocadas en su rango, con el vocabulario
+    congelado en `public/fixtures/softsight-story-schema.json` —traído por el
+    puente con `npm run softsight:story-schema`— y comparado por una prueba, así
+    que los roles del editor no son una copia sin comparar. Y el paso 6: `story`
+    en el puente y `--story` en el CLI —el puente solo ejecuta el CLI, así que
+    sin la bandera no había comando—, con `--reading-rate` para mover la
+    suposición. Sin `model` y sin artefactos: una historia no produce fichero.
+    `bridgeContractVersion` sigue en 1. Y el paso 7, con lo que se cierra el
+    plan: dos ejemplares versionados en `artifacts/agent/guion-*.json`, limpios
+    de avisos y **con formas distintas**, porque dos piezas con la misma
+    secuencia de roles enseñarían una plantilla. La puerta los audita: un
+    ejemplar con avisos enseñaría justo lo que la puerta rechaza.
+13. **Convergencia** (en curso). Ver
+    [`plan-convergencia.md`](plan-convergencia.md). Con F3 del plan del motor, el
+    editor tiene su propio rasterizador por software —`src/engine/cpu/`, raster
+    de Pineda, MSAA 4x, kernel WASM SIMD— y **nadie lo compara con el de
+    softsight**: deuda certificada en el sitio más caro, porque toca la
+    afirmación de exactitud que sostiene el producto. El plan la cierra con una
+    puerta de paridad que compara silueta, cajas y orden en duro y el color con
+    tolerancia declarada; después cierra el bucle de historias con la auditoría
+    de puesta en escena, y solo entonces optimiza. **A0 hecho el 2026-08-05: las
+    dos proyecciones coinciden al píxel** —cero de desviación en 12 cajas y seis
+    vistas—, y para lograrlo el informe publica ahora la cámara de cada vista
+    (`ViewReport.camera`), que antes se tiraba al serializar. **A3 hecho el
+    2026-08-05**: `npm run softsight:parity-gate` en el editor enfrenta los dos
+    rasterizadores. La vista en perspectiva da paridad exacta —0 píxeles sobre
+    9.251—; **A3 y A4 cerrados el mismo día**: la puerta destapó que
+    softsight descartaba caras visibles a incidencia rasante en proyección
+    ortográfica —usaba el test de perspectiva—, y con el arreglo las ocho vistas
+    de los dos fixtures dan **cero píxeles de diferencia**. `contractVersion`
+    sube a 3 porque se mueven los `renderHash`. De paso destapó que la prueba de profundidad
+    del rasterizador del editor compara `clipZ` sin dividir por w — arreglo del
+    plan del motor, no de este. **A4 medido el 2026-08-05 y abierto**: con la
+    tolerancia implementada como dilatación de un píxel, las bandas llegan a
+    cinco, así que la divergencia es real y no del medidor. Un fixture de solo
+    caras planas separa dos causas: las aristas curvas casi tangentes, y algo
+    propio de la vista superior que no es recorte ni rotación.
+14. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
+
+**Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
+el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un
+vínculo declarado y verifica que es completo y coherente, que es trabajo de
+banco de verificación. La línea queda donde estaba, y conviene no cruzarla: en
+cuanto la herramienta decida por su cuenta a qué hueso va un vértice, deja de
+poder afirmar que el resultado es exacto, y con ello se va el valor de todo lo
+demás. Lo que falte de pesos suaves lo trae quien los tenga, por `JOINTS_0` y
+`WEIGHTS_0`.
 
 Riesgo declarado: D era el mayor cuello de botella, porque el editor dependía
 del CLI por proceso. El puente lo cierra: el editor habla con un proceso local
 por JSON, y la forma del contrato sale de `--schema`, que no puede divergir.
+
+**Sobre medir fluidez.** No se puede desde el panel del navegador integrado:
+estrangula `requestAnimationFrame` a cero cuando no está en primer plano, lo que
+congela también los bucles de la aplicación. Cualquier percentil de fotograma
+medido así mide el panel, no el editor. Lo que sí es fiable son los bucles
+síncronos: medido así, `evaluateAt` cuesta 0,005 ms y ~0 KB por fotograma —no es
+el cuello de botella— y `evaluateParticleMorph` con 50.000 partículas cuesta
+**6,16 ms**, el 37 % del presupuesto de un fotograma. Ese es el número que manda,
+y el mando que lo mueve es `setParticleCap` del gestor de calidad. Para medir de
+verdad: Chrome propio, en primer plano, leyendo `mediana` y `p1` de la barra de
+estado, que es el instrumento del propio renderer.
 
 Trabajo de eficiencia identificado, sin fase asignada todavía:
 
@@ -167,22 +305,72 @@ funcionalidad no se toca en ningún paso y `npm run check` pasa entre paso y pas
 
 ---
 
-## 7. Higiene del entorno
+## 7. Fuentes de movimiento externas
+
+Analizados el 2026-08-03: [nv-tlabs/kimodo](https://github.com/nv-tlabs/kimodo)
+—generación de movimiento humanoide desde texto y restricciones— y
+[NVlabs/SOMA-X](https://github.com/NVlabs/SOMA-X) —topología y rig canónico de
+cuerpo humano, y el esqueleto sobre el que Kimodo genera—.
+
+**Como biblioteca dentro de cualquiera de las dos mitades: no.** Son Python con
+PyTorch, CUDA y Warp. El núcleo vende «sin GPU y sin dependencias»; meter torch
+dentro borraría el producto.
+
+**Como fuente de assets aguas arriba: sí**, y en el sitio que ya existe. Kimodo
+produce un fichero; el fichero se congela y se le calcula el hash; entra por el
+puente como cualquier otro asset. Esto **no es negociable**: un modelo de
+difusión da el mismo resultado con la misma semilla solo sobre la misma GPU, el
+mismo driver y la misma versión de torch. La generación queda **fuera** de la
+línea determinista, igual que un GLB descargado de internet.
+
+Ninguno de los dos se instala en la máquina actual, y conviene no volver a
+comprobarlo: la última rueda de PyTorch para macOS x86_64 es la 2.2.2 y SOMA
+pide la 2.10.0; `warp-lang` no publica rueda de macOS x86_64, solo arm64; y
+Kimodo pide GPU NVIDIA. Cuando haya una caja con GPU, el Python vive en un
+tercer directorio que no es ninguna de las dos mitades, y lo único que cruza la
+frontera son ficheros.
+
+Licencias: el código de los dos es Apache-2.0. Los pesos `Kimodo-SOMA-*` son
+NVIDIA Open Model —comercialmente usables, sin reclamación sobre las salidas—,
+pero `Kimodo-SMPLX-RP-v1` es licencia de investigación y los cuerpos SMPL/SMPL-X
+exigen registro aparte y no se redistribuyen. **La rama SOMA es la limpia.**
+
+Lo que sacamos de ahí sin instalar nada es el orden de trabajo de §5: E1
+(escribir esqueleto y clips, hecho) y E2 (leer BVH, siguiente). BVH es la salida
+estándar de Kimodo y de casi todo el mocap del mundo; `kimodo/exports/bvh.py` es
+Apache-2.0 y sirve de referencia para no equivocarse con el orden de rotación y
+la convención de ejes, que es donde todo el mundo se equivoca.
+
+Lo que **no** se hace: los correctivos por pose de SOMA. Son deformación
+dependiente de la pose por encima del LBS y el evaluador certificado no los
+contempla; certificarlos sería una fase entera, no un añadido.
+
+---
+
+## 8. Higiene del entorno
 
 Cosas que ya estaban rotas y conviene no volver a romper:
 
-- **El editor vivía sin repositorio.** `git` lo resolvía contra el `~/.git` de la
-  carpeta personal, donde no había ni un fichero suyo seguido: una única copia en
-  disco, sin historial. Ya tiene repositorio propio. **Le falta remoto**: hasta
-  que lo tenga, sigue existiendo en una sola máquina.
-- **El `~/.git` de la carpeta personal sigue ahí**, con `origin` apuntando a
-  `JesusGalindez/3Dcards` y tres commits que solo contienen un README. Cualquier
-  `git` ejecutado desde `~` sin repositorio más cercano cae en él. No se toca
-  desde aquí porque borrarlo no es reversible; conviene revisarlo aparte.
-- **Nombres divergentes del editor**: el directorio se llama `After effect
-  ThreeJS`, el paquete `softsight-motion-editor` y el remoto heredado era
-  `3Dcards`. Tres nombres para una cosa. Renombrar el directorio rompe rutas
-  absolutas (`.claude/launch.json`, scripts), así que es un cambio a hacer a
-  propósito, no de paso.
+- **Dos procesos escriben el repositorio del editor a la vez**, uno por el plan
+  del motor y otro por este. El reparto por directorios —quién escribe qué— está
+  en [`plan-convergencia.md`](plan-convergencia.md) §0, y ahí se explica por qué
+  todavía no hay un árbol de trabajo por plan. Nadie crea ramas ni hace `git
+  switch` en un árbol compartido: mover `HEAD` arrastra el trabajo sin commitear
+  del otro proceso.
+- **El editor estuvo sin repositorio propio durante meses**, y mientras lo
+  estuvo, `git` resolvía sus órdenes contra un repositorio ancestro del sistema
+  de ficheros donde no había ni un fichero suyo seguido: una única copia en
+  disco, sin historial. Ya tiene repositorio y remoto propios. La lección vale
+  para cualquier directorio nuevo: **comprueba `git rev-parse --show-toplevel`
+  antes de dar por hecho que estás donde crees.**
+- **Trabajar desde el directorio personal es una trampa.** Si un ancestro tiene
+  un `.git`, cualquier `git` lanzado desde una carpeta sin repositorio más
+  cercano cae en él y commitea donde no debe. Conviene comprobarlo una vez, y no
+  borrar nada a la ligera: borrar un repositorio no es reversible.
+- **Nombres divergentes del editor**: el directorio, el paquete
+  (`softsight-motion-editor`) y su primer remoto se llamaron cosas distintas.
+  Tres nombres para una cosa. Renombrar el directorio rompe las rutas absolutas
+  que guardan la configuración local y algunos scripts, así que es un cambio a
+  hacer a propósito, no de paso.
 - `.claude/launch.json` no se versiona en ninguno de los dos repos: lleva rutas
-  absolutas de esta máquina.
+  absolutas de la máquina donde se creó.

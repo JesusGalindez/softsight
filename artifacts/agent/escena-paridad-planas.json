@@ -1,0 +1,16 @@
+{
+  "objects": [
+    {
+      "name": "caja-baja",
+      "geometry": { "primitive": "box", "parameters": [1.2, 0.8, 1] },
+      "position": [-0.8, 0.4, 0],
+      "color": [0.82, 0.32, 0.24]
+    },
+    {
+      "name": "caja-alta",
+      "geometry": { "primitive": "box", "parameters": [0.7, 1.4, 0.9] },
+      "position": [0.8, 0.7, 0.2],
+      "color": [0.28, 0.46, 0.78]
+    }
+  ]
+}

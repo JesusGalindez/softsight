@@ -1,0 +1,87 @@
+{
+  "objects": [
+    { "name": "cadera", "geometry": { "primitive": "box", "parameters": [0.5, 0.3, 0.3] },
+      "position": [0, 1.0, 0], "color": [0.35, 0.42, 0.55] },
+    { "name": "torso", "geometry": { "primitive": "box", "parameters": [0.6, 0.7, 0.35] },
+      "position": [0, 1.5, 0], "color": [0.4, 0.48, 0.62] },
+    { "name": "cabeza", "geometry": { "primitive": "sphere", "parameters": [0.22] },
+      "position": [0, 2.05, 0], "color": [0.78, 0.66, 0.55] },
+
+    { "name": "brazo-izq", "geometry": { "primitive": "cylinder", "parameters": [0.075, 0.62] },
+      "position": [0.33, 1.28, 0], "color": [0.4, 0.48, 0.62] },
+    { "name": "brazo-der", "geometry": { "primitive": "cylinder", "parameters": [0.075, 0.62] },
+      "position": [-0.33, 1.28, 0], "color": [0.4, 0.48, 0.62] },
+
+    { "name": "pierna-izq", "geometry": { "primitive": "cylinder", "parameters": [0.1, 0.92] },
+      "position": [0.15, 0.46, 0], "color": [0.3, 0.36, 0.48] },
+    { "name": "pierna-der", "geometry": { "primitive": "cylinder", "parameters": [0.1, 0.92] },
+      "position": [-0.15, 0.46, 0], "color": [0.3, 0.36, 0.48] }
+  ],
+
+  "skeleton": {
+    "joints": [
+      { "name": "raiz", "offset": [0, 1.0, 0] },
+      { "name": "columna", "parent": "raiz", "offset": [0, 0.5, 0] },
+      { "name": "cuello", "parent": "columna", "offset": [0, 0.55, 0] },
+      { "name": "hombro-izq", "parent": "columna", "offset": [0.33, 0.09, 0] },
+      { "name": "hombro-der", "parent": "columna", "offset": [-0.33, 0.09, 0] },
+      { "name": "muslo-izq", "parent": "raiz", "offset": [0.15, -0.08, 0] },
+      { "name": "muslo-der", "parent": "raiz", "offset": [-0.15, -0.08, 0] }
+    ]
+  },
+
+  "bindings": [
+    { "part": "cabeza", "joint": "cuello" },
+    { "part": "brazo-izq", "joint": "hombro-izq" },
+    { "part": "brazo-der", "joint": "hombro-der" },
+    { "part": "pierna-izq", "joint": "muslo-izq" },
+    { "part": "pierna-der", "joint": "muslo-der" },
+    { "part": "torso", "joint": "columna" },
+    { "part": "*", "joint": "raiz" }
+  ],
+
+  "clips": [
+    {
+      "name": "saludo",
+      "fps": 30,
+      "tracks": [
+        { "joint": "hombro-izq", "property": "rotation", "keys": [
+          { "frame": 0,  "value": [0, 0, 0] },
+          { "frame": 20, "value": [0, 0, 140] },
+          { "frame": 40, "value": [0, 0, 110] },
+          { "frame": 60, "value": [0, 0, 0] }
+        ] },
+        { "joint": "hombro-der", "property": "rotation", "keys": [
+          { "frame": 0,  "value": [0, 0, 0] },
+          { "frame": 30, "value": [0, 0, -14] },
+          { "frame": 60, "value": [0, 0, 0] }
+        ] },
+        { "joint": "muslo-izq", "property": "rotation", "keys": [
+          { "frame": 0,  "value": [0, 0, 0] },
+          { "frame": 30, "value": [6, 0, 0] },
+          { "frame": 60, "value": [0, 0, 0] }
+        ] },
+        { "joint": "muslo-der", "property": "rotation", "keys": [
+          { "frame": 0,  "value": [0, 0, 0] },
+          { "frame": 30, "value": [-6, 0, 0] },
+          { "frame": 60, "value": [0, 0, 0] }
+        ] },
+        { "joint": "columna", "property": "rotation", "keys": [
+          { "frame": 0,  "value": [0, 0, 0] },
+          { "frame": 30, "value": [0, -8, 0] },
+          { "frame": 60, "value": [0, 0, 0] }
+        ] },
+        { "joint": "cuello", "property": "rotation", "keys": [
+          { "frame": 0,  "value": [0, 0, 0] },
+          { "frame": 30, "value": [0, 18, 0] },
+          { "frame": 60, "value": [0, 0, 0] }
+        ] },
+        { "joint": "raiz", "property": "translation", "keys": [
+          { "frame": 0,  "value": [0, 1.0, 0] },
+          { "frame": 30, "value": [0, 1.06, 0] },
+          { "frame": 60, "value": [0, 1.0, 0] }
+        ] }
+      ]
+    }
+  ]
+}

@@ -99,6 +99,53 @@ const BUDGET_FIELDS: ObjectSchema = {
   watertight: { type: "boolean", description: "Exige que todas las mallas estén cerradas." },
 };
 
+const JOINT_FIELDS: ObjectSchema = {
+  name: { type: "string", required: true, description: "Nombre del hueso; identifica, así que es único." },
+  parent: { type: "string", description: "Nombre del hueso del que cuelga. Sin él, es raíz." },
+  offset: { type: VECTOR3, description: "Desplazamiento respecto al padre. Cero por defecto." },
+};
+
+const SKELETON_FIELDS: ObjectSchema = {
+  joints: {
+    type: "object[]",
+    required: true,
+    description: "Huesos del esqueleto; se referencian por nombre, nunca por índice.",
+    fields: JOINT_FIELDS,
+  },
+};
+
+const BINDING_FIELDS: ObjectSchema = {
+  part: { type: "string", required: true, description: "Patrón de pieza, como --select: `rotor-*`." },
+  joint: { type: "string", required: true, description: "Hueso al que se ata. Debe existir." },
+};
+
+const KEY_FIELDS: ObjectSchema = {
+  frame: { type: "number", required: true, description: "Fotograma; en orden creciente y sin repetir." },
+  value: {
+    type: "number[]",
+    required: true,
+    description:
+      "translation y scale: 3 números. rotation: 3 grados en orden Y·X·Z, o 4 del cuaternión x,y,z,w.",
+  },
+};
+
+const TRACK_FIELDS: ObjectSchema = {
+  joint: { type: "string", required: true, description: "Hueso que anima esta pista." },
+  property: {
+    type: '"translation"|"rotation"|"scale"',
+    required: true,
+    description: "Qué se anima del hueso.",
+  },
+  interpolation: { type: '"linear"|"step"', description: "linear por defecto." },
+  keys: { type: "object[]", required: true, description: "Fotogramas clave.", fields: KEY_FIELDS },
+};
+
+const CLIP_FIELDS: ObjectSchema = {
+  name: { type: "string", description: "Nombre del clip; `clipN` si falta." },
+  fps: { type: "number", description: "Fotogramas por segundo con los que se leen los `frame`; 30." },
+  tracks: { type: "object[]", required: true, description: "Pistas del clip.", fields: TRACK_FIELDS },
+};
+
 export const SCENE_SCHEMA: ObjectSchema = {
   objects: {
     type: "object[]",
@@ -110,6 +157,73 @@ export const SCENE_SCHEMA: ObjectSchema = {
     type: "object",
     description: "Contrato que la escena debe cumplir; cada cláusula incumplida es un aviso.",
     fields: BUDGET_FIELDS,
+  },
+  skeleton: {
+    type: "object",
+    description:
+      "Huesos que animarán las piezas. Declararlo no calcula pesos: el atado es rígido y el " +
+      "vínculo lo dices tú en `bindings`.",
+    fields: SKELETON_FIELDS,
+  },
+  bindings: {
+    type: "object[]",
+    description:
+      "Qué pieza va a qué hueso. Gana la primera regla que encaja; una pieza sin regla es un " +
+      "error, no se ata a la raíz por si acaso. Obligatorio si hay `skeleton`.",
+    fields: BINDING_FIELDS,
+  },
+  clips: {
+    type: "object[]",
+    description: "Animaciones sobre los huesos declarados.",
+    fields: CLIP_FIELDS,
+  },
+};
+
+/**
+ * El vocabulario narrativo, aquí y en ningún otro sitio: de esta lista sale el
+ * tipo que valida `role` y la tabla de campos que exige cada rol. Escribir la
+ * unión a mano garantizaría que un rol nuevo entrase por un lado y no por el
+ * otro.
+ *
+ * Es corta a propósito. Con roles para describir cualquier cosa, ninguno
+ * significa nada y la auditoría de estructura no puede decir si falta un cierre.
+ */
+export const SCENE_ROLES = ["apertura", "desarrollo", "giro", "cierre"] as const;
+
+export type SceneRole = (typeof SCENE_ROLES)[number];
+
+const STORY_SCENE_FIELDS: ObjectSchema = {
+  name: { type: "string", required: true, description: "Nombre de la escena; identifica, así que es único." },
+  role: {
+    type: SCENE_ROLES.map((role) => `"${role}"`).join("|"),
+    required: true,
+    description: "Papel narrativo. Decide qué campos de data hacen falta y cómo se pone en escena.",
+  },
+  durationFrames: {
+    type: "number",
+    required: true,
+    description:
+      "Frames que dura. Las escenas van seguidas desde el frame 0, así que el inicio no se declara: " +
+      "se deduce, y la duración de la composición es la suma.",
+  },
+  data: {
+    type: "object",
+    required: true,
+    description:
+      "Lo que cuenta la escena, en texto: `line` siempre, y `headline` además en apertura y giro. " +
+      "Campos de más se admiten; son datos, no maqueta.",
+  },
+};
+
+export const STORY_SCHEMA: ObjectSchema = {
+  storyVersion: { type: "number", required: true, description: "Versión del contrato del guion; hoy 1." },
+  title: { type: "string", required: true, description: "Título de la pieza." },
+  fps: { type: "number", required: true, description: "Fotogramas por segundo con los que se leen las duraciones." },
+  scenes: {
+    type: "object[]",
+    required: true,
+    description: "Escenas en el orden en que se ven; al menos una.",
+    fields: STORY_SCENE_FIELDS,
   },
 };
 

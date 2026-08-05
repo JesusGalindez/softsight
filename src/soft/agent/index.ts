@@ -43,7 +43,7 @@ import type { Mesh } from "../mesh";
 import { diffSheets, type RasterImage, type RenderDiff } from "./renderDiff";
 import { createGroundPlane, resolveScene, type SceneSpec } from "./sceneSpec";
 import { auditSpatial, type SpatialAudit } from "./spatialAudit";
-import type { SceneNode } from "../renderer";
+import type { Camera, SceneNode } from "../renderer";
 
 export {
   renderContactSheet,
@@ -57,7 +57,31 @@ export {
 } from "./contactSheet";
 export { auditMesh } from "./inspect";
 export { parseGlb } from "./glbLoader";
-export { serializeGlb } from "./glbWriter";
+export { parseBvh, bvhToSkinnedScene } from "./bvhLoader";
+export { bindModelToSkeleton, restWorldMatrices, skeletonFromParsedGlb } from "./skinBinding";
+export { resolveRig, eulerToQuaternion } from "./rigSpec";
+export type { ClipSpec, JointSpec, KeySpec, ResolvedRig, SkeletonSpec, TrackSpec } from "./rigSpec";
+export { auditAnimation } from "./animationAudit";
+export type {
+  AnimationAudit,
+  AnimationAuditOptions,
+  AnimationCrossing,
+  GroundBreach,
+} from "./animationAudit";
+export type { BindResult, SkeletonSource, SkinBinding, SkinBindingRule } from "./skinBinding";
+export type { BvhChannel, BvhDocument, BvhJoint, BvhToSceneOptions } from "./bvhLoader";
+export { serializeGlb, serializeSkinnedGlb } from "./glbWriter";
+export type {
+  SkinnedGlbAnimation,
+  SkinnedGlbChannel,
+  SkinnedGlbMesh,
+  SkinnedGlbMorphTarget,
+  SkinnedGlbNode,
+  SkinnedGlbPrimitive,
+  SkinnedGlbSampler,
+  SkinnedGlbScene,
+  SkinnedGlbSkin,
+} from "./glbWriter";
 export type { MeshoptDecoderLike } from "./glbLoader";
 export { parseObj, serializeObj } from "./objLoader";
 export {
@@ -86,12 +110,14 @@ export {
   applyMorphTargets,
   applySkin,
   buildNodeStates,
+  computeWorlds,
   evaluatePose,
   evaluatePoseWithNormals,
   evaluateSample,
   hashSamplesAtFrames,
   inspectGlbAnimation,
   parseGlbAnimation,
+  readAccessorValues,
   sampleSurface,
   validateSampleReference,
 } from "./animation";
@@ -109,7 +135,25 @@ export type {
   SampleReference,
   SoftSightAnimationInspection,
 } from "./animation";
-export { SCENE_SCHEMA, PATCH_SCHEMA, SAMPLE_REFERENCE_SCHEMA, validate, assertValid } from "./schema";
+export { resolveStory, ROLE_REQUIRED_DATA, STORY_VERSION } from "./storySpec";
+export type { ResolvedScene, ResolvedStory, StoryScene, StorySpec } from "./storySpec";
+export {
+  auditStory,
+  DEFAULT_READING_RATE,
+  REQUIRED_ROLES,
+  STORY_AUDIT_CONTRACT_VERSION,
+} from "./storyAudit";
+export type { SceneReading, StoryAudit, StoryAuditOptions, StoryWarning } from "./storyAudit";
+export {
+  SCENE_SCHEMA,
+  PATCH_SCHEMA,
+  SAMPLE_REFERENCE_SCHEMA,
+  SCENE_ROLES,
+  STORY_SCHEMA,
+  validate,
+  assertValid,
+} from "./schema";
+export type { SceneRole } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
 export type {
   SceneSpec,
@@ -437,6 +481,16 @@ export interface ViewReport {
   backfaceRatio: number;
   trianglesRasterized: number;
   pixelsShaded: number;
+  /**
+   * La cámara con que se encuadró este tile.
+   *
+   * Sin ella, cualquiera que quiera rasterizar la misma escena por otra vía
+   * —el editor, otra herramienta— tiene que **adivinar el encuadre o copiar
+   * nuestros internos**, y entonces no está comparando dos renders sino dos
+   * copias del mismo código. Publicarla es lo que convierte el pliego en algo
+   * reproducible desde fuera.
+   */
+  camera: Camera;
 }
 
 export type RenderHash = { sheet: string; byView: Record<string, string> };
@@ -493,6 +547,13 @@ export interface ReviewOptions {
   /** Avisos de una revisión anterior, para separar lo nuevo de lo que ya estaba. */
   baselineWarnings?: readonly Warning[];
   /**
+   * Render de comparación en vez de render para mirar: sin suavizado, sin
+   * sombras, sin rótulo y sobre negro. Es lo que hace comparable el pliego con
+   * el de otro rasterizador; para revisar una escena no sirve, porque quita
+   * justo lo que ayuda a un humano a juzgarla.
+   */
+  parity?: boolean;
+  /**
    * Tamaño plausible del objeto en metros, para juzgar la escala. glTF mide en
    * metros, así que sin esto solo se puede avisar de lo insostenible.
    */
@@ -524,6 +585,7 @@ function viewReports(sheet: ContactSheet): ViewReport[] {
     backfaceRatio: view.backfaceRatio,
     trianglesRasterized: view.stats.trianglesRasterized,
     pixelsShaded: view.stats.pixelsShaded,
+    camera: view.camera,
   }));
 }
 
@@ -659,7 +721,15 @@ export function reviewScene(
   // Encuadre sobre el objeto, no sobre la escena dibujada: el suelo es contexto.
   const sheet = options.inspectOnly
     ? null
-    : renderContactSheet(nodes, tileSize, undefined, undefined, objectNodes, options.frameAabb);
+    : renderContactSheet(
+        nodes,
+        tileSize,
+        undefined,
+        undefined,
+        objectNodes,
+        options.frameAabb,
+        options.parity ?? false,
+      );
   const objectCoverage = options.inspectOnly
     ? null
     : Number(measureObjectCoverage(objectNodes).toFixed(4));
@@ -856,6 +926,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
       undefined,
       framingNodes,
       options.frameAabb,
+      options.parity ?? false,
     );
   }
 
