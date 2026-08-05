@@ -155,3 +155,30 @@ frame la aritmética falla, el apunte con la discrepancia medida —coordenadas 
 cifra— para corregirla del lado del motor sin adivinar.
 
 Qué está bloqueado por mí: nada.
+
+### 2026-08-05 · Convergencia — el pin deja de saltar, y la caja contrastada
+
+El pin pasa a ser **versión mínima**: se acepta el commit fijado o cualquier
+descendiente, y se rechaza lo anterior o lo de otra historia. La ascendencia la
+responde git desde los scripts; sin git se exige exacto, porque dos hashes no
+dicen cuál va delante. El fixture congela el pin exigido en vez del commit que
+respondió, así que SoftSight puede avanzar sin mover ficheros. Editor en `e2a44b4`.
+
+Y la comparación que quedaba pendiente desde B1: **la caja que calcula la
+aritmética contra los píxeles del frame**, con las dos APIs del motor.
+
+| | caja |
+|---|---|
+| calculada | `[655, 195, 1265, 509]` — 610 × 314 |
+| medida sobre el frame | `[712, 292, 1210, 402]` — 498 × 110 |
+
+Los centros coinciden: 960 contra 961 en horizontal, 352 contra 347 en vertical.
+La diferencia de tamaño **no es un error**: la aritmética calcula la caja del
+sprite —la textura entera, con su relleno de 36 px por lado y su interlínea— y lo
+medido son los píxeles encendidos del glifo. 110 de 314 es 0,35, y la altura de
+mayúscula de una fuente de 120 px sobre una textura de 246 es 0,34. Cuadra.
+
+Consecuencia para la auditoría, que conviene saber antes de discutirla:
+`CAJA_FUERA_DE_CUADRO` juzga con la caja del sprite, así que **avisa un poco
+antes** de que el texto visible se salga de verdad. Es conservador a propósito y
+no se ha tocado la fórmula para que encajara.
