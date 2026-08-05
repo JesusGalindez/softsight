@@ -24,6 +24,10 @@ El producto son **dos repositorios**, con una frontera que no se cruza.
 Lo que cae **entre** los dos repos —y por eso no cabe en ninguno de esos planes—
 va en [`plan-historias.md`](plan-historias.md) y [`plan-convergencia.md`](plan-convergencia.md).
 
+Y como hay **tres actores escribiendo a la vez y no todos pueden hablarse**, lo
+que va de uno a otro —peticiones, bloqueos, quién ve qué árbol— se registra en
+[`coordinacion.md`](coordinacion.md).
+
 **Regla de la frontera:** el editor nunca importa módulos internos de softsight.
 Se comunica solo por el contrato público —CLI, JSON, `--schema`, fixtures— y lo
 hace por un único fichero, `src/assets/softsight-adapter.ts`.
