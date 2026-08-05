@@ -14,8 +14,7 @@ El producto son **dos repositorios**, con una frontera que no se cruza.
 
 | | **softsight** | **softsight-motion-editor** |
 |---|---|---|
-| Ruta local | `~/Documents/Dron/softsight` | `~/Documents/Codex/After effect ThreeJS` |
-| Remoto | [`JesusGalindez/softsight`](https://github.com/JesusGalindez/softsight) (público) | ninguno todavía |
+| Remoto | [`JesusGalindez/softsight`](https://github.com/JesusGalindez/softsight) (público) | [`JesusGalindez/softsight-motion-editor`](https://github.com/JesusGalindez/softsight-motion-editor) (privado) |
 | Qué es | Núcleo verificador: rasterizador por software + banco headless para agentes | Editor de motion graphics 3D, local-first, React + Three.js |
 | Motor | CPU, cero dependencias en el núcleo | Three.js (WebGL/WebGPU) |
 | Salida | JSON determinista + PNG | Composición `.morphfx`, JSON, WebM |
@@ -335,18 +334,20 @@ Cosas que ya estaban rotas y conviene no volver a romper:
   todavía no hay un árbol de trabajo por plan. Nadie crea ramas ni hace `git
   switch` en un árbol compartido: mover `HEAD` arrastra el trabajo sin commitear
   del otro proceso.
-- **El editor vivía sin repositorio.** `git` lo resolvía contra el `~/.git` de la
-  carpeta personal, donde no había ni un fichero suyo seguido: una única copia en
-  disco, sin historial. Ya tiene repositorio propio. **Le falta remoto**: hasta
-  que lo tenga, sigue existiendo en una sola máquina.
-- **El `~/.git` de la carpeta personal sigue ahí**, con `origin` apuntando a
-  `JesusGalindez/3Dcards` y tres commits que solo contienen un README. Cualquier
-  `git` ejecutado desde `~` sin repositorio más cercano cae en él. No se toca
-  desde aquí porque borrarlo no es reversible; conviene revisarlo aparte.
-- **Nombres divergentes del editor**: el directorio se llama `After effect
-  ThreeJS`, el paquete `softsight-motion-editor` y el remoto heredado era
-  `3Dcards`. Tres nombres para una cosa. Renombrar el directorio rompe rutas
-  absolutas (`.claude/launch.json`, scripts), así que es un cambio a hacer a
-  propósito, no de paso.
+- **El editor estuvo sin repositorio propio durante meses**, y mientras lo
+  estuvo, `git` resolvía sus órdenes contra un repositorio ancestro del sistema
+  de ficheros donde no había ni un fichero suyo seguido: una única copia en
+  disco, sin historial. Ya tiene repositorio y remoto propios. La lección vale
+  para cualquier directorio nuevo: **comprueba `git rev-parse --show-toplevel`
+  antes de dar por hecho que estás donde crees.**
+- **Trabajar desde el directorio personal es una trampa.** Si un ancestro tiene
+  un `.git`, cualquier `git` lanzado desde una carpeta sin repositorio más
+  cercano cae en él y commitea donde no debe. Conviene comprobarlo una vez, y no
+  borrar nada a la ligera: borrar un repositorio no es reversible.
+- **Nombres divergentes del editor**: el directorio, el paquete
+  (`softsight-motion-editor`) y su primer remoto se llamaron cosas distintas.
+  Tres nombres para una cosa. Renombrar el directorio rompe las rutas absolutas
+  que guardan la configuración local y algunos scripts, así que es un cambio a
+  hacer a propósito, no de paso.
 - `.claude/launch.json` no se versiona en ninguno de los dos repos: lleva rutas
-  absolutas de esta máquina.
+  absolutas de la máquina donde se creó.
