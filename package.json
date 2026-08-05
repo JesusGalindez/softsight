@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "build:agent3d": "vite build --config vite.node.config.ts",
-    "test:animation": "npm run build:agent3d && node tools/animation-contract.test.mjs && node tools/glb-loader.test.mjs && node tools/sample-surface.test.mjs && node tools/glb-writer.test.mjs && node tools/bvh-loader.test.mjs && node tools/skin-binding.test.mjs && node tools/rig-spec.test.mjs && node tools/story-spec.test.mjs && node tools/parity-mode.test.mjs && node tools/bridge.test.mjs",
+    "test:animation": "npm run build:agent3d && node tools/animation-contract.test.mjs && node tools/glb-loader.test.mjs && node tools/sample-surface.test.mjs && node tools/glb-writer.test.mjs && node tools/bvh-loader.test.mjs && node tools/skin-binding.test.mjs && node tools/rig-spec.test.mjs && node tools/story-spec.test.mjs && node tools/staging-spec.test.mjs && node tools/parity-mode.test.mjs && node tools/bridge.test.mjs",
     "test:glb-writer": "npm run build:agent3d && node tools/glb-writer.test.mjs",
     "test:bvh": "npm run build:agent3d && node tools/bvh-loader.test.mjs",
     "test:bind": "npm run build:agent3d && node tools/skin-binding.test.mjs",

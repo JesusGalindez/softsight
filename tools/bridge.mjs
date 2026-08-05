@@ -10,7 +10,7 @@
  * Petición:
  *
  *   { "bridgeContractVersion": 1,
- *     "command": "inspect"|"render"|"patch"|"sample"|"scene"|"bvh"|"story"|"schema",
+ *     "command": "inspect"|"render"|"patch"|"sample"|"scene"|"bvh"|"story"|"staging"|"schema",
  *     "files": { "model": { "name": "drone.glb", "data": "<base64>" }, ... },
  *     "options": { ... } }
  *
@@ -21,7 +21,9 @@
  * sus `bindings` y sus `clips`— y devuelve el informe completo, el pliego y el
  * GLB. Es la vía por la que un agente construye desde cero sin tocar el disco.
  * `story` recibe un guion y devuelve hechos medidos sobre él, sin artefactos:
- * una historia no produce fichero, y ponerla en escena es del editor.
+ * una historia no produce fichero, y ponerla en escena es del editor. `staging`
+ * recibe lo que el editor midió sobre un frame ya montado —capas, cajas,
+ * colores— y dice si la escena enseña algo, si el texto cabe y si se lee.
  *
  * Respuesta:
  *
@@ -62,7 +64,7 @@ const MAX_ARTIFACT_BYTES = Number(process.env.SOFTSIGHT_BRIDGE_MAX_ARTIFACT_MB ?
 const TIMEOUT_MS = Number(process.env.SOFTSIGHT_BRIDGE_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-const COMMANDS = new Set(["inspect", "render", "patch", "sample", "scene", "bvh", "story", "schema"]);
+const COMMANDS = new Set(["inspect", "render", "patch", "sample", "scene", "bvh", "story", "staging", "schema"]);
 
 // Opciones del CLI que el puente acepta, con su tipo. Todo lo demás se rechaza:
 // el puente no expande variables ni patrones, y solo ejecuta con argumentos fijos.
@@ -88,6 +90,7 @@ const PASSTHROUGH = {
   bvhClip: "string",
   auditFrames: "number",
   readingRate: "number",
+  contrastRatio: "number",
   parity: "boolean",
 };
 
@@ -113,6 +116,7 @@ const OPTION_TO_FLAG = {
   bvhClip: "--bvh-clip",
   auditFrames: "--audit-frames",
   readingRate: "--reading-rate",
+  contrastRatio: "--contrast-ratio",
   parity: "--parity",
 };
 
@@ -128,6 +132,8 @@ const FILE_SLOTS = {
   bvh: { bvh: false },
   // El guion no trae geometría ni produce fichero: entra texto y salen hechos.
   story: { story: false },
+  // La puesta en escena tampoco: entran medidas del editor y salen hechos.
+  staging: { staging: false },
   schema: {},
 };
 
@@ -261,6 +267,11 @@ function buildArgs(request, workDir) {
     // Ni --model ni --export: una historia no produce artefacto, produce hechos
     // sobre sí misma. Quien la pone en escena es el editor.
     return ["--story", files.story, ...parseOptions(request.options)];
+  }
+
+  if (request.command === "staging") {
+    // Tampoco produce artefacto: entra lo que el editor midió y salen hechos.
+    return ["--staging", files.staging, ...parseOptions(request.options)];
   }
 
   if (request.command === "scene") {

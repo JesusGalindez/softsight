@@ -227,6 +227,74 @@ export const STORY_SCHEMA: ObjectSchema = {
   },
 };
 
+/**
+ * Contrato del informe de puesta en escena: lo que el editor mide y SoftSight
+ * audita. Se publica aquí para que quien lo produzca no lo escriba de oído — es
+ * el mismo trato que con la escena y con el guion.
+ */
+const STAGED_LAYER_FIELDS: ObjectSchema = {
+  id: { type: "string", required: true, description: "Identificador de la capa dentro de la escena." },
+  kind: {
+    type: '"text"|"model"|"image"|"shape"|"particles"',
+    required: true,
+    description: "Qué clase de capa es. Solo el texto se juzga por caja y contraste.",
+  },
+  visible: {
+    type: "boolean",
+    required: true,
+    description:
+      "Si aporta algo visible en el frame de muestra. Lo decide quien monta: «poco visible» es criterio, no medida.",
+  },
+  box: {
+    type: "number[4]",
+    description:
+      "Caja en píxeles del cuadro, [x0, y0, x1, y1]. Obligatoria en un texto visible. Sale de la proyección, no de rasterizar.",
+  },
+  color: { type: "number[3]", description: "Color del texto en sRGB 0..1. Obligatorio en un texto visible." },
+  backgroundColor: {
+    type: "number[3]",
+    description:
+      "Color medio del fondo bajo la caja, medido sobre el frame. Obligatorio en un texto visible.",
+  },
+};
+
+const STAGED_SCENE_FIELDS: ObjectSchema = {
+  name: { type: "string", required: true, description: "Nombre de la escena; único en la pieza." },
+  startFrame: { type: "number", required: true, description: "Primer frame de la escena." },
+  durationFrames: { type: "number", required: true, description: "Duración en frames, mayor que cero." },
+  sampleFrame: {
+    type: "number",
+    required: true,
+    description: "Frame en el que se midieron colores y cajas; tiene que caer dentro de la escena.",
+  },
+  layers: {
+    type: "object[]",
+    required: true,
+    description: "Capas colocadas, aunque la lista esté vacía: una escena vacía es un aviso, no un error.",
+    fields: STAGED_LAYER_FIELDS,
+  },
+};
+
+export const STAGING_SCHEMA: ObjectSchema = {
+  stagingVersion: { type: "number", required: true, description: "Versión del contrato de la puesta en escena; hoy 1." },
+  title: { type: "string", description: "Título de la pieza, si lo trae." },
+  frame: {
+    type: "object",
+    required: true,
+    description: "Tamaño del cuadro en píxeles: es lo que define qué queda fuera.",
+    fields: {
+      width: { type: "number", required: true, description: "Ancho en píxeles." },
+      height: { type: "number", required: true, description: "Alto en píxeles." },
+    },
+  },
+  scenes: {
+    type: "object[]",
+    required: true,
+    description: "Escenas montadas, en orden; al menos una.",
+    fields: STAGED_SCENE_FIELDS,
+  },
+};
+
 const EDIT_FIELDS: ObjectSchema = {
   op: {
     type: '"add"|"translate"|"rotate"|"scale"|"color"|"hide"|"show"|"delete"|"rename"|"align"|"setPivot"|"mirror"|"instance"',

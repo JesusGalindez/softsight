@@ -138,6 +138,24 @@ export type {
 export { resolveStory, ROLE_REQUIRED_DATA, STORY_VERSION } from "./storySpec";
 export type { ResolvedScene, ResolvedStory, StoryScene, StorySpec } from "./storySpec";
 export {
+  auditStaging,
+  contrastRatio,
+  resolveStaging,
+  DEFAULT_CONTRAST_RATIO,
+  STAGING_AUDIT_CONTRACT_VERSION,
+  STAGING_VERSION,
+} from "./stagingAudit";
+export type {
+  LayerKind,
+  StagedLayer,
+  StagedScene,
+  StagingAudit,
+  StagingAuditOptions,
+  StagingSceneReading,
+  StagingSpec,
+  StagingWarning,
+} from "./stagingAudit";
+export {
   auditStory,
   DEFAULT_READING_RATE,
   REQUIRED_ROLES,
@@ -149,6 +167,7 @@ export {
   PATCH_SCHEMA,
   SAMPLE_REFERENCE_SCHEMA,
   SCENE_ROLES,
+  STAGING_SCHEMA,
   STORY_SCHEMA,
   validate,
   assertValid,

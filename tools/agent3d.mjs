@@ -31,11 +31,13 @@ import {
   ROLE_REQUIRED_DATA,
   SAMPLE_REFERENCE_SCHEMA,
   SCENE_SCHEMA,
+  STAGING_SCHEMA,
   STORY_SCHEMA,
   applyPatch,
   applyPatchToScene,
   assertValid,
   auditAnimation,
+  auditStaging,
   auditStory,
   bindModelToSkeleton,
   bvhToSkinnedScene,
@@ -634,6 +636,13 @@ Guion (solo --story)
   --reading-rate <n>      caracteres por segundo que se suponen legibles (15).
                           Es una suposición declarada, no una medida
 
+Puesta en escena (solo --staging)
+  --staging <ruta.json>   audita una puesta en escena ya montada: qué se ve, si
+                          el texto cabe en el cuadro y si se lee sobre su fondo.
+                          El informe lo produce el editor, que es quien mide
+  --contrast-ratio <n>    contraste mínimo exigido al texto (4.5, el AA de WCAG).
+                          Es un umbral declarado, no una medida
+
   Ejemplares en artifacts/agent/guion-*.json: dos piezas completas y limpias.
   Se leen antes de escribir, para saber a qué suena esto cuando está bien; no
   se rellenan, que para eso harían falta huecos y aquí no los hay.
@@ -746,6 +755,7 @@ function printSchema() {
       {
         softsight: softsightVersion(),
         scene: SCENE_SCHEMA,
+        staging: STAGING_SCHEMA,
         patch: PATCH_SCHEMA,
         sampleReference: SAMPLE_REFERENCE_SCHEMA,
         story: STORY_SCHEMA,
@@ -757,6 +767,7 @@ function printSchema() {
           "Con pliego, el informe trae además sheet, views, renderHash y partScreenBoxes.",
           "story es el guion: la duración de la pieza es la suma de sus escenas, no se declara.",
           "storyRoles dice qué campos de data exige cada rol; quien ponga el guion en escena los necesita.",
+          "staging es lo que el editor mide sobre un frame ya montado; SoftSight solo lo juzga.",
           "softsight dice qué versión responde: el consumidor compara su pin contra este commit, no contra un texto.",
         ],
       },
@@ -793,6 +804,27 @@ function auditStoryFile(options) {
   }
 
   return { source: storyPath, ...auditStory(story, readingRate === undefined ? {} : { readingRate }) };
+}
+
+/**
+ * Audita una puesta en escena ya montada. Tampoco escribe nada: lo que entra son
+ * medidas que hizo el editor —cajas, colores, qué se ve— y lo que sale son
+ * hechos sobre ellas.
+ */
+function auditStagingFile(options) {
+  const stagingPath = resolve(options.get("staging"));
+  const staging = JSON.parse(readFileSync(stagingPath, "utf8"));
+
+  const ratioFlag = options.get("contrast-ratio");
+  const contrastRatio = ratioFlag === undefined || ratioFlag === "true" ? undefined : Number(ratioFlag);
+  if (ratioFlag !== undefined && ratioFlag !== "true" && (!Number.isFinite(contrastRatio) || contrastRatio < 1)) {
+    throw new Error(`--contrast-ratio inválido: '${ratioFlag}'; debe ser un número mayor o igual que 1`);
+  }
+
+  return {
+    source: stagingPath,
+    ...auditStaging(staging, contrastRatio === undefined ? {} : { contrastRatio }),
+  };
 }
 
 async function convertBvhFile(options) {
@@ -884,6 +916,14 @@ async function main() {
   // tiempo. Va antes por el mismo motivo que el BVH.
   if (options.has("story")) {
     const report = auditStoryFile(options);
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    process.exitCode = report.warnings.length > 0 ? 1 : 0;
+    return;
+  }
+  // La puesta en escena tampoco trae geometría: son las medidas que hizo el
+  // editor sobre un frame ya montado.
+  if (options.has("staging")) {
+    const report = auditStagingFile(options);
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     process.exitCode = report.warnings.length > 0 ? 1 : 0;
     return;
