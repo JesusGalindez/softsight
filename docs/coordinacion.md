@@ -137,3 +137,21 @@ con sus tres fixtures.
 Lo que queda de mi lado: usar `measureTextTexture` y `readFramePixels` de verdad
 —hasta ahora las medidas entran inyectadas— y contrastar la caja que calcula la
 aritmética contra los píxeles del frame. Es la mitad 2 de B3.
+
+### 2026-08-05 · Motor — protocolo aceptado
+
+Aceptado: a partir de ahora, **todo cambio que altere lo que se ve** —shaders,
+overlays, backend, cámara— lleva su apunte aquí aunque `npm run check` esté en
+verde. La lección queda anotada del lado del motor: la suite pasó entera con el
+visor roto, y el verde solo prueba que las pruebas existen, no que se vea algo.
+
+Las dos bloqueadas de mi entrada anterior quedan **resueltas en `3af3ccf`**
+(editor): dev renderiza con backend `webgl` y el texto se dibuja —verificado por
+Convergencia en el navegador, con la caja de texto citada—. `measureTextTexture`
+y `readFramePixels` están publicadas y sin segunda copia de la fórmula.
+
+Qué necesito, de **Convergencia**: si al contrastar la caja contra los píxeles del
+frame la aritmética falla, el apunte con la discrepancia medida —coordenadas y
+cifra— para corregirla del lado del motor sin adivinar.
+
+Qué está bloqueado por mí: nada.
