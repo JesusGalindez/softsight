@@ -20,7 +20,10 @@ El producto son **dos repositorios**, con una frontera que no se cruza.
 | Motor | CPU, cero dependencias en el núcleo | Three.js (WebGL/WebGPU) |
 | Salida | JSON determinista + PNG | Composición `.morphfx`, JSON, WebM |
 | Papel | **Produce verdad**: mide, audita y certifica | **Consume verdad**: importa lo ya certificado |
-| Plan propio | [`plan-fases-bcd.md`](plan-fases-bcd.md), [`plan-agentes.md`](plan-agentes.md), [`plan-renderizador.md`](plan-renderizador.md) | `PLAN.md` en su repo |
+| Plan propio | [`plan-fases-bcd.md`](plan-fases-bcd.md), [`plan-agentes.md`](plan-agentes.md), [`plan-renderizador.md`](plan-renderizador.md) | `PLAN.md` y `docs/PLAN_MOTOR.md` en su repo |
+
+Lo que cae **entre** los dos repos —y por eso no cabe en ninguno de esos planes—
+va en [`plan-historias.md`](plan-historias.md) y [`plan-convergencia.md`](plan-convergencia.md).
 
 **Regla de la frontera:** el editor nunca importa módulos internos de softsight.
 Se comunica solo por el contrato público —CLI, JSON, `--schema`, fixtures— y lo
@@ -198,7 +201,20 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     de avisos y **con formas distintas**, porque dos piezas con la misma
     secuencia de roles enseñarían una plantilla. La puerta los audita: un
     ejemplar con avisos enseñaría justo lo que la puerta rechaza.
-13. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
+13. **Convergencia** (en curso). Ver
+    [`plan-convergencia.md`](plan-convergencia.md). Con F3 del plan del motor, el
+    editor tiene su propio rasterizador por software —`src/engine/cpu/`, raster
+    de Pineda, MSAA 4x, kernel WASM SIMD— y **nadie lo compara con el de
+    softsight**: deuda certificada en el sitio más caro, porque toca la
+    afirmación de exactitud que sostiene el producto. El plan la cierra con una
+    puerta de paridad que compara silueta, cajas y orden en duro y el color con
+    tolerancia declarada; después cierra el bucle de historias con la auditoría
+    de puesta en escena, y solo entonces optimiza. **A0 hecho el 2026-08-05: las
+    dos proyecciones coinciden al píxel** —cero de desviación en 12 cajas y seis
+    vistas—, y para lograrlo el informe publica ahora la cámara de cada vista
+    (`ViewReport.camera`), que antes se tiraba al serializar. Lo siguiente es la
+    silueta rasterizada.
+14. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
@@ -313,6 +329,12 @@ contempla; certificarlos sería una fase entera, no un añadido.
 
 Cosas que ya estaban rotas y conviene no volver a romper:
 
+- **Dos procesos escriben el repositorio del editor a la vez**, uno por el plan
+  del motor y otro por este. El reparto por directorios —quién escribe qué— está
+  en [`plan-convergencia.md`](plan-convergencia.md) §0, y ahí se explica por qué
+  todavía no hay un árbol de trabajo por plan. Nadie crea ramas ni hace `git
+  switch` en un árbol compartido: mover `HEAD` arrastra el trabajo sin commitear
+  del otro proceso.
 - **El editor vivía sin repositorio.** `git` lo resolvía contra el `~/.git` de la
   carpeta personal, donde no había ni un fichero suyo seguido: una única copia en
   disco, sin historial. Ya tiene repositorio propio. **Le falta remoto**: hasta

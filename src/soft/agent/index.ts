@@ -43,7 +43,7 @@ import type { Mesh } from "../mesh";
 import { diffSheets, type RasterImage, type RenderDiff } from "./renderDiff";
 import { createGroundPlane, resolveScene, type SceneSpec } from "./sceneSpec";
 import { auditSpatial, type SpatialAudit } from "./spatialAudit";
-import type { SceneNode } from "../renderer";
+import type { Camera, SceneNode } from "../renderer";
 
 export {
   renderContactSheet,
@@ -481,6 +481,16 @@ export interface ViewReport {
   backfaceRatio: number;
   trianglesRasterized: number;
   pixelsShaded: number;
+  /**
+   * La cámara con que se encuadró este tile.
+   *
+   * Sin ella, cualquiera que quiera rasterizar la misma escena por otra vía
+   * —el editor, otra herramienta— tiene que **adivinar el encuadre o copiar
+   * nuestros internos**, y entonces no está comparando dos renders sino dos
+   * copias del mismo código. Publicarla es lo que convierte el pliego en algo
+   * reproducible desde fuera.
+   */
+  camera: Camera;
 }
 
 export type RenderHash = { sheet: string; byView: Record<string, string> };
@@ -568,6 +578,7 @@ function viewReports(sheet: ContactSheet): ViewReport[] {
     backfaceRatio: view.backfaceRatio,
     trianglesRasterized: view.stats.trianglesRasterized,
     pixelsShaded: view.stats.pixelsShaded,
+    camera: view.camera,
   }));
 }
 
