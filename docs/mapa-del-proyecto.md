@@ -32,6 +32,10 @@ Lo que viene después de que la pieza se monte sola —tipografía animada, ritm
 que el movimiento cuente la historia en vez de decorarla— está en
 [`plan-animacion.md`](plan-animacion.md).
 
+Y lo que hace falta para que un agente **describa** una pieza compleja —un ala, un
+fuselaje, una pata— en vez de solo colocar primitivas, está en
+[`plan-geometria.md`](plan-geometria.md).
+
 **Regla de la frontera:** el editor nunca importa módulos internos de softsight.
 Se comunica solo por el contrato público —CLI, JSON, `--schema`, fixtures— y lo
 hace por un único fichero, `src/assets/softsight-adapter.ts`.
