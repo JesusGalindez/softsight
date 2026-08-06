@@ -1,9 +1,13 @@
 # Plan: geometría compleja declarativa
 
-Estado: **cerrado**. Escrito el 2026-08-05, terminado el 2026-08-06, en once
-commits de `d352808` a `260f37a`. La puerta es `npm run test:geometry`, con 43
-comprobaciones, y va dentro de `npm run test:animation`. El ejemplar es
-`artifacts/agent/pieza-geometria.json`.
+Estado: **cerrado**. Escrito el 2026-08-05, terminado el 2026-08-06. La puerta es
+`npm run test:geometry`, con 44 comprobaciones, y va dentro de
+`npm run test:animation`. El ejemplar es `artifacts/agent/pieza-geometria.json`.
+
+Lo de después del cierre queda en §9, tachado y fechado, en vez de en un plan
+nuevo: el primer uso real encontró que la repetición radial no servía para un
+rotor fuera del eje del mundo, y esa historia se lee mejor donde está la decisión
+que la causó.
 
 Cada paso queda marcado abajo con el número que dio, no con «hecho»: dentro de
 seis meses, «hecho» no permite comprobar nada y un número sí.
