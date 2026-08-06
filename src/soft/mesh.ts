@@ -416,6 +416,156 @@ export function createCylinder(
 }
 
 /**
+ * Generadores de perfil: familias de fórmulas que producen un polígono cerrado en
+ * el mismo formato que ya acepta `createExtrusion` —pares `x,z`, antihorario—.
+ *
+ * Son familias fijas con parámetros y no un evaluador de expresiones a propósito.
+ * Una fórmula libre dentro del JSON traería análisis sintáctico, un modo de fallo
+ * que no es «campo mal escrito» —el único que el esquema sabe cazar— y la duda de
+ * si dos máquinas la evalúan igual. Con cuatro familias se describe lo que hace
+ * falta describir.
+ */
+export function createSuperellipseProfile(
+  a: number,
+  b: number,
+  exponent: number,
+  points = 32,
+): number[] {
+  if (points < 3) throw new Error("un perfil necesita al menos tres puntos");
+  if (!(exponent > 0)) throw new Error(`el exponente de la superelipse debe ser positivo, no ${exponent}`);
+
+  const polygon: number[] = [];
+  for (let index = 0; index < points; index += 1) {
+    const angle = (index / points) * Math.PI * 2;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    if (exponent === 2) {
+      // El caso elíptico se resuelve sin pasar por la fórmula general, y no por
+      // velocidad: `Math.sign(-0)` vale `-0`, así que la forma general deja ceros
+      // negativos donde esta deja ceros positivos. Con la excepción, un círculo y
+      // una superelipse de exponente 2 son el mismo polígono número a número, que
+      // es justo lo que la puerta comprueba.
+      polygon.push(a * cos, b * sin);
+      continue;
+    }
+    const power = 2 / exponent;
+    polygon.push(
+      a * Math.sign(cos) * Math.abs(cos) ** power,
+      b * Math.sign(sin) * Math.abs(sin) ** power,
+    );
+  }
+  return polygon;
+}
+
+/** Un círculo es la superelipse de exponente 2 con los dos semiejes iguales. */
+export function createCircleProfile(radius = 1, points = 32): number[] {
+  return createSuperellipseProfile(radius, radius, 2, points);
+}
+
+/**
+ * Superfórmula de Gielis: una sola familia que recorre flores, estrellas,
+ * caparazones y secciones redondeadas según cuatro números.
+ */
+export function createGielisProfile(
+  m: number,
+  n1: number,
+  n2: number,
+  n3: number,
+  options: { a?: number; b?: number; radius?: number; points?: number } = {},
+): number[] {
+  const a = options.a ?? 1;
+  const b = options.b ?? 1;
+  const radius = options.radius ?? 1;
+  const points = options.points ?? 64;
+  if (points < 3) throw new Error("un perfil necesita al menos tres puntos");
+  if (a === 0 || b === 0) throw new Error("los parámetros a y b de Gielis no pueden ser cero");
+
+  const polygon: number[] = [];
+  for (let index = 0; index < points; index += 1) {
+    const angle = (index / points) * Math.PI * 2;
+    const quarter = (m * angle) / 4;
+    const sum =
+      Math.abs(Math.cos(quarter) / a) ** n2 + Math.abs(Math.sin(quarter) / b) ** n3;
+    if (!(sum > 0) || !Number.isFinite(sum)) {
+      // Sin esto sale un infinito que revienta tres capas más abajo, en la
+      // triangulación, sin decir de dónde vino.
+      throw new Error(
+        `los parámetros de Gielis no producen figura en el ángulo ${angle.toFixed(4)} rad`,
+      );
+    }
+    const r = radius * sum ** (-1 / n1);
+    polygon.push(r * Math.cos(angle), r * Math.sin(angle));
+  }
+  return polygon;
+}
+
+/**
+ * Perfil aerodinámico NACA de cuatro dígitos `MPXX`: curvatura máxima en
+ * centésimas de cuerda, su posición en décimas, y grosor en centésimas.
+ *
+ * Dos detalles que deciden si el perfil sirve:
+ *
+ * El último coeficiente del grosor es **−0,1036** y no el clásico −0,1015. Con el
+ * clásico, `yt(1)` no es cero: el borde de fuga queda abierto por unas milésimas
+ * de cuerda y cada ala arrastraría un `BORDE_ABIERTO` que no es culpa de quien la
+ * escribió. Con este, los cinco coeficientes suman cero y el borde de fuga es un
+ * punto, no dos.
+ *
+ * Y las estaciones se reparten en coseno, no uniformemente. Con reparto uniforme,
+ * el borde de ataque —donde la curvatura es máxima— se queda con dos o tres puntos
+ * y el perfil sale con una punta poligonal.
+ */
+export function createNacaProfile(digits: string, chord = 1, points = 64): number[] {
+  if (!/^\d{4}$/.test(digits)) {
+    throw new Error(`un perfil NACA son cuatro dígitos, no "${digits}"`);
+  }
+  if (points % 2 !== 0 || points < 8) {
+    throw new Error(`points de un NACA debe ser par y al menos 8, no ${points}`);
+  }
+
+  const camber = Number(digits[0]) / 100;
+  const camberPosition = Number(digits[1]) / 10;
+  const thickness = Number(digits.slice(2)) / 100;
+  const stations = points / 2 + 1;
+
+  const surface = (station: number, upper: boolean): [number, number] => {
+    const x = (1 - Math.cos((Math.PI * station) / (stations - 1))) / 2;
+    const halfThickness =
+      5 *
+      thickness *
+      (0.2969 * Math.sqrt(x) - 0.126 * x - 0.3516 * x * x + 0.2843 * x ** 3 - 0.1036 * x ** 4);
+
+    let center = 0;
+    let slope = 0;
+    if (camber !== 0 && camberPosition !== 0) {
+      if (x < camberPosition) {
+        center = (camber / camberPosition ** 2) * (2 * camberPosition * x - x * x);
+        slope = ((2 * camber) / camberPosition ** 2) * (camberPosition - x);
+      } else {
+        const tail = (1 - camberPosition) ** 2;
+        center = (camber / tail) * (1 - 2 * camberPosition + 2 * camberPosition * x - x * x);
+        slope = ((2 * camber) / tail) * (camberPosition - x);
+      }
+    }
+
+    const angle = Math.atan(slope);
+    return upper
+      ? [chord * (x - halfThickness * Math.sin(angle)), chord * (center + halfThickness * Math.cos(angle))]
+      : [chord * (x + halfThickness * Math.sin(angle)), chord * (center - halfThickness * Math.cos(angle))];
+  };
+
+  // Por debajo desde el borde de ataque hasta el de fuga, y por arriba de vuelta:
+  // recorrido antihorario en el plano `x,z`. Los dos extremos se emiten una sola
+  // vez —en la estación 0 las dos superficies coinciden en el origen, y en la
+  // última coinciden en el borde de fuga porque `yt(1)` es cero—, así que salen
+  // exactamente `points` pares.
+  const polygon: number[] = [];
+  for (let station = 0; station < stations; station += 1) polygon.push(...surface(station, false));
+  for (let station = stations - 2; station >= 1; station -= 1) polygon.push(...surface(station, true));
+  return polygon;
+}
+
+/**
  * Área firmada de un polígono en el plano XZ. El signo dice el sentido de giro, y
  * hace falta porque un polígono escrito al revés genera un sólido del revés.
  */

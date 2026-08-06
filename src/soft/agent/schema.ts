@@ -52,11 +52,32 @@ const GEOMETRY_RAW: ObjectSchema = {
 
 const GEOMETRY_EXTRUDE: ObjectSchema = {
   extrude: {
-    type: "number[]",
+    type: "number[]|string",
     required: true,
-    description: "Polígono en el plano XZ, pares x,z; puede ser cóncavo y sin agujeros.",
+    description:
+      "Polígono en el plano XZ, pares x,z —cóncavo admitido y sin agujeros—, o el nombre " +
+      "de un perfil declarado en `profiles`.",
   },
   height: { type: "number", description: "Altura de la extrusión; 1 por defecto." },
+};
+
+/**
+ * Los cuatro generadores van planos y opcionales, no en un campo con `anyOf`,
+ * porque `anyOf` se aplica a un campo y no a los elementos de una lista. Que haya
+ * exactamente uno lo exige el resolutor, diciendo cuáles encontró.
+ */
+const PROFILE_FIELDS: ObjectSchema = {
+  name: { type: "string", required: true, description: "Nombre del perfil; identifica, así que es único." },
+  circle: { type: "number", description: "Círculo de este radio." },
+  superellipse: { type: "number[]", description: "[a, b, exponente]; con exponente 2 es una elipse." },
+  gielis: {
+    type: "number[]",
+    description: "Superfórmula de Gielis [m, n1, n2, n3], con a y b opcionales detrás.",
+  },
+  naca: { type: "string", description: 'Perfil aerodinámico de cuatro dígitos, como "2412".' },
+  points: { type: "number", description: "Puntos del polígono; 32, o 64 en gielis y naca." },
+  chord: { type: "number", description: "Cuerda del naca; 1 por defecto." },
+  radius: { type: "number", description: "Multiplicador del radio de gielis; 1 por defecto." },
 };
 
 const GEOMETRY_REVOLVE: ObjectSchema = {
@@ -152,6 +173,13 @@ export const SCENE_SCHEMA: ObjectSchema = {
     required: true,
     description: "Piezas de la escena; al menos una.",
     fields: OBJECT_FIELDS,
+  },
+  profiles: {
+    type: "object[]",
+    description:
+      "Catálogo de perfiles con nombre, usados desde la geometría. Uno declarado y no usado " +
+      "no es error.",
+    fields: PROFILE_FIELDS,
   },
   budget: {
     type: "object",

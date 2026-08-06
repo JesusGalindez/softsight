@@ -12,11 +12,15 @@
 import {
   computeNormals,
   createBox,
+  createCircleProfile,
   createCylinder,
   createExtrusion,
+  createGielisProfile,
+  createNacaProfile,
   createPlane,
   createRevolution,
   createSphere,
+  createSuperellipseProfile,
   createTorus,
   type Mesh,
 } from "../mesh";
@@ -46,9 +50,43 @@ export interface PrimitiveSpec {
   parameters?: number[];
 }
 
+/**
+ * Perfil con nombre: un polígono cerrado generado por fórmula, declarado una vez
+ * y usado por nombre desde la geometría.
+ *
+ * Existe por el coste de turno. Un ala con ocho estaciones que repita el mismo
+ * polígono de 64 puntos son cuatro mil números en el documento, y el agente
+ * vuelve a leerlos en cada llamada.
+ *
+ * Los cuatro generadores van planos y opcionales porque `anyOf` del esquema se
+ * aplica a un campo y no a los elementos de una lista. Quien exige que haya
+ * exactamente uno es `buildProfile`, con un mensaje que dice cuáles encontró.
+ */
+export interface ProfileSpec {
+  /** Identifica, así que es único dentro de la escena. */
+  name: string;
+  /** Círculo de este radio. */
+  circle?: number;
+  /** Superelipse `[a, b, exponente]`; con exponente 2 es una elipse. */
+  superellipse?: number[];
+  /** Superfórmula de Gielis `[m, n1, n2, n3]`, con `a` y `b` opcionales detrás. */
+  gielis?: number[];
+  /** Perfil aerodinámico NACA de cuatro dígitos, como `"2412"`. */
+  naca?: string;
+  /** Puntos del polígono. Por defecto 32, salvo Gielis (64) y NACA (64). */
+  points?: number;
+  /** Cuerda del NACA; 1 por defecto. */
+  chord?: number;
+  /** Multiplicador del radio de Gielis; 1 por defecto. */
+  radius?: number;
+}
+
 export interface ExtrudeSpec {
-  /** Polígono en el plano XZ, pares `x,z`. Puede ser cóncavo; sin agujeros. */
-  extrude: number[];
+  /**
+   * Polígono en el plano XZ, pares `x,z`, o el nombre de un perfil declarado en
+   * `profiles`. Puede ser cóncavo; sin agujeros.
+   */
+  extrude: number[] | string;
   /** Altura total; se reparte a ambos lados del origen. */
   height?: number;
 }
@@ -95,6 +133,11 @@ export interface ObjectSpec {
 export interface SceneSpec {
   objects: ObjectSpec[];
   /**
+   * Catálogo de perfiles. Uno declarado y no usado no es error: un catálogo puede
+   * tener piezas de repuesto.
+   */
+  profiles?: ProfileSpec[];
+  /**
    * Huesos que animarán las piezas. Declararlo no calcula pesos: el atado es
    * rígido y el vínculo se dice pieza a pieza en `bindings`.
    */
@@ -129,6 +172,75 @@ function isExtrude(geometry: GeometrySpec): geometry is ExtrudeSpec {
 
 function isRevolve(geometry: GeometrySpec): geometry is RevolveSpec {
   return (geometry as RevolveSpec).revolve !== undefined;
+}
+
+const PROFILE_GENERATORS = ["circle", "superellipse", "gielis", "naca"] as const;
+
+/** Un perfil declarado a su polígono. Exige exactamente un generador. */
+function buildProfile(spec: ProfileSpec): number[] {
+  const declared = PROFILE_GENERATORS.filter((key) => spec[key] !== undefined);
+  if (declared.length === 0) {
+    throw new Error(
+      `el perfil "${spec.name}" no declara generador; admitidos: ${PROFILE_GENERATORS.join(", ")}`,
+    );
+  }
+  if (declared.length > 1) {
+    throw new Error(
+      `el perfil "${spec.name}" declara ${declared.length} generadores (${declared.join(" y ")}); declara uno`,
+    );
+  }
+
+  if (spec.circle !== undefined) return createCircleProfile(spec.circle, spec.points ?? 32);
+  if (spec.superellipse !== undefined) {
+    const [a, b, exponent] = spec.superellipse;
+    if (a === undefined || b === undefined || exponent === undefined) {
+      throw new Error(`el perfil "${spec.name}": superellipse son tres números, [a, b, exponente]`);
+    }
+    return createSuperellipseProfile(a, b, exponent, spec.points ?? 32);
+  }
+  if (spec.gielis !== undefined) {
+    const [m, n1, n2, n3, a, b] = spec.gielis;
+    if (m === undefined || n1 === undefined || n2 === undefined || n3 === undefined) {
+      throw new Error(
+        `el perfil "${spec.name}": gielis son al menos cuatro números, [m, n1, n2, n3]`,
+      );
+    }
+    return createGielisProfile(m, n1, n2, n3, {
+      a,
+      b,
+      radius: spec.radius,
+      points: spec.points ?? 64,
+    });
+  }
+  return createNacaProfile(spec.naca as string, spec.chord ?? 1, spec.points ?? 64);
+}
+
+/** El catálogo entero, resuelto una vez por escena. */
+function resolveProfiles(specs: readonly ProfileSpec[] | undefined): Map<string, number[]> {
+  const profiles = new Map<string, number[]>();
+  for (const spec of specs ?? []) {
+    if (profiles.has(spec.name)) {
+      throw new Error(`hay dos perfiles llamados "${spec.name}"; el nombre identifica`);
+    }
+    profiles.set(spec.name, buildProfile(spec));
+  }
+  return profiles;
+}
+
+function polygonOf(
+  extrude: number[] | string,
+  profiles: ReadonlyMap<string, number[]> | undefined,
+): number[] {
+  if (typeof extrude !== "string") return extrude;
+  const polygon = profiles?.get(extrude);
+  if (polygon === undefined) {
+    const declared = profiles === undefined ? [] : [...profiles.keys()];
+    throw new Error(
+      `no hay ningún perfil llamado "${extrude}"; ` +
+        (declared.length > 0 ? `declarados: ${declared.join(", ")}` : "la escena no declara perfiles"),
+    );
+  }
+  return polygon;
 }
 
 function buildPrimitive(spec: PrimitiveSpec): Mesh {
@@ -227,13 +339,22 @@ function buildMaterial(spec: ObjectSpec): Material {
   };
 }
 
-/** Una pieza declarativa a nodo de escena. Suelta, para poder añadir de una en una. */
-export function resolveObject(object: ObjectSpec, index = 0): ResolvedObject {
+/**
+ * Una pieza declarativa a nodo de escena. Suelta, para poder añadir de una en una.
+ *
+ * La tabla de perfiles es opcional porque esta función es pública y el parche la
+ * llama pieza a pieza, fuera de una escena entera.
+ */
+export function resolveObject(
+  object: ObjectSpec,
+  index = 0,
+  profiles?: ReadonlyMap<string, number[]>,
+): ResolvedObject {
   const geometry = object.geometry;
   const mesh = isRawMesh(geometry)
     ? buildRawMesh(geometry)
     : isExtrude(geometry)
-      ? createExtrusion(geometry.extrude, geometry.height ?? 1)
+      ? createExtrusion(polygonOf(geometry.extrude, profiles), geometry.height ?? 1)
       : isRevolve(geometry)
         ? createRevolution(geometry.revolve, geometry.segments ?? 32)
         : buildPrimitive(geometry);
@@ -251,7 +372,8 @@ export function resolveScene(spec: SceneSpec): ResolvedObject[] {
     throw new Error("la escena necesita al menos un objeto en `objects`");
   }
 
-  return spec.objects.map((object, index) => resolveObject(object, index));
+  const profiles = resolveProfiles(spec.profiles);
+  return spec.objects.map((object, index) => resolveObject(object, index, profiles));
 }
 
 /**
