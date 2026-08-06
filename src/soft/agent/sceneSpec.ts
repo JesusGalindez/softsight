@@ -43,11 +43,17 @@ import {
   translation,
   type Mat4,
 } from "../math";
+import { evaluateVariation, type VariationSpec } from "../variation";
 import { assertValid, SCENE_SCHEMA } from "./schema";
 import type { Model } from "./model";
 import type { ClipSpec, SkeletonSpec } from "./rigSpec";
 import type { SkinBindingRule } from "./skinBinding";
 import type { Material, SceneNode } from "../renderer";
+
+// Se reexportan desde aquí porque es donde vivían: mover un fichero no debe
+// obligar a que quien lo usaba cambie su import.
+export { evaluateVariation };
+export type { VariationSpec };
 
 export interface PrimitiveSpec {
   primitive: "box" | "sphere" | "torus" | "plane" | "cylinder" | "cone";
@@ -117,23 +123,6 @@ export interface LoftSpec {
   samples?: number;
   /** Qué extremos se tapan; `both` por defecto. */
   caps?: "both" | "none" | "start" | "end";
-}
-
-/**
- * Una función escalar a lo largo de algo, como tabla de estaciones más
- * interpolación declarada.
- *
- * No hay evaluador de expresiones a propósito: traería análisis sintáctico, un
- * modo de fallo que el esquema no sabe cazar —el único que sabe cazar es «campo
- * mal escrito»— y la duda perpetua de si dos máquinas evalúan igual. Con cuatro
- * puntos se describe cualquier variación que un ala necesita, y es el mismo
- * modismo que ya usan los clips de animación: claves más interpolación.
- */
-export interface VariationSpec {
-  /** Pares `(u, valor)` con `u` de 0 a 1, ordenados y sin repetir. */
-  at: number[][];
-  /** `linear` por defecto; `smooth`; o `power:k`. */
-  ease?: string;
 }
 
 export interface PathSpec {
@@ -314,56 +303,6 @@ function isLoft(geometry: GeometrySpec): geometry is LoftSpec {
 
 function isSweep(geometry: GeometrySpec): geometry is SweepSpec {
   return (geometry as SweepSpec).sweep !== undefined;
-}
-
-/**
- * Una tabla de variación en el punto `u`. Un número suelto es una constante, que
- * es la mayoría de los casos y no debe costar seis caracteres.
- *
- * Fuera del rango declarado el valor se **sujeta** al primero o al último:
- * extrapolar daría radios negativos sin avisar de nada.
- */
-export function evaluateVariation(spec: number | VariationSpec, u: number, what = "la tabla"): number {
-  if (typeof spec === "number") return spec;
-  const table = spec.at;
-  if (!Array.isArray(table) || table.length === 0) {
-    throw new Error(`${what}: \`at\` necesita al menos un par (u, valor)`);
-  }
-  for (const [index, entry] of table.entries()) {
-    if (!Array.isArray(entry) || entry.length !== 2) {
-      throw new Error(`${what}: la entrada ${index} de \`at\` son dos números, (u, valor)`);
-    }
-    if (index > 0 && entry[0] <= table[index - 1][0]) {
-      throw new Error(
-        `${what}: \`at\` va en orden creciente de u y sin repetir; la entrada ${index} tiene ` +
-          `u=${entry[0]} después de u=${table[index - 1][0]}`,
-      );
-    }
-  }
-
-  if (u <= table[0][0]) return table[0][1];
-  if (u >= table[table.length - 1][0]) return table[table.length - 1][1];
-
-  let segment = 0;
-  while (segment < table.length - 2 && u >= table[segment + 1][0]) segment += 1;
-  const [fromU, fromValue] = table[segment];
-  const [toU, toValue] = table[segment + 1];
-  const t = (u - fromU) / (toU - fromU);
-
-  const ease = spec.ease ?? "linear";
-  let eased: number;
-  if (ease === "linear") eased = t;
-  else if (ease === "smooth") eased = t * t * (3 - 2 * t);
-  else if (ease.startsWith("power:")) {
-    const exponent = Number(ease.slice("power:".length));
-    if (!Number.isFinite(exponent) || exponent <= 0) {
-      throw new Error(`${what}: el exponente de \`${ease}\` debe ser un número positivo`);
-    }
-    eased = t ** exponent;
-  } else {
-    throw new Error(`${what}: ease desconocido "${ease}"; admitidos: linear, smooth, power:k`);
-  }
-  return fromValue + (toValue - fromValue) * eased;
 }
 
 const DEFORM_KINDS = ["twist", "taper", "bend", "wave"] as const;
