@@ -1,6 +1,11 @@
 # Plan: el movimiento se declara como se declara la forma
 
-Estado: **escrito, sin empezar**. Fecha 2026-08-06.
+Estado: **cerrado**. Escrito y terminado el 2026-08-06, en seis commits de
+`8c85e99` a la puerta `test:rig`, que pasa de tres comprobaciones a ocho. El
+ejemplar es el mismo de la geometría, `artifacts/agent/pieza-geometria.json`, que
+ahora además vuela.
+
+Cada paso queda marcado abajo con su número.
 
 Nace de una asimetría que se ve en cuanto se usan las dos cosas seguidas. Después
 de [`plan-geometria.md`](plan-geometria.md), un agente describe **forma** así:
@@ -123,14 +128,23 @@ motivo.
 
 ## 5. Los pasos
 
-### Paso 1 — `evaluateVariation` a su propio módulo
+### Paso 1 — `evaluateVariation` a su propio módulo — hecho
+
+**Medido:** `test:geometry` pasa sin tocar una sola línea de prueba, y ni un fichero
+de `tools/` en el diff.
 
 Mover, reexportar desde donde ya se exportaba, y nada más. **Cero cambios de
 comportamiento**: `npm run test:geometry` pasa sin tocar una sola prueba.
 
 Commit: `refactor: la tabla de variación, a su propio módulo`
 
-### Paso 2 — `value` en las pistas
+### Paso 2 — `value` en las pistas — hecho
+
+**Medido:** con `ease: linear` y dos entradas, hornear da **exactamente** los mismos
+tiempos y valores que las once claves a mano; `smooth` vale la media en el punto
+medio; el GLB horneado leído con el **evaluador certificado** coincide con la tabla
+evaluada directamente en cinco fotogramas; y el camino de `keys` sigue dando el
+mismo GLB **byte a byte** contra una huella medida antes del cambio.
 
 Una pista con `value` en vez de `keys`, y `frames` para decir cuánto dura. Se
 hornea a `frames + 1` claves, de 0 a `frames`.
@@ -154,7 +168,12 @@ revés: interpolar cuaterniones componente a componente no es una rotación.
   atajo y el camino certificado coinciden.
 - Una pista con `keys` sigue dando **el mismo GLB byte a byte** que antes.
 
-### Paso 3 — `turns`, y el aviso que hace falta con él
+### Paso 3 — `turns`, y el aviso que hace falta con él — hecho
+
+**Medido:** una vuelta son cuatro pasos y cinco claves; a un cuarto de vuelta lo que
+estaba en +Z está en +X y a media vuelta está enfrente, por el evaluador
+certificado —justo lo que no pasaría con dos claves—; y `GIRO_AMBIGUO` caza el
+0→360 y no el mismo giro partido en cuartos.
 
 `{ property: "rotation", axis, turns, frames }` gira `turns · 360°` en `frames`
 fotogramas.
@@ -184,7 +203,12 @@ hoy sin enterarse.
 - Una pista **a mano** con claves a 0° y 360° dispara `GIRO_AMBIGUO`; la misma con
   claves cada 90°, no.
 
-### Paso 4 — Ciclo y desfase
+### Paso 4 — Ciclo y desfase — hecho
+
+**Medido:** tres ciclos de 20 fotogramas duran 60 y los tres tramos son el mismo
+movimiento clave a clave; un desfase de 5 hace que cada clave valga lo que valía
+cinco más adelante y la 16 vuelva a valer lo que la 1. El desfase se aplica al
+**parámetro** antes de hornear, así que solo va con `value`.
 
 `cycle: n` repite el contenido de la pista `n` veces dentro del clip, y
 `offsetFrames` lo desplaza. Con eso, cuatro patas que caminan desfasadas son
@@ -197,7 +221,12 @@ palabra en los dos lados no es cosmético: quien aprende uno sabe el otro.
 contenido coincide con el original en los tres tramos, y `offsetFrames` mueve el
 resultado sin cambiar la forma.
 
-### Paso 5 — La auditoría recorre en vez de muestrear
+### Paso 5 — La auditoría recorre en vez de muestrear — hecho
+
+**Medido con el caso que lo justifica**: un cruce que dura **un solo fotograma**, el
+7. Muestreando ocho de treinta no cae en la rejilla y la auditoría dice que todo
+está bien; recorriendo los 31, sale. El presupuesto pasa de 8 a 512 y el informe
+dice con `complete` si miró entero.
 
 `animationAudit` mira hoy ocho fotogramas por clip y lo dice a la cara: puede
 perderse un cruce que solo ocurra entre dos. Con las piezas de este tamaño,
@@ -211,7 +240,20 @@ que no dice si es completo no sirve para afirmar nada.
 **Aceptación:** un clip con un cruce que ocurre en un solo fotograma —construido a
 propósito— se caza ahora y no antes, y el informe dice `recorridoCompleto: true`.
 
-### Paso 6 — Ejemplar y puerta
+### Paso 6 — Ejemplar y puerta — hecho
+
+El ejemplar de geometría gana esqueleto y movimiento sin dejar de ser el mismo
+fichero: dos huesos, un clip, el rotor con `turns` y el cuerpo flotando con
+`value` más `cycle`.
+
+**Medido:** 10 piezas animadas, 61 fotogramas recorridos enteros, **cero cruces**,
+cero hundimientos, ningún hueso quieto y ningún giro ambiguo. Y el rotor gira de
+verdad: un vértice de pala mantiene su radio al eje dentro de 1e-4 en seis
+fotogramas y avanza un cuarto de vuelta cada cinco, que son las tres vueltas en
+sesenta que declara el documento.
+
+`offsetFrames` no aparece en el ejemplar y es a propósito: con dos patas simétricas,
+un desfase entre ellas sería un defecto y no una demostración.
 
 El ejemplar de geometría gana esqueleto y movimiento: el rotor gira, las patas se
 pliegan. Un documento, una orden, y sale un GLB animado y auditado.

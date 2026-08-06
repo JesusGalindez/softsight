@@ -60,6 +60,32 @@
       "repeat": { "radial": { "count": 4, "axis": "y" } }
     }
   ],
+  "skeleton": {
+    "joints": [
+      { "name": "estructura" },
+      { "name": "rotor", "parent": "estructura", "offset": [0, 1.15, 0] }
+    ]
+  },
+  "bindings": [
+    { "part": "pala-*", "joint": "rotor" },
+    { "part": "*", "joint": "estructura" }
+  ],
+  "clips": [
+    {
+      "name": "vuelo",
+      "fps": 30,
+      "tracks": [
+        { "joint": "rotor", "property": "rotation", "axis": "y", "turns": 3, "frames": 60 },
+        {
+          "joint": "estructura",
+          "property": "translation",
+          "value": { "at": [[0, [0, 0, 0]], [0.5, [0, 0.06, 0]], [1, [0, 0, 0]]], "ease": "smooth" },
+          "frames": 20,
+          "cycle": 3
+        }
+      ]
+    }
+  ],
   "budget": {
     "watertight": true,
     "degenerateTriangles": 0,

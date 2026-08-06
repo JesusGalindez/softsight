@@ -793,6 +793,69 @@ console.log(
   `rig recorrido: ok (el cruce del fotograma 7 se escapa muestreando 8 y se caza recorriendo los 31)`,
 );
 
+// --- 10. El ejemplar: una pieza descrita por fórmulas, animada y auditada
+
+// El mismo documento que ya lleva las cinco mecánicas de geometría gana esqueleto
+// y movimiento. Un fichero y una orden: es lo que un agente va a copiar.
+{
+  const ejemplar = JSON.parse(
+    readFileSync(resolve(projectRoot, "artifacts/agent/pieza-geometria.json"), "utf8"),
+  );
+  const rigEjemplar = resolveRig(ejemplar.skeleton, ejemplar.clips);
+  assert.deepEqual(rigEjemplar.clips, [{ name: "vuelo", fps: 30, lastFrame: 60, tracks: 2 }]);
+
+  const modeloEjemplar = modelFromScene(ejemplar, "ejemplar");
+  const atadoEjemplar = bindModelToSkeleton(modeloEjemplar, rigEjemplar.skeleton, {
+    schemaVersion: 1,
+    bindings: ejemplar.bindings,
+  });
+  const glbEjemplar = parseGlbAnimation(serializeSkinnedGlb(atadoEjemplar.scene));
+  const auditEjemplar = auditAnimation(
+    modeloEjemplar,
+    glbEjemplar,
+    new Map(atadoEjemplar.bound.map((entry) => [entry.part, entry.joint])),
+    { fps: 30 },
+  );
+
+  assert.equal(auditEjemplar.clips[0].complete, true, "el ejemplar se audita entero, no muestreado");
+  assert.equal(auditEjemplar.clips[0].sampled.length, 61);
+  assert.deepEqual(auditEjemplar.crossings, [], "el movimiento del ejemplar no puede cruzar nada");
+  assert.deepEqual(auditEjemplar.groundBreaches, [], "ni hundir nada bajo el suelo");
+  assert.deepEqual(auditEjemplar.staticBones, [], "un hueso que nadie anima es un descuido");
+  assert.deepEqual(auditEjemplar.zeroLengthBones, []);
+  assert.deepEqual(auditClips(ejemplar.clips), [], "ningún giro ambiguo");
+
+  // Y el rotor gira **de verdad**, medido con el evaluador certificado: un vértice
+  // de pala mantiene su radio al eje y avanza un cuarto de vuelta cada cinco
+  // fotogramas, que son las tres vueltas en sesenta que declara el documento.
+  const poseEjemplar = (frame) =>
+    evaluatePose(glbEjemplar.document, glbEjemplar.binary, glbEjemplar.decodedViews, frame / 30, 0, 0);
+  const puntoDePala = poseEjemplar(0).length - 3;
+  const radioAl = (frame) => {
+    const pose = poseEjemplar(frame);
+    return Math.hypot(pose[puntoDePala], pose[puntoDePala + 2]);
+  };
+  const radio = radioAl(0);
+  assert.ok(radio > 0.4, `el punto elegido tiene que estar lejos del eje, y está a ${radio}`);
+  for (const frame of [5, 10, 15, 20, 40, 60]) {
+    assert.ok(
+      Math.abs(radioAl(frame) - radio) < 1e-4,
+      `fotograma ${frame}: girar no cambia el radio al eje, y pasó de ${radio} a ${radioAl(frame)}`,
+    );
+  }
+  const inicioPala = poseEjemplar(0);
+  const cuartoPala = poseEjemplar(5);
+  assert.ok(
+    Math.abs(cuartoPala[puntoDePala] - inicioPala[puntoDePala + 2]) < 1e-3,
+    "a los cinco fotogramas la pala tiene que haber girado un cuarto de vuelta",
+  );
+
+  console.log(
+    `rig ejemplar: ok (${modeloEjemplar.parts.length} piezas animadas, 61 fotogramas recorridos, ` +
+      "0 cruces, y el rotor da su cuarto de vuelta cada cinco fotogramas)",
+  );
+}
+
 function assertClose(actual, expected, what) {
   for (let index = 0; index < expected.length; index += 1) {
     assert.ok(
