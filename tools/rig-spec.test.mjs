@@ -16,6 +16,7 @@
  */
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -341,6 +342,156 @@ function matrixFromQuaternion([x, y, z, w]) {
     0, 0, 0, 1,
   ];
 }
+
+// --- 6. La pista declarada como función: `value` en vez de `keys`
+
+// Con `ease: linear` y dos entradas, hornear tiene que dar exactamente lo mismo
+// que escribir las claves a mano. Si no, el atajo no es un atajo: es otra cosa.
+const aMano = resolveRig({ joints: [{ name: "eje" }] }, [
+  {
+    name: "recto",
+    fps: 30,
+    tracks: [
+      {
+        joint: "eje",
+        property: "translation",
+        keys: Array.from({ length: 11 }, (_entrada, paso) => ({
+          frame: paso,
+          value: [paso / 10, 0, (paso / 10) * -2],
+        })),
+      },
+    ],
+  },
+]);
+const porFuncion = resolveRig({ joints: [{ name: "eje" }] }, [
+  {
+    name: "recto",
+    fps: 30,
+    tracks: [
+      {
+        joint: "eje",
+        property: "translation",
+        value: { at: [[0, [0, 0, 0]], [1, [1, 0, -2]]] },
+        frames: 10,
+      },
+    ],
+  },
+]);
+assertClose(
+  Array.from(porFuncion.skeleton.animations[0].samplers[0].times),
+  Array.from(aMano.skeleton.animations[0].samplers[0].times),
+  "los tiempos horneados",
+);
+assertClose(
+  Array.from(porFuncion.skeleton.animations[0].samplers[0].values),
+  Array.from(aMano.skeleton.animations[0].samplers[0].values),
+  "los valores horneados",
+);
+
+// `smooth` es Hermite con tangentes nulas: en el punto medio vale la media, y a un
+// cuarto se queda por debajo. Es la misma curva que usa la geometría.
+const suave = resolveRig({ joints: [{ name: "eje" }] }, [
+  {
+    name: "suave",
+    fps: 30,
+    tracks: [
+      {
+        joint: "eje",
+        property: "translation",
+        value: { at: [[0, [0, 0, 0]], [1, [8, 0, 0]]], ease: "smooth" },
+        frames: 40,
+        bake: 4,
+      },
+    ],
+  },
+]);
+const suaves = Array.from(suave.skeleton.animations[0].samplers[0].values);
+assert.equal(suaves.length, 15, "bake: 4 son cinco claves");
+assert.ok(Math.abs(suaves[6] - 4) < 1e-6, `el punto medio de smooth vale ${suaves[6]} y debía valer 4`);
+assert.ok(suaves[3] < 2, `a un cuarto, smooth va por debajo de la recta: ${suaves[3]}`);
+
+// Y lo que de verdad sostiene el atajo: el GLB horneado, leído con el **evaluador
+// certificado**, da la misma pose que la tabla evaluada a mano. Sin esto, hornear
+// sería una segunda implementación del movimiento.
+const brazoModelo = modelFromScene({
+  objects: [{ name: "brazo", geometry: { primitive: "box", parameters: [0.2, 0.2, 0.2] }, position: [1, 0, 0] }],
+});
+const rigFuncion = resolveRig({ joints: [{ name: "eje" }] }, [
+  {
+    name: "empuje",
+    fps: 30,
+    tracks: [
+      {
+        joint: "eje",
+        property: "translation",
+        value: { at: [[0, [0, 0, 0]], [1, [0, 3, 0]]], ease: "smooth" },
+        frames: 30,
+      },
+    ],
+  },
+]);
+const atadoFuncion = bindModelToSkeleton(brazoModelo, rigFuncion.skeleton, {
+  schemaVersion: 1,
+  bindings: [{ part: "*", joint: "eje" }],
+});
+const glbFuncion = parseGlbAnimation(serializeSkinnedGlb(atadoFuncion.scene));
+const reposoFuncion = evaluatePose(glbFuncion.document, glbFuncion.binary, glbFuncion.decodedViews, 0, 0, 0);
+for (const frame of [0, 7, 15, 23, 30]) {
+  const pose = evaluatePose(glbFuncion.document, glbFuncion.binary, glbFuncion.decodedViews, frame / 30, 0, 0);
+  const t = frame / 30;
+  const esperado = 3 * (t * t * (3 - 2 * t));
+  const subida = pose[1] - reposoFuncion[1];
+  assert.ok(
+    Math.abs(subida - esperado) < 1e-4,
+    `fotograma ${frame}: el evaluador certificado dice ${subida} y la tabla dice ${esperado}`,
+  );
+}
+
+// Una pista con `keys` sigue dando el mismo GLB **byte a byte** que antes de que
+// `value` existiera. La huella se midió con el `rigSpec` anterior al cambio, así
+// que no es una foto de lo que hay: es la de lo que había.
+assert.equal(
+  createHash("sha256").update(new Uint8Array(serializeSkinnedGlb(bound.scene))).digest("hex"),
+  "c43987954f101649fe113b7b8f21aa3d7916645f52ef9eccae608f22ba5359c0",
+  "el camino de `keys` no puede haberse movido",
+);
+
+// Errores, cada uno por su motivo.
+const conPista = (track) => () => resolveRig({ joints: [{ name: "eje" }] }, [{ tracks: [track] }]);
+assertThrows(
+  conPista({ joint: "eje", property: "translation" }),
+  /se escribe con 'keys' o con 'value', y no trae ninguno/,
+  "una pista sin claves ni función",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "translation", keys: [{ frame: 0, value: [0, 0, 0] }], value: { at: [[0, [0, 0, 0]]] }, frames: 5 }),
+  /'keys' y 'value' son excluyentes/,
+  "las dos formas a la vez",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "translation", value: { at: [[0, [0, 0, 0]]] } }),
+  /necesita 'frames'/,
+  "una función sin duración",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "rotation", value: { at: [[0, [0, 0, 0, 1]], [1, [0, 1, 0, 0]]] }, frames: 10 }),
+  /son 3 grados en orden Y·X·Z.*el cuaternión solo cabe en 'keys'/s,
+  "un cuaternión en una función",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "translation", value: { at: [[0, [0, 0]]] }, frames: 10 }),
+  /pide 3 números/,
+  "un vector con los componentes cambiados",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "translation", value: { at: [[0, [0, 0, 0]], [1, [1, 0, 0]]] }, frames: 10, bake: 99999 }),
+  /pasa del tope de 4096/,
+  "hornear sin tope",
+);
+
+console.log(
+  "rig value: ok (función ≡ claves a mano, smooth con su media, y el evaluador certificado confirma la curva en 5 fotogramas)",
+);
 
 function assertClose(actual, expected, what) {
   for (let index = 0; index < expected.length; index += 1) {

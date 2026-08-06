@@ -305,7 +305,23 @@ const TRACK_FIELDS: ObjectSchema = {
     description: "Qué se anima del hueso.",
   },
   interpolation: { type: '"linear"|"step"', description: "linear por defecto." },
-  keys: { type: "object[]", required: true, description: "Fotogramas clave.", fields: KEY_FIELDS },
+  keys: {
+    type: "object[]",
+    description: "Fotogramas clave escritos a mano. Excluyente con `value`.",
+    fields: KEY_FIELDS,
+  },
+  value: {
+    type: "object",
+    description:
+      "La pista como función declarada: { at: [[u, [valores]], …], ease } con la misma curva que " +
+      "la geometría —linear, smooth, power:k—. Necesita `frames` y se hornea a claves. " +
+      "La rotación va en 3 grados Y·X·Z; el cuaternión solo cabe en `keys`.",
+  },
+  frames: { type: "number", description: "Cuánto dura la pista declarada con `value`, en fotogramas." },
+  bake: {
+    type: "number",
+    description: "Claves a emitir al hornear: bake + 1. Una por fotograma por defecto.",
+  },
 };
 
 const CLIP_FIELDS: ObjectSchema = {

@@ -23,6 +23,7 @@
  * la forma más barata de que nadie confíe en ninguna.
  */
 
+import { evaluateVariation, type VariationSpec } from "../variation";
 import type { SkinnedGlbAnimation, SkinnedGlbNode, SkinnedGlbSampler } from "./glbWriter";
 import type { SkeletonSource } from "./skinBinding";
 
@@ -47,12 +48,103 @@ export interface KeySpec {
   value: number[];
 }
 
+/**
+ * Una función vectorial declarada como tabla, con la misma forma y la misma
+ * interpolación que las de la geometría: `at` son pares `(u, valor)` con `u` de 0
+ * a 1, y `ease` es `linear`, `smooth` o `power:k`.
+ *
+ * La diferencia con `VariationSpec` es que aquí el valor es el del `property` —tres
+ * números—, y se evalúa **componente a componente** con la misma curva. No hay
+ * interpolación nueva: hay tres tablas escalares de las que ya existen.
+ */
+export interface VectorVariationSpec {
+  at: Array<[number, number[]]>;
+  ease?: string;
+}
+
 export interface TrackSpec {
   joint: string;
   property: "translation" | "rotation" | "scale";
   /** `linear` por defecto; `step` mantiene el valor hasta el siguiente clave. */
   interpolation?: "linear" | "step";
-  keys: KeySpec[];
+  /** Fotogramas clave escritos a mano. Excluyente con `value`. */
+  keys?: KeySpec[];
+  /**
+   * La pista como función declarada, en vez de como lista de claves. Necesita
+   * `frames`, y se hornea a claves al resolver.
+   */
+  value?: VectorVariationSpec;
+  /** Cuánto dura la pista declarada con `value`, en fotogramas. */
+  frames?: number;
+  /**
+   * Claves a emitir al hornear: `bake + 1`, repartidas de 0 a `frames`. Por
+   * defecto una por fotograma.
+   */
+  bake?: number;
+}
+
+/** Tope de claves por pista. Un GLB no se rompe por esto, pero un descuido sí. */
+const MAX_BAKED_KEYS = 4096;
+
+/**
+ * La pista declarada como función, horneada a claves.
+ *
+ * Se hornea porque glTF admite `LINEAR`, `STEP` y `CUBICSPLINE` y nada más:
+ * `smooth` y `power:k` no existen ahí. Es la misma decisión que ya toma la
+ * geometría —la receta vive en el JSON y la malla se hornea al exportar— y tiene
+ * la misma ventaja: lo que sale lo abre cualquiera, sin extensiones inventadas.
+ *
+ * **El número de claves es declarado, no elegido por la herramienta.** Un número
+ * que la herramienta escoge sola es un número que nadie puede reproducir.
+ */
+function bakeTrack(track: TrackSpec, at: string, components: number): KeySpec[] {
+  const table = track.value as VectorVariationSpec;
+  if (!Array.isArray(table.at) || table.at.length === 0) {
+    throw new Error(`${at}.value: 'at' necesita al menos un par (u, valor)`);
+  }
+  const frames = track.frames;
+  if (!Number.isFinite(frames) || (frames as number) <= 0) {
+    throw new Error(`${at}: una pista con 'value' necesita 'frames', y son más de cero`);
+  }
+
+  // La rotación declarada como función va en **grados**, no en cuaternión:
+  // interpolar cuaterniones componente a componente no es una rotación, es un
+  // vector de cuatro números que pasa por dentro de la esfera. Los cuaterniones
+  // ya escritos siguen valiendo por `keys`.
+  const expected = track.property === "rotation" ? 3 : components;
+  const columns: VariationSpec[] = Array.from({ length: expected }, () => ({ at: [], ease: table.ease }));
+  table.at.forEach((entry, index) => {
+    if (!Array.isArray(entry) || entry.length !== 2 || !Number.isFinite(entry[0])) {
+      throw new Error(`${at}.value.at[${index}]: cada entrada es (u, valor), con u entre 0 y 1`);
+    }
+    const value = entry[1];
+    if (!Array.isArray(value) || value.length !== expected) {
+      throw new Error(
+        track.property === "rotation"
+          ? `${at}.value.at[${index}]: una rotación declarada como función son 3 grados en orden Y·X·Z, no ${Array.isArray(value) ? value.length : "otra cosa"}; el cuaternión solo cabe en 'keys'`
+          : `${at}.value.at[${index}]: ${track.property} pide ${expected} números, hay ${Array.isArray(value) ? value.length : "otra cosa"}`,
+      );
+    }
+    value.forEach((component, axis) => {
+      if (!Number.isFinite(component)) {
+        throw new Error(`${at}.value.at[${index}]: hay un componente que no es un número`);
+      }
+      columns[axis].at.push([entry[0], component]);
+    });
+  });
+
+  const steps = track.bake ?? Math.max(1, Math.round(frames as number));
+  if (!Number.isInteger(steps) || steps < 1) {
+    throw new Error(`${at}: 'bake' es un entero de 1 en adelante, no ${track.bake}`);
+  }
+  if (steps + 1 > MAX_BAKED_KEYS) {
+    throw new Error(`${at}: hornear ${steps + 1} claves pasa del tope de ${MAX_BAKED_KEYS}; baja 'bake'`);
+  }
+
+  return Array.from({ length: steps + 1 }, (_entry, step) => ({
+    frame: ((frames as number) * step) / steps,
+    value: columns.map((column) => evaluateVariation(column, step / steps, `${at}.value`)),
+  }));
 }
 
 export interface ClipSpec {
@@ -217,15 +309,23 @@ export function resolveRig(skeleton: SkeletonSpec, clips: readonly ClipSpec[] = 
       if (components === undefined) {
         throw new Error(`${at}: property '${track.property}' no existe; usa translation, rotation o scale`);
       }
-      if (!Array.isArray(track.keys) || track.keys.length === 0) {
+      const declared = (["keys", "value"] as const).filter((kind) => track[kind] !== undefined);
+      if (declared.length === 0) {
+        throw new Error(`${at}: una pista se escribe con 'keys' o con 'value', y no trae ninguno`);
+      }
+      if (declared.length > 1) {
+        throw new Error(`${at}: 'keys' y 'value' son excluyentes; declara uno`);
+      }
+      const keys = track.value !== undefined ? bakeTrack(track, at, components) : (track.keys as KeySpec[]);
+      if (!Array.isArray(keys) || keys.length === 0) {
         throw new Error(`${at}: 'keys' debe ser una lista no vacía`);
       }
 
-      const times = new Float32Array(track.keys.length);
-      const values = new Float32Array(track.keys.length * components);
+      const times = new Float32Array(keys.length);
+      const values = new Float32Array(keys.length * components);
       let previousFrame = -1;
 
-      track.keys.forEach((key, keyIndex) => {
+      keys.forEach((key, keyIndex) => {
         const here = `${at}.keys[${keyIndex}]`;
         if (!Number.isFinite(key.frame) || key.frame < 0) {
           throw new Error(`${here}: 'frame' debe ser un número no negativo`);

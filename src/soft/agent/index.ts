@@ -61,7 +61,15 @@ export { parseGlb } from "./glbLoader";
 export { parseBvh, bvhToSkinnedScene } from "./bvhLoader";
 export { bindModelToSkeleton, restWorldMatrices, skeletonFromParsedGlb } from "./skinBinding";
 export { resolveRig, eulerToQuaternion } from "./rigSpec";
-export type { ClipSpec, JointSpec, KeySpec, ResolvedRig, SkeletonSpec, TrackSpec } from "./rigSpec";
+export type {
+  ClipSpec,
+  JointSpec,
+  KeySpec,
+  ResolvedRig,
+  SkeletonSpec,
+  TrackSpec,
+  VectorVariationSpec,
+} from "./rigSpec";
 export { auditAnimation } from "./animationAudit";
 export type {
   AnimationAudit,
