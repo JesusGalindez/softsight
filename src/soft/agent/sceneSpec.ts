@@ -509,7 +509,7 @@ function buildProfile(spec: ProfileSpec): number[] {
 }
 
 /** El catálogo entero, resuelto una vez por escena. */
-function resolveProfiles(specs: readonly ProfileSpec[] | undefined): Map<string, number[]> {
+export function resolveProfiles(specs: readonly ProfileSpec[] | undefined): Map<string, number[]> {
   const profiles = new Map<string, number[]>();
   for (const spec of specs ?? []) {
     if (profiles.has(spec.name)) {
@@ -520,7 +520,7 @@ function resolveProfiles(specs: readonly ProfileSpec[] | undefined): Map<string,
   return profiles;
 }
 
-function polygonOf(
+export function polygonOf(
   extrude: number[] | string,
   profiles: ReadonlyMap<string, number[]> | undefined,
 ): number[] {

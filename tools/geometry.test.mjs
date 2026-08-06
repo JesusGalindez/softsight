@@ -1347,3 +1347,134 @@ const PALA = { primitive: "box", parameters: [0.1, 0.4, 1.2] };
   );
   console.log(`geometria: ok (${casos.length + 1} repeticiones mal escritas rechazadas por su motivo)`);
 }
+
+// ---------------------------------------------------------------------------
+// Los dos avisos que faltaban.
+// ---------------------------------------------------------------------------
+
+// 41. PERFIL_AUTOINTERSECADO. El caso que **no** debe avisar vale tanto como el
+//     que sí: un aviso que salta sobre los generadores del propio repositorio no
+//     lo mira nadie.
+{
+  const ocho = [0, 0, 1, 1, 1, 0, 0, 1];
+  const cuadrado = [0, 0, 1, 0, 1, 1, 0, 1];
+
+  const cruzado = auditGeometry({ objects: [{ name: "tapa", geometry: { extrude: ocho } }] });
+  assert.equal(cruzado.length, 1);
+  assert.equal(cruzado[0].code, "PERFIL_AUTOINTERSECADO");
+  assert.equal(cruzado[0].part, "tapa");
+  assert.match(cruzado[0].message, /los lados \d+ y \d+ se cruzan/);
+  assert.match(cruzado[0].message, /certeza, no candidato/);
+  assert.equal(auditGeometry({ objects: [{ geometry: { extrude: cuadrado } }] }).length, 0);
+
+  // Ninguno de los cuatro generadores se cruza consigo mismo, a varias
+  // resoluciones. Aquí es donde un test de intersección demasiado permisivo con
+  // los colineales se caería.
+  const sanos = [
+    { name: "circulo", circle: 1, points: 24 },
+    { name: "circulo-fino", circle: 0.05, points: 96 },
+    { name: "ala", naca: "2412", chord: 0.72, points: 64 },
+    { name: "ala-simetrica", naca: "0012", points: 128 },
+    { name: "chasis", superellipse: [1, 0.4, 4], points: 48 },
+    { name: "chasis-caja", superellipse: [1, 0.5, 12], points: 200 },
+    { name: "petalo", gielis: [5, 0.3, 1.7, 1.7], radius: 0.4, points: 96 },
+  ];
+  const limpia = auditGeometry({
+    profiles: sanos,
+    objects: sanos.map((perfil) => ({ name: perfil.name, geometry: { extrude: perfil.name } })),
+  });
+  assert.deepEqual(limpia, [], `los generadores propios no pueden avisar: ${JSON.stringify(limpia)}`);
+
+  // Y lo caza también dentro de un loft y de un barrido, no solo en la extrusión.
+  const enLoft = auditGeometry({
+    objects: [
+      {
+        name: "torre",
+        geometry: {
+          loft: [
+            { at: [0, 0, 0], profile: cuadrado },
+            { at: [0, 1, 0], profile: ocho },
+          ],
+        },
+      },
+    ],
+  });
+  assert.equal(enLoft[0].code, "PERFIL_AUTOINTERSECADO");
+  assert.match(enLoft[0].message, /el perfil de la sección 1/);
+  const enBarrido = auditGeometry({
+    objects: [
+      {
+        name: "tubo",
+        geometry: { sweep: ocho, path: { through: [[0, 0, 0], [0, 1, 0]], kind: "polyline" } },
+      },
+    ],
+  });
+  assert.equal(enBarrido[0].code, "PERFIL_AUTOINTERSECADO");
+  assert.match(enBarrido[0].message, /el perfil del barrido/);
+  console.log(
+    `geometria: ok (PERFIL_AUTOINTERSECADO: caza el ocho en extrusión, loft y barrido; ${sanos.length} perfiles propios limpios)`,
+  );
+}
+
+// 42. SECCIONES_INCOMPATIBLES. Candidato, con el umbral dicho en el mensaje.
+{
+  const circulo = createCircleProfile(0.3, 32);
+  const ala = createNacaProfile("2412", 0.6, 32);
+
+  const mezcla = auditGeometry({
+    objects: [
+      {
+        name: "transicion",
+        geometry: {
+          loft: [
+            { at: [0, 0, 0], profile: circulo },
+            { at: [0, 1, 0], profile: ala },
+          ],
+        },
+      },
+    ],
+  });
+  assert.equal(mezcla.length, 1);
+  assert.equal(mezcla[0].code, "SECCIONES_INCOMPATIBLES");
+  assert.match(mezcla[0].message, /gira \d+°, por encima del cuarto de vuelta/);
+  assert.match(mezcla[0].message, /Candidato, no certeza/);
+
+  // Círculo con círculo, no. Y un ala de verdad —NACA a NACA con cuerdas y
+  // torsiones distintas— tampoco: si saltara ahí, el ejemplar no podría quedar
+  // limpio y el umbral estaría mal.
+  const limpios = [
+    [
+      { at: [0, 0, 0], profile: circulo },
+      { at: [0, 1, 0], profile: createCircleProfile(0.15, 32) },
+    ],
+    [
+      { at: [0, 0, 0], profile: createNacaProfile("2412", 1, 64), scale: 0.72, twist: 18 },
+      { at: [0, 1.2, 0.05], profile: createNacaProfile("2412", 1, 64), scale: 0.4, twist: 11 },
+      { at: [0, 2.4, 0.09], profile: createNacaProfile("2412", 1, 64), scale: 0.18, twist: 4 },
+    ],
+  ];
+  for (const [index, loft] of limpios.entries()) {
+    const avisos = auditGeometry({ objects: [{ name: `limpio${index}`, geometry: { loft } }] });
+    assert.deepEqual(avisos, [], `el loft ${index} no debía avisar: ${JSON.stringify(avisos)}`);
+  }
+
+  // Y no avisa por escribir una sección en sentido contrario: el generador lo
+  // normaliza a propósito, y hay una prueba que exige que dé la misma malla.
+  const alReves = auditGeometry({
+    objects: [
+      {
+        name: "sentidos",
+        geometry: {
+          loft: [
+            { at: [0, 0, 0], profile: [-0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5] },
+            { at: [0, 1, 0], profile: [-0.5, -0.5, -0.5, 0.5, 0.5, 0.5, 0.5, -0.5] },
+          ],
+        },
+      },
+    ],
+  });
+  assert.deepEqual(alReves, [], "el sentido de escritura ya lo normaliza el generador");
+  console.log(
+    `geometria: ok (SECCIONES_INCOMPATIBLES: círculo→ala avisa, ala→ala y círculo→círculo no, y el sentido no cuenta)`,
+  );
+}
