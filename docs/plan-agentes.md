@@ -785,6 +785,11 @@ invertidas.
 
 Las booleanas quedan lejos y probablemente no compensen.
 
+**La historia siguió en [`plan-geometria.md`](plan-geometria.md)**, que añade lo que
+de verdad describe un ala o un fuselaje —perfiles con nombre, `loft`, `sweep`,
+deformadores y repetición— sin cruzar esa línea: sigue sin haber booleanas ni SDF,
+por el mismo motivo de siempre.
+
 ### H3. Malla del revés — hecho, y un aviso retirado por medida
 
 La primera pirámide tenía las caras bobinadas hacia dentro: renderizaba oscura y ninguna

@@ -114,6 +114,7 @@ hecho por los dos lados, da el mismo hash.
 | `test:rig` | Esqueleto y clips declarados, la auditoría de animación, y la escena por el puente byte a byte | `npm run test:rig` (softsight), también dentro de `test:animation` |
 | `test:bvh` | La cinemática de un BVH contra el evaluador certificado por dos caminos, y la conversión por API, CLI y puente byte a byte | `npm run test:bvh` (softsight), también dentro de `test:animation` |
 | `test:staging` | La puesta en escena: los tres avisos, informes malos rechazados por su motivo, que cada obligatorio del esquema se compruebe quitándolo, y que API, CLI y puente digan lo mismo sin dejar artefactos | dentro de `npm run test:animation` (softsight) |
+| `test:geometry` | La geometría declarativa contra sus volúmenes analíticos: perfiles, loft, barrido, deformadores y repetición, más el ejemplar montado sin solape parcial ni piezas sueltas | `npm run test:geometry` (softsight), también dentro de `test:animation` |
 | `softsight:parity-gate` | Los dos rasterizadores sobre los tres fixtures: silueta contenida en una dilatación de un píxel, y cajas de pantalla exactas | `npm run softsight:parity-gate` (editor), bajo demanda |
 | `test:story` | El guion: duración derivada de la suma, guiones malos rechazados por su motivo, que `--schema` publique el mismo esquema que valida, la auditoría con sus tres avisos, que API, CLI y puente digan lo mismo, y que los dos ejemplares estén limpios y no compartan forma | `npm run test:story` (softsight), también dentro de `test:animation` |
 | `scene-roles.contract` | El vocabulario de roles y los campos que exige cada uno, del editor contra el contrato que publica softsight | dentro de `npm run check` (editor); el fixture se regenera con `npm run softsight:story-schema` |
@@ -125,10 +126,11 @@ hecho por los dos lados, da el mismo hash.
 Las dos puertas llevan los fixtures y `--strict` en el propio script, así que se
 ejecutan sin argumentos; pasar los tuyos después de `--` los sustituye.
 
-Estado hoy, verificado el 2026-08-05: **ambas puertas en `accepted`; las
-diecinueve comprobaciones de softsight en verde** (trece del banco —contrato,
-robustez, muestreo, escritor, BVH, E3, atado, pliego, E6, las tres del guion y la
-auditoría de la historia— y seis del puente).
+Estado hoy, verificado el 2026-08-06: **ambas puertas en `accepted`; las 71
+comprobaciones de softsight en verde** —43 de la puerta de geometría, 21 del resto
+del banco y 7 del puente—. El número sale de contar las líneas `ok` de
+`npm run test:animation`, no de sumar a mano: cuando alguien añada una puerta, el
+recuento se rehace ejecutando.
 
 En el editor, **410 pruebas en verde y 6 en rojo**: las seis son de `mcp/`, el
 sidecar del paso F4.4 del plan del motor, que está a medio escribir y sin
@@ -250,7 +252,15 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     cinco, así que la divergencia es real y no del medidor. Un fixture de solo
     caras planas separa dos causas: las aristas curvas casi tangentes, y algo
     propio de la vista superior que no es recorte ni rotación.
-14. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
+14. **Geometría compleja declarativa** (hecha). El agente ya no está limitado a
+    colocar primitivas: perfiles con nombre —círculo, superelipse, Gielis y NACA—,
+    `loft` de secciones, `sweep` de un perfil por un recorrido, cuatro
+    deformadores en cadena y `repeat` radial y espejo. Todo con su número exacto:
+    dos secciones iguales dan lo mismo que una extrusión, un barrido cerrado da lo
+    mismo que el toro, y la torsión conserva el volumen firmado. Plan cerrado en
+    [`plan-geometria.md`](plan-geometria.md), puerta `test:geometry` con 43
+    comprobaciones, ejemplar en `artifacts/agent/pieza-geometria.json`.
+15. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
@@ -388,3 +398,20 @@ Cosas que ya estaban rotas y conviene no volver a romper:
   hacer a propósito, no de paso.
 - `.claude/launch.json` no se versiona en ninguno de los dos repos: lleva rutas
   absolutas de la máquina donde se creó.
+- **`math.ts` guarda las matrices por filas**, no por columnas: `translation` deja
+  la traslación en los índices 3, 7 y 11. Leerlas por columnas produce resultados
+  plausibles y falsos, y dos errores así se cancelan entre sí sin que nada salte.
+  Lo destapó una prueba que comparaba contra un número absoluto —una caja que
+  medía 1,200 cuando tenía que medir 2,800—; comparar solo contra otra ejecución
+  del mismo código no lo habría visto.
+- **`validate` de `schema.ts` rechaza toda clave que no esté en el esquema**, así
+  que un diccionario de claves libres es imposible: lo que se declara por nombre va
+  como lista con `name`. Y **`anyOf` se aplica a un campo, no a los elementos de
+  una lista**: cuando hacen falta alternativas dentro de un `object[]`, van planas
+  y opcionales y quien exige que haya exactamente una es el resolutor.
+- **`assert.equal` distingue `-0` de `0`.** Usa `Math.abs` cuando el cero pueda
+  venir con signo.
+- **Una prueba que pasa no siempre prueba algo.** Un lazo cerrado plano tiene
+  holonomía nula, y uno simétrico también: la primera versión de la prueba del
+  residuo del barrido pasaba con `-9e-16` sin comprobar nada. Conviene que el caso
+  de control y el caso a medir sean distintos **a propósito**.

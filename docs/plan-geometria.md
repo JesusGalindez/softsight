@@ -1,6 +1,12 @@
 # Plan: geometría compleja declarativa
 
-Estado: **escrito, sin empezar**. Fecha 2026-08-05.
+Estado: **cerrado**. Escrito el 2026-08-05, terminado el 2026-08-06, en once
+commits de `d352808` a `260f37a`. La puerta es `npm run test:geometry`, con 43
+comprobaciones, y va dentro de `npm run test:animation`. El ejemplar es
+`artifacts/agent/pieza-geometria.json`.
+
+Cada paso queda marcado abajo con el número que dio, no con «hecho»: dentro de
+seis meses, «hecho» no permite comprobar nada y un número sí.
 
 Nace de una pregunta concreta: si una pieza compleja —un ala, un fuselaje, una
 pata, una pala de hélice— se puede describir con fórmulas en vez de con una masa
@@ -167,7 +173,19 @@ pueden leer de un vistazo.
 Ordenados por rendimiento: cada uno deja el repositorio verde y aporta capacidad
 por sí solo.
 
-### Paso 1 — Perfiles con nombre y generadores de perfil
+### Paso 1 — Perfiles con nombre y generadores de perfil — hecho
+
+**Medido:** el círculo de 32 puntos y radio 1 extruido a altura 2 da **6,24289** frente
+a los 6,242890 del polígono inscrito —no 6,2832, que sería el círculo ideal—, y cuadra
+también con 7 y con 128 puntos. La superelipse de exponente 2 es el círculo **número a
+número**. Gielis con m=4 y los tres exponentes a 2 cae en la circunferencia con error
+por debajo de 1e-12. El NACA 2412 da 64 pares exactos, con el borde de fuga una sola vez
+en x=0,72, y extruido sale estanco. Ocho escrituras malas rechazadas por su motivo.
+
+Dos correcciones a la forma que traía este plan, las dos porque `validate` rechaza toda
+clave que no esté en el esquema: `profiles` es una **lista** con `name` obligatorio y no
+un diccionario de claves libres, y los cuatro generadores van planos y opcionales porque
+`anyOf` se aplica a un campo y no a los elementos de una lista.
 
 Un bloque `profiles` en la raíz de la escena, y perfiles generados por fórmula.
 
@@ -208,7 +226,21 @@ del círculo—, que es la misma disciplina con la que se verificó la esfera
 revolucionada contra `createSphere`. La superelipse con exponente 2 debe coincidir
 con el círculo hasta el error de coma flotante.
 
-### Paso 2 — `loft`: secciones cosidas
+### Paso 2 — `loft`: secciones cosidas — hecho
+
+**Medido:** dos secciones iguales dan **1,764 y 12 triángulos**, exactamente lo mismo
+que la extrusión, con la misma caja. El tronco cuadra con h·A·(1+k+k²)/3 en tres `k`
+distintos. El loft de círculos da **2,996587**, el mismo número que el cilindro. Las
+tapas dan 0, 24, 12 y 12 aristas de borde según lo que se deje abierto. El polígono
+escrito en sentido horario con la lista de secciones invertida da la misma malla y
+volumen positivo. Y 24 puntos cosidos con 64 a 48 muestras salen estancos.
+
+**Sin `stations`**, apartándose de lo que decía este apartado: ver §9.
+
+Y un fallo cazado al escribirlo: normalizar el sentido con `reversePolygon` habría roto
+la igualdad, porque esa función empieza por el **último** vértice y movería el origen del
+remuestreo. Se escribió `flipPolygonKeepingStart`, que invierte conservando el vértice
+cero.
 
 ```json
 {
@@ -251,7 +283,18 @@ equivalente. Un tronco de pirámide de secciones `A` y `k²A` a altura `h` da
 `h·A·(1+k+k²)/3`, exacto. Y un `loft` de secciones circulares reproduciendo un
 cilindro debe coincidir con `createCylinder` a la misma teselación.
 
-### Paso 3 — `sweep`: perfil por un recorrido
+### Paso 3 — `sweep`: perfil por un recorrido — hecho
+
+**Medido:** el barrido recto da el área del polígono inscrito por la longitud, en dos
+resoluciones. El cerrado da **2,383705 y 2.304 triángulos**, exactamente lo mismo que
+`createTorus` a esa teselación. **29 estaciones seguidas de tramo recto sin un grado de
+torsión**, a 1e-12. El cono de radio variable da 2,080963, la suma exacta de sus troncos.
+Seis tablas de variación malas y cinco barridos mal escritos rechazados por su motivo.
+
+La holonomía se comprueba contra una verdad conocida: un lazo **plano** tiene holonomía
+nula y da **cero exacto**, mientras que uno torcido acumula **26,78°** que se reparten
+lineal en `u`. La primera versión de esa prueba usaba un zigzag simétrico, que también da
+cero por simetría: pasaba sin comprobar nada.
 
 ```json
 {
@@ -296,7 +339,17 @@ circular de radio `R` cerrado debe coincidir con `createTorus` a la misma
 teselación, que es el teorema de Pappus discretizado. Y con `caps: "both"` sobre
 un recorrido recto debe salir estanco, sin aristas de borde.
 
-### Paso 4 — Deformadores
+### Paso 4 — Deformadores — hecho
+
+**Medido:** la torsión conserva el volumen firmado **exacto** —0,998862 con 30°, 120° y
+−270°, el mismo número que sin torcer—, que es la prueba que más vale del paso. El
+afinado multiplica el volumen por (1+k+k²)/3 con dos `k`. El doblado deja los 134
+vértices dentro de la corona **[1,128, 1,928]**, la que dicta el radio de doblado, exacto
+y por vértice. La ida y vuelta de torsión se desvía 3,0e-8 y la de ondulación 1,8e-24
+—ver §9—, y el parámetro neutro sí es la identidad bit a bit en los tres.
+
+`deform` va en el **objeto** y no dentro de `geometry`: la geometría es una unión de seis
+formas, y meterlo dentro obligaría a repetir el campo seis veces.
 
 Una lista **ordenada** aplicada a la malla ya generada, sea cual sea su origen:
 
@@ -345,7 +398,19 @@ y ondulación no tienen forma cerrada general, así que se verifican por **ida y
 vuelta**: aplicar y aplicar el inverso debe devolver las posiciones originales
 dentro de tolerancia declarada.
 
-### Paso 5 — `repeat`: matriz radial y espejo
+### Paso 5 — `repeat`: matriz radial y espejo — hecho
+
+**Medido:** las cuatro matrices radiales coinciden con `rotationY(2πi/4)·M` **a 1e-15**, y
+las cuatro copias comparten el mismo objeto `Mesh` por identidad. El espejo refleja con
+desviación **0,0 exacta**, su copia da volumen **0,048 positivo** y los dos determinantes
+quedan por encima de cero. La escena con `repeat` coincide vértice a vértice con las
+cuatro piezas escritas una a una, y las copias ensanchan la caja a 2,800 en X frente a
+los 0,1 de una pala.
+
+**El espejo se resuelve conjugando**, `S·M·S`, con el espejo horneado en la malla. Con la
+matriz reflejada a secas el determinante sería negativo: el rasterizador apagaría su
+descarte en espacio de objeto (`renderer.ts:504`) y la copia daría volumen firmado
+negativo, o sea un `MALLA_INVERTIDA` falso sobre una pieza correcta.
 
 En el objeto, no en la geometría, porque produce piezas y no forma:
 
@@ -377,7 +442,23 @@ hay que llegar a cometer. El espejo invierte los índices de cada triángulo.
 error de simetría en X de un espejo es cero exacto —con el matiz del hallazgo 6.3,
 que hay que arreglar antes o esta comprobación se apaga sola—.
 
-### Paso 6 — Los avisos nuevos
+### Paso 6 — Los avisos nuevos — hecho
+
+`BARRIDO_AUTOINTERSECADO` entró con el paso 3, y estrenó `geometryAudit.ts`, que audita
+el **documento** y no la malla: cuando el radio supera el radio de curvatura, el tubo se
+come a sí mismo y sale cerrado, con volumen plausible, sin nada a lo que la auditoría de
+malla pueda agarrarse.
+
+`PERFIL_AUTOINTERSECADO` mide el cruce **propio y estricto**. Admitir el caso colineal o
+el contacto en un extremo convertiría en aviso lo que produce cualquier generador con
+puntos casi alineados —el borde de fuga de un perfil, sin ir más lejos—. **Medido: los
+siete perfiles de los cuatro generadores, de 24 a 200 puntos, salen limpios.**
+
+`SECCIONES_INCOMPATIBLES` **no** avisa de secciones escritas en sentidos opuestos, aunque
+este plan lo decía: el paso 2 las normaliza a propósito y hay una prueba que exige que den
+la misma malla. Queda solo el retorcido del emparejamiento, con el umbral —un cuarto de
+vuelta— **dicho en el propio mensaje**: un candidato con el criterio a la vista se puede
+discutir; uno sin él, no.
 
 Tres, en la línea de los que ya hay:
 
@@ -392,7 +473,25 @@ Tres, en la línea de los que ya hay:
 mano que se cruza produce hoy tapas basura sin decir nada. Es O(n²) sobre
 decenas de puntos, es decir, gratis.
 
-### Paso 7 — Ejemplar versionado y puerta
+### Paso 7 — Ejemplar versionado y puerta — hecho
+
+La puerta se creó con el paso 1, no al final: un paso que añade capacidad sin puerta
+propia no está verificado, solo escrito.
+
+`artifacts/agent/pieza-geometria.json` son cinco objetos que la escena expande a **diez
+piezas**, con una mecánica por pieza: cuerpo por revolucionado con `wave`, alas por `loft`
+de perfiles NACA, patas por barrido de círculo, buje por revolucionado y palas por
+extrusión torcida repetida en radial. **2.672 triángulos, volumen 0,091438, 1,940 de lado
+mayor**, todas las mallas cerradas y `auditGeometry` limpio.
+
+**Y responde medida la pregunta de §6.2: el ensamblaje por solape aguanta.** Cero solapes
+parciales y cero piezas sueltas. Las dos condiciones tiran en direcciones opuestas —hay
+que tocarse, pero sin pasar del diez por ciento del volumen de la caja menor— y el margen
+existe: la pata daba 11,4 % con la raíz a 0,185, y moverla a 0,20 —justo el radio máximo
+del fuselaje— la dejó por debajo del umbral sin separar las cajas.
+
+Lo que el ejemplar **no** puede ser es «limpio de avisos» en el informe completo, y no por
+un defecto suyo: ver §9.
 
 Un fixture en `artifacts/agent/` con **una pieza de cada mecánica** —un ala por
 `loft`, un brazo por `sweep`, una hélice de cuatro palas por `repeat` radial, y un
@@ -444,6 +543,18 @@ Pero es un margen, no una garantía, y conviene medirlo con el ejemplar del paso
 antes de dar por bueno el modismo. Si resulta que salta, la salida **no** es subir
 el umbral —eso apagaría el aviso donde sí sirve—: es declarar la unión, y eso es
 una fase entera que hoy no toca.
+
+**Medido con el ejemplar, y el modismo aguanta.** Diez sólidos cerrados, sin una
+sola booleana: cero solapes parciales y cero piezas sueltas. Las dos condiciones
+tiran en direcciones opuestas —hay que tocarse, pero sin pasar de ese diez por
+ciento— y el margen es estrecho pero existe: la pata daba **11,4 %** con la raíz a
+0,185, y moverla a 0,20 —justo el radio máximo del fuselaje— la dejó por debajo del
+umbral **sin separar las cajas**, así que sigue tocando.
+
+La regla práctica que sale de ahí: lo que manda no es cuánto se inserta la pieza,
+sino cuánto es esa inserción **de su propia caja envolvente**. Una pata de cuarenta
+centímetros metida dos en el fuselaje pasa el umbral si va en diagonal, porque su
+caja en ese eje mide mucho menos que su longitud.
 
 ### 6.3 La comprobación de simetría se apaga sola justo con estas piezas
 
@@ -497,27 +608,47 @@ entera. Vale la pena decirlo porque es lo que hace que el plan sea barato.
 
 ---
 
-## 7. Tabla de verificación
+## 7. Tabla de verificación, con lo que dio
 
-Nada de esto se cierra mirando el render. Cada generador tiene su número exacto.
+Nada de esto se cerró mirando el render. Cada fila es un bloque de
+`npm run test:geometry`.
 
-| Qué | Comprobación | Valor esperado |
+| Qué | Valor esperado | Medido |
 |---|---|---|
-| Perfil círculo `n`, radio `r`, extruido `h` | volumen firmado | `½·n·r²·sin(2π/n)·h` |
-| Superelipse exponente 2 | contra el círculo | idénticos hasta coma flotante |
-| `loft` de dos secciones iguales | contra `extrude` | mismo volumen, caja y triángulos |
-| `loft` tronco de secciones `A` y `k²A` | volumen firmado | `h·A·(1+k+k²)/3` |
-| `loft` circular | contra `createCylinder` | idéntico a igual teselación |
-| `sweep` recto | volumen firmado | `½·n·r²·sin(2π/n)·L` |
-| `sweep` cerrado circular | contra `createTorus` | idéntico a igual teselación |
-| `sweep` con tapas | estanqueidad | `boundaryEdges` 0 |
-| `twist` | volumen firmado | **invariante** |
-| `taper` rampa 1 a `k` | volumen firmado | factor `(1+k+k²)/3` |
-| `bend`, `wave` | ida y vuelta | posiciones originales, tolerancia declarada |
-| `repeat` radial `n` | volumen firmado | `n` veces el de una |
-| `repeat` espejo | `symmetryErrorX` | cero exacto (requiere 6.3) |
-| Todos | `TRIANGULOS_DEGENERADOS` | cero |
-| Todos con tapas | `inverted` | falso, volumen positivo |
+| Perfil círculo `n`, radio `r`, extruido `h` | `½·n·r²·sin(2π/n)·h` | 6,24289 con n=32, r=1, h=2; cuadra con 7 y 128 |
+| Superelipse exponente 2 | idéntica al círculo | idéntica **número a número**, tres resoluciones |
+| Gielis m=4, exponentes 2 | circunferencia | error < 1e-12 |
+| NACA de cuatro dígitos | polígono cerrado, borde de fuga único | 64 pares, borde de fuga en x=cuerda, extruido estanco |
+| `loft` de dos secciones iguales | igual que `extrude` | 1,764 y 12 triángulos, misma caja |
+| `loft` tronco `A` y `k²A` | `h·A·(1+k+k²)/3` | cuadra con tres `k` |
+| `loft` circular | igual que `createCylinder` | 2,996587 por los dos caminos |
+| `sweep` recto | `½·n·r²·sin(2π/n)·L` | cuadra con dos `n` |
+| `sweep` cerrado circular | igual que `createTorus` | 2,383705 y 2.304 triángulos por los dos caminos |
+| `sweep`, tramo recto | sin torsión | 29 estaciones a 1e-12 |
+| `sweep` cerrado, holonomía | 0 en un lazo plano | 0 exacto; 26,78° en uno torcido, repartidos lineal en `u` |
+| `sweep` con tapas | `boundaryEdges` 0 | 0; sin tapas, 2·puntos |
+| `twist` | volumen **invariante** | 0,998862 con 30°, 120° y −270° |
+| `taper` rampa 1 a `k` | factor `(1+k+k²)/3` | cuadra con dos `k` |
+| `bend` | eje sobre un arco | 134 vértices en la corona [1,128, 1,928] |
+| `twist`, `wave` | ida y vuelta | 3,0e-8 y 1,8e-24 — ver §9 |
+| Parámetro neutro | identidad | bit a bit en los tres |
+| `repeat` radial `n` | ángulos exactos `2πi/n` | matrices a 1e-15, y una sola malla compartida |
+| `repeat` espejo | reflejo exacto, sin aviso falso | desviación 0,0; volumen 0,048 positivo; determinantes > 0 |
+| `PERFIL_AUTOINTERSECADO` | caza el cruce, no los propios | caza el ocho; 7 perfiles propios limpios |
+| `SECCIONES_INCOMPATIBLES` | candidato, umbral declarado | círculo→ala avisa; ala→ala y círculo→círculo no |
+| Ejemplar | limpio y montado | 10 piezas, 2.672 triángulos, 0,091438; sin solape parcial ni piezas sueltas |
+| Todos | `TRIANGULOS_DEGENERADOS` cero | cero |
+| Todos con tapas | `inverted` falso | falso, volumen positivo |
+
+Dos filas de la versión original no se implementaron tal cual, y merece la pena
+que se vea:
+
+- **`repeat` espejo contra `symmetryErrorX`** no vale: esa métrica es **por
+  pieza**, y un ala no es simétrica respecto a su propio origen. Se comprueba lo
+  que sí significa algo —que la copia sea el reflejo exacto, vértice a vértice—.
+- **`bend` por ida y vuelta** tampoco: el doblado **cambia** la extensión del eje
+  que define `u`, así que la segunda pasada vería otra caja. Se comprueba por
+  invariante geométrico, que además es exacto y por vértice.
 
 ---
 
@@ -542,6 +673,31 @@ Coste estimado: unas 600 líneas en `mesh.ts`, unas 120 entre `sceneSpec.ts` y
 Ideas que esperan a que una medida las justifique, en el sitio donde se
 recordarán:
 
+- **`repeat.radial` gira alrededor del eje del mundo que pasa por el origen**, no
+  de un punto declarado. Por eso el rotor del ejemplar está sobre el eje del
+  fuselaje: una hélice en la punta de un brazo orbitaría el origen. Un campo
+  `about` lo resolvería, y falta el caso de uso que lo pida.
+- **`SIMETRIA_ROTA` y `PIVOTE_DESCENTRADO` saltan sobre piezas legítimas.** El
+  ejemplar los dispara en todas sus piezas asimétricas —alas, patas, palas— y en
+  las que no están centradas en su propio origen, que es como se declara una pieza
+  colocada. No son defectos, y por eso la puerta no los exige a cero: hacerlo
+  obligaría a torcer la pieza hasta que dejara de enseñar nada. Pero con un
+  ensamblaje de decenas de piezas ese ruido tapa los avisos que sí importan, y eso
+  sí merece una medida antes de decidir qué hacer —acotarlos por pieza, o que el
+  informe separe observaciones de defectos—.
+- **Reparametrizar el `sweep` por longitud de arco.** Hoy las estaciones se
+  reparten uniformemente en el parámetro de la curva y `u` solo las *etiqueta* con
+  la fracción de longitud recorrida. Hacerlo de verdad exigiría invertir la tabla
+  numéricamente y traer una tolerancia nueva.
+- **Las idas y vueltas no vuelven bit a bit**, y no por el deformador: las
+  posiciones viven en un `Float32Array` y el estado intermedio se redondea a 32
+  bits. Medido: 3,0e-8 en la torsión. Lo que sí sale bit a bit es el parámetro
+  neutro. Si algún día hiciera falta exactitud ahí, el cambio es el tipo de dato,
+  no la aritmética.
+- **`createCylinder` deja dos vértices que no referencia ningún triángulo**, con
+  normal cero. No afecta ni a la topología ni a la imagen, pero obliga a filtrar
+  huérfanos en cualquier comprobación de coherencia de normales —lo hace el bloque
+  31 de la puerta, con su comentario—.
 - **Un recorrido opcional en `loft`**, que reutilice la curva del paso 3. El paso
   se hizo sin el campo `stations` que traía §5: interpolar linealmente entre dos
   secciones declaradas no añade forma —los anillos intermedios caen sobre la

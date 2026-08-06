@@ -80,6 +80,44 @@ Da igual en qué sentido escribas el polígono o el perfil: se normalizan, porqu
 escribirlos al revés produciría un sólido con las caras hacia dentro y ese es el error
 más fácil de cometer.
 
+Con eso no se describe un ala ni un fuselaje, así que hay **cinco cosas más**. Los
+perfiles se declaran una vez y se usan por nombre —cuatro familias de fórmulas, entre
+ellas el perfil aerodinámico NACA de cuatro dígitos—:
+
+```json
+{ "profiles": [{ "name": "ala", "naca": "2412", "points": 48 }] }
+```
+
+`loft` cose secciones colocadas, y **dos secciones iguales son una extrusión**: mismo
+volumen, misma caja y los mismos triángulos. `sweep` barre un perfil por un recorrido, y
+**un círculo alrededor de un eje es un revolucionado**: da el mismo número que el toro.
+
+```json
+{ "geometry": { "loft": [
+    { "at": [0,0,0],   "profile": "ala", "scale": 0.34, "twist": 8 },
+    { "at": [0,0.8,0], "profile": "ala", "scale": 0.09, "twist": 1 }] } }
+
+{ "geometry": { "sweep": "ala",
+    "path": { "through": [[0,0,0], [0.3,0.2,0], [0.4,0,0]] },
+    "radius": { "at": [[0, 0.02], [1, 0.013]] } } }
+```
+
+`deform` es una lista **ordenada** —torcer y luego doblar no es doblar y luego torcer— y
+se aplica a cualquier geometría. `repeat` produce copias: radial a ángulos exactos, o
+espejo.
+
+```json
+{ "deform": [{ "twist": { "axis": "y", "degrees": 120 } },
+             { "taper": { "axis": "y", "scale": { "at": [[0,1],[1,0.4]] } } }] }
+
+{ "repeat": { "radial": { "count": 4, "axis": "y" } } }
+```
+
+Todo se verifica con el volumen exacto, no con la imagen: la torsión lo conserva, el
+afinado lo multiplica por `(1+k+k²)/3`, y un barrido que se corta a sí mismo salta como
+`BARRIDO_AUTOINTERSECADO` antes de generar nada. Hay un ejemplar con una pieza de cada
+mecánica en `artifacts/agent/pieza-geometria.json`.
+
 Crear es **incremental**: un parche puede añadir piezas, y aplicado a una escena edita
 el documento, no la geometría. Lo que sale vuelve a ser una escena.
 
