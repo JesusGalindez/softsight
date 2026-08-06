@@ -34,7 +34,8 @@ que el movimiento cuente la historia en vez de decorarla— está en
 
 Y lo que hace falta para que un agente **describa** una pieza compleja —un ala, un
 fuselaje, una pata— en vez de solo colocar primitivas, está en
-[`plan-geometria.md`](plan-geometria.md).
+[`plan-geometria.md`](plan-geometria.md). Que el **movimiento** se declare con el
+mismo vocabulario que la forma, en [`plan-movimiento.md`](plan-movimiento.md).
 
 **Regla de la frontera:** el editor nunca importa módulos internos de softsight.
 Se comunica solo por el contrato público —CLI, JSON, `--schema`, fixtures— y lo
