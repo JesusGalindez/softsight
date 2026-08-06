@@ -1,0 +1,11 @@
+{
+  "bridgeContractVersion": 1,
+  "command": "render",
+  "files": {
+    "model": { "name": "drone.glb", "path": "artifacts/export/drone.glb" }
+  },
+  "options": {
+    "tile": 160,
+    "ground": true
+  }
+}

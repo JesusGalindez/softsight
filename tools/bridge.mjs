@@ -40,12 +40,35 @@
  * tamaño para el JSON, los ficheros y los artefactos, timeout por petición, y
  * solo `execFile` con argumentos fijos: el puente no expande variables ni
  * patrones.
+ *
+ * Caché del modelo: `SOFTSIGHT_BRIDGE_MODEL_CACHE=<directorio>` persiste el
+ * `model` fuera del directorio de trabajo, en un fichero plano nombrado por el
+ * `sha256` de su contenido. El modelo es lo que más pesa del JSON (hasta
+ * `SOFTSIGHT_BRIDGE_MAX_FILE_MB`) y no cambia entre peticiones del agente que
+ * edita la escena, no el fichero; con una ruta estable el puente no lo vuelve a
+ * escribir en cada turno y, además, la caché interna del motor lo encuentra por
+ * ruta+mtime+tamaño. Los otros slots (`controlPoses`, `patches`, ...) siguen
+ * viviendo en el directorio de trabajo. El directorio se acota por mtime con
+ * `SOFTSIGHT_BRIDGE_MODEL_CACHE_MAX_MB` (por defecto 256). Como con la caché
+ * del motor, la invalidación manda: una petición con `noCache: true` ignora el
+ * directorio y escribe el modelo en el directorio de trabajo.
  */
 
 import { execFile } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -62,6 +85,11 @@ const MAX_REQUEST_BYTES = Number(process.env.SOFTSIGHT_BRIDGE_MAX_REQUEST_MB ?? 
 const MAX_FILE_BYTES = Number(process.env.SOFTSIGHT_BRIDGE_MAX_FILE_MB ?? 256) * 1024 * 1024;
 const MAX_ARTIFACT_BYTES = Number(process.env.SOFTSIGHT_BRIDGE_MAX_ARTIFACT_MB ?? 64) * 1024 * 1024;
 const TIMEOUT_MS = Number(process.env.SOFTSIGHT_BRIDGE_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
+// Directorio externo (no el temporal de la petición) donde persiste el `model`,
+// acotado a `SOFTSIGHT_BRIDGE_MODEL_CACHE_MAX_MB` (por mtime, 256 MB por defecto);
+// un tope en cero desactiva la caché, igual que omitir la variable.
+const MODEL_CACHE_DIR = process.env.SOFTSIGHT_BRIDGE_MODEL_CACHE ?? "";
+const MODEL_CACHE_MAX_BYTES = Number(process.env.SOFTSIGHT_BRIDGE_MODEL_CACHE_MAX_MB ?? 256) * 1024 * 1024;
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 const COMMANDS = new Set(["inspect", "render", "patch", "sample", "scene", "bvh", "story", "staging", "schema"]);
@@ -174,8 +202,9 @@ function checkFileName(name, slot) {
   }
 }
 
-/** Escribe un payload base64 en el directorio de trabajo y devuelve la ruta. */
-function writeFilePayload(workDir, slot, payload) {
+/** Valida un payload base64 y lo convierte en bytes; los mismos límites para
+ * escribir en el sandbox que para cachear el modelo. */
+function decodePayload(payload, slot) {
   if (typeof payload !== "object" || payload === null || typeof payload.data !== "string" || typeof payload.name !== "string") {
     throw new BridgeError("invalid-request", `${slot}: cada fichero necesita { name, data } con data en base64`);
   }
@@ -191,9 +220,63 @@ function writeFilePayload(workDir, slot, payload) {
   if (bytes.length > MAX_FILE_BYTES) {
     throw new BridgeError("file-too-large", `${slot}: '${payload.name}' excede ${MAX_FILE_BYTES} bytes`);
   }
-  const path = join(workDir, payload.name);
+  return { name: payload.name, bytes };
+}
+
+/** Escribe un payload base64 en el directorio de trabajo y devuelve la ruta. */
+function writeFilePayload(workDir, slot, payload) {
+  const { name, bytes } = decodePayload(payload, slot);
+  const path = join(workDir, name);
   writeFileSync(path, bytes);
   return path;
+}
+
+/**
+ * Persiste un `model` en `MODEL_CACHE_DIR` bajo el nombre `<sha256>.ext` si vale,
+ * y devuelve la ruta. Solo se llama con la caché activa y `noCache: false`.
+ */
+function writeFileModelCached(slot, payload) {
+  const { name, bytes } = decodePayload(payload, slot);
+  const target = join(MODEL_CACHE_DIR, `${createHash("sha256").update(bytes).digest("hex")}${extname(name)}`);
+  if (!existsSync(target)) {
+    mkdirSync(MODEL_CACHE_DIR, { recursive: true });
+    writeFileSync(target, bytes);
+    trimModelCache();
+  }
+  return target;
+}
+
+/** Borra los ficheros más viejos del directorio hasta volver al tope. */
+function trimModelCache() {
+  let entries;
+  try {
+    entries = readdirSync(MODEL_CACHE_DIR);
+  } catch {
+    return;
+  }
+  const files = [];
+  for (const entry of entries) {
+    const path = join(MODEL_CACHE_DIR, entry);
+    try {
+      const stats = statSync(path);
+      if (stats.isFile()) files.push({ path, size: stats.size, mtimeMs: stats.mtimeMs });
+    } catch {
+      // otro proceso pudo borrarlo a mitad de listado
+    }
+  }
+  let total = 0;
+  for (const file of files) total += file.size;
+  if (total <= MODEL_CACHE_MAX_BYTES) return;
+  files.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  for (const file of files) {
+    if (total <= MODEL_CACHE_MAX_BYTES) break;
+    try {
+      unlinkSync(file.path);
+      total -= file.size;
+    } catch {
+      // ya no existe; sigue con el siguiente
+    }
+  }
 }
 
 function readArtifact(workDir, name, mimeType) {
@@ -250,6 +333,10 @@ function buildArgs(request, workDir) {
         throw new BridgeError("invalid-request", "patches debe ser una lista no vacía de { name, data }");
       }
       files[slot] = payload.map((entry, index) => writeFilePayload(workDir, `patches[${index}]`, entry));
+      continue;
+    }
+    if (slot === "model" && MODEL_CACHE_DIR && MODEL_CACHE_MAX_BYTES > 0 && request.options?.noCache !== true) {
+      files[slot] = writeFileModelCached(slot, payload);
       continue;
     }
     files[slot] = writeFilePayload(workDir, slot, payload);
