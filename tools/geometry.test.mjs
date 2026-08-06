@@ -24,6 +24,7 @@ import {
   auditMesh,
   createCircleProfile,
   createGielisProfile,
+  createLoft,
   createNacaProfile,
   createSuperellipseProfile,
   resolveScene,
@@ -239,4 +240,320 @@ console.log(
     assert.throws(() => resolveScene(scene), expected, `no se rechazó por su motivo: ${expected}`);
   }
   console.log(`geometria: ok (${casos.length} escrituras malas rechazadas por su motivo)`);
+}
+
+// ---------------------------------------------------------------------------
+// Loft: secciones cosidas.
+// ---------------------------------------------------------------------------
+
+/** Cuadrado de lado `side` centrado en el origen, antihorario en el papel x,z. */
+function square(side) {
+  const half = side / 2;
+  return [-half, -half, half, -half, half, half, -half, half];
+}
+
+// 8. Dos secciones iguales **son** una extrusión. Con `samples: 4` el remuestreo
+//    por longitud de arco devuelve las cuatro esquinas intactas, así que la
+//    igualdad es exacta: si algún día deja de serlo, es que el remuestreo mueve
+//    puntos que no debía tocar.
+{
+  const side = 1.4;
+  const height = 0.9;
+  const extrusion = auditMesh(extruded({ extrude: square(side), height }));
+  const loft = auditMesh(
+    meshOf({
+      objects: [
+        {
+          geometry: {
+            loft: [
+              { at: [0, -height / 2, 0], profile: square(side) },
+              { at: [0, height / 2, 0], profile: square(side) },
+            ],
+            samples: 4,
+          },
+        },
+      ],
+    }),
+  );
+  assert.equal(loft.signedVolume, extrusion.signedVolume);
+  assert.deepEqual(loft.boundingBoxMin, extrusion.boundingBoxMin);
+  assert.deepEqual(loft.boundingBoxMax, extrusion.boundingBoxMax);
+  assert.equal(loft.triangles, extrusion.triangles);
+  assert.equal(loft.watertight, true);
+  assert.equal(loft.degenerateTriangles, 0);
+  assert.equal(loft.inverted, false);
+  console.log(
+    `geometria: ok (loft de dos secciones iguales ≡ extrusión: ${loft.signedVolume}, ` +
+      `${loft.triangles} triángulos, misma caja)`,
+  );
+}
+
+// 9. Tronco: el volumen de un prismatoide de secciones A y k²A es h·A·(1+k+k²)/3.
+//    Las caras laterales son trapecios planos, así que la triangulación no
+//    introduce error y la igualdad es exacta hasta la coma flotante.
+for (const [k, height] of [
+  [0.5, 2],
+  [0.25, 1],
+  [1.75, 0.6],
+]) {
+  const loft = auditMesh(
+    meshOf({
+      objects: [
+        {
+          geometry: {
+            loft: [
+              { at: [0, 0, 0], profile: square(1) },
+              { at: [0, height, 0], profile: square(1), scale: k },
+            ],
+            samples: 4,
+          },
+        },
+      ],
+    }),
+  );
+  const expected = (height * (1 + k + k * k)) / 3;
+  assert.ok(
+    Math.abs(loft.signedVolume - expected) < 1e-6,
+    `tronco k=${k}: ${loft.signedVolume} frente a ${expected}`,
+  );
+}
+console.log("geometria: ok (tronco h·A·(1+k+k²)/3, tres k distintos)");
+
+// 10. Loft de círculos ≡ cilindro. Se comparan los volúmenes y no los arrays:
+//     los dos generadores reparten sus vértices de otra forma y eso no es fallo.
+{
+  const points = 32;
+  const radius = 0.8;
+  const height = 1.5;
+  const loft = auditMesh(
+    meshOf({
+      objects: [
+        {
+          geometry: {
+            loft: [
+              { at: [0, -height / 2, 0], profile: createCircleProfile(radius, points) },
+              { at: [0, height / 2, 0], profile: createCircleProfile(radius, points) },
+            ],
+          },
+        },
+      ],
+    }),
+  );
+  const cylinder = auditMesh(
+    meshOf({ objects: [{ geometry: { primitive: "cylinder", parameters: [radius, height] } }] }),
+  );
+  assert.equal(loft.signedVolume, cylinder.signedVolume);
+  assert.ok(Math.abs(loft.signedVolume - regularArea(points, radius) * height) < 1e-6);
+  console.log(
+    `geometria: ok (loft de círculos ≡ cilindro: ${loft.signedVolume} por los dos caminos)`,
+  );
+}
+
+// 11. Tapas: lo que se deja abierto se cuenta, y no se cierra por iniciativa propia.
+{
+  const samples = 12;
+  const bordes = (caps) =>
+    auditMesh(
+      meshOf({
+        objects: [
+          {
+            geometry: {
+              loft: [
+                { at: [0, 0, 0], profile: createCircleProfile(1, 24) },
+                { at: [0, 1, 0], profile: createCircleProfile(1, 24) },
+              ],
+              samples,
+              caps,
+            },
+          },
+        ],
+      }),
+    );
+  assert.equal(bordes("both").boundaryEdges, 0);
+  assert.equal(bordes("both").watertight, true);
+  assert.equal(bordes("none").boundaryEdges, samples * 2);
+  assert.equal(bordes("none").watertight, false);
+  assert.equal(bordes("start").boundaryEdges, samples);
+  assert.equal(bordes("end").boundaryEdges, samples);
+  console.log(`geometria: ok (tapas: 0, ${samples * 2}, ${samples} y ${samples} aristas de borde)`);
+}
+
+// 12. El sentido de escritura no cambia la pieza. Ni el del polígono ni el de la
+//     lista de secciones: se ordena la entrada en vez de confiar en ella.
+{
+  const height = 0.7;
+  const derecho = meshOf({
+    objects: [
+      {
+        geometry: {
+          loft: [
+            { at: [0, 0, 0], profile: square(1) },
+            { at: [0, height, 0], profile: square(1), scale: 0.5 },
+          ],
+          samples: 4,
+        },
+      },
+    ],
+  });
+  // El mismo cuadrado escrito en sentido horario, y la lista de arriba abajo.
+  const alReves = meshOf({
+    objects: [
+      {
+        geometry: {
+          loft: [
+            { at: [0, height, 0], profile: [-0.5, -0.5, -0.5, 0.5, 0.5, 0.5, 0.5, -0.5], scale: 0.5 },
+            { at: [0, 0, 0], profile: square(1) },
+          ],
+          samples: 4,
+        },
+      },
+    ],
+  });
+  assert.deepEqual(alReves.positions, derecho.positions);
+  assert.deepEqual(alReves.indices, derecho.indices);
+  const audit = auditMesh(alReves);
+  assert.ok(audit.signedVolume > 0, `escrito al revés el volumen sigue positivo: ${audit.signedVolume}`);
+  assert.equal(audit.inverted, false);
+  console.log(`geometria: ok (polígono horario y lista invertida dan la misma malla, volumen ${audit.signedVolume})`);
+}
+
+// 13. Remuestreo entre secciones de distinto número de puntos. La forma está
+//     retorcida a propósito —es el caso que cazará SECCIONES_INCOMPATIBLES—; lo
+//     que se juzga aquí es que la topología aguante.
+{
+  const audit = auditMesh(
+    meshOf({
+      profiles: [
+        { name: "raiz", circle: 0.3, points: 24 },
+        { name: "punta", naca: "2412", chord: 0.6, points: 64 },
+      ],
+      objects: [
+        {
+          geometry: {
+            loft: [
+              { at: [0, 0, 0], profile: "raiz" },
+              { at: [0, 1.1, 0], profile: "punta" },
+            ],
+            samples: 48,
+          },
+        },
+      ],
+    }),
+  );
+  assert.equal(audit.watertight, true);
+  assert.equal(audit.degenerateTriangles, 0);
+  assert.equal(audit.nonManifoldEdges, 0);
+  assert.equal(audit.inverted, false);
+  console.log("geometria: ok (24 puntos cosidos con 64 a 48 muestras, malla estanca)");
+}
+
+// 14. Perfil por nombre en una sección ≡ polígono en línea.
+{
+  const polygon = createNacaProfile("2412", 0.5, 32);
+  const porNombre = meshOf({
+    profiles: [{ name: "ala", naca: "2412", chord: 0.5, points: 32 }],
+    objects: [
+      {
+        geometry: {
+          loft: [
+            { at: [0, 0, 0], profile: "ala" },
+            { at: [0, 1, 0], profile: "ala", scale: 0.4, twist: 12 },
+          ],
+        },
+      },
+    ],
+  });
+  const enLinea = meshOf({
+    objects: [
+      {
+        geometry: {
+          loft: [
+            { at: [0, 0, 0], profile: polygon },
+            { at: [0, 1, 0], profile: polygon, scale: 0.4, twist: 12 },
+          ],
+        },
+      },
+    ],
+  });
+  assert.deepEqual(porNombre.positions, enLinea.positions);
+  assert.deepEqual(porNombre.indices, enLinea.indices);
+  console.log("geometria: ok (perfil por nombre en una sección ≡ polígono en línea)");
+}
+
+// 15. Errores del loft, por su motivo.
+{
+  const conLoft = (loft, extra = {}) => ({ objects: [{ geometry: { loft, ...extra } }] });
+  const casos = [
+    [conLoft([{ at: [0, 0, 0], profile: square(1) }]), /un loft necesita al menos dos secciones/],
+    [
+      conLoft(
+        [
+          { at: [0, 0, 0], profile: square(1) },
+          { at: [0, 1, 0], profile: square(1) },
+        ],
+        { samples: 2 },
+      ),
+      /samples debe ser al menos 3, no 2/,
+    ],
+    [
+      conLoft([
+        { at: [0, 0, 0], profile: square(1) },
+        { at: [0, 0, 0], profile: square(1) },
+      ]),
+      /las secciones 0 y 1 están en la misma posición/,
+    ],
+    [
+      conLoft([
+        { at: [0, 0], profile: square(1) },
+        { at: [0, 1, 0], profile: square(1) },
+      ]),
+      /loft\[0\]\.at debe ser number\[3\]/,
+    ],
+    [
+      conLoft([
+        { at: [0, 0, 0], profile: square(1), scale: 0 },
+        { at: [0, 1, 0], profile: square(1) },
+      ]),
+      /la escala de la sección 0 debe ser positiva/,
+    ],
+    [
+      conLoft([
+        { at: [0, 0, 0], profile: "ala" },
+        { at: [0, 1, 0], profile: square(1) },
+      ]),
+      /no hay ningún perfil llamado "ala"/,
+    ],
+  ];
+  for (const [scene, expected] of casos) {
+    assert.throws(() => resolveScene(scene), expected, `no se rechazó por su motivo: ${expected}`);
+  }
+  console.log(`geometria: ok (${casos.length} loft mal escritos rechazados por su motivo)`);
+}
+
+// 16. La API pública y el documento hacen lo mismo. `createLoft` se exporta, así
+//     que hay quien lo va a llamar sin pasar por una escena.
+{
+  const directo = createLoft(
+    [
+      { position: [0, 0, 0], polygon: square(1) },
+      { position: [0, 1, 0], polygon: square(1), scale: [0.5, 0.5], twist: Math.PI / 6 },
+    ],
+    { samples: 4 },
+  );
+  const porEscena = meshOf({
+    objects: [
+      {
+        geometry: {
+          loft: [
+            { at: [0, 0, 0], profile: square(1) },
+            { at: [0, 1, 0], profile: square(1), scale: 0.5, twist: 30 },
+          ],
+          samples: 4,
+        },
+      },
+    ],
+  });
+  assert.deepEqual(directo.positions, porEscena.positions);
+  assert.deepEqual(directo.indices, porEscena.indices);
+  console.log("geometria: ok (createLoft por API ≡ por documento, con los grados convertidos)");
 }

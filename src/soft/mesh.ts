@@ -579,6 +579,69 @@ function signedArea(polygon: readonly number[]): number {
   return total / 2;
 }
 
+/**
+ * El mismo polígono con `samples` puntos repartidos por longitud de arco,
+ * empezando en su vértice cero.
+ *
+ * Es lo que elimina el fallo número uno del *loft*: dos secciones con distinto
+ * número de puntos, o con el mismo número mal emparejado, cosen una superficie
+ * retorcida en espiral. Remuestreando las dos al mismo número, un círculo de 24
+ * puntos y un perfil de 64 se cosen sin que nadie los iguale a mano.
+ *
+ * Cuando un punto de destino cae exactamente sobre un vértice —un cuadrado
+ * remuestreado a cuatro puntos, por ejemplo— sale el vértice **intacto**: el
+ * parámetro local vale cero y la interpolación devuelve el extremo sin tocarlo.
+ * De eso depende que un loft de dos secciones iguales dé exactamente lo mismo que
+ * una extrusión, y no «casi».
+ */
+function resamplePolygon(polygon: readonly number[], samples: number): number[] {
+  const count = polygon.length / 2;
+  if (count < 3) throw new Error("un polígono necesita al menos tres puntos");
+  if (samples < 3) throw new Error(`samples debe ser al menos 3, no ${samples}`);
+
+  const cumulative = new Float64Array(count + 1);
+  for (let index = 0; index < count; index += 1) {
+    const next = (index + 1) % count;
+    cumulative[index + 1] =
+      cumulative[index] +
+      Math.hypot(polygon[next * 2] - polygon[index * 2], polygon[next * 2 + 1] - polygon[index * 2 + 1]);
+  }
+  const perimeter = cumulative[count];
+  if (!(perimeter > 0)) throw new Error("un polígono de perímetro cero no se puede remuestrear");
+
+  const resampled: number[] = [];
+  let edge = 0;
+  for (let sample = 0; sample < samples; sample += 1) {
+    const target = (perimeter * sample) / samples;
+    while (edge < count - 1 && target >= cumulative[edge + 1]) edge += 1;
+    const span = cumulative[edge + 1] - cumulative[edge];
+    const t = span > 0 ? (target - cumulative[edge]) / span : 0;
+    const next = (edge + 1) % count;
+    resampled.push(
+      polygon[edge * 2] + (polygon[next * 2] - polygon[edge * 2]) * t,
+      polygon[edge * 2 + 1] + (polygon[next * 2 + 1] - polygon[edge * 2 + 1]) * t,
+    );
+  }
+  return resampled;
+}
+
+/**
+ * El polígono al revés **conservando su vértice cero**: `v0, v_{n-1}, … , v1`.
+ *
+ * `reversePolygon` no sirve aquí: empieza por el último vértice, así que
+ * normalizar el sentido de una sección movería también el punto de partida del
+ * remuestreo, y la correspondencia entre secciones giraría. La misma pieza
+ * escrita en un sentido y en el otro dejaría de dar la misma malla.
+ */
+function flipPolygonKeepingStart(polygon: readonly number[]): number[] {
+  const count = polygon.length / 2;
+  const flipped = [polygon[0], polygon[1]];
+  for (let index = count - 1; index >= 1; index -= 1) {
+    flipped.push(polygon[index * 2], polygon[index * 2 + 1]);
+  }
+  return flipped;
+}
+
 function isInsideTriangle(
   px: number, py: number,
   ax: number, ay: number,
@@ -740,6 +803,163 @@ export function createExtrusion(polygon: readonly number[], height = 1): Mesh {
     indices: Uint32Array.from(indices),
     boundingRadius: boundingRadiusOf(positions),
   };
+}
+
+export interface LoftSection {
+  position: readonly [number, number, number];
+  /** Polígono cerrado en el plano XZ, pares `x,z`. */
+  polygon: readonly number[];
+  /** Escala en x y en z; 1 y 1 por defecto. Las dos positivas. */
+  scale?: readonly [number, number];
+  /** Radianes alrededor de Y. Radianes aquí; los grados son cosa del documento. */
+  twist?: number;
+}
+
+/**
+ * Secciones cosidas: la generalización de la extrusión a más de dos perfiles y a
+ * perfiles distintos.
+ *
+ * Convención de planos, que no es adivinable y por eso se dice: el polígono de
+ * cada sección vive en el plano XZ —igual que en `createExtrusion`— y se traslada
+ * a su posición. Las secciones quedan **paralelas a XZ**, así que la pieza crece
+ * a lo largo de Y, y la posición puede además desplazarse en X y en Z para
+ * inclinarla o escalonarla. Un ala cuyo tramo va en horizontal se gira entera con
+ * la matriz del objeto. Es la convención de la extrusión, sin inventar una segunda.
+ *
+ * Los vértices del costado se comparten a lo largo del anillo, así que las
+ * normales salen promediadas y la superficie sombrea suave: es lo que quiere un
+ * perfil aerodinámico, y lo mismo que hace el revolucionado. Un canto vivo en la
+ * sección —un cuadrado— sombreará redondeado, que es el precio conocido de esa
+ * decisión.
+ */
+export function createLoft(
+  sections: readonly LoftSection[],
+  options: { samples?: number; caps?: "both" | "none" | "start" | "end" } = {},
+): Mesh {
+  if (sections.length < 2) throw new Error("un loft necesita al menos dos secciones");
+
+  const caps = options.caps ?? "both";
+  const samples =
+    options.samples ?? Math.max(...sections.map((section) => section.polygon.length / 2));
+  if (samples < 3) throw new Error(`samples debe ser al menos 3, no ${samples}`);
+
+  // El sentido del recorrido se normaliza igual que se normaliza el del polígono:
+  // una lista escrita de arriba abajo produciría el sólido del revés, y ordenarla
+  // cuesta menos que explicarle al agente en qué orden tenía que escribirla.
+  const ordered =
+    sections[sections.length - 1].position[1] >= sections[0].position[1]
+      ? [...sections]
+      : [...sections].reverse();
+
+  const rings: number[][] = [];
+  for (const [index, section] of ordered.entries()) {
+    if (index > 0) {
+      const previous = ordered[index - 1].position;
+      const here = section.position;
+      if (here[0] === previous[0] && here[1] === previous[1] && here[2] === previous[2]) {
+        throw new Error(`las secciones ${index - 1} y ${index} están en la misma posición`);
+      }
+    }
+    const [scaleX, scaleZ] = section.scale ?? [1, 1];
+    if (!(scaleX > 0) || !(scaleZ > 0)) {
+      throw new Error(`la escala de la sección ${index} debe ser positiva, no [${scaleX}, ${scaleZ}]`);
+    }
+
+    const oriented =
+      signedArea(section.polygon) < 0 ? flipPolygonKeepingStart(section.polygon) : [...section.polygon];
+    const resampled = resamplePolygon(oriented, samples);
+    const twist = section.twist ?? 0;
+    const cos = Math.cos(twist);
+    const sin = Math.sin(twist);
+
+    const ring: number[] = [];
+    for (let sample = 0; sample < samples; sample += 1) {
+      const x = resampled[sample * 2] * scaleX;
+      const z = resampled[sample * 2 + 1] * scaleZ;
+      // Mismo sentido de giro que `rotationY`, para que un twist en el documento y
+      // una rotación del objeto no giren en direcciones contrarias.
+      ring.push(cos * x - sin * z, sin * x + cos * z);
+    }
+    rings.push(ring);
+  }
+
+  const ringCount = rings.length;
+  const capStart = caps === "both" || caps === "start";
+  const capEnd = caps === "both" || caps === "end";
+  const startTriangles = capStart ? earClip(rings[0]) : [];
+  const endTriangles = capEnd ? earClip(rings[ringCount - 1]) : [];
+
+  const capVertices = (capStart ? samples : 0) + (capEnd ? samples : 0);
+  const vertexCount = ringCount * samples + capVertices;
+  const positions = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  const indices: number[] = [];
+
+  let vertex = 0;
+  for (let ring = 0; ring < ringCount; ring += 1) {
+    const y = ordered[ring].position[1];
+    const offsetX = ordered[ring].position[0];
+    const offsetZ = ordered[ring].position[2];
+    for (let sample = 0; sample < samples; sample += 1) {
+      positions[vertex * 3 + 0] = rings[ring][sample * 2] + offsetX;
+      positions[vertex * 3 + 1] = y;
+      positions[vertex * 3 + 2] = rings[ring][sample * 2 + 1] + offsetZ;
+      uvs[vertex * 2 + 0] = sample / samples;
+      uvs[vertex * 2 + 1] = ring / (ringCount - 1);
+      vertex += 1;
+    }
+  }
+
+  for (let ring = 0; ring < ringCount - 1; ring += 1) {
+    for (let sample = 0; sample < samples; sample += 1) {
+      const next = (sample + 1) % samples;
+      const a = ring * samples + sample;
+      const b = ring * samples + next;
+      const c = (ring + 1) * samples + next;
+      const d = (ring + 1) * samples + sample;
+      indices.push(a, c, b, a, d, c);
+    }
+  }
+
+  // Las tapas no comparten vértices con el costado: comparten posición pero no
+  // normal, y soldarlas redondearía el canto.
+  for (const [ring, triangles, upward] of [
+    [0, startTriangles, false],
+    [ringCount - 1, endTriangles, true],
+  ] as const) {
+    if (triangles.length === 0) continue;
+    const base = vertex;
+    const y = ordered[ring].position[1];
+    const offsetX = ordered[ring].position[0];
+    const offsetZ = ordered[ring].position[2];
+    for (let sample = 0; sample < samples; sample += 1) {
+      positions[vertex * 3 + 0] = rings[ring][sample * 2] + offsetX;
+      positions[vertex * 3 + 1] = y;
+      positions[vertex * 3 + 2] = rings[ring][sample * 2 + 1] + offsetZ;
+      uvs[vertex * 2 + 0] = sample / samples;
+      uvs[vertex * 2 + 1] = upward ? 1 : 0;
+      vertex += 1;
+    }
+    for (let entry = 0; entry < triangles.length; entry += 3) {
+      const [a, b, c] = [triangles[entry], triangles[entry + 1], triangles[entry + 2]];
+      // Un polígono antihorario en el papel `x,z` se ve horario desde +Y, así que
+      // la tapa de arriba va al revés que la de abajo. Es el mismo cuidado que ya
+      // se tuvo en la extrusión, donde escribirlo del otro modo sacó el sólido
+      // entero hacia dentro.
+      if (upward) indices.push(base + c, base + b, base + a);
+      else indices.push(base + a, base + b, base + c);
+    }
+  }
+
+  const mesh: Mesh = {
+    positions,
+    normals: new Float32Array(positions.length),
+    uvs,
+    indices: Uint32Array.from(indices),
+    boundingRadius: boundingRadiusOf(positions),
+  };
+  computeNormals(mesh);
+  return mesh;
 }
 
 /** El perfil recorrido en sentido contrario, conservando los pares radio,altura. */

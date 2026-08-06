@@ -101,13 +101,15 @@ export type { Model, ModelPart, PartFamily, Patch, Edit, EditResult, PropertyQue
 export { diffSheets } from "./renderDiff";
 export type { RasterImage, RenderDiff, DiffRegion } from "./renderDiff";
 export { resolveScene, resolveObject, modelFromScene, createGroundPlane } from "./sceneSpec";
-export type { ProfileSpec } from "./sceneSpec";
+export type { ProfileSpec, LoftSpec, LoftSectionSpec } from "./sceneSpec";
 export {
   createCircleProfile,
   createGielisProfile,
+  createLoft,
   createNacaProfile,
   createSuperellipseProfile,
 } from "../mesh";
+export type { LoftSection } from "../mesh";
 export { applyPatchToScene } from "./scenePatch";
 export { invertPatch } from "./invertPatch";
 export { auditSpatial } from "./spatialAudit";

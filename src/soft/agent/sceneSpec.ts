@@ -16,12 +16,14 @@ import {
   createCylinder,
   createExtrusion,
   createGielisProfile,
+  createLoft,
   createNacaProfile,
   createPlane,
   createRevolution,
   createSphere,
   createSuperellipseProfile,
   createTorus,
+  type LoftSection,
   type Mesh,
 } from "../mesh";
 import {
@@ -91,6 +93,26 @@ export interface ExtrudeSpec {
   height?: number;
 }
 
+export interface LoftSectionSpec {
+  /** Dónde se coloca la sección. */
+  at: [number, number, number];
+  /** Polígono en el plano XZ, pares `x,z`, o el nombre de un perfil. */
+  profile: number[] | string;
+  /** Escala uniforme, o `[sx, sz]`; 1 por defecto. */
+  scale?: number | [number, number];
+  /** Grados alrededor de Y, sobre el origen local del polígono; 0 por defecto. */
+  twist?: number;
+}
+
+export interface LoftSpec {
+  /** Secciones a coser, al menos dos. */
+  loft: LoftSectionSpec[];
+  /** Puntos por sección tras remuestrear; el mayor de las secciones por defecto. */
+  samples?: number;
+  /** Qué extremos se tapan; `both` por defecto. */
+  caps?: "both" | "none" | "start" | "end";
+}
+
 export interface RevolveSpec {
   /** Perfil en pares `radio,altura`, girado alrededor del eje Y. */
   revolve: number[];
@@ -108,7 +130,12 @@ export interface RawMeshSpec {
   uvs?: number[];
 }
 
-export type GeometrySpec = PrimitiveSpec | RawMeshSpec | ExtrudeSpec | RevolveSpec;
+export type GeometrySpec =
+  | PrimitiveSpec
+  | RawMeshSpec
+  | ExtrudeSpec
+  | RevolveSpec
+  | LoftSpec;
 
 export interface ObjectSpec {
   name?: string;
@@ -172,6 +199,30 @@ function isExtrude(geometry: GeometrySpec): geometry is ExtrudeSpec {
 
 function isRevolve(geometry: GeometrySpec): geometry is RevolveSpec {
   return (geometry as RevolveSpec).revolve !== undefined;
+}
+
+function isLoft(geometry: GeometrySpec): geometry is LoftSpec {
+  return (geometry as LoftSpec).loft !== undefined;
+}
+
+/** Las secciones del documento a las que entiende `createLoft`. */
+function buildLoftSections(
+  spec: LoftSpec,
+  profiles: ReadonlyMap<string, number[]> | undefined,
+): LoftSection[] {
+  return spec.loft.map((section, index) => {
+    if (section.at === undefined || section.at.length !== 3) {
+      throw new Error(`la sección ${index} del loft necesita \`at\` con tres números`);
+    }
+    const scale = section.scale ?? 1;
+    return {
+      position: [section.at[0], section.at[1], section.at[2]] as const,
+      polygon: polygonOf(section.profile, profiles),
+      scale: (typeof scale === "number" ? [scale, scale] : scale) as readonly [number, number],
+      // Los grados son cosa del documento; el generador trabaja en radianes.
+      twist: (section.twist ?? 0) * DEGREES_TO_RADIANS,
+    };
+  });
 }
 
 const PROFILE_GENERATORS = ["circle", "superellipse", "gielis", "naca"] as const;
@@ -357,7 +408,12 @@ export function resolveObject(
       ? createExtrusion(polygonOf(geometry.extrude, profiles), geometry.height ?? 1)
       : isRevolve(geometry)
         ? createRevolution(geometry.revolve, geometry.segments ?? 32)
-        : buildPrimitive(geometry);
+        : isLoft(geometry)
+          ? createLoft(buildLoftSections(geometry, profiles), {
+              samples: geometry.samples,
+              caps: geometry.caps,
+            })
+          : buildPrimitive(geometry);
   return {
     name: object.name ?? `objeto${index}`,
     node: { mesh, model: buildModelMatrix(object), material: buildMaterial(object) },

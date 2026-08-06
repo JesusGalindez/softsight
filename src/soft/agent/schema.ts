@@ -80,6 +80,38 @@ const PROFILE_FIELDS: ObjectSchema = {
   radius: { type: "number", description: "Multiplicador del radio de gielis; 1 por defecto." },
 };
 
+const LOFT_SECTION_FIELDS: ObjectSchema = {
+  at: { type: "number[3]", required: true, description: "Dónde se coloca la sección." },
+  profile: {
+    type: "number[]|string",
+    required: true,
+    description:
+      "Polígono en el plano XZ, pares x,z, o el nombre de un perfil declarado en `profiles`.",
+  },
+  scale: { type: "number|number[]", description: "Escala uniforme, o [sx, sz]; 1 por defecto." },
+  twist: {
+    type: "number",
+    description: "Grados alrededor de Y, sobre el origen local del polígono; 0 por defecto.",
+  },
+};
+
+const GEOMETRY_LOFT: ObjectSchema = {
+  loft: {
+    type: "object[]",
+    required: true,
+    description:
+      "Secciones cosidas, al menos dos. Las secciones quedan paralelas al plano XZ y la pieza " +
+      "crece a lo largo de Y; `at` puede además desplazarse en X y en Z.",
+    fields: LOFT_SECTION_FIELDS,
+  },
+  samples: {
+    type: "number",
+    description:
+      "Puntos por sección tras remuestrear por longitud de arco; el mayor de las secciones por defecto.",
+  },
+  caps: { type: '"both"|"none"|"start"|"end"', description: "Qué extremos se tapan; both por defecto." },
+};
+
 const GEOMETRY_REVOLVE: ObjectSchema = {
   revolve: {
     type: "number[]",
@@ -95,9 +127,9 @@ const OBJECT_FIELDS: ObjectSchema = {
     type: "object",
     required: true,
     description:
-      "Primitiva con parámetros, malla cruda con sus arrays, extrusión de un polígono " +
-      "o revolucionado de un perfil.",
-    anyOf: [GEOMETRY_PRIMITIVE, GEOMETRY_RAW, GEOMETRY_EXTRUDE, GEOMETRY_REVOLVE],
+      "Primitiva con parámetros, malla cruda con sus arrays, extrusión de un polígono, " +
+      "revolucionado de un perfil o loft de secciones cosidas.",
+    anyOf: [GEOMETRY_PRIMITIVE, GEOMETRY_RAW, GEOMETRY_EXTRUDE, GEOMETRY_REVOLVE, GEOMETRY_LOFT],
   },
   matrix: {
     type: "number[]",
