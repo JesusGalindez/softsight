@@ -43,6 +43,7 @@ import type { Mesh } from "../mesh";
 import { diffSheets, type RasterImage, type RenderDiff } from "./renderDiff";
 import { createGroundPlane, resolveScene, type SceneSpec } from "./sceneSpec";
 import { auditSpatial, type SpatialAudit } from "./spatialAudit";
+import { auditGeometry } from "./geometryAudit";
 import type { Camera, SceneNode } from "../renderer";
 
 export {
@@ -101,15 +102,26 @@ export type { Model, ModelPart, PartFamily, Patch, Edit, EditResult, PropertyQue
 export { diffSheets } from "./renderDiff";
 export type { RasterImage, RenderDiff, DiffRegion } from "./renderDiff";
 export { resolveScene, resolveObject, modelFromScene, createGroundPlane } from "./sceneSpec";
-export type { ProfileSpec, LoftSpec, LoftSectionSpec } from "./sceneSpec";
+export { evaluateVariation, resolveSweepPath } from "./sceneSpec";
+export type {
+  ProfileSpec,
+  LoftSpec,
+  LoftSectionSpec,
+  SweepSpec,
+  PathSpec,
+  VariationSpec,
+} from "./sceneSpec";
+export { auditGeometry } from "./geometryAudit";
 export {
   createCircleProfile,
   createGielisProfile,
   createLoft,
   createNacaProfile,
   createSuperellipseProfile,
+  createSweep,
+  sweepStations,
 } from "../mesh";
-export type { LoftSection } from "../mesh";
+export type { LoftSection, SweepStation, SweepPath } from "../mesh";
 export { applyPatchToScene } from "./scenePatch";
 export { invertPatch } from "./invertPatch";
 export { auditSpatial } from "./spatialAudit";
@@ -792,6 +804,9 @@ export function reviewScene(
     ...budgetWarnings,
     ...checkScale(size, options.expectSize),
     ...spatialWarnings(spatial),
+    // Sobre el documento, no sobre la malla: hay geometría mal declarada que la
+    // malla ya no delata, como un barrido que se corta a sí mismo.
+    ...auditGeometry(spec),
   ];
 
   const review: SceneReview = {

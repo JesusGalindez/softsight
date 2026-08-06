@@ -21,13 +21,16 @@
 import assert from "node:assert/strict";
 
 import {
+  auditGeometry,
   auditMesh,
   createCircleProfile,
   createGielisProfile,
   createLoft,
   createNacaProfile,
   createSuperellipseProfile,
+  evaluateVariation,
   resolveScene,
+  sweepStations,
 } from "../dist-node/agent3d.mjs";
 
 /** Malla de una escena de un solo objeto. */
@@ -556,4 +559,345 @@ console.log("geometria: ok (tronco h·A·(1+k+k²)/3, tres k distintos)");
   assert.deepEqual(directo.positions, porEscena.positions);
   assert.deepEqual(directo.indices, porEscena.indices);
   console.log("geometria: ok (createLoft por API ≡ por documento, con los grados convertidos)");
+}
+
+// ---------------------------------------------------------------------------
+// Sweep: perfil barrido por un recorrido.
+// ---------------------------------------------------------------------------
+
+/** `count` puntos repartidos por una circunferencia de radio `radius` en el plano XZ. */
+function ring(radius, count) {
+  const points = [];
+  for (let index = 0; index < count; index += 1) {
+    const angle = (index / count) * Math.PI * 2;
+    points.push([radius * Math.cos(angle), 0, radius * Math.sin(angle)]);
+  }
+  return points;
+}
+
+// 17. Recorrido recto: el volumen es el área del polígono inscrito por la longitud.
+for (const [points, radius, length] of [
+  [24, 0.2, 2],
+  [9, 0.55, 0.4],
+]) {
+  const audit = auditMesh(
+    meshOf({
+      objects: [
+        {
+          geometry: {
+            sweep: createCircleProfile(radius, points),
+            path: { through: [[0, 0, 0], [0, length, 0]], kind: "polyline" },
+            stations: 2,
+          },
+        },
+      ],
+    }),
+  );
+  const expected = regularArea(points, radius) * length;
+  assert.ok(
+    Math.abs(audit.signedVolume - expected) < 1e-6,
+    `barrido recto de ${points} puntos: ${audit.signedVolume} frente a ${expected}`,
+  );
+  assert.equal(audit.watertight, true);
+  assert.equal(audit.degenerateTriangles, 0);
+  assert.equal(audit.inverted, false);
+}
+console.log("geometria: ok (barrido recto ≡ ½·n·r²·sin(2π/n)·L, dos resoluciones)");
+
+// 18. Recorrido circular cerrado ≡ toro, a la misma teselación. Es la afirmación
+//     de que el barrido generaliza el revolucionado, medida en vez de dicha.
+{
+  const major = 48;
+  const minor = 24;
+  const R = 1;
+  const r = 0.35;
+  const barrido = auditMesh(
+    meshOf({
+      objects: [
+        {
+          geometry: {
+            sweep: createCircleProfile(r, minor),
+            path: { through: ring(R, major), kind: "polyline", closed: true },
+            stations: major,
+          },
+        },
+      ],
+    }),
+  );
+  const toro = auditMesh(
+    meshOf({ objects: [{ geometry: { primitive: "torus", parameters: [R, r] } }] }),
+  );
+  assert.equal(barrido.signedVolume, toro.signedVolume);
+  assert.equal(barrido.triangles, toro.triangles);
+  assert.equal(barrido.watertight, true);
+  assert.equal(barrido.boundaryEdges, 0);
+  assert.equal(barrido.nonManifoldEdges, 0);
+  assert.equal(barrido.inverted, false);
+  console.log(`geometria: ok (barrido cerrado ≡ toro: ${barrido.signedVolume} y ${barrido.triangles} triángulos por los dos caminos)`);
+}
+
+// 19. La costura de un cerrado cierra de verdad. Que `boundaryEdges` sea cero no
+//     lo demuestra —la costura está soldada por posición pase lo que pase—; lo que
+//     lo demuestra es que el marco vuelva alineado. Sin repartir el residuo, la
+//     normal de la última estación no coincide con la de la primera.
+{
+  const residuoDe = (puntos) => {
+    const { stations, u } = sweepStations(puntos, { closed: true, stations: 40 });
+    const residuo = stations[stations.length - 1].twist / (u[u.length - 1] || 1);
+    return { stations, u, residuo };
+  };
+
+  // Verdad conocida: un lazo **plano** tiene holonomía nula, así que el marco
+  // vuelve solo y el residuo es cero exacto. Si saliera distinto de cero, el
+  // medidor estaría midiendo su propio ruido.
+  // `Math.abs` porque un cero negativo es cero: `strictEqual` distingue -0 de 0.
+  assert.equal(Math.abs(residuoDe(ring(1, 8)).residuo), 0);
+
+  // Y uno torcido de verdad sí acumula giro. Sin repartirlo, la costura del tubo
+  // queda desalineada por esta cantidad.
+  const torcido = residuoDe([
+    [1, 0, 0],
+    [0.3, 0.9, 0.6],
+    [-0.7, 0.2, 1.1],
+    [-1.1, -0.6, 0.1],
+    [-0.2, 0.4, -0.9],
+    [0.8, -0.5, -0.7],
+  ]);
+  assert.ok(
+    Math.abs(torcido.residuo) > 0.1,
+    `un lazo torcido tiene que acumular giro, y acumuló ${torcido.residuo}`,
+  );
+  assert.equal(Math.abs(torcido.stations[0].twist), 0, "la primera estación no lleva corrección");
+  // El reparto es lineal en u, estación a estación.
+  for (const index of [7, 20, 33, 39]) {
+    assert.ok(
+      Math.abs(torcido.stations[index].twist - torcido.residuo * torcido.u[index]) < 1e-12,
+      `el residuo se reparte lineal en u; falla en la estación ${index}`,
+    );
+  }
+  console.log(
+    `geometria: ok (holonomía: lazo plano 0 exacto, lazo torcido ` +
+      `${((torcido.residuo * 180) / Math.PI).toFixed(2)}° repartidos lineal en u)`,
+  );
+}
+
+// 20. Un tramo recto no lleva torsión. Es lo que compra el transporte paralelo:
+//     con Frenet, el marco gira donde la curvatura tiende a cero.
+{
+  const { stations } = sweepStations(
+    [
+      [0, 0, 0],
+      [0, 1, 0],
+      [0, 2, 0],
+      [0, 3, 0],
+      [0.8, 3.8, 0.5],
+    ],
+    { kind: "polyline", stations: 40 },
+  );
+  // Las del tramo recto, **sin la esquina**: la estación que cae justo sobre el
+  // punto de quiebro tiene tangente promediada entre los dos tramos, así que gira
+  // con razón. Lo que se juzga es que las anteriores no giren.
+  const rectas = stations.filter(
+    (station) => station.position[0] === 0 && station.position[2] === 0 && station.position[1] < 2.9,
+  );
+  assert.ok(rectas.length > 10, `el tramo recto tiene ${rectas.length} estaciones`);
+  for (const station of rectas) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      assert.ok(
+        Math.abs(station.normal[axis] - rectas[0].normal[axis]) < 1e-12,
+        `el tramo recto no debe girar: ${station.normal} frente a ${rectas[0].normal}`,
+      );
+    }
+  }
+  console.log(`geometria: ok (${rectas.length} estaciones de tramo recto sin un grado de torsión)`);
+}
+
+// 21. Tablas de variación.
+{
+  assert.equal(evaluateVariation(0.42, 0.7), 0.42);
+  const tabla = { at: [[0, 10], [0.5, 20], [1, 0]] };
+  assert.equal(evaluateVariation(tabla, 0), 10);
+  assert.equal(evaluateVariation(tabla, 0.5), 20);
+  assert.equal(evaluateVariation(tabla, 1), 0);
+  assert.equal(evaluateVariation(tabla, 0.25), 15);
+  // Sujeción fuera del rango, no extrapolación: extrapolar daría radios negativos.
+  assert.equal(evaluateVariation(tabla, -3), 10);
+  assert.equal(evaluateVariation(tabla, 7), 0);
+  // `smooth` es Hermite con tangentes nulas: en el punto medio vale la media.
+  assert.equal(evaluateVariation({ at: [[0, 0], [1, 8]], ease: "smooth" }, 0.5), 4);
+  assert.ok(evaluateVariation({ at: [[0, 0], [1, 8]], ease: "smooth" }, 0.25) < 2);
+  // `power:k` interpola en t^k.
+  assert.ok(
+    Math.abs(evaluateVariation({ at: [[0, 0], [1, 1]], ease: "power:0.5" }, 0.25) - 0.5) < 1e-15,
+  );
+  const malas = [
+    [{ at: [[0, 1], [0.5, 2], [0.5, 3]] }, /va en orden creciente de u y sin repetir/],
+    [{ at: [[1, 1], [0, 2]] }, /va en orden creciente de u/],
+    [{ at: [] }, /necesita al menos un par/],
+    [{ at: [[0, 1, 2]] }, /son dos números/],
+    [{ at: [[0, 1], [1, 2]], ease: "bounce" }, /ease desconocido "bounce"/],
+    [{ at: [[0, 1], [1, 2]], ease: "power:0" }, /exponente de `power:0` debe ser un número positivo/],
+  ];
+  for (const [spec, expected] of malas) {
+    assert.throws(() => evaluateVariation(spec, 0.5), expected, `no se rechazó: ${expected}`);
+  }
+  console.log(`geometria: ok (tablas de variación: nudos, sujeción, tres eases, ${malas.length} malas)`);
+}
+
+// 22. Radio variable: un cono barrido. El valor esperado es la suma exacta de los
+//     troncos, porque cada cuadrilátero del costado es plano.
+{
+  const points = 32;
+  const stations = 17;
+  const length = 2;
+  const audit = auditMesh(
+    meshOf({
+      objects: [
+        {
+          geometry: {
+            sweep: createCircleProfile(1, points),
+            path: { through: [[0, 0, 0], [0, length, 0]], kind: "polyline" },
+            radius: { at: [[0, 1], [1, 0]] },
+            stations,
+          },
+        },
+      ],
+    }),
+  );
+  const area = regularArea(points, 1);
+  const step = length / (stations - 1);
+  let expected = 0;
+  for (let index = 0; index < stations - 1; index += 1) {
+    const a = 1 - index / (stations - 1);
+    const b = 1 - (index + 1) / (stations - 1);
+    expected += (step / 3) * area * (a * a + a * b + b * b);
+  }
+  assert.ok(
+    Math.abs(audit.signedVolume - expected) < 1e-6,
+    `cono barrido: ${audit.signedVolume} frente a ${expected}`,
+  );
+  // Y se acerca a ⅓·área·L, que es el cono continuo.
+  assert.ok(Math.abs(expected - (area * length) / 3) < 0.01);
+  console.log(
+    `geometria: ok (cono barrido ${audit.signedVolume}, suma exacta de troncos, hacia ⅓·área·L)`,
+  );
+}
+
+// 23. BARRIDO_AUTOINTERSECADO: el codo que se come a sí mismo.
+{
+  const codo = (radius) => ({
+    objects: [
+      {
+        name: "codo",
+        geometry: {
+          sweep: createCircleProfile(1, 16),
+          path: { through: ring(0.5, 6), kind: "polyline", closed: true },
+          radius,
+          stations: 24,
+        },
+      },
+    ],
+  });
+  const gordo = auditGeometry(codo(0.9));
+  assert.equal(gordo.length, 1, "un codo con radio mayor que su curvatura tiene que avisar");
+  assert.equal(gordo[0].code, "BARRIDO_AUTOINTERSECADO");
+  assert.equal(gordo[0].part, "codo");
+  assert.match(gordo[0].message, /en la estación \d+ el radio es 0\.9000/);
+  assert.match(gordo[0].message, /Cabe hasta \d+\.\d+/);
+  assert.match(gordo[0].message, /certeza, no candidato/);
+  assert.equal(auditGeometry(codo(0.05)).length, 0, "con radio pequeño no debe avisar");
+  // Y un aviso por pieza, no uno por estación.
+  assert.equal(auditGeometry(codo(2)).length, 1);
+  console.log(`geometria: ok (BARRIDO_AUTOINTERSECADO: «${gordo[0].message.slice(0, 68)}…»)`);
+}
+
+// 24. Tapas, y que un recorrido cerrado no las tiene ni aunque se pidan.
+{
+  const points = 16;
+  const bordes = (caps, closed) =>
+    auditMesh(
+      meshOf({
+        objects: [
+          {
+            geometry: {
+              sweep: createCircleProfile(0.2, points),
+              path: closed
+                ? { through: ring(1, 8), kind: "polyline", closed: true }
+                : { through: [[0, 0, 0], [0, 1, 0]], kind: "polyline" },
+              stations: closed ? 8 : 2,
+              caps,
+            },
+          },
+        ],
+      }),
+    );
+  assert.equal(bordes("both", false).boundaryEdges, 0);
+  assert.equal(bordes("none", false).boundaryEdges, points * 2);
+  assert.equal(bordes("start", false).boundaryEdges, points);
+  assert.equal(bordes("end", false).boundaryEdges, points);
+  assert.equal(bordes("both", true).boundaryEdges, 0);
+  assert.equal(bordes("none", true).boundaryEdges, 0, "un cerrado no tiene extremos que tapar");
+  console.log(`geometria: ok (tapas del barrido: 0, ${points * 2}, ${points}, ${points}; y el cerrado sin extremos)`);
+}
+
+// 25. Errores del barrido, por su motivo.
+{
+  const casos = [
+    [
+      { objects: [{ geometry: { sweep: createCircleProfile(1, 8), path: { through: [[0, 0, 0]] } } }] },
+      /un recorrido necesita al menos dos puntos/,
+    ],
+    [
+      {
+        objects: [
+          {
+            geometry: {
+              sweep: createCircleProfile(1, 8),
+              path: { through: [[0, 0, 0], [0, 0, 0], [1, 0, 0]], kind: "polyline" },
+            },
+          },
+        ],
+      },
+      /los puntos 0 y 1 del recorrido son el mismo/,
+    ],
+    [
+      {
+        objects: [
+          {
+            geometry: {
+              sweep: createCircleProfile(1, 8),
+              path: { through: [[0, 0, 0], [0, 1, 0]] },
+              stations: 1,
+            },
+          },
+        ],
+      },
+      /stations debe ser al menos 2, no 1/,
+    ],
+    [
+      {
+        objects: [
+          { geometry: { sweep: "brazo", path: { through: [[0, 0, 0], [0, 1, 0]] } } },
+        ],
+      },
+      /no hay ningún perfil llamado "brazo"/,
+    ],
+    [
+      {
+        objects: [
+          {
+            geometry: {
+              sweep: createCircleProfile(1, 8),
+              path: { through: [[0, 0], [0, 1, 0]], kind: "polyline" },
+            },
+          },
+        ],
+      },
+      /el punto 0 del recorrido son tres números/,
+    ],
+  ];
+  for (const [scene, expected] of casos) {
+    assert.throws(() => resolveScene(scene), expected, `no se rechazó por su motivo: ${expected}`);
+  }
+  console.log(`geometria: ok (${casos.length} barridos mal escritos rechazados por su motivo)`);
 }

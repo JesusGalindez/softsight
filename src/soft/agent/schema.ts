@@ -112,6 +112,49 @@ const GEOMETRY_LOFT: ObjectSchema = {
   caps: { type: '"both"|"none"|"start"|"end"', description: "Qué extremos se tapan; both por defecto." },
 };
 
+const PATH_FIELDS: ObjectSchema = {
+  through: {
+    type: "object[]",
+    required: true,
+    description: "Puntos de tres números por los que pasa el recorrido; al menos dos.",
+  },
+  kind: {
+    type: '"catmull-rom"|"polyline"',
+    description: "catmull-rom por defecto, centrípeta; polyline une los puntos con rectas.",
+  },
+  closed: { type: "boolean", description: "Si el recorrido se cierra sobre sí mismo." },
+};
+
+const GEOMETRY_SWEEP: ObjectSchema = {
+  sweep: {
+    type: "number[]|string",
+    required: true,
+    description:
+      "Polígono en el plano XZ, pares x,z, o el nombre de un perfil declarado en `profiles`.",
+  },
+  path: { type: "object", required: true, description: "Recorrido del barrido.", fields: PATH_FIELDS },
+  // Sin `fields`: el valor puede ser un número, y `validate` aplicaría el esquema
+  // de objeto también a él. La forma de la tabla —`at` en orden y `ease` conocido—
+  // la comprueba `evaluateVariation`, que es quien la lee y quien puede decir cuál
+  // de los pares rompe el orden.
+  radius: {
+    type: "number|object",
+    description:
+      "Multiplica el perfil en cada estación. Número constante, o tabla { at: [[u, valor], …], " +
+      "ease: linear|smooth|power:k }. 1 por defecto.",
+  },
+  twist: {
+    type: "number|object",
+    description:
+      "Grados alrededor de la tangente. Número constante o la misma tabla que radius. 0 por defecto.",
+  },
+  stations: { type: "number", description: "Estaciones a lo largo del recorrido; 24 por defecto." },
+  caps: {
+    type: '"both"|"none"|"start"|"end"',
+    description: "Qué extremos se tapan; both por defecto. Un recorrido cerrado no tiene extremos.",
+  },
+};
+
 const GEOMETRY_REVOLVE: ObjectSchema = {
   revolve: {
     type: "number[]",
@@ -128,8 +171,15 @@ const OBJECT_FIELDS: ObjectSchema = {
     required: true,
     description:
       "Primitiva con parámetros, malla cruda con sus arrays, extrusión de un polígono, " +
-      "revolucionado de un perfil o loft de secciones cosidas.",
-    anyOf: [GEOMETRY_PRIMITIVE, GEOMETRY_RAW, GEOMETRY_EXTRUDE, GEOMETRY_REVOLVE, GEOMETRY_LOFT],
+      "revolucionado de un perfil, loft de secciones cosidas o barrido de un perfil por un recorrido.",
+    anyOf: [
+      GEOMETRY_PRIMITIVE,
+      GEOMETRY_RAW,
+      GEOMETRY_EXTRUDE,
+      GEOMETRY_REVOLVE,
+      GEOMETRY_LOFT,
+      GEOMETRY_SWEEP,
+    ],
   },
   matrix: {
     type: "number[]",

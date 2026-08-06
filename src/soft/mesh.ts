@@ -962,6 +962,388 @@ export function createLoft(
   return mesh;
 }
 
+type Point3 = readonly [number, number, number];
+
+export interface SweepStation {
+  position: Point3;
+  normal: Point3;
+  binormal: Point3;
+  /** Multiplica el perfil en esta estación. */
+  radius: number;
+  /** Radianes alrededor de la tangente. */
+  twist: number;
+}
+
+export interface SweepPath {
+  stations: SweepStation[];
+  /** Fracción de longitud recorrida en cada estación, de 0 a 1. */
+  u: number[];
+  /** Curvatura discreta en cada estación, en 1/unidad. */
+  curvature: number[];
+}
+
+/**
+ * Punto de una Catmull-Rom **centrípeta** entre `p1` y `p2`, con `p0` y `p3` de
+ * vecinos y `t` local de 0 a 1.
+ *
+ * Centrípeta —exponente 0,5 en el reparto de nudos— y no uniforme, y no es un
+ * detalle de gusto: la uniforme forma bucles y cúspides en cuanto los puntos
+ * están desigualmente espaciados, que es como los escribe cualquiera. La
+ * centrípeta tiene demostrado que no produce ninguna de las dos dentro de un
+ * segmento, así que el modo de fallo desaparece en vez de tener que avisarse.
+ */
+function catmullRom(p0: Point3, p1: Point3, p2: Point3, p3: Point3, t: number): Point3 {
+  const knot = (a: Point3, b: Point3, start: number): number =>
+    start + Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]));
+  const t0 = 0;
+  const t1 = knot(p0, p1, t0);
+  const t2 = knot(p1, p2, t1);
+  const t3 = knot(p2, p3, t2);
+  const at = t1 + t * (t2 - t1);
+
+  const mix = (a: Point3, b: Point3, from: number, to: number): Point3 => {
+    const span = to - from;
+    if (span === 0) return a;
+    const weight = (at - from) / span;
+    return [
+      a[0] + (b[0] - a[0]) * weight,
+      a[1] + (b[1] - a[1]) * weight,
+      a[2] + (b[2] - a[2]) * weight,
+    ];
+  };
+
+  const a1 = mix(p0, p1, t0, t1);
+  const a2 = mix(p1, p2, t1, t2);
+  const a3 = mix(p2, p3, t2, t3);
+  const b1 = mix(a1, a2, t0, t2);
+  const b2 = mix(a2, a3, t1, t3);
+  return mix(b1, b2, t1, t2);
+}
+
+/**
+ * Estaciones de un recorrido, con sus marcos por **transporte paralelo**.
+ *
+ * Va aparte de `createSweep` porque la auditoría necesita las estaciones y la
+ * curvatura sin construir la malla, y calcularlas dos veces con dos códigos
+ * distintos sería la divergencia servida.
+ *
+ * **Transporte paralelo y no Frenet.** El marco de Frenet sale de la derivada
+ * segunda: gira de golpe media vuelta al pasar por un punto de inflexión y queda
+ * indefinido donde la curvatura tiende a cero, es decir, en cualquier tramo recto.
+ * Un brazo recto con una curva al final saldría retorcido por la mitad. El
+ * transporte paralelo arrastra el marco anterior girándolo lo mínimo, así que en
+ * un tramo recto no gira nada.
+ */
+export function sweepStations(
+  through: readonly Point3[],
+  options: { kind?: "catmull-rom" | "polyline"; closed?: boolean; stations?: number } = {},
+): SweepPath {
+  const kind = options.kind ?? "catmull-rom";
+  const closed = options.closed ?? false;
+  const count = options.stations ?? 24;
+  if (through.length < 2) throw new Error("un recorrido necesita al menos dos puntos");
+  if (count < 2) throw new Error(`stations debe ser al menos 2, no ${count}`);
+  for (let index = 1; index < through.length; index += 1) {
+    const a = through[index - 1];
+    const b = through[index];
+    if (a[0] === b[0] && a[1] === b[1] && a[2] === b[2]) {
+      throw new Error(`los puntos ${index - 1} y ${index} del recorrido son el mismo`);
+    }
+  }
+
+  const last = through.length - 1;
+  // Los extremos de una curva abierta se completan por reflexión; en una cerrada,
+  // los vecinos se toman dando la vuelta.
+  const at = (index: number): Point3 => {
+    if (closed) return through[((index % through.length) + through.length) % through.length];
+    if (index < 0) {
+      return [
+        2 * through[0][0] - through[1][0],
+        2 * through[0][1] - through[1][1],
+        2 * through[0][2] - through[1][2],
+      ];
+    }
+    if (index > last) {
+      return [
+        2 * through[last][0] - through[last - 1][0],
+        2 * through[last][1] - through[last - 1][1],
+        2 * through[last][2] - through[last - 1][2],
+      ];
+    }
+    return through[index];
+  };
+
+  const segments = closed ? through.length : through.length - 1;
+  const positions: Point3[] = [];
+  for (let index = 0; index < count; index += 1) {
+    // Reparto uniforme en el parámetro, con el mismo número de estaciones por
+    // segmento. Una curva abierta llega al último punto; una cerrada no repite el
+    // primero.
+    const global = closed ? (index / count) * segments : (index / (count - 1)) * segments;
+    const segment = Math.min(segments - 1, Math.floor(global));
+    const local = global - segment;
+    positions.push(
+      kind === "polyline"
+        ? mixPoints(at(segment), at(segment + 1), local)
+        : catmullRom(at(segment - 1), at(segment), at(segment + 1), at(segment + 2), local),
+    );
+  }
+
+  // `u` no es el parámetro de la curva sino la **fracción de longitud recorrida**:
+  // quien escribe una tabla de radio quiere decir «de la raíz a la punta», y con el
+  // parámetro crudo de una centrípeta eso no coincide. Solo se etiquetan las
+  // estaciones ya colocadas; reparametrizar de verdad exigiría invertir la tabla
+  // numéricamente y traer una tolerancia nueva.
+  const steps: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const next = positions[(index + 1) % count];
+    const here = positions[index];
+    steps.push(Math.hypot(next[0] - here[0], next[1] - here[1], next[2] - here[2]));
+  }
+  const total = steps.slice(0, closed ? count : count - 1).reduce((sum, step) => sum + step, 0);
+  const u: number[] = [];
+  let travelled = 0;
+  for (let index = 0; index < count; index += 1) {
+    u.push(total > 0 ? travelled / total : 0);
+    travelled += steps[index];
+  }
+
+  const tangents: Point3[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const previous = positions[(index - 1 + count) % count];
+    const next = positions[(index + 1) % count];
+    const from = closed || index > 0 ? previous : positions[index];
+    const to = closed || index < count - 1 ? next : positions[index];
+    tangents.push(unit([to[0] - from[0], to[1] - from[1], to[2] - from[2]]));
+  }
+
+  // Normal inicial determinista: el eje del mundo menos alineado con la tangente.
+  // Con una elección arbitraria, dos ejecuciones darían mallas distintas y el
+  // `renderHash` dejaría de significar nada.
+  const axes: Point3[] = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ];
+  let chosen = axes[0];
+  let smallest = Infinity;
+  for (const axis of axes) {
+    const alignment = Math.abs(dotPoints(tangents[0], axis));
+    if (alignment < smallest) {
+      smallest = alignment;
+      chosen = axis;
+    }
+  }
+  const normals: Point3[] = [orthogonalize(chosen, tangents[0])];
+  for (let index = 1; index < count; index += 1) {
+    normals.push(transportNormal(normals[index - 1], tangents[index - 1], tangents[index]));
+  }
+
+  // Un recorrido cerrado no cierra solo: el marco vuelve al punto de partida con un
+  // giro residual que casi nunca es cero, y la costura queda desalineada. Se mide y
+  // se reparte a lo largo del recorrido.
+  let residual = 0;
+  if (closed) {
+    const returned = transportNormal(normals[count - 1], tangents[count - 1], tangents[0]);
+    const start = normals[0];
+    const startBinormal = crossPoints(tangents[0], start);
+    residual = Math.atan2(dotPoints(returned, startBinormal), dotPoints(returned, start));
+  }
+
+  const stations: SweepStation[] = [];
+  for (let index = 0; index < count; index += 1) {
+    stations.push({
+      position: positions[index],
+      normal: normals[index],
+      // La binormal se recalcula siempre, nunca se transporta aparte: transportar
+      // las dos deja el marco no ortogonal por acumulación.
+      binormal: crossPoints(tangents[index], normals[index]),
+      radius: 1,
+      twist: -residual * u[index],
+    });
+  }
+
+  const curvature: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    if (!closed && (index === 0 || index === count - 1)) {
+      curvature.push(0);
+      continue;
+    }
+    const previous = positions[(index - 1 + count) % count];
+    const here = positions[index];
+    const next = positions[(index + 1) % count];
+    const first: Point3 = [here[0] - previous[0], here[1] - previous[1], here[2] - previous[2]];
+    const second: Point3 = [next[0] - here[0], next[1] - here[1], next[2] - here[2]];
+    const lengthFirst = Math.hypot(first[0], first[1], first[2]);
+    const lengthSecond = Math.hypot(second[0], second[1], second[2]);
+    const axis = crossPoints(first, second);
+    const angle = Math.atan2(Math.hypot(axis[0], axis[1], axis[2]), dotPoints(first, second));
+    const span = (lengthFirst + lengthSecond) / 2;
+    curvature.push(span > 0 ? angle / span : 0);
+  }
+
+  return { stations, u, curvature };
+}
+
+function mixPoints(a: Point3, b: Point3, t: number): Point3 {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+
+function dotPoints(a: Point3, b: Point3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function crossPoints(a: Point3, b: Point3): Point3 {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+function unit(v: Point3): Point3 {
+  const length = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / length, v[1] / length, v[2] / length];
+}
+
+/** La componente de `v` perpendicular a `axis`, normalizada. */
+function orthogonalize(v: Point3, axis: Point3): Point3 {
+  const projection = dotPoints(v, axis);
+  return unit([v[0] - axis[0] * projection, v[1] - axis[1] * projection, v[2] - axis[2] * projection]);
+}
+
+/**
+ * La normal girada por la rotación **mínima** que lleva una tangente a la otra.
+ *
+ * Con las dos tangentes paralelas —un tramo recto— el eje sale de longitud nula y
+ * la normal se conserva **tal cual**, sin pasar por ninguna fórmula: de eso
+ * depende que un brazo recto salga sin un grado de torsión.
+ */
+function transportNormal(normal: Point3, from: Point3, to: Point3): Point3 {
+  const axis = crossPoints(from, to);
+  const sine = Math.hypot(axis[0], axis[1], axis[2]);
+  if (sine < 1e-12) return normal;
+  const unitAxis: Point3 = [axis[0] / sine, axis[1] / sine, axis[2] / sine];
+  const angle = Math.atan2(sine, dotPoints(from, to));
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const cross = crossPoints(unitAxis, normal);
+  const projection = dotPoints(unitAxis, normal) * (1 - cos);
+  return unit([
+    normal[0] * cos + cross[0] * sin + unitAxis[0] * projection,
+    normal[1] * cos + cross[1] * sin + unitAxis[1] * projection,
+    normal[2] * cos + cross[2] * sin + unitAxis[2] * projection,
+  ]);
+}
+
+/**
+ * Perfil barrido por un recorrido. Generaliza el revolucionado: un círculo
+ * barrido alrededor de un eje **es** un revolucionado.
+ *
+ * El polígono se interpreta en el plano del marco —su `x` sobre la normal y su
+ * `z` sobre la binormal—, y el bobinado va al revés que en el *loft*: la terna
+ * `(normal, binormal, tangente)` es dextrógira, mientras que la del *loft*
+ * —`(X, Z, Y)`— es levógira. Con el mismo bobinado en los dos, uno de los dos
+ * saldría con todas las caras hacia dentro.
+ */
+export function createSweep(
+  polygon: readonly number[],
+  stations: readonly SweepStation[],
+  options: { closed?: boolean; caps?: "both" | "none" | "start" | "end" } = {},
+): Mesh {
+  const points = polygon.length / 2;
+  if (points < 3) throw new Error("un barrido necesita un perfil de al menos tres puntos");
+  if (stations.length < 2) throw new Error("un barrido necesita al menos dos estaciones");
+
+  const closed = options.closed ?? false;
+  // Un recorrido cerrado no tiene extremos que tapar, así que `caps` no se aplica.
+  const caps = closed ? "none" : options.caps ?? "both";
+  const oriented = signedArea(polygon) < 0 ? flipPolygonKeepingStart(polygon) : [...polygon];
+  const capStart = caps === "both" || caps === "start";
+  const capEnd = caps === "both" || caps === "end";
+  const startTriangles = capStart ? earClip(oriented) : [];
+  const endTriangles = capEnd ? earClip(oriented) : [];
+
+  const ringCount = stations.length;
+  const capVertices = (capStart ? points : 0) + (capEnd ? points : 0);
+  const vertexCount = ringCount * points + capVertices;
+  const positions = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  const indices: number[] = [];
+
+  const place = (station: SweepStation, point: number): [number, number, number] => {
+    const cos = Math.cos(station.twist);
+    const sin = Math.sin(station.twist);
+    const x = oriented[point * 2] * station.radius;
+    const z = oriented[point * 2 + 1] * station.radius;
+    const alongNormal = cos * x - sin * z;
+    const alongBinormal = sin * x + cos * z;
+    return [
+      station.position[0] + station.normal[0] * alongNormal + station.binormal[0] * alongBinormal,
+      station.position[1] + station.normal[1] * alongNormal + station.binormal[1] * alongBinormal,
+      station.position[2] + station.normal[2] * alongNormal + station.binormal[2] * alongBinormal,
+    ];
+  };
+
+  let vertex = 0;
+  for (let ring = 0; ring < ringCount; ring += 1) {
+    for (let point = 0; point < points; point += 1) {
+      const world = place(stations[ring], point);
+      positions[vertex * 3 + 0] = world[0];
+      positions[vertex * 3 + 1] = world[1];
+      positions[vertex * 3 + 2] = world[2];
+      uvs[vertex * 2 + 0] = point / points;
+      uvs[vertex * 2 + 1] = ring / (ringCount - 1);
+      vertex += 1;
+    }
+  }
+
+  const gaps = closed ? ringCount : ringCount - 1;
+  for (let ring = 0; ring < gaps; ring += 1) {
+    const following = (ring + 1) % ringCount;
+    for (let point = 0; point < points; point += 1) {
+      const next = (point + 1) % points;
+      const a = ring * points + point;
+      const b = ring * points + next;
+      const c = following * points + next;
+      const d = following * points + point;
+      indices.push(a, b, c, a, c, d);
+    }
+  }
+
+  for (const [ring, triangles, atEnd] of [
+    [0, startTriangles, false],
+    [ringCount - 1, endTriangles, true],
+  ] as const) {
+    if (triangles.length === 0) continue;
+    const base = vertex;
+    for (let point = 0; point < points; point += 1) {
+      const world = place(stations[ring], point);
+      positions[vertex * 3 + 0] = world[0];
+      positions[vertex * 3 + 1] = world[1];
+      positions[vertex * 3 + 2] = world[2];
+      uvs[vertex * 2 + 0] = point / points;
+      uvs[vertex * 2 + 1] = atEnd ? 1 : 0;
+      vertex += 1;
+    }
+    for (let entry = 0; entry < triangles.length; entry += 3) {
+      const [a, b, c] = [triangles[entry], triangles[entry + 1], triangles[entry + 2]];
+      if (atEnd) indices.push(base + a, base + b, base + c);
+      else indices.push(base + c, base + b, base + a);
+    }
+  }
+
+  const mesh: Mesh = {
+    positions,
+    normals: new Float32Array(positions.length),
+    uvs,
+    indices: Uint32Array.from(indices),
+    boundingRadius: boundingRadiusOf(positions),
+  };
+  computeNormals(mesh);
+  return mesh;
+}
+
 /** El perfil recorrido en sentido contrario, conservando los pares radio,altura. */
 function reverseProfile(profile: readonly number[]): number[] {
   const out: number[] = [];
