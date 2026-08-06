@@ -44,6 +44,7 @@ import { diffSheets, type RasterImage, type RenderDiff } from "./renderDiff";
 import { createGroundPlane, resolveScene, type SceneSpec } from "./sceneSpec";
 import { auditSpatial, type SpatialAudit } from "./spatialAudit";
 import { auditGeometry } from "./geometryAudit";
+import { auditClips } from "./animationAudit";
 import type { Camera, SceneNode } from "../renderer";
 
 export {
@@ -70,7 +71,7 @@ export type {
   TrackSpec,
   VectorVariationSpec,
 } from "./rigSpec";
-export { auditAnimation } from "./animationAudit";
+export { auditAnimation, auditClips } from "./animationAudit";
 export type {
   AnimationAudit,
   AnimationAuditOptions,
@@ -816,8 +817,11 @@ export function reviewScene(
     ...checkScale(size, options.expectSize),
     ...spatialWarnings(spatial),
     // Sobre el documento, no sobre la malla: hay geometría mal declarada que la
-    // malla ya no delata, como un barrido que se corta a sí mismo.
+    // malla ya no delata, como un barrido que se corta a sí mismo. Y lo mismo con
+    // el movimiento: una vuelta entera escrita con dos claves no se mueve, y el
+    // fichero sale igual de válido.
     ...auditGeometry(spec),
+    ...auditClips(spec.clips),
   ];
 
   const review: SceneReview = {

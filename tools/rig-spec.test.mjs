@@ -31,6 +31,7 @@ import {
   evaluatePose,
   modelFromScene,
   parseGlbAnimation,
+  auditClips,
   resolveRig,
   serializeSkinnedGlb,
 } from "../dist-node/agent3d.mjs";
@@ -460,12 +461,12 @@ assert.equal(
 const conPista = (track) => () => resolveRig({ joints: [{ name: "eje" }] }, [{ tracks: [track] }]);
 assertThrows(
   conPista({ joint: "eje", property: "translation" }),
-  /se escribe con 'keys' o con 'value', y no trae ninguno/,
+  /se escribe con 'keys', 'value' o 'turns', y no trae ninguno/,
   "una pista sin claves ni función",
 );
 assertThrows(
   conPista({ joint: "eje", property: "translation", keys: [{ frame: 0, value: [0, 0, 0] }], value: { at: [[0, [0, 0, 0]]] }, frames: 5 }),
-  /'keys' y 'value' son excluyentes/,
+  /son excluyentes/,
   "las dos formas a la vez",
 );
 assertThrows(
@@ -491,6 +492,137 @@ assertThrows(
 
 console.log(
   "rig value: ok (función ≡ claves a mano, smooth con su media, y el evaluador certificado confirma la curva en 5 fotogramas)",
+);
+
+// --- 7. `turns`, y el aviso que hace falta con él
+
+// Una vuelta se hornea en claves de 90° como mucho, y el evaluador certificado
+// confirma que la orientación es la declarada en los cuartos de vuelta.
+const gira = resolveRig({ joints: [{ name: "rotor" }] }, [
+  { name: "giro", fps: 30, tracks: [{ joint: "rotor", property: "rotation", turns: 1, frames: 24 }] },
+]);
+const muestreador = gira.skeleton.animations[0].samplers[0];
+assert.equal(muestreador.times.length, 5, "una vuelta son cuatro pasos de 90° y cinco claves");
+assertClose(Array.from(muestreador.times), [0, 0.2, 0.4, 0.6, 0.8].map((t) => t), "los tiempos de la vuelta");
+
+const aspa = modelFromScene({
+  objects: [{ name: "pala", geometry: { primitive: "box", parameters: [0.1, 0.1, 1] }, position: [0, 0, 0.6] }],
+});
+const atadoGiro = bindModelToSkeleton(aspa, gira.skeleton, {
+  schemaVersion: 1,
+  bindings: [{ part: "*", joint: "rotor" }],
+});
+const glbGiro = parseGlbAnimation(serializeSkinnedGlb(atadoGiro.scene));
+const poseEn = (frame) => evaluatePose(glbGiro.document, glbGiro.binary, glbGiro.decodedViews, frame / 30, 0, 0);
+const inicio = poseEn(0);
+// A un cuarto de vuelta, lo que estaba en +Z está en +X: giro de 90° en Y.
+const cuarto = poseEn(6);
+assert.ok(
+  Math.abs(cuarto[0] - inicio[2]) < 1e-4 && Math.abs(cuarto[2] + inicio[0]) < 1e-4,
+  `a un cuarto de vuelta el punto tenía que rotar 90° en Y: ${inicio.slice(0, 3)} → ${cuarto.slice(0, 3)}`,
+);
+// Y a media vuelta está enfrente: es la comprobación de que gira de verdad y no
+// se queda quieto, que es justo lo que pasaría con dos claves.
+const media = poseEn(12);
+assert.ok(
+  Math.abs(media[0] + inicio[0]) < 1e-4 && Math.abs(media[2] + inicio[2]) < 1e-4,
+  `a media vuelta el punto tenía que estar enfrente: ${inicio.slice(0, 3)} → ${media.slice(0, 3)}`,
+);
+
+// Tres vueltas son tres vueltas: doce pasos.
+const tres = resolveRig({ joints: [{ name: "r" }] }, [
+  { name: "g", fps: 30, tracks: [{ joint: "r", property: "rotation", turns: 3, frames: 60 }] },
+]);
+assert.equal(tres.skeleton.animations[0].samplers[0].times.length, 13);
+// Al revés, también.
+const alReves = resolveRig({ joints: [{ name: "r" }] }, [
+  { name: "g", fps: 30, tracks: [{ joint: "r", property: "rotation", turns: -1, frames: 24, axis: "x" }] },
+]);
+assert.ok(alReves.skeleton.animations[0].samplers[0].values[0 * 4 + 0] === 0);
+assert.ok(
+  alReves.skeleton.animations[0].samplers[0].values[1 * 4 + 0] < 0,
+  "una vuelta negativa gira al otro lado",
+);
+
+// El aviso: dos claves a 0° y 360° no giran nada, y el fichero sale igual de válido.
+const ambiguo = auditClips([
+  {
+    name: "malo",
+    tracks: [
+      {
+        joint: "rotor",
+        property: "rotation",
+        keys: [{ frame: 0, value: [0, 0, 0] }, { frame: 24, value: [0, 360, 0] }],
+      },
+    ],
+  },
+]);
+assert.equal(ambiguo.length, 1);
+assert.equal(ambiguo[0].code, "GIRO_AMBIGUO");
+assert.equal(ambiguo[0].part, "rotor");
+assert.match(ambiguo[0].message, /salta 360\.0°/);
+assert.match(ambiguo[0].message, /arco más corto/);
+
+// El mismo giro partido en cuartos, no avisa. Ni la pista horneada por `turns`.
+const enCuartos = auditClips([
+  {
+    name: "bueno",
+    tracks: [
+      {
+        joint: "rotor",
+        property: "rotation",
+        keys: [0, 90, 180, 270, 360].map((grados, paso) => ({ frame: paso * 6, value: [0, grados, 0] })),
+      },
+    ],
+  },
+]);
+assert.deepEqual(enCuartos, []);
+assert.deepEqual(
+  auditClips([{ name: "t", tracks: [{ joint: "rotor", property: "rotation", turns: 5, frames: 60 }] }]),
+  [],
+  "`turns` no puede disparar el aviso: hornea a 90°",
+);
+// Y una traslación grande tampoco: el aviso es de rotaciones.
+assert.deepEqual(
+  auditClips([
+    {
+      name: "t",
+      tracks: [
+        {
+          joint: "rotor",
+          property: "translation",
+          keys: [{ frame: 0, value: [0, 0, 0] }, { frame: 10, value: [900, 0, 0] }],
+        },
+      ],
+    },
+  ]),
+  [],
+);
+
+// Errores de `turns`, por su motivo.
+assertThrows(
+  conPista({ joint: "eje", property: "translation", turns: 1, frames: 10 }),
+  /'turns' solo tiene sentido en una pista de rotation/,
+  "turns en una traslación",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "rotation", turns: 1 }),
+  /necesita 'frames'/,
+  "turns sin duración",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "rotation", turns: 1, frames: 24, bake: 2 }),
+  /cada clave saltaría 180\.0°.*al menos 4 pasos/s,
+  "turns con menos pasos de los que caben",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "rotation", turns: 1, frames: 24, keys: [{ frame: 0, value: [0, 0, 0] }] }),
+  /son excluyentes/,
+  "turns y keys a la vez",
+);
+
+console.log(
+  "rig turns: ok (una vuelta en cinco claves, media vuelta enfrente por el evaluador certificado, y GIRO_AMBIGUO caza el 0→360)",
 );
 
 function assertClose(actual, expected, what) {

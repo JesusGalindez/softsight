@@ -78,13 +78,73 @@ export interface TrackSpec {
   frames?: number;
   /**
    * Claves a emitir al hornear: `bake + 1`, repartidas de 0 a `frames`. Por
-   * defecto una por fotograma.
+   * defecto una por fotograma, salvo en `turns`.
    */
   bake?: number;
+  /**
+   * Vueltas completas alrededor de `axis` en `frames` fotogramas. Negativo, al
+   * revés. Solo en `rotation`, y excluyente con `keys` y `value`.
+   */
+  turns?: number;
+  /** Eje de `turns`; `y` por defecto. */
+  axis?: "x" | "y" | "z";
 }
 
 /** Tope de claves por pista. Un GLB no se rompe por esto, pero un descuido sí. */
 const MAX_BAKED_KEYS = 4096;
+
+/**
+ * Paso máximo entre claves de una rotación horneada.
+ *
+ * No es un ajuste de calidad: un muestreador de rotación de glTF interpola
+ * cuaterniones **por el arco más corto**, así que dos claves separadas más de media
+ * vuelta giran poco y al revés, y una vuelta completa escrita con dos claves no se
+ * mueve nada —los dos cuaterniones son el mismo—. Con 90° el camino corto y el
+ * declarado son el mismo.
+ */
+const MAX_DEGREES_PER_KEY = 90;
+
+/** `turns` vueltas alrededor de un eje, horneadas a claves de 90° como mucho. */
+function bakeTurns(track: TrackSpec, at: string): KeySpec[] {
+  if (track.property !== "rotation") {
+    throw new Error(`${at}: 'turns' solo tiene sentido en una pista de rotation, no de ${track.property}`);
+  }
+  const turns = track.turns as number;
+  if (!Number.isFinite(turns) || turns === 0) {
+    throw new Error(`${at}: 'turns' es un número distinto de cero, no ${track.turns}`);
+  }
+  const frames = track.frames;
+  if (!Number.isFinite(frames) || (frames as number) <= 0) {
+    throw new Error(`${at}: una pista con 'turns' necesita 'frames', y son más de cero`);
+  }
+  const axis = track.axis ?? "y";
+  if (axis !== "x" && axis !== "y" && axis !== "z") {
+    throw new Error(`${at}: 'axis' es "x", "y" o "z", no ${JSON.stringify(track.axis)}`);
+  }
+
+  const total = turns * 360;
+  const minimum = Math.ceil(Math.abs(total) / MAX_DEGREES_PER_KEY);
+  const steps = track.bake ?? minimum;
+  if (!Number.isInteger(steps) || steps < 1) {
+    throw new Error(`${at}: 'bake' es un entero de 1 en adelante, no ${track.bake}`);
+  }
+  if (Math.abs(total) / steps > MAX_DEGREES_PER_KEY) {
+    throw new Error(
+      `${at}: con 'bake' ${steps}, cada clave saltaría ${(Math.abs(total) / steps).toFixed(1)}° y el ` +
+        `muestreador de glTF interpola por el arco más corto; hacen falta al menos ${minimum} pasos`,
+    );
+  }
+  if (steps + 1 > MAX_BAKED_KEYS) {
+    throw new Error(`${at}: hornear ${steps + 1} claves pasa del tope de ${MAX_BAKED_KEYS}; baja 'turns' o sube 'frames'`);
+  }
+
+  const slot = axis === "x" ? 0 : axis === "y" ? 1 : 2;
+  return Array.from({ length: steps + 1 }, (_entry, step) => {
+    const degrees = [0, 0, 0];
+    degrees[slot] = (total * step) / steps;
+    return { frame: ((frames as number) * step) / steps, value: degrees };
+  });
+}
 
 /**
  * La pista declarada como función, horneada a claves.
@@ -309,14 +369,19 @@ export function resolveRig(skeleton: SkeletonSpec, clips: readonly ClipSpec[] = 
       if (components === undefined) {
         throw new Error(`${at}: property '${track.property}' no existe; usa translation, rotation o scale`);
       }
-      const declared = (["keys", "value"] as const).filter((kind) => track[kind] !== undefined);
+      const declared = (["keys", "value", "turns"] as const).filter((kind) => track[kind] !== undefined);
       if (declared.length === 0) {
-        throw new Error(`${at}: una pista se escribe con 'keys' o con 'value', y no trae ninguno`);
+        throw new Error(`${at}: una pista se escribe con 'keys', 'value' o 'turns', y no trae ninguno`);
       }
       if (declared.length > 1) {
-        throw new Error(`${at}: 'keys' y 'value' son excluyentes; declara uno`);
+        throw new Error(`${at}: 'keys', 'value' y 'turns' son excluyentes; declara uno (${declared.join(" y ")})`);
       }
-      const keys = track.value !== undefined ? bakeTrack(track, at, components) : (track.keys as KeySpec[]);
+      const keys =
+        track.turns !== undefined
+          ? bakeTurns(track, at)
+          : track.value !== undefined
+            ? bakeTrack(track, at, components)
+            : (track.keys as KeySpec[]);
       if (!Array.isArray(keys) || keys.length === 0) {
         throw new Error(`${at}: 'keys' debe ser una lista no vacía`);
       }

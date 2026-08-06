@@ -29,6 +29,9 @@ import type { Mat4 } from "../math";
 import { applyAnimation, buildNodeStates, computeWorlds } from "./animation";
 import type { ParsedGlb } from "./animation";
 import type { Model } from "./model";
+import type { ClipSpec } from "./rigSpec";
+// Solo el tipo: se borra al compilar, así que no hay ciclo en ejecución.
+import type { Warning } from "./index";
 import { auditSpatial } from "./spatialAudit";
 import type { PlacedPart } from "./spatialAudit";
 
@@ -238,4 +241,58 @@ export function auditAnimation(
     staticBones,
     groundY,
   };
+}
+
+/**
+ * Vueltas ambiguas en una pista escrita a mano.
+ *
+ * Un muestreador de rotación de glTF interpola cuaterniones **por el arco más
+ * corto**. Dos claves separadas media vuelta o más no giran lo que dicen: giran
+ * menos, o al revés, y una vuelta completa escrita con dos claves —0° y 360°— no se
+ * mueve nada, porque los dos cuaterniones son el mismo. Es un fallo que no rompe
+ * nada al escribir el fichero y que solo se ve mirando el movimiento.
+ *
+ * Solo se puede juzgar cuando la clave viene en **grados**: el cuaternión ya ha
+ * perdido la intención —no existe un cuaternión de 360°— y ahí la herramienta no
+ * tiene nada honesto que decir. Con `turns` no puede pasar: hornea a 90° como
+ * mucho.
+ *
+ * Es certeza, no candidato: sale de restar dos números declarados.
+ */
+export function auditClips(clips: readonly ClipSpec[] = []): Warning[] {
+  const warnings: Warning[] = [];
+  for (const [clipIndex, clip] of clips.entries()) {
+    const name = clip.name ?? `clip${clipIndex}`;
+    for (const track of clip.tracks ?? []) {
+      if (track.property !== "rotation" || !Array.isArray(track.keys)) continue;
+      let worst = 0;
+      let where = 0;
+      for (let key = 1; key < track.keys.length; key += 1) {
+        const before = track.keys[key - 1]?.value;
+        const here = track.keys[key]?.value;
+        // Solo los grados dicen la intención; el cuaternión ya la ha perdido.
+        if (!Array.isArray(before) || !Array.isArray(here)) continue;
+        if (before.length !== 3 || here.length !== 3) continue;
+        for (let axis = 0; axis < 3; axis += 1) {
+          const step = Math.abs(here[axis] - before[axis]);
+          if (step > worst) {
+            worst = step;
+            where = key;
+          }
+        }
+      }
+      if (worst < 180) continue;
+      warnings.push({
+        code: "GIRO_AMBIGUO",
+        part: track.joint,
+        message:
+          `${name}, pista de ${track.joint}: entre las claves ${where - 1} y ${where} la rotación salta ` +
+          `${worst.toFixed(1)}°, media vuelta o más. El muestreador de glTF interpola cuaterniones por el ` +
+          "arco más corto, así que el reproductor no hará ese giro: hará el corto, o ninguno si el salto es " +
+          "de una vuelta entera. Parte el tramo en claves de 90° como mucho, o declara la pista con `turns`, " +
+          "que lo hornea así. Es certeza, no candidato: sale de restar dos números declarados.",
+      });
+    }
+  }
+  return warnings;
 }

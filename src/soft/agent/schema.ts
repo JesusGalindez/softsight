@@ -322,6 +322,14 @@ const TRACK_FIELDS: ObjectSchema = {
     type: "number",
     description: "Claves a emitir al hornear: bake + 1. Una por fotograma por defecto.",
   },
+  turns: {
+    type: "number",
+    description:
+      "Vueltas completas alrededor de `axis` en `frames` fotogramas; negativo, al revés. Solo en " +
+      "rotation, excluyente con keys y value. Hornea a 90° por clave como mucho, porque el " +
+      "muestreador de glTF interpola por el arco más corto.",
+  },
+  axis: { type: '"x"|"y"|"z"', description: "Eje de `turns`; y por defecto." },
 };
 
 const CLIP_FIELDS: ObjectSchema = {
