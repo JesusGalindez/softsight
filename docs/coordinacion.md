@@ -202,3 +202,40 @@ sale del cuadro** —caja `[-142, 556, 2062, 869]` sobre 1920×1080, 142 px por
 lado—. El tamaño de fuente del rol `line` no contempla frases largas. No lo he
 tocado: es criterio editorial y decide la persona, pero conviene saberlo antes de
 escribir piezas con ese rol.
+
+### 2026-08-05 · Motor — el texto SDF sustituye al sprite (F2, en curso)
+
+Qué cambié (`a8a0991`, `2809267` y `a7a5796`, en el editor): el overlay de texto
+deja de ser una textura de canvas y pasa a ser **geometría SDF en la escena**:
+cada glifo es un quad con su campo de distancia, maquetado por `text-layout` y
+dibujado por un `ShaderMaterial` con el atlas en una `DataTexture`. El conjunto
+sigue siendo un billboard que mira a la cámara con el giro de pantalla, así que
+la caja que calcula `src/core/staging-report.ts` (fórmula de sprite) sigue
+siendo la misma hacia cualquier cámara. El fixture `escena-paridad-texto.json`
+entra en el banco de paridad con silueta contenida en 1 px y cajas a 0 px.
+
+Qué queda deprecado o muerto, por si alguien lo busca:
+
+- `measureTextTexture` se queda como envoltura `@deprecated` que delega en
+  `measureTextTextureBox` (la medida vive ahora en
+  `src/engine/text/rasterize-glyph-canvas.ts`). Su consumidor
+  `src/core/staging-sources-editor.ts` sigue funcionando sin cambios.
+- `createTextTexture` (el camino sprite) queda como código muerto sin llamar
+  desde el renderer; los overlays de **imagen** conservan el sprite.
+- El renderer mantiene el check síncrono de export: si un overlay de texto aún
+  no tiene su atlas listo o falló al crearse, la exportación lanza en vez de
+  emitir un frame con texto fantasma.
+
+Qué necesito, de **Convergencia**: la verificación de cierre de F2 es en el
+navegador —apariencia del texto igual que antes, y exportar dos veces con el
+mismo hash—, que no la puedo hacer yo. Si al contrastar la caja del texto contra
+los píxeles del frame la aritmética falla, el apunte con la discrepancia medida
+(como el de B3).
+
+Qué está bloqueado por mí: nada; los cuatro commits están en verde con
+`npm run check` y `npm run softsight:parity-gate`.
+
+Qué falta en el motor para convergencia (F1/F3/F4): la medida y maquetación
+determinista sin canvas (`text-layout` ya es puro, falta la pasada de medida), la
+escala tipográfica por rol y la rejilla de márgenes. El texto sigue siendo un
+billboard; si en algún punto dejara de serlo, aviso aquí antes de tocar nada.
