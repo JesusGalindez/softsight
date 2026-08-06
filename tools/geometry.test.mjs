@@ -19,11 +19,15 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   applyPatch,
   auditGeometry,
   auditMesh,
+  auditSpatial,
   createCircleProfile,
   createGielisProfile,
   createLoft,
@@ -34,6 +38,8 @@ import {
   resolveScene,
   sweepStations,
 } from "../dist-node/agent3d.mjs";
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 /** Malla de una escena de un solo objeto. */
 function meshOf(scene) {
@@ -1476,5 +1482,103 @@ const PALA = { primitive: "box", parameters: [0.1, 0.4, 1.2] };
   assert.deepEqual(alReves, [], "el sentido de escritura ya lo normaliza el generador");
   console.log(
     `geometria: ok (SECCIONES_INCOMPATIBLES: círculo→ala avisa, ala→ala y círculo→círculo no, y el sentido no cuenta)`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// El ejemplar versionado.
+// ---------------------------------------------------------------------------
+
+// 43. Una pieza de cada mecánica, montada y sin defectos.
+//
+//     Se lee el fichero de verdad para que un ejemplar roto rompa la puerta: es lo
+//     primero que copia un agente que llega nuevo, y con defectos enseñaría justo
+//     lo que la puerta rechaza.
+//
+//     Lo que se afirma aquí es **la topología, la geometría declarada y el
+//     ensamblaje**. `SIMETRIA_ROTA` y `PIVOTE_DESCENTRADO` del informe completo no
+//     entran, y no por comodidad: saltan sobre cualquier pieza legítimamente
+//     asimétrica —un ala, una pata, una pala— o cuya geometría no esté centrada en
+//     su propio origen, que es como se declara una pieza colocada. Son
+//     observaciones, no defectos, y exigirlas cero obligaría a torcer la pieza
+//     hasta que dejara de enseñar nada.
+{
+  const ejemplar = JSON.parse(
+    readFileSync(resolve(here, "..", "artifacts/agent/pieza-geometria.json"), "utf8"),
+  );
+  const piezas = resolveScene(ejemplar);
+  assert.deepEqual(
+    piezas.map((pieza) => pieza.name),
+    [
+      "cuerpo",
+      "ala-1",
+      "ala-2",
+      "pata-1",
+      "pata-2",
+      "buje",
+      "pala-1",
+      "pala-2",
+      "pala-3",
+      "pala-4",
+    ],
+    "diez piezas: el documento declara cinco objetos, y repeat expande tres de ellos",
+  );
+
+  let triangulos = 0;
+  let volumen = 0;
+  for (const pieza of piezas) {
+    const audit = auditMesh(pieza.node.mesh);
+    assert.equal(audit.watertight, true, `${pieza.name} no está cerrada`);
+    assert.equal(audit.boundaryEdges, 0, `${pieza.name} tiene aristas de borde`);
+    assert.equal(audit.nonManifoldEdges, 0, `${pieza.name} tiene aristas no manifold`);
+    assert.equal(audit.degenerateTriangles, 0, `${pieza.name} tiene triángulos de área nula`);
+    assert.equal(audit.inverted, false, `${pieza.name} está del revés`);
+    assert.ok(audit.signedVolume > 0, `${pieza.name} tiene volumen ${audit.signedVolume}`);
+    triangulos += audit.triangles;
+    volumen += audit.signedVolume;
+  }
+
+  assert.deepEqual(auditGeometry(ejemplar), [], "la geometría declarada tiene que estar limpia");
+
+  // El ensamblaje: sin booleanas, con sólidos cerrados que **se tocan sin
+  // morderse**. Es la respuesta medida a la pregunta abierta en §6.2 del plan.
+  const spatial = auditSpatial(
+    piezas.map((pieza) => ({
+      name: pieza.name,
+      path: pieza.name,
+      mesh: pieza.node.mesh,
+      model: pieza.node.model,
+    })),
+  );
+  const parciales = spatial.interpenetration.filter((par) => !par.contained);
+  assert.deepEqual(
+    parciales,
+    [],
+    `solape parcial: ${parciales.map((par) => `${par.parts[0]}~${par.parts[1]} ${(par.overlap * 100).toFixed(1)}%`).join(", ")}`,
+  );
+  assert.deepEqual(
+    spatial.floating,
+    [],
+    `piezas sueltas: ${spatial.floating.map((suelta) => suelta.part).join(", ")}`,
+  );
+
+  // Y la escala: fuera del rango de un metro largo, casi nada es lo que dice ser.
+  let minimo = [Infinity, Infinity, Infinity];
+  let maximo = [-Infinity, -Infinity, -Infinity];
+  for (const pieza of piezas) {
+    const mundo = worldPositions(pieza);
+    for (let vertex = 0; vertex < mundo.length / 3; vertex += 1) {
+      for (let axis = 0; axis < 3; axis += 1) {
+        minimo[axis] = Math.min(minimo[axis], mundo[vertex * 3 + axis]);
+        maximo[axis] = Math.max(maximo[axis], mundo[vertex * 3 + axis]);
+      }
+    }
+  }
+  const lado = Math.max(...[0, 1, 2].map((axis) => maximo[axis] - minimo[axis]));
+  assert.ok(lado > 0.01 && lado < 100, `la pieza mide ${lado} en su lado mayor`);
+
+  console.log(
+    `geometria: ok (ejemplar: ${piezas.length} piezas, ${triangulos} triángulos, ` +
+      `volumen ${volumen.toFixed(6)}, ${lado.toFixed(3)} de lado mayor; sin solape parcial y sin piezas sueltas)`,
   );
 }
