@@ -213,19 +213,165 @@ export function auditMesh(mesh: Mesh): MeshAudit {
 }
 
 /**
+ * Rejilla uniforme de vértices, en arrays tipados y sin `Map`: el orden de
+ * recorrido es contrato, y una tabla asociativa lo haría depender del orden de
+ * inserción de las claves.
+ */
+interface PositionGrid {
+  cell: number;
+  minX: number;
+  minY: number;
+  minZ: number;
+  countX: number;
+  countY: number;
+  countZ: number;
+  /** Índice del primer elemento de cada celda; longitud celdas + 1. */
+  start: Int32Array;
+  /** Índices de vértice agrupados por celda. */
+  items: Int32Array;
+}
+
+function buildPositionGrid(positions: Float32Array, vertexCount: number): PositionGrid {
+  let minX = Infinity;
+  let minY = Infinity;
+  let minZ = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  let maxZ = -Infinity;
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const offset = vertex * 3;
+    if (positions[offset] < minX) minX = positions[offset];
+    if (positions[offset + 1] < minY) minY = positions[offset + 1];
+    if (positions[offset + 2] < minZ) minZ = positions[offset + 2];
+    if (positions[offset] > maxX) maxX = positions[offset];
+    if (positions[offset + 1] > maxY) maxY = positions[offset + 1];
+    if (positions[offset + 2] > maxZ) maxZ = positions[offset + 2];
+  }
+
+  // Una celda por vértice de media: con celdas más grandes cada consulta mira
+  // demasiados candidatos, y con celdas más pequeñas el anillo crece varias
+  // vueltas sin encontrar nada. El lado mayor manda para que una malla plana
+  // —una tapa, un perfil extruido— no genere una rejilla degenerada.
+  const extent = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+  const divisions = Math.max(1, Math.round(Math.cbrt(vertexCount)));
+  const cell = extent > 0 ? extent / divisions : 1;
+
+  const countX = Math.floor((maxX - minX) / cell) + 1;
+  const countY = Math.floor((maxY - minY) / cell) + 1;
+  const countZ = Math.floor((maxZ - minZ) / cell) + 1;
+  const cells = countX * countY * countZ;
+
+  const cellOf = new Int32Array(vertexCount);
+  const start = new Int32Array(cells + 1);
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const offset = vertex * 3;
+    const x = Math.min(countX - 1, Math.floor((positions[offset] - minX) / cell));
+    const y = Math.min(countY - 1, Math.floor((positions[offset + 1] - minY) / cell));
+    const z = Math.min(countZ - 1, Math.floor((positions[offset + 2] - minZ) / cell));
+    const index = (z * countY + y) * countX + x;
+    cellOf[vertex] = index;
+    start[index + 1] += 1;
+  }
+  for (let index = 0; index < cells; index += 1) start[index + 1] += start[index];
+
+  const cursor = Int32Array.from(start.subarray(0, cells));
+  const items = new Int32Array(vertexCount);
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    items[cursor[cellOf[vertex]]] = vertex;
+    cursor[cellOf[vertex]] += 1;
+  }
+
+  return { cell, minX, minY, minZ, countX, countY, countZ, start, items };
+}
+
+/**
+ * Distancia al cuadrado del punto al vértice más próximo, **exacta**.
+ *
+ * La búsqueda crece en anillos alrededor de la celda del punto y para cuando la
+ * mejor distancia encontrada ya es menor que la distancia mínima posible a lo que
+ * queda sin mirar. Un anillo de tamaño fijo sería más corto de escribir y daría
+ * otro número: en cuanto la malla es asimétrica de verdad, el vecino más próximo
+ * del reflejo está a varias celdas —el perfil en L da 0,4236 con un radio de
+ * malla de 1,6— y una búsqueda acotada lo perdería.
+ */
+function nearestSquared(
+  grid: PositionGrid,
+  positions: Float32Array,
+  x: number,
+  y: number,
+  z: number,
+): number {
+  const { cell, countX, countY, countZ, start, items } = grid;
+  const centerX = Math.min(countX - 1, Math.max(0, Math.floor((x - grid.minX) / cell)));
+  const centerY = Math.min(countY - 1, Math.max(0, Math.floor((y - grid.minY) / cell)));
+  const centerZ = Math.min(countZ - 1, Math.max(0, Math.floor((z - grid.minZ) / cell)));
+
+  let best = Infinity;
+  for (let ring = 0; ; ring += 1) {
+    const lowX = centerX - ring;
+    const lowY = centerY - ring;
+    const lowZ = centerZ - ring;
+    const highX = centerX + ring;
+    const highY = centerY + ring;
+    const highZ = centerZ + ring;
+
+    for (let cz = Math.max(0, lowZ); cz <= Math.min(countZ - 1, highZ); cz += 1) {
+      const edgeZ = cz === lowZ || cz === highZ;
+      for (let cy = Math.max(0, lowY); cy <= Math.min(countY - 1, highY); cy += 1) {
+        const edgeY = cy === lowY || cy === highY;
+        for (let cx = Math.max(0, lowX); cx <= Math.min(countX - 1, highX); cx += 1) {
+          // Solo la cáscara del anillo: el interior ya se miró en la vuelta anterior.
+          if (!edgeZ && !edgeY && cx !== lowX && cx !== highX) continue;
+          const index = (cz * countY + cy) * countX + cx;
+          for (let slot = start[index]; slot < start[index + 1]; slot += 1) {
+            const candidate = items[slot] * 3;
+            const dx = positions[candidate] - x;
+            const dy = positions[candidate + 1] - y;
+            const dz = positions[candidate + 2] - z;
+            const squared = dx * dx + dy * dy + dz * dz;
+            if (squared < best) best = squared;
+          }
+        }
+      }
+    }
+
+    if (best === 0) return 0;
+
+    // Lo que queda sin mirar está, como poco, a la distancia de la cara más
+    // próxima del bloque ya recorrido. Si el bloque cubre la rejilla entera, no
+    // queda nada.
+    let outside = Infinity;
+    if (lowX > 0) outside = Math.min(outside, x - (grid.minX + lowX * cell));
+    if (lowY > 0) outside = Math.min(outside, y - (grid.minY + lowY * cell));
+    if (lowZ > 0) outside = Math.min(outside, z - (grid.minZ + lowZ * cell));
+    if (highX < countX - 1) outside = Math.min(outside, grid.minX + (highX + 1) * cell - x);
+    if (highY < countY - 1) outside = Math.min(outside, grid.minY + (highY + 1) * cell - y);
+    if (highZ < countZ - 1) outside = Math.min(outside, grid.minZ + (highZ + 1) * cell - z);
+    if (outside === Infinity) return best;
+    if (best <= outside * outside) return best;
+  }
+}
+
+/**
  * Error de simetría respecto al plano X = 0: para cada vértice se busca el
  * vecino más próximo de su reflejo y se promedia la distancia, normalizada por
  * el radio de la malla.
  *
- * Es O(n²), así que se salta por encima de 4.000 vértices: por debajo tarda
- * milisegundos y por encima no merece la pena para lo que aporta. Un agente que
- * modela un objeto que debe ser simétrico —un chasis, un dron, una cara— no
- * puede verificar eso en una imagen 3/4, y en las vistas ortográficas la
+ * Un agente que modela un objeto que debe ser simétrico —un chasis, un dron, una
+ * cara— no puede verificar eso en una imagen 3/4, y en las vistas ortográficas la
  * asimetría pequeña es invisible.
+ *
+ * La búsqueda era O(n²) y se rendía por encima de 4.000 vértices, lo que apagaba
+ * la métrica justo en las mallas que más la necesitan: una pieza generada por
+ * barrido o por *loft* pasa de ese número sin esfuerzo, y el informe devolvía
+ * `null` donde el agente esperaba un cero. Con la rejilla el coste es casi lineal
+ * y **el número es el mismo**, no una aproximación. El techo sigue existiendo, más
+ * arriba, porque una malla de millones de vértices no es lo que esta medida sirve
+ * para juzgar.
  */
 function symmetryErrorX(positions: Float32Array): number | null {
   const vertexCount = positions.length / 3;
-  if (vertexCount === 0 || vertexCount > 4000) return null;
+  if (vertexCount === 0 || vertexCount > 200000) return null;
 
   let radius = 0;
   for (let vertex = 0; vertex < vertexCount; vertex += 1) {
@@ -235,24 +381,14 @@ function symmetryErrorX(positions: Float32Array): number | null {
   }
   if (radius === 0) return 0;
 
+  const grid = buildPositionGrid(positions, vertexCount);
+
   let total = 0;
   for (let vertex = 0; vertex < vertexCount; vertex += 1) {
     const offset = vertex * 3;
-    const targetX = -positions[offset];
-    const targetY = positions[offset + 1];
-    const targetZ = positions[offset + 2];
-
-    let best = Infinity;
-    for (let other = 0; other < vertexCount; other += 1) {
-      const candidate = other * 3;
-      const dx = positions[candidate] - targetX;
-      const dy = positions[candidate + 1] - targetY;
-      const dz = positions[candidate + 2] - targetZ;
-      const squared = dx * dx + dy * dy + dz * dz;
-      if (squared < best) best = squared;
-      if (best === 0) break;
-    }
-    total += Math.sqrt(best);
+    total += Math.sqrt(
+      nearestSquared(grid, positions, -positions[offset], positions[offset + 1], positions[offset + 2]),
+    );
   }
 
   return total / vertexCount / radius;
