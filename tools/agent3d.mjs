@@ -619,9 +619,10 @@ Esqueleto y clips declarados en la escena (solo --scene)
   bindings (qué pieza a qué hueso) y clips (pistas con fotogramas clave).
   Con esqueleto, --export escribe el GLB atado y animado, y el informe trae
   rig y animationAudit. Ver --schema para la forma exacta.
-  --audit-frames <n>      fotogramas a muestrear por clip en la auditoría (8).
-                          La auditoría muestrea, no recorre: puede perderse un
-                          cruce que solo ocurra entre dos fotogramas mirados
+  --audit-frames <n>      fotogramas a mirar por clip, como máximo (512). La
+                          auditoría los recorre **todos** mientras quepan; si el
+                          clip es más largo, los reparte y el informe lo dice con
+                          'complete' en falso
 
 Conversión de BVH (solo --bvh)
   --bvh-scale <n>         factor sobre desplazamientos y traslaciones (1). Un BVH
@@ -1005,7 +1006,7 @@ async function main() {
     if ((spec.clips ?? []).length > 0) {
       const framesFlag = options.get("audit-frames");
       const sampleFrames =
-        framesFlag === undefined || framesFlag === "true" ? 8 : Number(framesFlag);
+        framesFlag === undefined || framesFlag === "true" ? 512 : Number(framesFlag);
       if (!Number.isInteger(sampleFrames) || sampleFrames < 2) {
         throw new Error(`--audit-frames inválido: '${framesFlag}'; debe ser un entero de 2 en adelante`);
       }

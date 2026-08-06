@@ -747,6 +747,52 @@ console.log(
   "rig cycle: ok (tres ciclos idénticos y de 60 fotogramas, y el desfase de 5 envuelve por el principio)",
 );
 
+// --- 9. La auditoría recorre, no muestrea
+
+// Un cruce que existe en **un solo fotograma**, el 7. Muestreando ocho de treinta
+// no se mira el 7, así que el muestreo dice que todo está bien. Recorriendo, no.
+const rigDeUnFotograma = resolveRig(esqueleto, [
+  {
+    name: "tic",
+    fps: 30,
+    tracks: [
+      {
+        joint: "hombro",
+        property: "translation",
+        keys: [
+          { frame: 0, value: [0.9, 0.5, 0] },
+          { frame: 6, value: [0.9, 0.5, 0] },
+          { frame: 7, value: [0, 0.5, 0] },
+          { frame: 8, value: [0.9, 0.5, 0] },
+          { frame: 30, value: [0.9, 0.5, 0] },
+        ],
+      },
+    ],
+  },
+]);
+const atadoTic = bindModelToSkeleton(model, rigDeUnFotograma.skeleton, binding);
+const riggedTic = parseGlbAnimation(serializeSkinnedGlb(atadoTic.scene));
+const jointOfTic = new Map(atadoTic.bound.map((entry) => [entry.part, entry.joint]));
+
+const muestreado = auditAnimation(model, riggedTic, jointOfTic, { fps: 30, sampleFrames: 8 });
+assert.equal(muestreado.clips[0].complete, false, "con presupuesto 8 y 30 fotogramas no se recorre entero");
+assert.ok(
+  !muestreado.clips[0].sampled.includes(7),
+  `el muestreo de 8 no debía caer en el 7: ${muestreado.clips[0].sampled}`,
+);
+assert.equal(muestreado.crossings.length, 0, "muestreando, el cruce de un fotograma se escapa");
+
+const recorrido = auditAnimation(model, riggedTic, jointOfTic, { fps: 30 });
+assert.equal(recorrido.clips[0].complete, true, "por defecto se recorren los 31 fotogramas");
+assert.equal(recorrido.clips[0].sampled.length, 31);
+const enElSiete = recorrido.crossings.filter((crossing) => crossing.frame === 7);
+assert.ok(enElSiete.length > 0, "recorriendo, el cruce del fotograma 7 tiene que salir");
+assert.deepEqual(enElSiete[0].parts.slice().sort(), ["brazo", "torso"]);
+
+console.log(
+  `rig recorrido: ok (el cruce del fotograma 7 se escapa muestreando 8 y se caza recorriendo los 31)`,
+);
+
 function assertClose(actual, expected, what) {
   for (let index = 0; index < expected.length; index += 1) {
     assert.ok(
