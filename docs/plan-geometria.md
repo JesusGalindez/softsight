@@ -542,6 +542,13 @@ Coste estimado: unas 600 líneas en `mesh.ts`, unas 120 entre `sceneSpec.ts` y
 Ideas que esperan a que una medida las justifique, en el sitio donde se
 recordarán:
 
+- **Un recorrido opcional en `loft`**, que reutilice la curva del paso 3. El paso
+  se hizo sin el campo `stations` que traía §5: interpolar linealmente entre dos
+  secciones declaradas no añade forma —los anillos intermedios caen sobre la
+  superficie que ya describen las dos secciones—, e interpolar suavemente exige
+  una curva que pase por ellas, que es exactamente la maquinaria de `sweep`.
+  Escribirla dos veces serían dos fuentes para el mismo dato. Cuando `sweep` esté,
+  `loft` puede aceptar esa curva sin duplicar nada.
 - **NURBS**, cuando exista un consumidor que pague la precisión de CAD (§2.3).
 - **Declarar la unión entre piezas**, si el ejemplar del paso 7 demuestra que el
   ensamblaje por solape dispara `INTERPENETRACION` (§6.2).
