@@ -330,6 +330,18 @@ const TRACK_FIELDS: ObjectSchema = {
       "muestreador de glTF interpola por el arco más corto.",
   },
   axis: { type: '"x"|"y"|"z"', description: "Eje de `turns`; y por defecto." },
+  cycle: {
+    type: "number",
+    description:
+      "Repeticiones del contenido de la pista, una detrás de otra. Con `turns` sobra: las vueltas " +
+      "ya se cuentan con ese número.",
+  },
+  offsetFrames: {
+    type: "number",
+    description:
+      "Desfase en fotogramas del ciclo, tratando la pista como periódica: lo que sale por el final " +
+      "vuelve a entrar por el principio. Solo con `value`.",
+  },
 };
 
 const CLIP_FIELDS: ObjectSchema = {

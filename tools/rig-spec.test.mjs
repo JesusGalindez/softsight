@@ -625,6 +625,128 @@ console.log(
   "rig turns: ok (una vuelta en cinco claves, media vuelta enfrente por el evaluador certificado, y GIRO_AMBIGUO caza el 0→360)",
 );
 
+// --- 8. Ciclo y desfase
+
+// `cycle` repite el contenido, y la pista dura tantas veces más.
+const unCiclo = resolveRig({ joints: [{ name: "pata" }] }, [
+  {
+    name: "paso",
+    fps: 30,
+    tracks: [
+      {
+        joint: "pata",
+        property: "translation",
+        value: { at: [[0, [0, 0, 0]], [0.5, [1, 0, 0]], [1, [0, 0, 0]]] },
+        frames: 20,
+        bake: 20,
+      },
+    ],
+  },
+]);
+const tresCiclos = resolveRig({ joints: [{ name: "pata" }] }, [
+  {
+    name: "paso",
+    fps: 30,
+    tracks: [
+      {
+        joint: "pata",
+        property: "translation",
+        value: { at: [[0, [0, 0, 0]], [0.5, [1, 0, 0]], [1, [0, 0, 0]]] },
+        frames: 20,
+        bake: 20,
+        cycle: 3,
+      },
+    ],
+  },
+]);
+assert.equal(unCiclo.clips[0].lastFrame, 20);
+assert.equal(tresCiclos.clips[0].lastFrame, 60, "tres ciclos de 20 fotogramas duran 60");
+const uno = Array.from(unCiclo.skeleton.animations[0].samplers[0].values);
+const repetido = Array.from(tresCiclos.skeleton.animations[0].samplers[0].values);
+// Los tres tramos son el mismo movimiento.
+for (let round = 0; round < 3; round += 1) {
+  for (let key = 0; key < 20; key += 1) {
+    const desde = (round * 20 + key) * 3;
+    assertClose(repetido.slice(desde, desde + 3), uno.slice(key * 3, key * 3 + 3), `ciclo ${round}, clave ${key}`);
+  }
+}
+
+// `offsetFrames` desfasa **el parámetro**: la pista arranca donde arrancaría a un
+// cuarto de camino, que es lo que hace que cuatro patas iguales no vayan a la vez.
+const desfasada = resolveRig({ joints: [{ name: "pata" }] }, [
+  {
+    name: "paso",
+    fps: 30,
+    tracks: [
+      {
+        joint: "pata",
+        property: "translation",
+        value: { at: [[0, [0, 0, 0]], [0.5, [1, 0, 0]], [1, [0, 0, 0]]] },
+        frames: 20,
+        bake: 20,
+        offsetFrames: 5,
+      },
+    ],
+  },
+]);
+const conDesfase = Array.from(desfasada.skeleton.animations[0].samplers[0].values);
+for (let key = 0; key < 15; key += 1) {
+  assertClose(
+    conDesfase.slice(key * 3, key * 3 + 3),
+    uno.slice((key + 5) * 3, (key + 5) * 3 + 3),
+    `desfase de 5: la clave ${key} vale lo que valía la ${key + 5}`,
+  );
+}
+// Y lo que sale por el final vuelve a entrar por el principio: la clave 16 vale lo
+// que la 1 de la pista sin desfasar.
+assertClose(conDesfase.slice(16 * 3, 16 * 3 + 3), uno.slice(1 * 3, 1 * 3 + 3), "el desfase envuelve");
+
+// Sobre claves escritas a mano, `cycle` también repite, sin duplicar la frontera.
+const clavesRepetidas = resolveRig({ joints: [{ name: "p" }] }, [
+  {
+    name: "r",
+    fps: 30,
+    tracks: [
+      {
+        joint: "p",
+        property: "translation",
+        keys: [
+          { frame: 0, value: [0, 0, 0] },
+          { frame: 5, value: [1, 0, 0] },
+          { frame: 10, value: [0, 0, 0] },
+        ],
+        cycle: 3,
+      },
+    ],
+  },
+]);
+assert.deepEqual(
+  Array.from(clavesRepetidas.skeleton.animations[0].samplers[0].times).map((t) => Math.round(t * 30)),
+  [0, 5, 10, 15, 20, 25, 30],
+  "tres ciclos de tres claves son siete, no nueve: la frontera no se duplica",
+);
+
+// Errores, por su motivo.
+assertThrows(
+  conPista({ joint: "eje", property: "rotation", turns: 2, frames: 40, cycle: 2 }),
+  /'cycle' con 'turns' sobra/,
+  "ciclo sobre vueltas",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "translation", keys: [{ frame: 0, value: [0, 0, 0] }], offsetFrames: 3 }),
+  /solo va con 'value'/,
+  "desfase sobre claves escritas a mano",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "translation", value: { at: [[0, [0, 0, 0]], [1, [1, 0, 0]]] }, frames: 10, cycle: 0 }),
+  /'cycle' es un entero de 1 en adelante/,
+  "un ciclo de cero",
+);
+
+console.log(
+  "rig cycle: ok (tres ciclos idénticos y de 60 fotogramas, y el desfase de 5 envuelve por el principio)",
+);
+
 function assertClose(actual, expected, what) {
   for (let index = 0; index < expected.length; index += 1) {
     assert.ok(

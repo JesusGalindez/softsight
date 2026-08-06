@@ -88,6 +88,21 @@ export interface TrackSpec {
   turns?: number;
   /** Eje de `turns`; `y` por defecto. */
   axis?: "x" | "y" | "z";
+  /**
+   * Repeticiones del contenido de la pista, una detrás de otra. Con `turns` no:
+   * ahí las vueltas ya se cuentan con el propio número.
+   */
+  cycle?: number;
+  /**
+   * Desfase, en fotogramas del ciclo. **Trata la pista como periódica**: lo que
+   * sale por el final vuelve a entrar por el principio, que es lo que hace que
+   * cuatro patas iguales caminen desacompasadas.
+   *
+   * Solo con `value`, porque el desfase se aplica al **parámetro** antes de
+   * hornear. Sobre claves ya escritas habría que remuestrearlas, y remuestrear una
+   * rotación en cuaterniones no es interpolar tres números.
+   */
+  offsetFrames?: number;
 }
 
 /** Tope de claves por pista. Un GLB no se rompe por esto, pero un descuido sí. */
@@ -103,6 +118,33 @@ const MAX_BAKED_KEYS = 4096;
  * declarado son el mismo.
  */
 const MAX_DEGREES_PER_KEY = 90;
+
+function checkCycle(track: TrackSpec, at: string): number {
+  const cycles = track.cycle ?? 1;
+  if (!Number.isInteger(cycles) || cycles < 1) {
+    throw new Error(`${at}: 'cycle' es un entero de 1 en adelante, no ${track.cycle}`);
+  }
+  return cycles;
+}
+
+/**
+ * Claves escritas a mano, repetidas `cycle` veces.
+ *
+ * La primera clave de cada repetición cae justo donde la última de la anterior, y
+ * dos claves en el mismo fotograma no son un muestreador válido: se emite una sola
+ * vez. Si el principio y el final de la pista no valen lo mismo, ahí se ve un
+ * salto, y es el que dice el propio documento.
+ */
+function repeatKeys(keys: readonly KeySpec[], cycles: number, at: string): KeySpec[] {
+  if (cycles === 1) return [...keys];
+  const span = keys[keys.length - 1]?.frame ?? 0;
+  if (!(span > 0)) throw new Error(`${at}: 'cycle' necesita que la pista dure más de un fotograma`);
+  const repeated: KeySpec[] = [...keys];
+  for (let round = 1; round < cycles; round += 1) {
+    for (const key of keys.slice(1)) repeated.push({ frame: key.frame + span * round, value: key.value });
+  }
+  return repeated;
+}
 
 /** `turns` vueltas alrededor de un eje, horneadas a claves de 90° como mucho. */
 function bakeTurns(track: TrackSpec, at: string): KeySpec[] {
@@ -197,14 +239,25 @@ function bakeTrack(track: TrackSpec, at: string, components: number): KeySpec[] 
   if (!Number.isInteger(steps) || steps < 1) {
     throw new Error(`${at}: 'bake' es un entero de 1 en adelante, no ${track.bake}`);
   }
-  if (steps + 1 > MAX_BAKED_KEYS) {
-    throw new Error(`${at}: hornear ${steps + 1} claves pasa del tope de ${MAX_BAKED_KEYS}; baja 'bake'`);
+  const cycles = checkCycle(track, at);
+  // El desfase se aplica al parámetro, no a las claves ya horneadas: es exacto y
+  // no obliga a remuestrear nada.
+  const phase = (track.offsetFrames ?? 0) / (frames as number);
+  const total = steps * cycles;
+  if (total + 1 > MAX_BAKED_KEYS) {
+    throw new Error(`${at}: hornear ${total + 1} claves pasa del tope de ${MAX_BAKED_KEYS}; baja 'bake' o 'cycle'`);
   }
 
-  return Array.from({ length: steps + 1 }, (_entry, step) => ({
-    frame: ((frames as number) * step) / steps,
-    value: columns.map((column) => evaluateVariation(column, step / steps, `${at}.value`)),
-  }));
+  return Array.from({ length: total + 1 }, (_entry, step) => {
+    const u = (((step / steps + phase) % 1) + 1) % 1;
+    // El último fotograma de un ciclo sin desfase es el final de la curva, no su
+    // principio: `u` valdría 0 por el módulo y la pista se quedaría a medias.
+    const at01 = step === total && phase === 0 ? 1 : u;
+    return {
+      frame: ((frames as number) * step) / steps,
+      value: columns.map((column) => evaluateVariation(column, at01, `${at}.value`)),
+    };
+  });
 }
 
 export interface ClipSpec {
@@ -376,12 +429,21 @@ export function resolveRig(skeleton: SkeletonSpec, clips: readonly ClipSpec[] = 
       if (declared.length > 1) {
         throw new Error(`${at}: 'keys', 'value' y 'turns' son excluyentes; declara uno (${declared.join(" y ")})`);
       }
+      if (track.offsetFrames !== undefined && track.value === undefined) {
+        throw new Error(
+          `${at}: 'offsetFrames' desfasa el parámetro antes de hornear, así que solo va con 'value'; ` +
+            "sobre claves escritas a mano habría que remuestrearlas",
+        );
+      }
+      if (track.cycle !== undefined && track.turns !== undefined) {
+        throw new Error(`${at}: 'cycle' con 'turns' sobra; las vueltas ya se cuentan con 'turns'`);
+      }
       const keys =
         track.turns !== undefined
           ? bakeTurns(track, at)
           : track.value !== undefined
             ? bakeTrack(track, at, components)
-            : (track.keys as KeySpec[]);
+            : repeatKeys(track.keys as KeySpec[], checkCycle(track, at), at);
       if (!Array.isArray(keys) || keys.length === 0) {
         throw new Error(`${at}: 'keys' debe ser una lista no vacía`);
       }
