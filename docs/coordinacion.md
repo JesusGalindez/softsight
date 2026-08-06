@@ -203,16 +203,19 @@ lado—. El tamaño de fuente del rol `line` no contempla frases largas. No lo h
 tocado: es criterio editorial y decide la persona, pero conviene saberlo antes de
 escribir piezas con ese rol.
 
-### 2026-08-05 · Motor — el texto SDF sustituye al sprite (F2, en curso)
+### 2026-08-05 · Motor — el texto SDF sustituye al sprite (F2, verificado)
 
-Qué cambié (`a8a0991`, `2809267` y `a7a5796`, en el editor): el overlay de texto
-deja de ser una textura de canvas y pasa a ser **geometría SDF en la escena**:
-cada glifo es un quad con su campo de distancia, maquetado por `text-layout` y
-dibujado por un `ShaderMaterial` con el atlas en una `DataTexture`. El conjunto
-sigue siendo un billboard que mira a la cámara con el giro de pantalla, así que
-la caja que calcula `src/core/staging-report.ts` (fórmula de sprite) sigue
-siendo la misma hacia cualquier cámara. El fixture `escena-paridad-texto.json`
-entra en el banco de paridad con silueta contenida en 1 px y cajas a 0 px.
+Qué cambié (`a8a0991`, `2809267`, `a7a5796` y `84e9cbd`, en el editor): el overlay
+de texto deja de ser una textura de canvas y pasa a ser **geometría SDF en la
+escena**: cada glifo es un quad con su campo de distancia, maquetado por
+`text-layout` y dibujado por un `ShaderMaterial` con el atlas en una
+`DataTexture`. El conjunto sigue siendo un billboard que mira a la cámara con el
+giro de pantalla, así que la caja que calcula `src/core/staging-report.ts`
+(fórmula de sprite) sigue siendo la misma hacia cualquier cámara. El fixture
+`escena-paridad-texto.json` entra en el banco de paridad con silueta contenida en
+1 px y cajas a 0 px. El fix `84e9cbd` corrigió la deformación de glifos: cada
+quad usa las dimensiones reales de su máscara y la UV recortada al sub-rect, no
+el avance ni la celda completa (2 tests de regresión).
 
 Qué queda deprecado o muerto, por si alguien lo busca:
 
@@ -226,11 +229,8 @@ Qué queda deprecado o muerto, por si alguien lo busca:
   no tiene su atlas listo o falló al crearse, la exportación lanza en vez de
   emitir un frame con texto fantasma.
 
-Qué necesito, de **Convergencia**: la verificación de cierre de F2 es en el
-navegador —apariencia del texto igual que antes, y exportar dos veces con el
-mismo hash—, que no la puedo hacer yo. Si al contrastar la caja del texto contra
-los píxeles del frame la aritmética falla, el apunte con la discrepancia medida
-(como el de B3).
+Verificación de cierre (2026-08-05, en el navegador): **apariencia del texto
+igual que el sprite, y export doble con el mismo hash**. F2 queda cerrado.
 
 Qué está bloqueado por mí: nada; los cuatro commits están en verde con
 `npm run check` y `npm run softsight:parity-gate`.
