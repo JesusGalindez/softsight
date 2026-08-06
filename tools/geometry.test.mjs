@@ -21,6 +21,7 @@
 import assert from "node:assert/strict";
 
 import {
+  applyPatch,
   auditGeometry,
   auditMesh,
   createCircleProfile,
@@ -29,6 +30,7 @@ import {
   createNacaProfile,
   createSuperellipseProfile,
   evaluateVariation,
+  modelFromScene,
   resolveScene,
   sweepStations,
 } from "../dist-node/agent3d.mjs";
@@ -1124,4 +1126,224 @@ console.log("geometria: ok (taper multiplica el volumen por (1+k+k²)/3, dos k)"
     assert.throws(() => resolveScene(scene), expected, `no se rechazó por su motivo: ${expected}`);
   }
   console.log(`geometria: ok (${casos.length} deformadores mal escritos rechazados por su motivo)`);
+}
+
+// ---------------------------------------------------------------------------
+// Repetición: radial y espejo.
+// ---------------------------------------------------------------------------
+
+/**
+ * Posiciones en mundo de una pieza resuelta: matriz por malla.
+ *
+ * `math.ts` guarda las matrices **por filas** —`translation` deja la traslación en
+ * 3, 7 y 11—, así que la fila `r` empieza en `m[r*4]`. Leerlas por columnas da un
+ * resultado que parece plausible y no lo es.
+ */
+function worldPositions({ node }) {
+  const { mesh, model: m } = node;
+  const out = new Float64Array(mesh.positions.length);
+  for (let vertex = 0; vertex < mesh.positions.length / 3; vertex += 1) {
+    const offset = vertex * 3;
+    const [x, y, z] = [mesh.positions[offset], mesh.positions[offset + 1], mesh.positions[offset + 2]];
+    out[offset + 0] = m[0] * x + m[1] * y + m[2] * z + m[3];
+    out[offset + 1] = m[4] * x + m[5] * y + m[6] * z + m[7];
+    out[offset + 2] = m[8] * x + m[9] * y + m[10] * z + m[11];
+  }
+  return out;
+}
+
+/** Determinante 3×3 de la parte lineal, con la matriz leída por filas. */
+function linearDeterminant(m) {
+  return (
+    m[0] * (m[5] * m[10] - m[6] * m[9]) -
+    m[1] * (m[4] * m[10] - m[6] * m[8]) +
+    m[2] * (m[4] * m[9] - m[5] * m[8])
+  );
+}
+
+const PALA = { primitive: "box", parameters: [0.1, 0.4, 1.2] };
+
+// 34. Cuenta, nombres y orden.
+{
+  const radial = resolveScene({
+    objects: [{ name: "pala", geometry: PALA, position: [0, 0, 0.8], repeat: { radial: { count: 4 } } }],
+  });
+  assert.deepEqual(radial.map((copy) => copy.name), ["pala-1", "pala-2", "pala-3", "pala-4"]);
+
+  const espejo = resolveScene({
+    objects: [{ name: "ala", geometry: PALA, position: [1.2, 0, 0], repeat: { mirror: "x" } }],
+  });
+  assert.deepEqual(espejo.map((copy) => copy.name), ["ala-1", "ala-2"]);
+
+  const suelta = resolveScene({ objects: [{ name: "ala", geometry: PALA }] });
+  assert.deepEqual(suelta.map((copy) => copy.name), ["ala"], "sin repeat el nombre no se toca");
+  console.log("geometria: ok (repeat numera pala-1…pala-4 y ala-1/ala-2; sin repeat no numera)");
+}
+
+// 35. Las cuatro matrices son exactas, y la malla se comparte.
+{
+  const escena = {
+    objects: [{ name: "pala", geometry: PALA, position: [0, 0, 0.8], repeat: { radial: { count: 4 } } }],
+  };
+  const copias = resolveScene(escena);
+  const base = resolveScene({ objects: [{ name: "pala", geometry: PALA, position: [0, 0, 0.8] }] })[0];
+
+  for (const [copy, resuelta] of copias.entries()) {
+    const angle = (copy * 2 * Math.PI) / 4;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    // `rotationY(2πi/4) · M`, calculada aparte y a mano, por filas: la fila 0 del
+    // producto es `cos·fila0 + sin·fila2` y la fila 2 es `−sin·fila0 + cos·fila2`.
+    // Es lo que distingue calcular el ángulo de acumularlo copia a copia.
+    const m = base.node.model;
+    for (let column = 0; column < 4; column += 1) {
+      const first = m[column];
+      const middle = m[4 + column];
+      const third = m[8 + column];
+      assert.ok(Math.abs(resuelta.node.model[column] - (cos * first + sin * third)) < 1e-15);
+      assert.ok(Math.abs(resuelta.node.model[4 + column] - middle) < 1e-15);
+      assert.ok(Math.abs(resuelta.node.model[8 + column] - (-sin * first + cos * third)) < 1e-15);
+    }
+    // La misma malla, por identidad: clonarla cuatro veces sería tirar memoria y
+    // romper el agrupado de mallas repetidas del exportador.
+    assert.equal(resuelta.node.mesh, copias[0].node.mesh);
+  }
+  console.log("geometria: ok (4 matrices radiales exactas a 2πi/4, y una sola malla compartida)");
+}
+
+// 36. El espejo refleja de verdad, y sin disparar avisos falsos.
+{
+  const [izquierda, derecha] = resolveScene({
+    objects: [
+      {
+        name: "ala",
+        geometry: PALA,
+        position: [1.2, 0.3, 0],
+        rotation: [0, 25, 0],
+        repeat: { mirror: "x" },
+      },
+    ],
+  });
+  const original = worldPositions(izquierda);
+  const reflejada = worldPositions(derecha);
+  let peor = 0;
+  for (let vertex = 0; vertex < original.length / 3; vertex += 1) {
+    const offset = vertex * 3;
+    peor = Math.max(
+      peor,
+      Math.abs(reflejada[offset] + original[offset]),
+      Math.abs(reflejada[offset + 1] - original[offset + 1]),
+      Math.abs(reflejada[offset + 2] - original[offset + 2]),
+    );
+  }
+  assert.ok(peor < 1e-6, `el espejo no refleja: desviación ${peor}`);
+
+  const auditoriaOriginal = auditMesh(izquierda.node.mesh);
+  const auditoriaCopia = auditMesh(derecha.node.mesh);
+  assert.equal(auditoriaCopia.signedVolume, auditoriaOriginal.signedVolume);
+  assert.ok(auditoriaCopia.signedVolume > 0, "la copia no puede tener volumen negativo");
+  assert.equal(auditoriaCopia.inverted, false, "un espejo bien hecho no es una malla del revés");
+  assert.equal(auditoriaCopia.watertight, auditoriaOriginal.watertight);
+  // Determinante positivo en las dos: es lo que mantiene vivo el descarte barato.
+  assert.ok(linearDeterminant(izquierda.node.model) > 0);
+  assert.ok(linearDeterminant(derecha.node.model) > 0, "la matriz va conjugada, no reflejada");
+  console.log(
+    `geometria: ok (espejo exacto a ${peor.toExponential(1)}, volumen ${auditoriaCopia.signedVolume} positivo, determinantes > 0)`,
+  );
+}
+
+// 37. `repeat` va después de `deform`: las copias salen ya deformadas.
+{
+  const cadena = [{ twist: { axis: "y", degrees: 90 } }];
+  const [copia] = resolveScene({
+    objects: [{ name: "pala", geometry: CILINDRO, deform: cadena, repeat: { radial: { count: 3 } } }],
+  });
+  const sola = resolveScene({ objects: [{ name: "pala", geometry: CILINDRO, deform: cadena }] })[0];
+  assert.deepEqual(copia.node.mesh.positions, sola.node.mesh.positions);
+  console.log("geometria: ok (las copias salen ya deformadas: deform primero, repeat después)");
+}
+
+// 38. `repeat` equivale a escribirlo a mano. No hace falta renderizar para
+//     saberlo: matrices y posiciones **son** lo que se rasteriza.
+{
+  const conRepeat = resolveScene({
+    objects: [{ name: "pala", geometry: PALA, position: [0, 0, 0.8], repeat: { radial: { count: 4 } } }],
+  });
+  const aMano = resolveScene({
+    objects: [0, 1, 2, 3].map((copy) => ({
+      name: `pala-${copy + 1}`,
+      geometry: PALA,
+      position: [0.8 * Math.sin((copy * Math.PI) / 2), 0, 0.8 * Math.cos((copy * Math.PI) / 2)],
+      rotation: [0, (copy * 360) / 4, 0],
+    })),
+  });
+  assert.equal(conRepeat.length, aMano.length);
+  for (const [copy, resuelta] of conRepeat.entries()) {
+    assert.equal(resuelta.name, aMano[copy].name);
+    const uno = worldPositions(resuelta);
+    const otro = worldPositions(aMano[copy]);
+    let peor = 0;
+    for (let index = 0; index < uno.length; index += 1) peor = Math.max(peor, Math.abs(uno[index] - otro[index]));
+    assert.ok(peor < 1e-6, `la copia ${copy + 1} no coincide con la escrita a mano: ${peor}`);
+  }
+  console.log("geometria: ok (repeat ≡ las cuatro piezas escritas una a una, vértice a vértice)");
+}
+
+// 39. La caja del parche cubre todas las copias.
+{
+  const conRepeat = resolveScene({
+    objects: [{ name: "pala", geometry: PALA, position: [0, 0, 0.8], repeat: { radial: { count: 4 } } }],
+  });
+  let minimo = Infinity;
+  let maximo = -Infinity;
+  for (const copia of conRepeat) {
+    const mundo = worldPositions(copia);
+    for (let vertex = 0; vertex < mundo.length / 3; vertex += 1) {
+      minimo = Math.min(minimo, mundo[vertex * 3]);
+      maximo = Math.max(maximo, mundo[vertex * 3]);
+    }
+  }
+  // Con cuatro palas a 90°, dos quedan a los lados: la caja se ensancha en X hasta
+  // donde llega el radio, no hasta el ancho de una pala sola.
+  assert.ok(maximo - minimo > 1.6, `las cuatro copias tienen que ensanchar la caja: ${maximo - minimo}`);
+  console.log(`geometria: ok (las 4 copias ensanchan la caja a ${(maximo - minimo).toFixed(3)} en X)`);
+}
+
+// 40. Errores por su motivo.
+{
+  const casos = [
+    [
+      { objects: [{ name: "p", geometry: PALA, repeat: { radial: { count: 4 }, mirror: "x" } }] },
+      /repeat declara radial y mirror; son excluyentes/,
+    ],
+    [{ objects: [{ name: "p", geometry: PALA, repeat: {} }] }, /repeat no declara ni radial ni mirror/],
+    [
+      { objects: [{ name: "p", geometry: PALA, repeat: { radial: { count: 1 } } }] },
+      /repeat\.radial\.count es un entero de 2 en adelante, no 1/,
+    ],
+    // Estos dos los caza el esquema antes de llegar al resolutor, porque el eje es
+    // una unión cerrada de tres literales. Mejor así: el mensaje llega con la ruta
+    // del campo dentro.
+    [
+      { objects: [{ name: "p", geometry: PALA, repeat: { radial: { count: 4, axis: "w" } } }] },
+      /repeat\.radial\.axis debe ser/,
+    ],
+    [
+      { objects: [{ name: "p", geometry: PALA, repeat: { mirror: "w" } }] },
+      /repeat\.mirror debe ser/,
+    ],
+  ];
+  for (const [scene, expected] of casos) {
+    assert.throws(() => resolveScene(scene), expected, `no se rechazó por su motivo: ${expected}`);
+  }
+
+  // Y por el camino de modelo se rechaza en vez de ignorarse.
+  assert.throws(
+    () =>
+      applyPatch(modelFromScene({ objects: [{ name: "base", geometry: PALA }] }), {
+        edits: [{ op: "add", object: { name: "copia", geometry: PALA, repeat: { mirror: "x" } } }],
+      }),
+    /`repeat` es del documento de escena/,
+  );
+  console.log(`geometria: ok (${casos.length + 1} repeticiones mal escritas rechazadas por su motivo)`);
 }

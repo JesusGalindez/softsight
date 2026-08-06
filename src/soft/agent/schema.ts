@@ -194,8 +194,30 @@ const DEFORM_FIELDS: ObjectSchema = {
   },
 };
 
+const RADIAL_FIELDS: ObjectSchema = {
+  count: { type: "number", required: true, description: "Copias; entero de 2 en adelante." },
+  axis: { type: '"x"|"y"|"z"', description: "Eje alrededor del que se reparten; y por defecto." },
+};
+
+/** `radial` y `mirror` son excluyentes, y eso lo exige el resolutor. */
+const REPEAT_FIELDS: ObjectSchema = {
+  radial: {
+    type: "object",
+    description: "Copias alrededor de un eje, a ángulos exactos de 2πi/count.",
+    fields: RADIAL_FIELDS,
+  },
+  mirror: { type: '"x"|"y"|"z"', description: "Una copia reflejada en este eje." },
+};
+
 const OBJECT_FIELDS: ObjectSchema = {
   name: { type: "string", description: "Nombre de la pieza; si falta, `objetoN`." },
+  repeat: {
+    type: "object",
+    description:
+      "Copias de la pieza, aplicadas después de `deform`. La pieza pasa a llamarse `nombre-1` … " +
+      "`nombre-n`. Solo tiene efecto por el camino de escena.",
+    fields: REPEAT_FIELDS,
+  },
   deform: {
     type: "object[]",
     description:

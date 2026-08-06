@@ -209,9 +209,26 @@ export interface DeformSpec {
   };
 }
 
+/**
+ * Copias de una pieza. Va en el objeto porque **produce piezas y no forma**, y se
+ * aplica después de `deform`: se deforma la pieza y luego se repite.
+ *
+ * `radial` y `mirror` son excluyentes. Con cualquiera de los dos, la pieza pasa a
+ * llamarse `nombre-1` … `nombre-n`, que encaja con los patrones de selección que
+ * ya existen.
+ */
+export interface RepeatSpec {
+  /** Copias alrededor de un eje, a ángulos exactos de `2πi/count`. */
+  radial?: { count: number; axis?: Axis };
+  /** Una copia reflejada en este eje. */
+  mirror?: Axis;
+}
+
 export interface ObjectSpec {
   name?: string;
   geometry: GeometrySpec;
+  /** Copias de la pieza. Solo tiene efecto por el camino de escena. */
+  repeat?: RepeatSpec;
   /**
    * Deformaciones en el orden en que se aplican, sobre la malla ya generada y
    * **antes** de la matriz de colocación.
@@ -342,6 +359,7 @@ export function evaluateVariation(spec: number | VariationSpec, u: number, what 
 
 const DEFORM_KINDS = ["twist", "taper", "bend", "wave"] as const;
 const AXES: readonly Axis[] = ["x", "y", "z"];
+const AXIS_INDEX: Record<Axis, number> = { x: 0, y: 1, z: 2 };
 
 function checkAxis(value: unknown, what: string): Axis {
   if (typeof value !== "string" || !AXES.includes(value as Axis)) {
@@ -652,6 +670,105 @@ export function resolveObject(
   };
 }
 
+/**
+ * La malla reflejada en un eje, horneada.
+ *
+ * Negar una coordenada invierte la orientación del espacio, así que el bobinado de
+ * cada triángulo se invierte también; sin eso la copia saldría con todas las caras
+ * hacia dentro. Las normales llevan negada la misma coordenada, y el radio
+ * envolvente no cambia porque reflejar no mueve ningún punto respecto al origen.
+ */
+function mirrorMesh(mesh: Mesh, axis: number): Mesh {
+  const positions = Float32Array.from(mesh.positions);
+  const normals = Float32Array.from(mesh.normals);
+  for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+    positions[vertex * 3 + axis] = -positions[vertex * 3 + axis];
+    normals[vertex * 3 + axis] = -normals[vertex * 3 + axis];
+  }
+  const indices = Uint32Array.from(mesh.indices);
+  for (let triangle = 0; triangle < indices.length; triangle += 3) {
+    const swap = indices[triangle + 1];
+    indices[triangle + 1] = indices[triangle + 2];
+    indices[triangle + 2] = swap;
+  }
+  return {
+    positions,
+    normals,
+    uvs: Float32Array.from(mesh.uvs),
+    indices,
+    boundingRadius: mesh.boundingRadius,
+  };
+}
+
+function reflectionMatrix(axis: Axis): Mat4 {
+  return scaling(axis === "x" ? -1 : 1, axis === "y" ? -1 : 1, axis === "z" ? -1 : 1);
+}
+
+function axisRotation(axis: Axis, angle: number): Mat4 {
+  if (axis === "x") return rotationX(angle);
+  if (axis === "z") return rotationZ(angle);
+  return rotationY(angle);
+}
+
+/**
+ * Una pieza y sus copias. Existe aparte de `resolveObject` porque aquella es
+ * pública y hay dos sitios que la llaman esperando **una** pieza.
+ */
+export function resolveCopies(
+  object: ObjectSpec,
+  index = 0,
+  profiles?: ReadonlyMap<string, number[]>,
+): ResolvedObject[] {
+  const base = resolveObject(object, index, profiles);
+  const repeat = object.repeat;
+  if (repeat === undefined) return [base];
+
+  const declared = (["radial", "mirror"] as const).filter((kind) => repeat[kind] !== undefined);
+  if (declared.length === 0) {
+    throw new Error(`${base.name}: repeat no declara ni radial ni mirror`);
+  }
+  if (declared.length > 1) {
+    throw new Error(`${base.name}: repeat declara radial y mirror; son excluyentes`);
+  }
+
+  if (repeat.radial !== undefined) {
+    const count = repeat.radial.count;
+    if (!Number.isInteger(count) || count < 2) {
+      throw new Error(`${base.name}: repeat.radial.count es un entero de 2 en adelante, no ${count}`);
+    }
+    const axis = checkAxis(repeat.radial.axis ?? "y", `${base.name}: repeat.radial`);
+    return Array.from({ length: count }, (_value, copy) => ({
+      name: `${base.name}-${copy + 1}`,
+      node: {
+        ...base.node,
+        // El ángulo se **calcula**, nunca se acumula sumando el paso a la copia
+        // anterior: acumular arrastra error y la última pala deja de estar donde
+        // dice. Y la malla se comparte: son la misma geometría en sitios
+        // distintos, y clonarla sería tirar memoria y romper el agrupado de
+        // mallas repetidas del exportador de GLB.
+        model: multiply(axisRotation(axis, (copy * 2 * Math.PI) / count), base.node.model),
+      },
+    }));
+  }
+
+  const axis = checkAxis(repeat.mirror as Axis, `${base.name}: repeat.mirror`);
+  const reflection = reflectionMatrix(axis);
+  // La matriz va **conjugada**, `S·M·S`, y el espejo horneado en la malla. Con la
+  // matriz reflejada a secas el determinante sería negativo: el rasterizador
+  // apagaría el descarte en espacio de objeto, y la copia daría volumen firmado
+  // negativo, o sea un `MALLA_INVERTIDA` falso sobre una pieza correcta. Conjugar
+  // deja el determinante como estaba —`det(S)·det(M)·det(S)`— y sigue siendo el
+  // reflejo exacto, porque `S·S` es la identidad.
+  const mirrored = multiply(multiply(reflection, base.node.model), reflection);
+  return [
+    { name: `${base.name}-1`, node: base.node },
+    {
+      name: `${base.name}-2`,
+      node: { ...base.node, mesh: mirrorMesh(base.node.mesh, AXIS_INDEX[axis]), model: mirrored },
+    },
+  ];
+}
+
 export function resolveScene(spec: SceneSpec): ResolvedObject[] {
   // Contra el esquema antes de tocar nada: un campo mal escrito se ignoraría en
   // silencio y el agente vería un render que no es el que pidió, sin saber por qué.
@@ -661,7 +778,7 @@ export function resolveScene(spec: SceneSpec): ResolvedObject[] {
   }
 
   const profiles = resolveProfiles(spec.profiles);
-  return spec.objects.map((object, index) => resolveObject(object, index, profiles));
+  return spec.objects.flatMap((object, index) => resolveCopies(object, index, profiles));
 }
 
 /**

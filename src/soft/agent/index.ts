@@ -101,7 +101,7 @@ export {
 export type { Model, ModelPart, PartFamily, Patch, Edit, EditResult, PropertyQuery } from "./model";
 export { diffSheets } from "./renderDiff";
 export type { RasterImage, RenderDiff, DiffRegion } from "./renderDiff";
-export { resolveScene, resolveObject, modelFromScene, createGroundPlane } from "./sceneSpec";
+export { resolveScene, resolveObject, resolveCopies, modelFromScene, createGroundPlane } from "./sceneSpec";
 export { evaluateVariation, resolveSweepPath } from "./sceneSpec";
 export type {
   ProfileSpec,
@@ -111,6 +111,7 @@ export type {
   PathSpec,
   VariationSpec,
   DeformSpec,
+  RepeatSpec,
 } from "./sceneSpec";
 export { auditGeometry } from "./geometryAudit";
 export {
