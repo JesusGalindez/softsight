@@ -118,6 +118,28 @@ afinado lo multiplica por `(1+k+k²)/3`, y un barrido que se corta a sí mismo s
 `BARRIDO_AUTOINTERSECADO` antes de generar nada. Hay un ejemplar con una pieza de cada
 mecánica en `artifacts/agent/pieza-geometria.json`.
 
+Y el movimiento se declara con **el mismo vocabulario que la forma**: una pista de un
+clip acepta la misma tabla —`linear`, `smooth`, `power:k`— en vez de doscientas claves
+escritas a mano, y `turns` gira las vueltas que le digas.
+
+```json
+{ "joint": "rotor", "property": "rotation", "axis": "y", "turns": 3, "frames": 60 }
+{ "joint": "cuerpo", "property": "translation",
+  "value": { "at": [[0,[0,0,0]], [0.5,[0,0.06,0]], [1,[0,0,0]]], "ease": "smooth" },
+  "frames": 20, "cycle": 3 }
+```
+
+`turns` no es azúcar: un muestreador de glTF interpola cuaterniones por el arco más
+corto, así que una vuelta entera escrita con dos claves **no gira nada**. Por eso hornea
+a 90° por clave, y `GIRO_AMBIGUO` avisa de las pistas escritas a mano que caen en la
+trampa.
+
+Para mirar el movimiento sin salir del repositorio, una tira de fotogramas:
+
+```bash
+npm run filmstrip -- --scene artifacts/agent/pieza-geometria.json --frames "0,1,2,3,4,5"
+```
+
 Crear es **incremental**: un parche puede añadir piezas, y aplicado a una escena edita
 el documento, no la geometría. Lo que sale vuelve a ser una escena.
 

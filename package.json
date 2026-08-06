@@ -16,6 +16,7 @@
     "test:geometry": "npm run build:agent3d && node tools/geometry.test.mjs",
     "test:bridge": "npm run build:agent3d && node tools/bridge.test.mjs",
     "bridge": "node tools/bridge.mjs",
+    "filmstrip": "npm run build:agent3d --silent && node tools/filmstrip.mjs",
     "agent3d": "vite build --config vite.node.config.ts --logLevel error 1>&2 && node tools/agent3d.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },

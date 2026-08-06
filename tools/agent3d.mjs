@@ -111,7 +111,7 @@ function chunk(type, payload) {
  * CRC-32; los datos son las filas precedidas por un byte de filtro y comprimidas
  * con zlib, que Node trae de serie. Treinta líneas y ninguna dependencia.
  */
-function encodePng(pixels, width, height) {
+export function encodePng(pixels, width, height) {
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
