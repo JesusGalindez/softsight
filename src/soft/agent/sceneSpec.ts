@@ -222,6 +222,15 @@ export interface RepeatSpec {
   radial?: { count: number; axis?: Axis };
   /** Una copia reflejada en este eje. */
   mirror?: Axis;
+  /**
+   * Punto por el que pasa el eje de giro, o el plano del espejo. El origen por
+   * defecto.
+   *
+   * Sin esto, un rotor solo se puede poner sobre el eje del mundo: cuatro palas en
+   * la punta de un brazo orbitarían el centro de la escena en vez de su propio
+   * buje.
+   */
+  about?: [number, number, number];
 }
 
 export interface ObjectSpec {
@@ -704,6 +713,22 @@ function reflectionMatrix(axis: Axis): Mat4 {
   return scaling(axis === "x" ? -1 : 1, axis === "y" ? -1 : 1, axis === "z" ? -1 : 1);
 }
 
+/**
+ * La transformación `t` llevada al punto `about`: `T(a)·t·T(−a)`.
+ *
+ * Es la misma idea que ya usa el espejo con la reflexión, aplicada al sitio: girar
+ * o reflejar «alrededor de aquí» es hacerlo en el origen con el mundo trasladado.
+ * Con `about` en el origen devuelve `t` intacta, así que lo escrito antes de que
+ * existiera el campo sigue dando exactamente lo mismo.
+ */
+function around(transform: Mat4, about: readonly [number, number, number] | undefined): Mat4 {
+  if (about === undefined || (about[0] === 0 && about[1] === 0 && about[2] === 0)) return transform;
+  return multiply(
+    multiply(translation(about[0], about[1], about[2]), transform),
+    translation(-about[0], -about[1], -about[2]),
+  );
+}
+
 function axisRotation(axis: Axis, angle: number): Mat4 {
   if (axis === "x") return rotationX(angle);
   if (axis === "z") return rotationZ(angle);
@@ -746,7 +771,10 @@ export function resolveCopies(
         // dice. Y la malla se comparte: son la misma geometría en sitios
         // distintos, y clonarla sería tirar memoria y romper el agrupado de
         // mallas repetidas del exportador de GLB.
-        model: multiply(axisRotation(axis, (copy * 2 * Math.PI) / count), base.node.model),
+        model: multiply(
+          around(axisRotation(axis, (copy * 2 * Math.PI) / count), repeat.about),
+          base.node.model,
+        ),
       },
     }));
   }
@@ -759,7 +787,15 @@ export function resolveCopies(
   // negativo, o sea un `MALLA_INVERTIDA` falso sobre una pieza correcta. Conjugar
   // deja el determinante como estaba —`det(S)·det(M)·det(S)`— y sigue siendo el
   // reflejo exacto, porque `S·S` es la identidad.
-  const mirrored = multiply(multiply(reflection, base.node.model), reflection);
+  //
+  // Con el plano desplazado, la de la izquierda es la reflexión llevada al punto y
+  // la de la derecha sigue siendo la pura: el espejo horneado en la malla es el de
+  // siempre —negar una coordenada— y así la geometría no se aleja de su origen. El
+  // determinante sigue saliendo positivo, porque las dos son reflexiones.
+  const mirrored = multiply(
+    multiply(around(reflection, repeat.about), base.node.model),
+    reflection,
+  );
   return [
     { name: `${base.name}-1`, node: base.node },
     {

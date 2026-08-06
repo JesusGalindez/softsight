@@ -1582,3 +1582,101 @@ const PALA = { primitive: "box", parameters: [0.1, 0.4, 1.2] };
       `volumen ${volumen.toFixed(6)}, ${lado.toFixed(3)} de lado mayor; sin solape parcial y sin piezas sueltas)`,
   );
 }
+
+// 44. `repeat.about`: girar y reflejar alrededor de un punto declarado.
+//
+//     Sin él, un rotor solo se puede poner sobre el eje del mundo: cuatro palas en
+//     la punta de un brazo orbitarían el centro de la escena.
+{
+  const centro = [0.9, 1.2, -0.4];
+  const conCentro = resolveScene({
+    objects: [
+      {
+        name: "pala",
+        geometry: PALA,
+        position: [centro[0] + 0.3, centro[1], centro[2]],
+        repeat: { radial: { count: 4, axis: "y" }, about: centro },
+      },
+    ],
+  });
+
+  // Cada copia es la anterior girada alrededor de la recta vertical que pasa por
+  // el punto: la distancia al eje se conserva y la altura no cambia.
+  const radioDe = (pieza) => {
+    const mundo = worldPositions(pieza);
+    let dentro = Infinity;
+    let fuera = 0;
+    for (let vertex = 0; vertex < mundo.length / 3; vertex += 1) {
+      const distancia = Math.hypot(mundo[vertex * 3] - centro[0], mundo[vertex * 3 + 2] - centro[2]);
+      dentro = Math.min(dentro, distancia);
+      fuera = Math.max(fuera, distancia);
+    }
+    return [dentro, fuera];
+  };
+  const [dentro, fuera] = radioDe(conCentro[0]);
+  for (const copia of conCentro.slice(1)) {
+    const [otroDentro, otroFuera] = radioDe(copia);
+    assert.ok(Math.abs(otroDentro - dentro) < 1e-6, `${copia.name}: radio interior ${otroDentro} frente a ${dentro}`);
+    assert.ok(Math.abs(otroFuera - fuera) < 1e-6, `${copia.name}: radio exterior ${otroFuera} frente a ${fuera}`);
+  }
+  // Y giran de verdad: la copia opuesta cae al otro lado del punto.
+  const primera = worldPositions(conCentro[0]);
+  const opuesta = worldPositions(conCentro[2]);
+  let peor = 0;
+  for (let vertex = 0; vertex < primera.length / 3; vertex += 1) {
+    const offset = vertex * 3;
+    peor = Math.max(
+      peor,
+      Math.abs(opuesta[offset] - (2 * centro[0] - primera[offset])),
+      Math.abs(opuesta[offset + 1] - primera[offset + 1]),
+      Math.abs(opuesta[offset + 2] - (2 * centro[2] - primera[offset + 2])),
+    );
+  }
+  assert.ok(peor < 1e-6, `la copia a 180° tiene que caer al otro lado del punto: ${peor}`);
+
+  // El espejo también: el plano pasa por el punto.
+  const [izquierda, derecha] = resolveScene({
+    objects: [
+      { name: "ala", geometry: PALA, position: [1.5, 0, 0], repeat: { mirror: "x", about: [1, 0, 0] } },
+    ],
+  });
+  const original = worldPositions(izquierda);
+  const reflejada = worldPositions(derecha);
+  let peorEspejo = 0;
+  for (let vertex = 0; vertex < original.length / 3; vertex += 1) {
+    const offset = vertex * 3;
+    peorEspejo = Math.max(
+      peorEspejo,
+      Math.abs(reflejada[offset] - (2 * 1 - original[offset])),
+      Math.abs(reflejada[offset + 1] - original[offset + 1]),
+      Math.abs(reflejada[offset + 2] - original[offset + 2]),
+    );
+  }
+  assert.ok(peorEspejo < 1e-6, `el espejo desplazado se desvía ${peorEspejo}`);
+  const copia = auditMesh(derecha.node.mesh);
+  assert.ok(copia.signedVolume > 0, "la copia reflejada sigue con volumen positivo");
+  assert.equal(copia.inverted, false);
+  assert.ok(linearDeterminant(derecha.node.model) > 0, "la matriz sigue conjugada");
+
+  // Y sin `about`, o con el origen, todo sale **exactamente** como antes: lo
+  // escrito antes de que el campo existiera no se mueve un bit.
+  const sinCampo = resolveScene({
+    objects: [{ name: "p", geometry: PALA, position: [0, 0, 0.8], repeat: { radial: { count: 4 } } }],
+  });
+  const conOrigen = resolveScene({
+    objects: [
+      {
+        name: "p",
+        geometry: PALA,
+        position: [0, 0, 0.8],
+        repeat: { radial: { count: 4 }, about: [0, 0, 0] },
+      },
+    ],
+  });
+  for (const [index, copiaSin] of sinCampo.entries()) {
+    assert.deepEqual(conOrigen[index].node.model, copiaSin.node.model);
+  }
+  console.log(
+    `geometria: ok (repeat.about: 4 copias en órbita del punto a ${peor.toExponential(1)}, espejo desplazado a ${peorEspejo.toExponential(1)}, y el origen no mueve nada)`,
+  );
+}

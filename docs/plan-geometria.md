@@ -673,10 +673,14 @@ Coste estimado: unas 600 líneas en `mesh.ts`, unas 120 entre `sceneSpec.ts` y
 Ideas que esperan a que una medida las justifique, en el sitio donde se
 recordarán:
 
-- **`repeat.radial` gira alrededor del eje del mundo que pasa por el origen**, no
-  de un punto declarado. Por eso el rotor del ejemplar está sobre el eje del
-  fuselaje: una hélice en la punta de un brazo orbitaría el origen. Un campo
-  `about` lo resolvería, y falta el caso de uso que lo pida.
+- ~~**`repeat.radial` gira alrededor del eje del mundo**~~ — **hecho** el
+  2026-08-06, en cuanto se intentó pasar del ejemplar a una pieza de verdad: un
+  dron de cuatro brazos con rotor en cada punta no se podía describir, porque las
+  palas orbitaban el centro de la escena. `repeat.about` declara el punto por el
+  que pasa el eje de giro o el plano del espejo, y se aplica conjugando por la
+  traslación —`T(a)·t·T(−a)`—, la misma idea que ya usaba el espejo con la
+  reflexión. Con el punto en el origen devuelve la transformación intacta, así que
+  lo escrito antes no se mueve un bit, y eso se comprueba.
 - **`SIMETRIA_ROTA` y `PIVOTE_DESCENTRADO` saltan sobre piezas legítimas.** El
   ejemplar los dispara en todas sus piezas asimétricas —alas, patas, palas— y en
   las que no están centradas en su propio origen, que es como se declara una pieza

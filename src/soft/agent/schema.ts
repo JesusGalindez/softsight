@@ -207,6 +207,12 @@ const REPEAT_FIELDS: ObjectSchema = {
     fields: RADIAL_FIELDS,
   },
   mirror: { type: '"x"|"y"|"z"', description: "Una copia reflejada en este eje." },
+  about: {
+    type: "number[3]",
+    description:
+      "Punto por el que pasa el eje de giro, o el plano del espejo; el origen por defecto. " +
+      "Sin él, un rotor solo se puede poner sobre el eje del mundo.",
+  },
 };
 
 const OBJECT_FIELDS: ObjectSchema = {
