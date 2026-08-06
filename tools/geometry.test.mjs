@@ -901,3 +901,227 @@ console.log("geometria: ok (barrido recto ≡ ½·n·r²·sin(2π/n)·L, dos res
   }
   console.log(`geometria: ok (${casos.length} barridos mal escritos rechazados por su motivo)`);
 }
+
+// ---------------------------------------------------------------------------
+// Deformadores.
+// ---------------------------------------------------------------------------
+
+function deformed(geometry, deform) {
+  return meshOf({ objects: [{ name: "pieza", geometry, deform }] });
+}
+
+const CILINDRO = { primitive: "cylinder", parameters: [0.4, 2] };
+
+// 26. `twist` conserva el volumen firmado, **exacto**. Cada rebanada gira
+//     rígidamente, así que el volumen no puede cambiar: si el número se mueve, el
+//     deformador está mal.
+{
+  const recto = auditMesh(meshOf({ objects: [{ geometry: CILINDRO }] }));
+  for (const degrees of [30, 120, -270]) {
+    const torcido = auditMesh(deformed(CILINDRO, [{ twist: { axis: "y", degrees } }]));
+    assert.equal(
+      torcido.signedVolume,
+      recto.signedVolume,
+      `torcer ${degrees}° no puede cambiar el volumen`,
+    );
+    assert.equal(torcido.watertight, true);
+    assert.equal(torcido.degenerateTriangles, 0);
+    assert.equal(torcido.inverted, false);
+  }
+  console.log(`geometria: ok (twist conserva el volumen: ${recto.signedVolume} con 30°, 120° y −270°)`);
+}
+
+// 27. `twist` y `wave` son reversibles, y el parámetro neutro es la identidad
+//     **bit a bit**.
+//
+//     La ida y vuelta vuelve dentro de la precisión de `Float32`, no bit a bit, y
+//     el motivo no es el deformador: las posiciones viven en un `Float32Array`, así
+//     que el estado intermedio se redondea a 32 bits y la segunda pasada ya no
+//     opera sobre el mismo número. Lo que sí es exacto —y es lo que de verdad se
+//     está comprobando— es que la segunda pasada ve **la misma caja**: ni la
+//     torsión ni la ondulación cambian la extensión del eje que define `u`, así que
+//     el error se queda en el redondeo y no crece.
+{
+  const original = meshOf({ objects: [{ geometry: CILINDRO }] });
+  const maximaDiferencia = (mesh) => {
+    let peor = 0;
+    for (let index = 0; index < mesh.positions.length; index += 1) {
+      peor = Math.max(peor, Math.abs(mesh.positions[index] - original.positions[index]));
+    }
+    return peor;
+  };
+
+  const torsion = maximaDiferencia(
+    deformed(CILINDRO, [
+      { twist: { axis: "y", degrees: 140 } },
+      { twist: { axis: "y", degrees: -140 } },
+    ]),
+  );
+  assert.ok(torsion < 1e-6, `la ida y vuelta de torsión se desvía ${torsion}`);
+
+  const onda = maximaDiferencia(
+    deformed(CILINDRO, [
+      { wave: { axis: "y", along: "z", amplitude: 0.15, cycles: 3 } },
+      { wave: { axis: "y", along: "z", amplitude: -0.15, cycles: 3 } },
+    ]),
+  );
+  assert.ok(onda < 1e-6, `la ida y vuelta de ondulación se desvía ${onda}`);
+
+  // Los parámetros neutros sí salen idénticos, y esos sí bit a bit: `cos 0` es 1,
+  // `sin 0` es 0, sumar cero no mueve un float, y el doblado a cero ni entra.
+  assert.deepEqual(deformed(CILINDRO, [{ wave: { axis: "y", along: "z", amplitude: 0 } }]).positions, original.positions);
+  assert.deepEqual(deformed(CILINDRO, [{ bend: { axis: "y", into: "x", degrees: 0 } }]).positions, original.positions);
+  assert.deepEqual(deformed(CILINDRO, [{ twist: { axis: "y", degrees: 0 } }]).positions, original.positions);
+  console.log(
+    `geometria: ok (ida y vuelta: torsión ${torsion.toExponential(1)}, onda ${onda.toExponential(1)}; ` +
+      "el parámetro neutro es la identidad bit a bit)",
+  );
+}
+
+// 28. `taper` multiplica el volumen por (1+k+k²)/3 con una rampa lineal de 1 a k.
+//     Es el mismo número del tronco del loft, y no es casualidad.
+for (const k of [0.4, 0.75]) {
+  const recto = auditMesh(meshOf({ objects: [{ geometry: CILINDRO }] }));
+  const afinado = auditMesh(
+    deformed(CILINDRO, [{ taper: { axis: "y", scale: { at: [[0, 1], [1, k]] } } }]),
+  );
+  const expected = recto.signedVolume * ((1 + k + k * k) / 3);
+  assert.ok(
+    Math.abs(afinado.signedVolume - expected) < 1e-6,
+    `taper k=${k}: ${afinado.signedVolume} frente a ${expected}`,
+  );
+  // Con la rampa, el extremo ancho no se toca y el radio envolvente no tiene por
+  // qué bajar. Quien lo baja es un afinado constante, que encoge toda la pieza.
+  const uniforme = auditMesh(deformed(CILINDRO, [{ taper: { axis: "y", scale: k } }]));
+  assert.ok(
+    uniforme.boundingRadius < recto.boundingRadius,
+    `al encoger entera, el radio envolvente baja: ${uniforme.boundingRadius} frente a ${recto.boundingRadius}`,
+  );
+  assert.ok(Math.abs(uniforme.signedVolume - recto.signedVolume * k * k) < 1e-6);
+}
+console.log("geometria: ok (taper multiplica el volumen por (1+k+k²)/3, dos k)");
+
+// 29. `bend` deja el eje sobre un arco: todo vértice cae en la corona de radios
+//     [R−r, R+r]. Exacto y por vértice.
+{
+  const radius = 0.4;
+  const length = 2;
+  const degrees = 75;
+  const doblado = deformed({ primitive: "cylinder", parameters: [radius, length] }, [
+    { bend: { axis: "y", into: "x", degrees } },
+  ]);
+  const R = length / (degrees * (Math.PI / 180));
+  // El mínimo del eje antes de doblar: el cilindro está centrado en el origen.
+  const minimum = -length / 2;
+  let dentro = 0;
+  for (let vertex = 0; vertex < doblado.positions.length / 3; vertex += 1) {
+    const offset = vertex * 3;
+    const arco = Math.hypot(doblado.positions[offset + 1] - minimum, R - doblado.positions[offset]);
+    assert.ok(
+      arco >= R - radius - 1e-6 && arco <= R + radius + 1e-6,
+      `el vértice ${vertex} se sale del arco: ${arco} fuera de [${R - radius}, ${R + radius}]`,
+    );
+    dentro += 1;
+  }
+  const audit = auditMesh(doblado);
+  assert.equal(audit.watertight, true);
+  assert.equal(audit.degenerateTriangles, 0);
+  console.log(`geometria: ok (bend: ${dentro} vértices en la corona [${(R - radius).toFixed(3)}, ${(R + radius).toFixed(3)}])`);
+}
+
+// 30. El orden importa, y se comprueba a propósito.
+{
+  const torcerDoblar = deformed(CILINDRO, [
+    { twist: { axis: "y", degrees: 90 } },
+    { bend: { axis: "y", into: "x", degrees: 45 } },
+  ]);
+  const doblarTorcer = deformed(CILINDRO, [
+    { bend: { axis: "y", into: "x", degrees: 45 } },
+    { twist: { axis: "y", degrees: 90 } },
+  ]);
+  assert.notDeepEqual(torcerDoblar.positions, doblarTorcer.positions);
+  console.log("geometria: ok (torcer y doblar ≠ doblar y torcer)");
+}
+
+// 31. Coherencia de la malla después de deformar: es donde están los fallos
+//     silenciosos.
+{
+  const cadena = [
+    { twist: { axis: "y", degrees: 120 } },
+    { taper: { axis: "y", scale: { at: [[0, 1], [1, 0.4]] } } },
+    { bend: { axis: "y", into: "x", degrees: 30 } },
+    { wave: { axis: "y", along: "z", amplitude: 0.02, cycles: 3 } },
+  ];
+  const mesh = deformed(CILINDRO, cadena);
+  assert.equal(mesh.faceNormals, undefined, "la caché de normales de cara hay que borrarla");
+  // Solo los vértices que usa algún triángulo: `createCylinder` deja dos sueltos
+  // que no referencia nadie, y su normal es cero desde antes de deformar. Es
+  // desperdicio suyo, no del deformador, y no se toca aquí.
+  const usados = new Set(mesh.indices);
+  let maximo = 0;
+  for (let vertex = 0; vertex < mesh.positions.length / 3; vertex += 1) {
+    const offset = vertex * 3;
+    if (usados.has(vertex)) {
+      const longitud = Math.hypot(mesh.normals[offset], mesh.normals[offset + 1], mesh.normals[offset + 2]);
+      assert.ok(Math.abs(longitud - 1) < 1e-6, `la normal del vértice ${vertex} no es unitaria: ${longitud}`);
+    }
+    maximo = Math.max(maximo, Math.hypot(mesh.positions[offset], mesh.positions[offset + 1], mesh.positions[offset + 2]));
+  }
+  assert.ok(
+    Math.abs(mesh.boundingRadius - maximo) < 1e-6,
+    `el radio envolvente quedó viejo: ${mesh.boundingRadius} frente a ${maximo}`,
+  );
+  const audit = auditMesh(mesh);
+  assert.equal(audit.watertight, true, "deformar no cambia la conectividad");
+  assert.equal(audit.degenerateTriangles, 0);
+  console.log("geometria: ok (tras la cadena de cuatro: caché borrada, normales unitarias, radio al día, estanca)");
+}
+
+// 32. La misma cadena sobre cualquier geometría.
+{
+  const cadena = [
+    { twist: { axis: "y", degrees: 60 } },
+    { taper: { axis: "y", scale: { at: [[0, 1], [1, 0.6]] } } },
+  ];
+  const geometrias = [
+    CILINDRO,
+    {
+      loft: [
+        { at: [0, 0, 0], profile: createCircleProfile(0.5, 24) },
+        { at: [0, 1.5, 0], profile: createCircleProfile(0.3, 24) },
+      ],
+    },
+    {
+      sweep: createCircleProfile(0.2, 16),
+      path: { through: [[0, 0, 0], [0, 1.5, 0]], kind: "polyline" },
+      stations: 8,
+    },
+  ];
+  for (const [index, geometry] of geometrias.entries()) {
+    const audit = auditMesh(deformed(geometry, cadena));
+    assert.equal(audit.watertight, true, `la geometría ${index} dejó de ser estanca`);
+    assert.equal(audit.inverted, false);
+    assert.equal(audit.degenerateTriangles, 0);
+  }
+  console.log(`geometria: ok (la misma cadena sobre ${geometrias.length} geometrías distintas)`);
+}
+
+// 33. Errores de los deformadores, por su motivo, y con el nombre de la pieza.
+{
+  const conDeform = (deform) => ({ objects: [{ name: "pala", geometry: CILINDRO, deform }] });
+  const casos = [
+    [conDeform([{ bend: { axis: "y", into: "y", degrees: 30 } }]), /pala: la deformación 0: bend\.into \("y"\) no puede ser el propio eje/],
+    [conDeform([{ wave: { axis: "y", along: "y", amplitude: 1 } }]), /wave\.along \("y"\) no puede ser el propio eje/],
+    [conDeform([{ twist: { axis: "w", degrees: 30 } }]), /el eje es "x", "y" o "z", no "w"/],
+    [conDeform([{ twist: { axis: "y", degrees: 1 }, taper: { axis: "y", scale: 1 } }]), /declara 2 \(twist y taper\); declara una/],
+    [conDeform([{}]), /no declara ninguna; admitidas: twist, taper, bend, wave/],
+    [
+      conDeform([{ taper: { axis: "y", scale: { at: [[1, 1], [0, 2]] } } }]),
+      /pala: la deformación 0 \(taper\.scale\): `at` va en orden creciente de u/,
+    ],
+  ];
+  for (const [scene, expected] of casos) {
+    assert.throws(() => resolveScene(scene), expected, `no se rechazó por su motivo: ${expected}`);
+  }
+  console.log(`geometria: ok (${casos.length} deformadores mal escritos rechazados por su motivo)`);
+}

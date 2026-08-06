@@ -10,6 +10,7 @@
  */
 
 import {
+  applyDeformers,
   computeNormals,
   createBox,
   createCircleProfile,
@@ -25,6 +26,8 @@ import {
   createSweep,
   createTorus,
   sweepStations,
+  type Axis,
+  type Deformer,
   type LoftSection,
   type Mesh,
   type SweepPath,
@@ -181,9 +184,43 @@ export type GeometrySpec =
   | LoftSpec
   | SweepSpec;
 
+/**
+ * Una deformación de la lista. Los cuatro van planos y opcionales, y que haya
+ * exactamente uno lo exige el resolutor: `anyOf` del esquema se aplica a un campo
+ * y no a los elementos de una lista.
+ *
+ * `degrees`, `scale` y `amplitude` admiten los tres un número o una tabla de
+ * variación, que es un solo modismo para las tres cosas.
+ */
+export interface DeformSpec {
+  /** Gira alrededor del eje, proporcionalmente al recorrido. */
+  twist?: { axis: Axis; degrees: number | VariationSpec };
+  /** Escala las dos coordenadas que no son la del eje. */
+  taper?: { axis: Axis; scale: number | VariationSpec };
+  /** Dobla el eje sobre un arco, hacia `into`. */
+  bend?: { axis: Axis; into: Axis; degrees: number };
+  /** Ondula desplazando a lo largo de `along`. */
+  wave?: {
+    axis: Axis;
+    along: Axis;
+    amplitude: number | VariationSpec;
+    cycles?: number;
+    phase?: number;
+  };
+}
+
 export interface ObjectSpec {
   name?: string;
   geometry: GeometrySpec;
+  /**
+   * Deformaciones en el orden en que se aplican, sobre la malla ya generada y
+   * **antes** de la matriz de colocación.
+   *
+   * Va aquí y no en `geometry` porque `geometry` es una unión de seis formas:
+   * meterlo dentro obligaría a repetir el campo en las seis, y el generador
+   * número siete se lo dejaría.
+   */
+  deform?: DeformSpec[];
   /**
    * Colocación exacta, que manda sobre posición, rotación y escala.
    *
@@ -301,6 +338,70 @@ export function evaluateVariation(spec: number | VariationSpec, u: number, what 
     throw new Error(`${what}: ease desconocido "${ease}"; admitidos: linear, smooth, power:k`);
   }
   return fromValue + (toValue - fromValue) * eased;
+}
+
+const DEFORM_KINDS = ["twist", "taper", "bend", "wave"] as const;
+const AXES: readonly Axis[] = ["x", "y", "z"];
+
+function checkAxis(value: unknown, what: string): Axis {
+  if (typeof value !== "string" || !AXES.includes(value as Axis)) {
+    throw new Error(`${what}: el eje es "x", "y" o "z", no ${JSON.stringify(value)}`);
+  }
+  return value as Axis;
+}
+
+/** Las deformaciones del documento a las que entiende `applyDeformers`. */
+function buildDeformers(specs: readonly DeformSpec[], name: string): Deformer[] {
+  return specs.map((spec, index) => {
+    const what = `${name}: la deformación ${index}`;
+    const declared = DEFORM_KINDS.filter((kind) => spec[kind] !== undefined);
+    if (declared.length === 0) {
+      throw new Error(`${what} no declara ninguna; admitidas: ${DEFORM_KINDS.join(", ")}`);
+    }
+    if (declared.length > 1) {
+      throw new Error(`${what} declara ${declared.length} (${declared.join(" y ")}); declara una`);
+    }
+
+    if (spec.twist !== undefined) {
+      const axis = checkAxis(spec.twist.axis, `${what} (twist)`);
+      const degrees = spec.twist.degrees ?? 0;
+      return {
+        kind: "twist" as const,
+        axis,
+        radians: (u: number) =>
+          evaluateVariation(degrees, u, `${what} (twist.degrees)`) * DEGREES_TO_RADIANS,
+      };
+    }
+    if (spec.taper !== undefined) {
+      const axis = checkAxis(spec.taper.axis, `${what} (taper)`);
+      const scale = spec.taper.scale ?? 1;
+      return {
+        kind: "taper" as const,
+        axis,
+        scale: (u: number) => evaluateVariation(scale, u, `${what} (taper.scale)`),
+      };
+    }
+    if (spec.bend !== undefined) {
+      const axis = checkAxis(spec.bend.axis, `${what} (bend)`);
+      const into = checkAxis(spec.bend.into, `${what} (bend.into)`);
+      if (into === axis) throw new Error(`${what}: bend.into ("${into}") no puede ser el propio eje`);
+      return { kind: "bend" as const, axis, into, radians: (spec.bend.degrees ?? 0) * DEGREES_TO_RADIANS };
+    }
+
+    const wave = spec.wave as NonNullable<DeformSpec["wave"]>;
+    const axis = checkAxis(wave.axis, `${what} (wave)`);
+    const along = checkAxis(wave.along, `${what} (wave.along)`);
+    if (along === axis) throw new Error(`${what}: wave.along ("${along}") no puede ser el propio eje`);
+    const amplitude = wave.amplitude ?? 0;
+    return {
+      kind: "wave" as const,
+      axis,
+      along,
+      amplitude: (u: number) => evaluateVariation(amplitude, u, `${what} (wave.amplitude)`),
+      cycles: wave.cycles ?? 1,
+      phase: wave.phase ?? 0,
+    };
+  });
 }
 
 /** Estaciones del recorrido declarado, con el radio y la torsión ya aplicados. */
@@ -543,8 +644,10 @@ export function resolveObject(
                 { closed: geometry.path?.closed, caps: geometry.caps },
               )
             : buildPrimitive(geometry);
+  const name = object.name ?? `objeto${index}`;
+  if (object.deform !== undefined) applyDeformers(mesh, buildDeformers(object.deform, name));
   return {
-    name: object.name ?? `objeto${index}`,
+    name,
     node: { mesh, model: buildModelMatrix(object), material: buildMaterial(object) },
   };
 }

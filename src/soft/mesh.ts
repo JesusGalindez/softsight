@@ -1344,6 +1344,132 @@ export function createSweep(
   return mesh;
 }
 
+export type Axis = "x" | "y" | "z";
+
+export type Deformer =
+  | { kind: "twist"; axis: Axis; radians: (u: number) => number }
+  | { kind: "taper"; axis: Axis; scale: (u: number) => number }
+  | { kind: "bend"; axis: Axis; into: Axis; radians: number }
+  | {
+      kind: "wave";
+      axis: Axis;
+      along: Axis;
+      amplitude: (u: number) => number;
+      cycles: number;
+      phase: number;
+    };
+
+const AXIS_INDEX: Record<Axis, number> = { x: 0, y: 1, z: 2 };
+
+/**
+ * Las dos coordenadas que no son la del eje, **en orden ascendente**.
+ *
+ * No es una elección libre: así el giro coincide con el de `rotationX`,
+ * `rotationY` y `rotationZ` de `math.ts` —eje x da (y,z), eje y da (x,z), eje z da
+ * (x,y)—, y un `twist` del documento gira en el mismo sentido que la rotación del
+ * objeto. Con el orden cíclico, el del eje y saldría al revés.
+ */
+function otherAxes(axis: Axis): [number, number] {
+  const index = AXIS_INDEX[axis];
+  const rest = [0, 1, 2].filter((candidate) => candidate !== index);
+  return [rest[0], rest[1]];
+}
+
+/**
+ * Deformadores aplicados **en su sitio**, en el orden en que vienen.
+ *
+ * El orden importa —torcer y luego doblar no es doblar y luego torcer—, y el
+ * parámetro `u` de cada uno sale de la caja envolvente **del momento**: el
+ * deformador anterior pudo cambiarla, y usar la caja original haría que el mismo
+ * documento significase cosas distintas según lo que hubiera delante.
+ *
+ * Al terminar deja la malla coherente, que es donde están los fallos silenciosos:
+ * `faceNormals` borrada —el rasterizador descarta caras con esa caché, y con las
+ * normales de antes de deformar aparecen agujeros que van y vienen al girar la
+ * cámara—, normales recalculadas y radio envolvente al día.
+ *
+ * Las funciones de `u` entran ya resueltas: aquí no se sabe qué es una tabla de
+ * variación ni qué son los grados del documento.
+ */
+export function applyDeformers(mesh: Mesh, deformers: readonly Deformer[]): void {
+  if (deformers.length === 0) return;
+  const { positions } = mesh;
+  const vertexCount = positions.length / 3;
+
+  for (const deformer of deformers) {
+    const axis = AXIS_INDEX[deformer.axis];
+    let minimum = Infinity;
+    let maximum = -Infinity;
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      const value = positions[vertex * 3 + axis];
+      if (value < minimum) minimum = value;
+      if (value > maximum) maximum = value;
+    }
+    const extent = maximum - minimum;
+    // Una malla sin extensión en el eje no tiene nada que recorrer; `u` vale cero
+    // en todas partes y el deformador no hace nada raro.
+    const parameterOf = (value: number): number => (extent > 0 ? (value - minimum) / extent : 0);
+
+    if (deformer.kind === "twist") {
+      const [b, c] = otherAxes(deformer.axis);
+      for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+        const offset = vertex * 3;
+        const angle = deformer.radians(parameterOf(positions[offset + axis]));
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const first = positions[offset + b];
+        const second = positions[offset + c];
+        positions[offset + b] = cos * first - sin * second;
+        positions[offset + c] = sin * first + cos * second;
+      }
+      continue;
+    }
+
+    if (deformer.kind === "taper") {
+      const [b, c] = otherAxes(deformer.axis);
+      for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+        const offset = vertex * 3;
+        const scale = deformer.scale(parameterOf(positions[offset + axis]));
+        positions[offset + b] *= scale;
+        positions[offset + c] *= scale;
+      }
+      continue;
+    }
+
+    if (deformer.kind === "bend") {
+      // Sin ángulo, el radio de doblado sería infinito. Y además la identidad
+      // tiene que salir bit a bit, no «casi».
+      if (deformer.radians === 0 || extent === 0) continue;
+      const into = AXIS_INDEX[deformer.into];
+      const radius = extent / deformer.radians;
+      for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+        const offset = vertex * 3;
+        const along = positions[offset + axis] - minimum;
+        const away = positions[offset + into];
+        const angle = along / radius;
+        positions[offset + axis] = minimum + (radius - away) * Math.sin(angle);
+        positions[offset + into] = radius - (radius - away) * Math.cos(angle);
+      }
+      continue;
+    }
+
+    const along = AXIS_INDEX[deformer.along];
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      const offset = vertex * 3;
+      const u = parameterOf(positions[offset + axis]);
+      positions[offset + along] +=
+        deformer.amplitude(u) * Math.sin(2 * Math.PI * deformer.cycles * u + deformer.phase);
+    }
+  }
+
+  // Recalcular, no transformar: la transformación correcta de una normal bajo una
+  // deformación no lineal es la traspuesta de la inversa del jacobiano en cada
+  // punto, y `computeNormals` ya está.
+  computeNormals(mesh);
+  delete mesh.faceNormals;
+  mesh.boundingRadius = boundingRadiusOf(positions);
+}
+
 /** El perfil recorrido en sentido contrario, conservando los pares radio,altura. */
 function reverseProfile(profile: readonly number[]): number[] {
   const out: number[] = [];

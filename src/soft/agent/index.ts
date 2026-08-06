@@ -110,9 +110,11 @@ export type {
   SweepSpec,
   PathSpec,
   VariationSpec,
+  DeformSpec,
 } from "./sceneSpec";
 export { auditGeometry } from "./geometryAudit";
 export {
+  applyDeformers,
   createCircleProfile,
   createGielisProfile,
   createLoft,
@@ -121,7 +123,7 @@ export {
   createSweep,
   sweepStations,
 } from "../mesh";
-export type { LoftSection, SweepStation, SweepPath } from "../mesh";
+export type { Axis, Deformer, LoftSection, SweepStation, SweepPath } from "../mesh";
 export { applyPatchToScene } from "./scenePatch";
 export { invertPatch } from "./invertPatch";
 export { auditSpatial } from "./spatialAudit";

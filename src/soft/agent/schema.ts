@@ -164,8 +164,45 @@ const GEOMETRY_REVOLVE: ObjectSchema = {
   segments: { type: "number", description: "Divisiones alrededor del eje; 32 por defecto." },
 };
 
+/**
+ * Las cuatro deformaciones, planas y opcionales por lo mismo que los generadores
+ * de perfil: `anyOf` se aplica a un campo y no a los elementos de una lista. Que
+ * haya exactamente una por entrada lo exige el resolutor.
+ */
+const DEFORM_FIELDS: ObjectSchema = {
+  twist: {
+    type: "object",
+    description:
+      "{ axis, degrees } — gira alrededor del eje, proporcionalmente al recorrido. " +
+      "degrees admite número o tabla { at, ease }.",
+  },
+  taper: {
+    type: "object",
+    description:
+      "{ axis, scale } — escala las dos coordenadas que no son la del eje. " +
+      "scale admite número o tabla.",
+  },
+  bend: {
+    type: "object",
+    description: "{ axis, into, degrees } — dobla el eje sobre un arco hacia `into`, que no puede ser el eje.",
+  },
+  wave: {
+    type: "object",
+    description:
+      "{ axis, along, amplitude, cycles, phase } — ondula desplazando a lo largo de `along`, " +
+      "que no puede ser el eje. amplitude admite número o tabla.",
+  },
+};
+
 const OBJECT_FIELDS: ObjectSchema = {
   name: { type: "string", description: "Nombre de la pieza; si falta, `objetoN`." },
+  deform: {
+    type: "object[]",
+    description:
+      "Deformaciones en el orden en que se aplican, sobre la malla ya generada y antes de la " +
+      "matriz. El orden importa: torcer y luego doblar no es doblar y luego torcer.",
+    fields: DEFORM_FIELDS,
+  },
   geometry: {
     type: "object",
     required: true,
