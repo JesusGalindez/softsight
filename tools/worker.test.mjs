@@ -97,6 +97,18 @@ async function health(baseUrl) {
   return { status: response.status, body: await response.json() };
 }
 
+/** POST /batch y devuelve { status, body }. */
+async function postBatch(baseUrl, requests, token) {
+  const headers = { "Content-Type": "application/json" };
+  if (token !== null) headers.Authorization = `Bearer ${token}`;
+  const response = await fetch(`${baseUrl}/batch`, {
+    method: "POST",
+    headers,
+    body: `${JSON.stringify({ request: requests })}\n`,
+  });
+  return { status: response.status, body: await response.json() };
+}
+
 /** Lanza el CLI directo y devuelve { exitCode, report }. */
 async function runCli(args) {
   try {
@@ -226,6 +238,23 @@ try {
     const { exitCode, response } = await runBridge(renderRequest);
     assert.equal(exitCode, body.exitCode, "el puente local debe salir igual que el worker");
     assert.deepEqual(response.report.warnings, body.report.warnings);
+  }
+
+  console.log("worker: tanda (POST /batch con request: lista)");
+  {
+    const { status, body: batchBody } = await postBatch(
+      baseUrl,
+      [renderRequest, { ...renderRequest, options: { ...renderRequest.options, tile: 140 } }],
+      TOKEN,
+    );
+    assert.equal(status, 200);
+    assert.equal(batchBody.bridgeContractVersion, 1);
+    assert.equal(batchBody.request, 2);
+    assert.ok(Array.isArray(batchBody.results) && batchBody.results.length === 2);
+    for (const entry of batchBody.results) {
+      assert.equal(entry.command, "render");
+      assert.ok(entry.report, "cada entrada del lote debe traer su informe");
+    }
   }
 } finally {
   worker.kill("SIGKILL");

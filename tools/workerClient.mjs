@@ -73,7 +73,7 @@ export async function postBatch(baseUrl, requests, { token, timeoutMs = 600_000 
   const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/batch`, {
     method: "POST",
     headers,
-    body: `${JSON.stringify({ batch: requests.map((entry) => expandRequest(entry)) })}\n`,
+    body: `${JSON.stringify({ request: requests.map((entry) => expandRequest(entry)) })}\n`,
     signal: AbortSignal.timeout(timeoutMs),
   });
   return { status: response.status, body: await readBody(response) };
