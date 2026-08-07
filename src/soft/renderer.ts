@@ -40,6 +40,7 @@ import {
 } from "./math";
 import { ensureFaceNormals, type Mesh } from "./mesh";
 import { applyDepthEdgeAntialias } from "./postprocess";
+import { drawSDFText } from "./text";
 import { ShadowMap } from "./shadowMap";
 import {
   extractFrustumPlanes,
@@ -158,6 +159,20 @@ export interface RenderOptions {
   fogColor: [number, number, number];
   fogDensity: number;
   clearColor: [number, number, number];
+  /**
+   * Título de texto SDF que se quema en el framebuffer después del postproceso.
+   * Vive en la propia imagen, no en una capa del navegador: el render headless
+   * lo lleva dentro, así que video y pliego muestran lo mismo.
+   */
+  title?: {
+    text: string;
+    /** Esquina superior izquierda en píxeles de pantalla. */
+    originX: number;
+    originY: number;
+    /** Píxeles de pantalla por píxel de fuente (5×7). */
+    scale: number;
+    color?: readonly [number, number, number];
+  };
 }
 
 export interface FrameStats extends RasterStats {
@@ -390,6 +405,22 @@ export class SoftwareRenderer {
       const postprocessStart = performance.now();
       stats.smoothedPixels = applyDepthEdgeAntialias(framebuffer);
       stats.postprocessMilliseconds = performance.now() - postprocessStart;
+    }
+
+    if (options.title) {
+      drawSDFText(
+        framebuffer.color,
+        framebuffer.width,
+        framebuffer.height,
+        options.title.originX,
+        options.title.originY,
+        {
+          text: options.title.text,
+          scale: options.title.scale,
+          color: options.title.color ?? [236, 239, 245],
+        },
+        framebuffer.rowOffset,
+      );
     }
 
     stats.totalMilliseconds = performance.now() - startTime;

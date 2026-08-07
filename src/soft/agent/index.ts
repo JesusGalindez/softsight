@@ -46,7 +46,9 @@ import { auditSpatial, type SpatialAudit } from "./spatialAudit";
 import { auditGeometry } from "./geometryAudit";
 import { auditClips } from "./animationAudit";
 import type { Camera, SceneNode } from "../renderer";
+import { SoftwareRenderer } from "../renderer";
 
+export { SoftwareRenderer };
 export {
   renderContactSheet,
   computeSceneAabb,
@@ -57,6 +59,8 @@ export {
   frameCamera,
   DEFAULT_VIEWS,
 } from "./contactSheet";
+export { drawSDFText } from "../text";
+export type { TextRun } from "../text";
 export { auditMesh } from "./inspect";
 export { parseGlb } from "./glbLoader";
 export { parseBvh, bvhToSkinnedScene } from "./bvhLoader";

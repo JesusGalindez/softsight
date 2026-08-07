@@ -559,7 +559,9 @@ resultado que el CLI directo.
 | `raster.ts` | Span exacto, gradientes incrementales, regla top-left, curva ACES, dither |
 | `shading.ts` | Blinn-Phong, ambiente hemisférico, filtrado analítico de textura |
 | `shadowMap.ts` | Mapa de sombras direccional con profundidad lineal |
-| `renderer.ts` | Orquestación: visibilidad, vértices, recorte, rasterizado, postproceso |
+| `renderer.ts` | Orquestación: visibilidad, vértices, recorte, rasterizado, postproceso, título SDF |
+| `font.ts` | Tabla de glifos 5×7 en cadena hexadecimal, compartida por rótulo y texto |
+| `text.ts` | Texto SDF: campos de distancias por glifo, aristas suaves a cualquier escala |
 | `present.ts` | Buffer interno desacoplado del canvas visible |
 | `resolutionController.ts` | Resolución adaptativa con modelo de coste ajustado en vivo |
 | `parallel.ts`, `renderWorker.ts` | Paralelo por bandas con reparto adaptativo |
