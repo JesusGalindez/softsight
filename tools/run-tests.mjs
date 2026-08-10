@@ -14,20 +14,23 @@
  * 1. **No había doce compilaciones.** `test:animation` ya compilaba una sola vez
  *    y encadenaba trece `node`. Las que compilan por su cuenta son los `test:*`
  *    sueltos, que existen para iterar sobre una puerta.
- * 2. **Una puerta es la suite.** `sample-surface` cuesta **26,2 s de CPU de los
- *    ~44 s** del total (62 %); `bridge` otros 9,5 s; las once restantes suman
- *    menos de 8 s. Es el mismo derroche que persiguen Ω6.2 y Ω6.3: 128
- *    evaluaciones completas de la malla con skin releyendo las mismas IBM.
+ * 2. **Una puerta era la suite.** `sample-surface` costaba **26,2 s de CPU de los
+ *    ~44 s** del total (62 %). Era el derroche que Ω6.2 y Ω6.3 arreglaron —128
+ *    evaluaciones releyendo las mismas IBM y tres recorridos idénticos de las
+ *    áreas—: hoy son **0,8 s de pared**, y la suite entera 34,5 s con diecisiete
+ *    puertas en vez de trece.
  * 3. **Esta máquina tiene dos núcleos físicos**, no cuatro (i5-5350U;
  *    `availableParallelism()` cuenta los cuatro lógicos). Con la puerta gorda ya
  *    limitada por memoria, repartir no da nada y a partir de tres procesos
  *    resta: 61 s en serie contra 89 s y 109 s con cuatro procesos, dos vueltas.
  *
  * Así que el reparto **viene apagado** —`SOFTSIGHT_TEST_JOBS` lo enciende— y el
- * objetivo de bajar de 20 s no lo desbloquea el paralelismo, lo desbloquea
- * abaratar `sample-surface`. Se guarda el descarte con su medida, como
- * `plan-renderizador.md` guarda los suyos, en vez de dejar puesto un reparto que
- * no mejora nada.
+ * objetivo de bajar de 20 s no lo desbloqueó el paralelismo sino abaratar
+ * `sample-surface`. Con Ω6 hecho, dos procesos ya ganan algo —44,5 s contra 35,9,
+ * y 41,5 contra 32,1 en la vuelta siguiente— pero es un **20 %, por debajo del
+ * 30 % que el ruido de esta máquina permite afirmar**, así que el reparto sigue
+ * apagado por defecto y el descarte se queda anotado con su medida, como los de
+ * `plan-renderizador.md`.
  *
  * La salida se agrupa por fichero: un hijo escribe entera y de una vez cuando
  * termina, así que el registro se lee igual aunque no se produzca en orden.
@@ -47,23 +50,23 @@ const projectRoot = resolve(here, "..");
  * con una cola, dejar la más larga para el final la deja corriendo sola.
  */
 const GATES = [
-  "sample-surface.test.mjs", // 50,4 s — 26,2 s de CPU, el 62 % de la suite
-  "mcp.test.mjs", // 12,9 s — siete herramientas, cada una contra el CLI directo
-  "bridge.test.mjs", // 6,3 s — 9,5 s de CPU, porque lanza el CLI
-  "summary.test.mjs", // 5,4 s — renderiza el dron entero para medir el recorte
-  "staging-spec.test.mjs", // 1,8 s
-  "rig-spec.test.mjs", // 1,6 s
-  "story-spec.test.mjs", // 1,5 s
-  "bvh-loader.test.mjs", // 1,0 s
-  "animation-contract.test.mjs", // 1,0 s
-  "glb-loader.test.mjs", // 0,6 s
-  "skin-binding.test.mjs", // 0,6 s
-  "parity-mode.test.mjs", // 0,5 s
-  "warning-codes.test.mjs", // 0,5 s
-  "agents-md.mjs --check", // 0,5 s — no acaba en .test.mjs porque también regenera
-  "glb-writer.test.mjs", // 0,3 s
-  "geometry.test.mjs", // 0,3 s
-  "text.test.mjs", // 0,3 s
+  "bridge.test.mjs", // 15,5 s — lanza el CLI muchas veces, y ahora también el residente
+  "mcp.test.mjs", // 5,2 s — siete herramientas, cada una contra el CLI directo
+  "summary.test.mjs", // 4,3 s — renderiza el dron entero para medir el recorte
+  "rig-spec.test.mjs", // 1,3 s
+  "story-spec.test.mjs", // 1,1 s
+  "staging-spec.test.mjs", // 1,0 s
+  "sample-surface.test.mjs", // 0,8 s — eran 50,4 antes de Ω6.2 y Ω6.3
+  "bvh-loader.test.mjs", // 0,8 s
+  "parity-mode.test.mjs", // 0,4 s
+  "animation-contract.test.mjs", // 0,3 s
+  "skin-binding.test.mjs", // 0,3 s
+  "warning-codes.test.mjs", // 0,3 s
+  "glb-loader.test.mjs", // 0,2 s
+  "geometry.test.mjs", // 0,2 s
+  "text.test.mjs", // 0,2 s
+  "agents-md.mjs --check", // 0,2 s — no acaba en .test.mjs porque también regenera
+  "glb-writer.test.mjs", // 0,1 s
 ];
 
 /** Lanza una orden y devuelve `{ code, out }` con stdout y stderr ya juntos. */

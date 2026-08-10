@@ -483,6 +483,39 @@ del repositorio, no del estilo de trabajo.
 
 ## Fase Ω6 — El núcleo: la deuda de eficiencia, con fase asignada
 
+**Ω6.2 y Ω6.3 hechas el 2026-08-09**, y son el resultado más grande de todo el plan:
+
+| Medida | Antes | Después |
+|---|---|---|
+| `sample-surface` (pared) | **50,4 s** | **0,8 s** |
+| `sample-surface` (CPU) | **26,2 s** | **0,88 s** |
+| Suite entera (pared) | 61 s con 13 puertas | **34,5 s con 17** |
+
+**Ω6.3** —los accesores leídos una vez por GLB en vez de una por llamada— es la que trae
+casi todo. Evaluar la pose, las normales y una muestra del mismo fotograma releía las
+mismas matrices inversas de atado tres veces, y cuatro fotogramas eran doce lecturas de lo
+mismo: 128 evaluaciones completas de la malla con skin. La caché es un `WeakMap` sobre
+`decodedViews`, que es el objeto que identifica un GLB analizado.
+
+**Ω6.2** —áreas y pesos √área en `Float64Array` una vez por GLB— baja de 2,3 s a 0,8 s lo
+que quedaba: tres muestreos del mismo GLB eran tres recorridos idénticos de todos los
+triángulos.
+
+Ninguna de las dos podía mover un número, y no lo movió: `renderHash.sheet` del dron sigue
+en `46228b7c`, las 86 comprobaciones en verde y las huellas de muestreo iguales. La razón
+por la que se podía afirmar antes de medir: los arrays de `readAccessor` ya se compartían
+dentro de una llamada, así que nadie los escribe; y `Math.sqrt(area)` guardado en un
+`Float64Array` es el mismo bit que el número de JS. Y se dejó **a propósito** el recorrido
+lineal del muestreo en vez de una suma acumulada con búsqueda binaria: sería más rápido y
+cambiaría el triángulo elegido en el borde.
+
+**Ω6.4 no está en este repositorio.** `create-sample-contract.mjs` vive en el editor; aquí
+no hay ningún `AnimationMixer`. Se queda para quien tenga ese árbol.
+
+**Efecto sobre Ω7**: con la puerta gorda abaratada, dos procesos ya ganan —44,5 s contra
+35,9, y 41,5 contra 32,1 en la vuelta siguiente—, pero es un **20 %, por debajo del 30 %
+que el ruido de esta máquina permite afirmar**. El reparto sigue apagado por defecto.
+
 Las cuatro que el mapa §5 tiene identificadas sin fase, ordenadas por lo que devuelven:
 
 | # | Trabajo | Medida objetivo |
