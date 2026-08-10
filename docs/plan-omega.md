@@ -509,6 +509,40 @@ dentro de una llamada, así que nadie los escribe; y `Math.sqrt(area)` guardado 
 lineal del muestreo en vez de una suma acumulada con búsqueda binaria: sería más rápido y
 cambiaría el triángulo elegido en el borde.
 
+**Ω6.1 hecha el 2026-08-10, y con otro diseño**, porque el escrito no se puede construir:
+«hereda el resto del informe anterior» supone que el informe publica las 296 auditorías, y
+**no las publica** —solo `selection.audits`, recortado a `--audit-limit`—. Publicarlas
+serían ~50 KB por informe justo después de bajarlo a 1.108 B con `--summary`.
+
+Lo que sí se puede afirmar es más fuerte que heredar: **`auditMesh` depende solo de la
+malla**, no de la matriz ni del nombre. Así que `tools/auditCache.mjs` cachea la auditoría
+con clave en la **huella de la malla** —posiciones, normales e índices—, y el resultado no
+es una aproximación: es la misma función sobre la misma entrada.
+
+Con eso, la tabla de «qué operación toca la malla» desaparece, que es justo donde un
+incremental por operaciones se equivoca en silencio. Un `translate` no cambia la huella y
+no reaudita nada; un `setPivot` mueve las posiciones, la huella cambia y esa pieza —y solo
+esa— se vuelve a auditar. Y no hace falta `--baseline-report`: funciona en cualquier
+llamada, y también en el modo residente.
+
+Medido en CPU, que es lo único estable en esta máquina:
+
+| `--inspect-only` del dron | CPU |
+|---|---|
+| consulta, sin contrato de topología | 0,28 s |
+| con `--require-watertight`, caché fría | 0,74 s |
+| con `--require-watertight`, caché caliente | **0,30 s** |
+
+Es decir: **el contrato de topología pasa a costar 0,02 s en vez de 0,46 s**, y a partir de
+la segunda llamada sale prácticamente gratis. La caché no vive en `src/soft/agent/` porque
+esa capa no toca ficheros: `reviewModel` recibe el auditor por opción y el CLI le pone
+delante el que guarda en `.cache/audits`, acotado por `SOFTSIGHT_AUDIT_CACHE_MAX_MB`.
+
+Puerta `test:incremental`: el informe con caché fría, caliente y sin caché es `deepEqual`,
+y el caso que rompería la huella si se quedara corta —`setPivot`, que mueve las
+posiciones— sale igual por los dos caminos y cambia el `centerOffset`, así que el caso
+prueba algo.
+
 **Ω6.4 no está en este repositorio.** `create-sample-contract.mjs` vive en el editor; aquí
 no hay ningún `AnimationMixer`. Se queda para quien tenga ese árbol.
 

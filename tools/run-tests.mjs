@@ -51,6 +51,7 @@ const projectRoot = resolve(here, "..");
  */
 const GATES = [
   "bridge.test.mjs", // 15,5 s — lanza el CLI muchas veces, y ahora también el residente
+  "incremental.test.mjs", // 5,5 s — seis revisiones del dron con contrato de topología
   "mcp.test.mjs", // 5,2 s — siete herramientas, cada una contra el CLI directo
   "summary.test.mjs", // 4,3 s — renderiza el dron entero para medir el recorte
   "rig-spec.test.mjs", // 1,3 s

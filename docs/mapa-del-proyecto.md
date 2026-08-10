@@ -123,6 +123,7 @@ hecho por los dos lados, da el mismo hash.
 | `softsight:sample-gate` | Muestras de superficie: posiciones y normales | `npm run softsight:sample-gate` (editor) |
 | `softsight:gates` | Las dos anteriores, en cadena | `npm run softsight:gates` (editor) |
 | `test:agents-md` | El `AGENTS.md` commiteado contra el regenerado de `package.json` y `--help`, y su techo de 120 líneas | `npm run test:agents-md` (softsight), también dentro de `test:animation` |
+| `test:incremental` | El informe con contrato de topología, con la caché de auditoría fría, caliente y sin caché, y tras un parche que cambia la malla | `npm run test:incremental` (softsight), también dentro de `test:animation` |
 | `test:mcp` | Cada una de las siete herramientas MCP contra el CLI directo —informe, pliego y GLB byte a byte—, y que los esquemas de parámetros son la traducción de `SCENE_SCHEMA` y `PATCH_SCHEMA` | `npm run test:mcp` (softsight), también dentro de `test:animation` |
 | `test:summary` | El informe recortado contra el completo: cada clave del resumen es la misma, el resumen del dron cabe en 2.000 B, una ruta de `--fields` que no existe sale 2 con sugerencia, y la unión de las siete partes de `--schema` es el `--schema` completo | `npm run test:summary` (softsight), también dentro de `test:animation` |
 | `test:codes` | El registro de códigos de aviso contra `src/soft/`, en las dos direcciones, y contra lo que publica `--schema` | `npm run test:codes` (softsight), también dentro de `test:animation` |
@@ -143,7 +144,7 @@ puertas; las cinco restantes solo las cierra una ejecución local con los dos
 repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 85
+Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 88
 comprobaciones de softsight en verde**. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
@@ -312,7 +313,10 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     **Ω3 hecha**: `tools/mcp-server.mjs` publica siete herramientas tipadas por
     JSON-RPC sobre el modo residente, con los esquemas de parámetros generados de
     `SCENE_SCHEMA` y compañía; el servidor traduce a una petición del puente y no
-    decide nada.
+    decide nada. **Ω6 hecha salvo Ω6.4**, que vive en el editor: `sample-surface`
+    de 50,4 s a 0,8 s, la suite de 61 s a 34,5, y el contrato de topología de
+    0,46 s de CPU a 0,02 gracias a una caché de auditoría con clave en la huella
+    de la malla. Ningún hash se movió: el pliego del dron sigue en `46228b7c`.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un
@@ -340,12 +344,11 @@ estado, que es el instrumento del propio renderer.
 
 Trabajo de eficiencia identificado, sin fase asignada todavía:
 
-- Precomputar áreas y pesos √área en `Float64` una vez por GLB; hoy el muestreo
-  los recalcula en cada llamada.
-- Reutilizar `decodedViews` entre frames consecutivos: hoy los skins leen las
-  mismas IBM cuatro veces (pose, normales, muestra).
+- Precomputar áreas y pesos √área en `Float64` una vez por GLB. **Hecho** (Ω6.2).
+- Reutilizar `decodedViews` entre frames consecutivos. **Hecho** (Ω6.3): con las
+  dos, `sample-surface` pasa de 50,4 s a 0,8 s y la suite de 61 s a 34,5.
 - Un solo `AnimationMixer` por lote de frames en `create-sample-contract.mjs`;
-  hoy se crea uno por frame.
+  hoy se crea uno por frame. **Ese fichero vive en el editor**, no aquí.
 - Ampliar la caché del CLI a las muestras, con clave `(GLB, semilla)`. **Sigue
   sin fase y ahora se sabe por qué**: no hay consumidor aquí. `sampleSurface` con
   semilla lo llaman el editor y la puerta; el `--sample` del CLI evalúa

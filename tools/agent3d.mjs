@@ -22,6 +22,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { openAuditCache } from "./auditCache.mjs";
 import { loadModelCached } from "./modelCache.mjs";
 import { deflateSync, inflateSync } from "node:zlib";
 
@@ -35,6 +36,7 @@ import {
   STORY_SCHEMA,
   WARNING_CODE_LIST,
   applyPatch,
+  auditMesh,
   projectFields,
   summarize,
   applyPatchToScene,
@@ -446,8 +448,15 @@ async function reviewModelFile(options, outputPath) {
   }
 
   const select = options.get("select");
+  // La auditoría de topología se cachea por la huella de la malla: `auditMesh`
+  // depende solo de ella, así que un parche que mueve una pieza no obliga a
+  // reauditar las 296. `--no-cache` la apaga igual que apaga la del modelo.
+  const audits = openAuditCache(modelPath, auditMesh, {
+    enabled: options.get("no-cache") !== "true",
+  });
   const { sheet, review } = reviewModel(model, {
     ...commonOptions(options),
+    auditMesh: audits.auditMesh,
     budget: readBudget(options),
     baselineWarnings: previous.warnings,
     select: select ? select.split(",").map((pattern) => pattern.trim()) : [],
@@ -458,6 +467,7 @@ async function reviewModelFile(options, outputPath) {
     baseline,
     frameAabb,
   });
+  audits.flush();
 
   if (sheet) {
     mkdirSync(dirname(outputPath), { recursive: true });

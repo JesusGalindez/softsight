@@ -953,12 +953,28 @@ export interface ModelReviewOptions extends ReviewOptions {
    * paga si se pide alguna de ellas.
    */
   budget?: Budget;
+  /**
+   * Quién audita una malla. Por defecto `auditMesh`, que es la función pura de
+   * siempre; el CLI le pone delante una caché en disco.
+   *
+   * Existe porque el coste de las cláusulas de topología es real —auditar las 296
+   * piezas del dron— y **`auditMesh` depende solo de la malla**, no de la matriz:
+   * la pieza que un parche movió pero no deformó tiene la misma auditoría. Quien
+   * pueda reconocer que la malla es la misma se ahorra el recorrido, y como lo
+   * que devuelve es la misma función sobre la misma entrada, el informe no puede
+   * salir distinto.
+   *
+   * La caché no vive aquí porque esta capa no toca el sistema de ficheros: la
+   * inyecta `tools/agent3d.mjs`, que sí.
+   */
+  auditMesh?: (mesh: Mesh) => MeshAudit;
 }
 
 export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
   sheet: ContactSheet | null;
   review: ModelReview;
 } {
+  const audit = options.auditMesh ?? auditMesh;
   const tileSize = options.tileSize ?? 320;
   const patterns = options.select ?? [];
   // Por nombre y por propiedad se suman: quien pide las dos cosas quiere las dos.
@@ -969,7 +985,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
     const audits = new Map<string, Record<string, number | boolean | null>>();
     if (needsAudit(queries)) {
       for (const part of model.parts) {
-        audits.set(part.name, auditMesh(part.mesh) as unknown as Record<string, number | boolean | null>);
+        audits.set(part.name, audit(part.mesh) as unknown as Record<string, number | boolean | null>);
       }
     }
     byProperty = selectWhere(model, queries, audits);
@@ -1019,7 +1035,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
   const audited = selected.slice(0, auditLimit);
   const audits: ObjectReport[] = audited.map((part) => ({
     name: part.name,
-    ...auditMesh(part.mesh),
+    ...audit(part.mesh),
   }));
 
   const triangles = model.parts.reduce((total, part) => total + part.mesh.indices.length / 3, 0);
@@ -1075,7 +1091,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
       budget.degenerateTriangles !== undefined ||
       budget.symmetryError !== undefined;
     const contractAudits: ObjectReport[] = needsFullAudit
-      ? model.parts.map((part) => ({ name: part.name, ...auditMesh(part.mesh) }))
+      ? model.parts.map((part) => ({ name: part.name, ...audit(part.mesh) }))
       : [];
     warnings.push(
       ...checkBudget(budget, { parts: model.parts.length, triangles }, contractAudits),
