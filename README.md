@@ -214,8 +214,9 @@ dan **cero exacto**. Para que eso valga, con `--baseline` el encuadre y el volum
 sombra quedan fijados a los del modelo *antes* del parche: si no, mover una pieza
 mueve la cámara y el pliego entero se desplaza un píxel.
 
-`stdout` es JSON puro y el código de salida es 1 si hay avisos, así que encadena en CI
-sin interpretar nada.
+`stdout` es JSON puro y el código de salida es 1 si hay un **defecto** —un aviso de
+severidad `certeza`—, así que encadena en CI sin interpretar nada. Un `candidato` sale
+entero en el informe y no rompe la orden: su medida es firme y su conclusión no.
 
 ### Pagar solo lo que se va a leer
 
@@ -376,6 +377,13 @@ si es **certeza** —aritmética que no depende de la intención— o **candidat
 firme y conclusión abierta—. La tabla vive en `src/soft/agent/warningCodes.ts` y es la
 que manda: emitir un código que no esté en ella no compila, y `npm run test:codes`
 comprueba las dos direcciones contra `src/`.
+
+Cada aviso trae su `severity` dentro, puesta desde esa tabla, así que no hay que cruzar
+el informe con el registro para saber si se mira un hecho o una sospecha. Y es lo que
+decide el código de salida: **1 solo si hay una certeza**. Antes lo decidía el número de
+avisos, y con eso el ejemplar limpio del repositorio —`artifacts/agent/pieza-geometria.json`,
+catorce avisos y los catorce candidatos— salía 1, que es la manera más rápida de enseñar
+a ignorar el código de salida.
 
 ### Probar, mirar, deshacer
 

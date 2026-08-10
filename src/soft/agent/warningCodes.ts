@@ -80,7 +80,13 @@ export const WARNING_CODES = {
     cause: "la malla está cerrada y su volumen firmado es negativo: las caras miran hacia dentro",
   },
   PIVOTE_DESCENTRADO: {
-    severity: "certeza",
+    // Candidato y no certeza, y la diferencia importa: la medida —distancia del
+    // centro de la caja al origen— es exacta, pero la conclusión «el pivote
+    // quedará descentrado al rotar» supone que la pieza va a rotar. Una pieza
+    // colocada declara su sitio ahí, así que en un ensamblaje lo dispara casi
+    // todo. Es el mismo caso que SIMETRIA_ROTA: la conclusión depende de la
+    // intención, que es justo lo que separa las dos severidades.
+    severity: "candidato",
     cause: "el centro de la caja está a más de medio radio del origen de la pieza",
     fixOp: "setPivot",
   },
@@ -236,3 +242,26 @@ export const WARNING_CODE_LIST: readonly (WarningCodeEntry & {
   ...WARNING_CODES[code],
   hasFix: "fixOp" in WARNING_CODES[code],
 }));
+
+/**
+ * Le pone a cada aviso la severidad que la tabla ya declara.
+ *
+ * Va aquí y no en cada sitio que emite por lo de siempre: escrita a mano en las
+ * treinta llamadas, la severidad sería una copia que puede contradecir a la
+ * tabla, y el aviso que la contradijera compilaría igual. Así el que emite dice
+ * **qué** midió y la tabla dice **cuánto vale**, que es la única de las dos
+ * cosas que un consumidor no puede recalcular.
+ *
+ * La severidad se coloca justo detrás del código: quien lee el informe la ve
+ * antes que el texto del aviso, que es donde decide si sigue leyendo.
+ */
+export function withSeverity<T extends { code: WarningCode }>(
+  warnings: readonly T[],
+): Array<T & { severity: WarningSeverity }> {
+  return warnings.map(
+    ({ code, ...rest }) =>
+      ({ code, severity: WARNING_CODES[code].severity, ...rest }) as T & {
+        severity: WarningSeverity;
+      },
+  );
+}

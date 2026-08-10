@@ -297,3 +297,50 @@ cambia la ruta.
 
 Qué está bloqueado por mí: nada. De `plan-convergencia.md` no queda nada asignado
 a softsight; lo abierto —E1 por el lado del editor, B3, C1, C2 y D1–D4— vive allí.
+
+
+### 2026-08-10 · Arquitectura — el informe separa defecto de observación
+
+Qué cambié, todo en `softsight`: cada aviso publica ahora su `severity`, y el
+código de salida del CLI cuenta **certezas** en vez de avisos. Detalle en
+[`plan-geometria.md`](plan-geometria.md) §9; aquí va lo que cruza al otro árbol,
+que es todo, porque el editor consume el informe y el código de salida.
+
+Lo que lo forzó fue una medida sobre el ejemplar del repositorio,
+`artifacts/agent/pieza-geometria.json`: **14 avisos, los 14 candidatos, cero
+defectos, y salía 1**. La pieza que un agente copia lo primero fallaba la orden,
+que es la manera más rápida de enseñar a ignorar el código de salida.
+
+**Dos cambios que hay que mirar desde allí:**
+
+1. **`severity` dentro de cada aviso**, `certeza` o `candidato`, la misma que
+   publica `--schema codes`. Es **aditivo**: quien no lo lea sigue igual. La pone
+   `withSeverity` leyendo la tabla en el sitio donde se emite, así que un aviso no
+   puede contradecir al registro. También lo llevan los avisos de guion
+   (`StoryWarning`) y los de puesta en escena (`StagingWarning`).
+2. **El código 1 pasa a significar «hay un defecto»**, no «hay algo que mirar».
+   Los `candidato` salen enteros en el informe y no rompen la orden. Si allí hay
+   algo que trate el 1 del CLI o el `exitCode` del puente como «hubo avisos»,
+   **eso cambia de sentido**: ahora hay informes con avisos y salida 0. Lo que sí
+   sigue saliendo 1 es todo el presupuesto —`PRESUPUESTO_*` es `certeza`—, el
+   contrato `watertight`, `ROL_AUSENTE`, `ESCENA_VACIA`, `CAJA_FUERA_DE_CUADRO` y
+   `CONTRASTE_INSUFICIENTE`.
+
+   Un caso concreto, por si algo de allí lo mira: el muñeco de
+   `artifacts/agent/muneco.json` traía dos `INTERPENETRACION` y salía 1; ahora
+   sale 0 con los dos avisos dentro.
+
+**Una reclasificación**, la única: `PIVOTE_DESCENTRADO` pasa de `certeza` a
+`candidato`. La medida —distancia del centro de la caja al origen— es exacta, pero
+la conclusión «el pivote quedará descentrado al rotar» supone que la pieza va a
+rotar, y una pieza colocada declara su sitio ahí. Es el mismo caso que
+`SIMETRIA_ROTA`. Si allí hay un pin de la tabla de códigos, esto lo mueve.
+
+**`contractVersion` sigue en 3 y `bridgeContractVersion` en 1.** Ningún hash se
+movió —el pliego del dron sigue en `46228b7c`— porque no se ha tocado una sola
+línea de aritmética. `npm run verify` en verde: 21 puertas, 103 comprobaciones.
+
+Qué necesito de Convergencia: nada nuevo. Sigue abierto lo de la entrada del
+2026-08-10 —fijar `artifacts/agent/encuadre-control.json`—.
+
+Qué está bloqueado por mí: nada.

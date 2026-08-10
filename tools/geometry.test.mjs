@@ -36,6 +36,7 @@ import {
   evaluateVariation,
   modelFromScene,
   resolveScene,
+  reviewScene,
   sweepStations,
 } from "../dist-node/agent3d.mjs";
 
@@ -1495,13 +1496,15 @@ const PALA = { primitive: "box", parameters: [0.1, 0.4, 1.2] };
 //     primero que copia un agente que llega nuevo, y con defectos enseñaría justo
 //     lo que la puerta rechaza.
 //
-//     Lo que se afirma aquí es **la topología, la geometría declarada y el
-//     ensamblaje**. `SIMETRIA_ROTA` y `PIVOTE_DESCENTRADO` del informe completo no
-//     entran, y no por comodidad: saltan sobre cualquier pieza legítimamente
-//     asimétrica —un ala, una pata, una pala— o cuya geometría no esté centrada en
-//     su propio origen, que es como se declara una pieza colocada. Son
-//     observaciones, no defectos, y exigirlas cero obligaría a torcer la pieza
-//     hasta que dejara de enseñar nada.
+//     Lo que se afirma aquí es **la topología, la geometría declarada, el
+//     ensamblaje y el informe entero**: ni un aviso de severidad `certeza`, que es
+//     lo que separa un defecto de una observación. `SIMETRIA_ROTA` y
+//     `PIVOTE_DESCENTRADO` sí salen, y por eso el ejemplar no exige cero avisos:
+//     saltan sobre cualquier pieza legítimamente asimétrica —un ala, una pata, una
+//     pala— o cuya geometría no esté centrada en su propio origen, que es como se
+//     declara una pieza colocada. Los dos son `candidato`, así que se dicen sin
+//     tumbar la orden, y exigirlos cero obligaría a torcer la pieza hasta que
+//     dejara de enseñar nada.
 {
   const ejemplar = JSON.parse(
     readFileSync(resolve(here, "..", "artifacts/agent/pieza-geometria.json"), "utf8"),
@@ -1539,6 +1542,18 @@ const PALA = { primitive: "box", parameters: [0.1, 0.4, 1.2] };
   }
 
   assert.deepEqual(auditGeometry(ejemplar), [], "la geometría declarada tiene que estar limpia");
+
+  // El informe entero, no solo la geometría declarada: un defecto es un aviso de
+  // severidad `certeza`, y el ejemplar no puede traer ninguno. Los candidatos que
+  // sí trae se cuentan aparte para que el número quede en la salida de la puerta y
+  // un cambio de clasificación se vea aquí antes que en el editor.
+  const { warnings } = reviewScene(ejemplar, { inspectOnly: true }).review;
+  const defectos = warnings.filter((aviso) => aviso.severity === "certeza");
+  assert.deepEqual(
+    defectos,
+    [],
+    `el ejemplar trae defectos: ${defectos.map((aviso) => `${aviso.code} en ${aviso.part}`).join(", ")}`,
+  );
 
   // El ensamblaje: sin booleanas, con sólidos cerrados que **se tocan sin
   // morderse**. Es la respuesta medida a la pregunta abierta en §6.2 del plan.
@@ -1579,7 +1594,8 @@ const PALA = { primitive: "box", parameters: [0.1, 0.4, 1.2] };
 
   console.log(
     `geometria: ok (ejemplar: ${piezas.length} piezas, ${triangulos} triángulos, ` +
-      `volumen ${volumen.toFixed(6)}, ${lado.toFixed(3)} de lado mayor; sin solape parcial y sin piezas sueltas)`,
+      `volumen ${volumen.toFixed(6)}, ${lado.toFixed(3)} de lado mayor; sin solape parcial, ` +
+      `sin piezas sueltas y sin un defecto: ${warnings.length} avisos, los ${warnings.length} candidatos)`,
   );
 }
 

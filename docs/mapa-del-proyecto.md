@@ -68,7 +68,8 @@ un cambio rompa lo que no tocaba. Ordenadas de dentro hacia fuera:
    auditoría, parches, pliego de contactos, evaluador de animación, muestreo de
    superficie. Es la biblioteca que produce el JSON.
 3. **CLI** — `tools/agent3d.mjs` sobre `dist-node/agent3d.mjs`. La cara del banco
-   para procesos: JSON limpio a stdout, progreso a stderr, salida 1 si hay avisos.
+   para procesos: JSON limpio a stdout, progreso a stderr, salida 1 si hay un
+   defecto —un aviso de severidad `certeza`—.
 4. **Demo de navegador** — `soft.html` + `src/soft/softMain.ts`. Prueba que el
    mismo código corre sin Node. **No es el producto**; es la demostración de que
    el núcleo es portable.
@@ -285,9 +286,22 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     mismo que el toro, y la torsión conserva el volumen firmado. Plan cerrado en
     [`plan-geometria.md`](plan-geometria.md), puerta `test:geometry` con 43
     comprobaciones, ejemplar en `artifacts/agent/pieza-geometria.json`.
-15. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
+15. **El informe separa defecto de observación** (hecho el 2026-08-10). Cada aviso
+    publica su `severity` —tomada de `warningCodes.ts` en el sitio donde se emite,
+    no escrita a mano— y el código de salida cuenta **certezas**, no avisos. Lo que
+    lo forzó fue una medida: el ejemplar `artifacts/agent/pieza-geometria.json`
+    daba 14 avisos, los 14 de `SIMETRIA_ROTA` y `PIVOTE_DESCENTRADO`, cero
+    defectos, y **salía 1**; la pieza que un agente copia lo primero fallaba la
+    orden. `PIVOTE_DESCENTRADO` pasa a `candidato` porque la medida es exacta pero
+    la conclusión supone que la pieza va a rotar, que es intención. Ningún aviso
+    desaparece —los 14 siguen en el informe y el ejemplar sale 0— y ningún hash se
+    movió: el pliego del dron sigue en `46228b7c` y `contractVersion` en 3. La
+    puerta `test:geometry` deja de excusar dos códigos y exige cero avisos de
+    `certeza` sobre el ejemplar. Queda anotado en
+    [`plan-geometria.md`](plan-geometria.md) §9.
+16. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
-16. **Plan Ω — el coste por turno del agente** (hecho, salvo Ω6.4, que vive en el
+17. **Plan Ω — el coste por turno del agente** (hecho, salvo Ω6.4, que vive en el
     editor). Ver [`plan-omega.md`](plan-omega.md), que lleva la tabla de antes y
     ahora. No añadió funcionalidad: atacaba lo que hacía caro operar el banco
     —16,5 KB por turno, 10.000 tokens de descubrimiento, 0,10 s de arranque por

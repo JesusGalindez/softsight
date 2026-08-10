@@ -262,14 +262,18 @@ try {
     "--inspect-only",
     "--audit-frames",
     "6",
-  ]).catch((error) => {
-    // El fixture trae dos avisos estáticos, así que el CLI sale con 1. Es
-    // éxito con informe, no un fallo.
-    if (error.code !== 1) throw error;
-    return { stdout: error.stdout };
-  });
+  ]);
+  // El fixture trae dos avisos estáticos —las dos interpenetraciones que el muñeco
+  // ya tiene en reposo—, y los dos son `candidato`, así que el CLI sale con 0: el
+  // código 1 dice «hay un defecto», no «hay algo que mirar». Los avisos siguen en
+  // el informe.
 
   const report = JSON.parse(stdout);
+  assert.deepEqual(
+    report.warnings.map((aviso) => aviso.severity),
+    ["candidato", "candidato"],
+    "los dos avisos estáticos del muñeco son candidatos, no defectos",
+  );
   assert.equal(report.rig.joints, 7);
   assert.equal(report.rig.mode, "rigid");
   assert.equal(report.rig.clips[0].name, "saludo");
@@ -285,7 +289,7 @@ try {
     options: { inspectOnly: true, auditFrames: 6 },
   });
   assert.equal(bridged.command, "scene");
-  assert.equal(bridged.exitCode, 1, "el puente debe devolver el mismo código que el CLI");
+  assert.equal(bridged.exitCode, 0, "el puente debe devolver el mismo código que el CLI");
   assert.deepEqual(bridged.report.rig, report.rig);
   assert.deepEqual(bridged.report.animationAudit, report.animationAudit);
   assert.equal(bridged.artifacts.length, 1);

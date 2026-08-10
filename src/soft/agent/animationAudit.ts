@@ -32,7 +32,7 @@ import type { ParsedGlb } from "./animation";
 import type { Model } from "./model";
 import type { ClipSpec } from "./rigSpec";
 // Solo el tipo: se borra al compilar, así que no hay ciclo en ejecución.
-import type { Warning } from "./index";
+import type { Finding } from "./index";
 import { auditSpatial } from "./spatialAudit";
 import type { PlacedPart } from "./spatialAudit";
 import { computeSceneAabb, DEFAULT_VIEWS, frameCameraFromAabb } from "./contactSheet";
@@ -324,8 +324,8 @@ export function auditAnimation(
  *
  * Es certeza, no candidato: sale de restar dos números declarados.
  */
-export function auditClips(clips: readonly ClipSpec[] = []): Warning[] {
-  const warnings: Warning[] = [];
+export function auditClips(clips: readonly ClipSpec[] = []): Finding[] {
+  const warnings: Finding[] = [];
   for (const [clipIndex, clip] of clips.entries()) {
     const name = clip.name ?? `clip${clipIndex}`;
     for (const track of clip.tracks ?? []) {

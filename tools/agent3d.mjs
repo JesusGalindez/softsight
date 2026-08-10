@@ -12,8 +12,10 @@
  * codificación y descodificación PNG, y escritura. Todo lo que decide algo está
  * en `src/soft/agent/`, tipado y comprobado por el compilador.
  *
- * El código de salida es 1 si el informe trae avisos, para poder usarlo como
- * verificación automática sin interpretar el JSON. Un error de datos —fichero
+ * El código de salida es 1 si el informe trae algún aviso de severidad
+ * `certeza` —un defecto—, para poder usarlo como verificación automática sin
+ * interpretar el JSON. Los `candidato` salen enteros en el informe y no rompen la
+ * orden: su medida es firme y su conclusión no. Un error de datos —fichero
  * ilegible, patrón sin coincidencias— sale con 2.
  */
 
@@ -35,6 +37,7 @@ import {
   STAGING_SCHEMA,
   STORY_SCHEMA,
   WARNING_CODE_LIST,
+  withSeverity,
   applyPatch,
   auditMesh,
   compareWarnings,
@@ -835,6 +838,7 @@ const SCHEMA_PARTS = {
     notes: [
       "warningCodes es el registro completo de avisos: cargándolo una vez se interpreta cualquier informe futuro sin provocar cada caso.",
       "severity 'certeza' sale de aritmética y no depende de la intención; 'candidato' tiene la medida firme y la conclusión no.",
+      "Cada aviso del informe trae su severity dentro: el código de salida es 1 solo si hay alguna certeza.",
     ],
   }),
 };
@@ -1041,6 +1045,19 @@ function emitReport(report, options) {
 }
 
 /**
+ * Si hay algún defecto entre los avisos, que es lo que decide el código 1.
+ *
+ * Cuenta **solo los de severidad `certeza`**, y la diferencia no es de matiz: un
+ * `candidato` tiene la medida firme y la conclusión abierta —una pieza asimétrica
+ * solo está mal si tenía que ser simétrica—, así que romper la orden con él
+ * obliga a quien la ejecuta a ignorar el código de salida, y entonces deja de
+ * avisar también de lo que sí es un hecho. Medido sobre el ejemplar del
+ * repositorio, `artifacts/agent/pieza-geometria.json`: 14 avisos, los 14
+ * candidatos, y salía 1. Los candidatos siguen enteros en el informe.
+ */
+const hasDefect = (warnings) => warnings.some((warning) => warning.severity === "certeza");
+
+/**
  * Ejecuta una orden y **devuelve** su código de salida en vez de escribirlo en
  * `process.exitCode`: en modo residente hay muchas órdenes por proceso y el
  * código es de cada una, no del proceso.
@@ -1063,14 +1080,14 @@ async function main(argv) {
   if (options.has("story")) {
     const report = auditStoryFile(options);
     emitReport(report, options);
-    return report.warnings.length > 0 ? 1 : 0;
+    return hasDefect(report.warnings) ? 1 : 0;
   }
   // La puesta en escena tampoco trae geometría: son las medidas que hizo el
   // editor sobre un frame ya montado.
   if (options.has("staging")) {
     const report = auditStagingFile(options);
     emitReport(report, options);
-    return report.warnings.length > 0 ? 1 : 0;
+    return hasDefect(report.warnings) ? 1 : 0;
   }
   // El BVH va antes que todo lo demás porque no es un modelo: no tiene malla, así
   // que no hay nada que encuadrar, rasterizar ni auditar. Es una conversión, y
@@ -1087,7 +1104,7 @@ async function main(argv) {
     const report = await reviewModelFile(options, outputPath);
     emitReport(report, options);
     const failedEdits = (report.edits ?? []).filter((edit) => edit.error);
-    return report.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;
+    return hasDefect(report.warnings) || failedEdits.length > 0 ? 1 : 0;
   }
 
   const scenePath = options.get("scene");
@@ -1165,7 +1182,7 @@ async function main(argv) {
       // con ellos dentro, porque un `warningsDelta` que no los cuenta diría que
       // no hay nada nuevo justo cuando lo hay.
       if (animationAudit.screen) {
-        review.warnings.push(...screenWarnings(animationAudit.screen));
+        review.warnings.push(...withSeverity(screenWarnings(animationAudit.screen)));
         if (previous.warnings) {
           review.warningsDelta = compareWarnings(review.warnings, previous.warnings);
         }
@@ -1214,7 +1231,7 @@ async function main(argv) {
     options,
   );
   const failedEdits = (edits ?? []).filter((edit) => edit.error);
-  return review.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;
+  return hasDefect(review.warnings) || failedEdits.length > 0 ? 1 : 0;
 }
 
 /**

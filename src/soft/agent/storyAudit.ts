@@ -22,7 +22,8 @@
 
 import { resolveStory, type StorySpec } from "./storySpec";
 import { SCENE_ROLES, type SceneRole } from "./schema";
-import type { WarningCode } from "./warningCodes";
+import { withSeverity } from "./warningCodes";
+import type { WarningCode, WarningSeverity } from "./warningCodes";
 
 /**
  * Caracteres por segundo que se suponen legibles en pantalla.
@@ -49,6 +50,8 @@ export const STORY_AUDIT_CONTRACT_VERSION = 1;
 export interface StoryWarning {
   /** Del registro de `warningCodes.ts`, igual que los avisos de topología. */
   code: WarningCode;
+  /** La que declara la tabla, puesta por `withSeverity`, igual que en `Warning`. */
+  severity: WarningSeverity;
   /** Escena a la que se refiere, o `null` si el aviso es de la pieza entera. */
   scene: string | null;
   message: string;
@@ -102,7 +105,7 @@ export function auditStory(story: StorySpec, options: StoryAuditOptions = {}): S
     throw new Error("readingRate debe ser un número positivo de caracteres por segundo");
   }
 
-  const warnings: StoryWarning[] = [];
+  const warnings: Omit<StoryWarning, "severity">[] = [];
   const roles = resolved.scenes.map((scene) => scene.role);
 
   for (const role of REQUIRED_ROLES) {
@@ -166,6 +169,6 @@ export function auditStory(story: StorySpec, options: StoryAuditOptions = {}): S
     durationFrames: resolved.durationFrames,
     readingRate,
     scenes,
-    warnings,
+    warnings: withSeverity(warnings),
   };
 }

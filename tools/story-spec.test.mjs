@@ -288,20 +288,45 @@ try {
   const guionPath = join(trabajo, "guion.json");
   writeFileSync(guionPath, `${JSON.stringify(guionApretado, null, 2)}\n`);
 
-  // El CLI sale 1 cuando hay avisos, como con la geometría: execFile rechaza y
-  // el informe viene igualmente en stdout.
+  // Este guion solo trae TEXTO_ILEGIBLE, que es `candidato`: el aviso sale entero
+  // en el informe y el CLI sale 0, porque el código 1 dice «hay un defecto» y no
+  // «hay algo que mirar». Con un defecto sí sale 1, y se comprueba más abajo.
   const porCli = await execFileAsync("node", ["tools/agent3d.mjs", "--story", guionPath], {
     cwd: projectRoot,
     maxBuffer: 32 * 1024 * 1024,
-  }).catch((error) => {
-    assert.equal(error.code, 1, "el CLI debería salir 1 cuando el guion tiene avisos");
-    return { stdout: error.stdout };
   });
   const informeCli = JSON.parse(porCli.stdout);
+  assert.deepEqual(
+    informeCli.warnings.map((aviso) => aviso.severity),
+    ["candidato"],
+    "el guion apretado debería traer un solo aviso, y candidato",
+  );
 
   const respuesta = await runBridge({ bridgeContractVersion: 1, command: "story", files: { story: { name: "guion.json", data: readFileSync(guionPath).toString("base64") } } });
-  assert.equal(respuesta.exitCode, 1, "el puente debe devolver el mismo código que el CLI");
+  assert.equal(respuesta.exitCode, 0, "el puente debe devolver el mismo código que el CLI");
   assert.deepEqual(respuesta.artifacts, [], "un guion no produce artefactos");
+
+  // Y el otro lado del código de salida: un guion sin el rol que la pieza exige
+  // trae ROL_AUSENTE, que es `certeza`, y entonces los dos caminos salen 1.
+  const guionSinCierre = join(trabajo, "sin-cierre.json");
+  writeFileSync(guionSinCierre, `${JSON.stringify(conEscenas(guion.scenes.slice(0, 3)), null, 2)}\n`);
+  const conDefecto = await execFileAsync("node", ["tools/agent3d.mjs", "--story", guionSinCierre], {
+    cwd: projectRoot,
+    maxBuffer: 32 * 1024 * 1024,
+  }).catch((error) => {
+    assert.equal(error.code, 1, "el CLI debería salir 1 cuando el guion tiene un defecto");
+    return { stdout: error.stdout };
+  });
+  assert.ok(
+    JSON.parse(conDefecto.stdout).warnings.some((aviso) => aviso.code === "ROL_AUSENTE"),
+    "el guion sin cierre debería traer ROL_AUSENTE",
+  );
+  const puenteConDefecto = await runBridge({
+    bridgeContractVersion: 1,
+    command: "story",
+    files: { story: { name: "sin-cierre.json", data: readFileSync(guionSinCierre).toString("base64") } },
+  });
+  assert.equal(puenteConDefecto.exitCode, 1, "el puente debe devolver el mismo código que el CLI");
 
   // El `source` es la única diferencia legítima: cada vía lee el fichero de un
   // sitio. Todo lo demás tiene que coincidir byte a byte.

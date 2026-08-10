@@ -50,7 +50,7 @@ import type { Camera } from "../renderer";
 import type { PlacedPart } from "./spatialAudit";
 // Solo el tipo: se borra al compilar, así que no hay ciclo en ejecución. Es el
 // mismo apaño que usa `animationAudit.ts` por el mismo motivo.
-import type { Warning } from "./index";
+import type { Finding } from "./index";
 
 export interface ScreenAuditOptions {
   /** Lado del tile en píxeles con el que se mide. El del pliego por defecto. */
@@ -391,8 +391,8 @@ export function createScreenAudit(
 }
 
 /** Los avisos que salen de la auditoría 2D, con su cifra dentro. */
-export function screenWarnings(audit: ScreenAudit): Warning[] {
-  const warnings: Warning[] = [];
+export function screenWarnings(audit: ScreenAudit): Finding[] {
+  const warnings: Finding[] = [];
 
   for (const event of audit.offFrame) {
     warnings.push({

@@ -685,14 +685,21 @@ recordarán:
   traslación —`T(a)·t·T(−a)`—, la misma idea que ya usaba el espejo con la
   reflexión. Con el punto en el origen devuelve la transformación intacta, así que
   lo escrito antes no se mueve un bit, y eso se comprueba.
-- **`SIMETRIA_ROTA` y `PIVOTE_DESCENTRADO` saltan sobre piezas legítimas.** El
-  ejemplar los dispara en todas sus piezas asimétricas —alas, patas, palas— y en
-  las que no están centradas en su propio origen, que es como se declara una pieza
-  colocada. No son defectos, y por eso la puerta no los exige a cero: hacerlo
-  obligaría a torcer la pieza hasta que dejara de enseñar nada. Pero con un
-  ensamblaje de decenas de piezas ese ruido tapa los avisos que sí importan, y eso
-  sí merece una medida antes de decidir qué hacer —acotarlos por pieza, o que el
-  informe separe observaciones de defectos—.
+- ~~**`SIMETRIA_ROTA` y `PIVOTE_DESCENTRADO` saltan sobre piezas legítimas**~~ —
+  **hecho** el 2026-08-10, y la medida que faltaba resultó ser peor de lo que decía
+  esta nota: sobre el ejemplar salían **14 avisos y los 14 eran estos dos códigos**,
+  cero defectos, y aun así el CLI **salía 1**. La pieza que un agente copia lo
+  primero fallaba la orden, que es la manera más rápida de enseñar a ignorar el
+  código de salida.
+
+  No se arregló subiendo umbrales —eso pierde los casos verdaderos—, sino separando
+  observación de defecto donde ya estaba escrita la distinción: `PIVOTE_DESCENTRADO`
+  pasa a `candidato`, porque la medida es exacta pero la conclusión «quedará
+  descentrado al rotar» supone que la pieza va a rotar, y eso es intención; cada
+  aviso publica su `severity`, tomada de la tabla en el sitio donde se emite; y el
+  código de salida cuenta certezas, no avisos. Los 14 siguen enteros en el informe y
+  el ejemplar sale 0. La puerta ya no tiene que excusarse: exige **cero avisos de
+  `certeza`**, que es más fuerte que excluir dos códigos a mano.
 - **Reparametrizar el `sweep` por longitud de arco.** Hoy las estaciones se
   reparten uniformemente en el parámetro de la curva y `u` solo las *etiqueta* con
   la fracción de longitud recorrida. Hacerlo de verdad exigiría invertir la tabla

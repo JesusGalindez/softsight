@@ -17,7 +17,8 @@
  * discutible enseña a discutir la puerta.
  */
 
-import type { WarningCode } from "./warningCodes";
+import { withSeverity } from "./warningCodes";
+import type { WarningCode, WarningSeverity } from "./warningCodes";
 
 export const STAGING_VERSION = 1;
 export const STAGING_AUDIT_CONTRACT_VERSION = 1;
@@ -77,6 +78,8 @@ export interface StagingSpec {
 export interface StagingWarning {
   /** Del registro de `warningCodes.ts`, igual que los avisos de topología. */
   code: WarningCode;
+  /** La que declara la tabla, puesta por `withSeverity`, igual que en `Warning`. */
+  severity: WarningSeverity;
   /** Escena a la que se refiere. */
   scene: string;
   /** Capa concreta, o `null` si el aviso es de la escena entera. */
@@ -282,7 +285,7 @@ export function auditStaging(spec: unknown, options: StagingAuditOptions = {}): 
     throw new Error("contrastRatio debe ser un número mayor o igual que 1");
   }
 
-  const warnings: StagingWarning[] = [];
+  const warnings: Omit<StagingWarning, "severity">[] = [];
   const scenes: StagingSceneReading[] = [];
 
   for (const scene of staging.scenes) {
@@ -355,6 +358,6 @@ export function auditStaging(spec: unknown, options: StagingAuditOptions = {}): 
     frame: staging.frame,
     contrastRatio: threshold,
     scenes,
-    warnings,
+    warnings: withSeverity(warnings),
   };
 }

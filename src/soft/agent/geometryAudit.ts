@@ -23,7 +23,7 @@ import {
 // Solo el tipo, así que el `import` se borra al compilar y no hay ciclo en
 // ejecución. Declarar aquí un `Warning` propio sería un segundo original del
 // mismo dato, y acabarían divergiendo.
-import type { Warning } from "./index";
+import type { Finding } from "./index";
 
 function isSweep(geometry: unknown): geometry is SweepSpec {
   return typeof geometry === "object" && geometry !== null && "sweep" in geometry;
@@ -127,7 +127,7 @@ function loftWarnings(
   name: string,
   spec: LoftSpec,
   profiles: ReadonlyMap<string, number[]>,
-): Warning[] {
+): Finding[] {
   const sections = spec.loft ?? [];
   for (let index = 1; index < sections.length; index += 1) {
     const before = startAngle(polygonOf(sections[index - 1].profile, profiles));
@@ -181,7 +181,7 @@ function polygonsOf(
  * perfil de radio `r ≥ 1/k` lo rebasa, así que la superficie del lado interior se
  * pliega sobre sí misma.
  */
-function sweepWarnings(name: string, spec: SweepSpec): Warning[] {
+function sweepWarnings(name: string, spec: SweepSpec): Finding[] {
   const path = resolveSweepPath(spec);
   for (const [index, station] of path.stations.entries()) {
     const curvature = path.curvature[index];
@@ -210,8 +210,8 @@ function sweepWarnings(name: string, spec: SweepSpec): Warning[] {
  * Uno por pieza como mucho: repetir el mismo aviso en veinte estaciones seguidas
  * de la misma curva no le dice al agente nada que no supiera con la primera.
  */
-export function auditGeometry(spec: SceneSpec): Warning[] {
-  const warnings: Warning[] = [];
+export function auditGeometry(spec: SceneSpec): Finding[] {
+  const warnings: Finding[] = [];
   const profiles = resolveProfiles(spec.profiles);
   for (const [index, object] of spec.objects.entries()) {
     const name = object.name ?? `objeto${index}`;

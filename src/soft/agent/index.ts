@@ -45,7 +45,8 @@ import { createGroundPlane, resolveScene, type SceneSpec } from "./sceneSpec";
 import { auditSpatial, type SpatialAudit } from "./spatialAudit";
 import { auditGeometry } from "./geometryAudit";
 import { auditClips } from "./animationAudit";
-import type { WarningCode } from "./warningCodes";
+import { withSeverity } from "./warningCodes";
+import type { WarningCode, WarningSeverity } from "./warningCodes";
 import type { Camera, SceneNode } from "../renderer";
 import { SoftwareRenderer } from "../renderer";
 
@@ -224,7 +225,7 @@ export {
 } from "./storyAudit";
 export type { SceneReading, StoryAudit, StoryAuditOptions, StoryWarning } from "./storyAudit";
 export { SUMMARY_KEYS, projectFields, summarize } from "./reportView";
-export { WARNING_CODES, WARNING_CODE_LIST } from "./warningCodes";
+export { WARNING_CODES, WARNING_CODE_LIST, withSeverity } from "./warningCodes";
 export type { WarningCode, WarningCodeEntry, WarningSeverity } from "./warningCodes";
 export {
   SCENE_SCHEMA,
@@ -269,6 +270,13 @@ export interface Warning {
    * código que no esté en la tabla no compila.
    */
   code: WarningCode;
+  /**
+   * La que declara la tabla para ese código, puesta por `withSeverity`. Viaja
+   * dentro del aviso porque es lo que decide qué hacer con él —y el código de
+   * salida del CLI—, y cruzarlo a mano contra `--schema codes` para averiguarlo
+   * era trabajo que el informe puede ahorrar.
+   */
+  severity: WarningSeverity;
   /** Pieza a la que se refiere, o `null` si el aviso es del conjunto. */
   part: string | null;
   message: string;
@@ -282,6 +290,13 @@ export interface Warning {
    */
   fix?: Edit;
 }
+
+/**
+ * Un aviso recién medido, antes de que la tabla le ponga la severidad. Es lo que
+ * construye cada auditoría, y `withSeverity` lo convierte en `Warning` al
+ * devolverlo: así ningún sitio de emisión escribe una severidad a mano.
+ */
+export type Finding = Omit<Warning, "severity">;
 
 /**
  * Presupuesto como contrato: mientras solo hubo `budget.triangles`, el código de
@@ -355,7 +370,7 @@ function guessUnit(factor: number): string | null {
  * casos el aviso **dice la suposición**, porque la suposición es justo lo que puede
  * estar mal.
  */
-function checkScale(size: readonly [number, number, number], expectSize?: number): Warning[] {
+function checkScale(size: readonly [number, number, number], expectSize?: number): Finding[] {
   const largest = longestSide(size);
   if (largest <= 0) return [];
 
@@ -402,8 +417,8 @@ function checkScale(size: readonly [number, number, number], expectSize?: number
  * mallas se corten de verdad, y callarlo convertiría un candidato en una certeza que
  * el agente no puede comprobar.
  */
-function spatialWarnings(audit: SpatialAudit): Warning[] {
-  const warnings: Warning[] = [];
+function spatialWarnings(audit: SpatialAudit): Finding[] {
+  const warnings: Finding[] = [];
   for (const pair of audit.interpenetration) {
     // Una caja entera dentro de otra es un alojamiento —un motor dentro de su
     // carcasa, una tira sobre una cubierta— y en un ensamblaje real es la mayoría
@@ -472,8 +487,8 @@ function checkBudget(
   budget: Budget,
   totals: { parts: number; triangles: number },
   audits: readonly ObjectReport[],
-): Warning[] {
-  const warnings: Warning[] = [];
+): Finding[] {
+  const warnings: Finding[] = [];
 
   if (budget.triangles !== undefined && totals.triangles > budget.triangles) {
     warnings.push({
@@ -688,8 +703,8 @@ function buildWarnings(
   objects: readonly ObjectReport[],
   /** `null` cuando no se ha renderizado: sin imagen no hay encuadre que juzgar. */
   objectCoverage: number | null,
-): Warning[] {
-  const warnings: Warning[] = [];
+): Finding[] {
+  const warnings: Finding[] = [];
   const add = (code: WarningCode, part: string | null, message: string, fix?: Edit): void => {
     warnings.push(fix !== undefined ? { code, part, message, fix } : { code, part, message });
   };
@@ -854,7 +869,7 @@ export function reviewScene(
       model: entry.node.model,
     })),
   );
-  const warnings = [
+  const warnings = withSeverity([
     ...buildWarnings(objects, objectCoverage),
     ...budgetWarnings,
     ...checkScale(size, options.expectSize),
@@ -865,7 +880,7 @@ export function reviewScene(
     // fichero sale igual de válido.
     ...auditGeometry(spec),
     ...auditClips(spec.clips),
-  ];
+  ]);
 
   const review: SceneReview = {
     objects,
@@ -1058,31 +1073,31 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
   const triangles = model.parts.reduce((total, part) => total + part.mesh.indices.length / 3, 0);
   const vertices = model.parts.reduce((total, part) => total + part.mesh.positions.length / 3, 0);
 
-  const warnings: Warning[] = [];
+  const findings: Finding[] = [];
   for (const audit of audits) {
     if (audit.boundaryEdges > 0) {
-      warnings.push({
+      findings.push({
         code: "BORDE_ABIERTO",
         part: audit.name,
         message: `${audit.name}: ${audit.boundaryEdges} aristas de borde, la malla no está cerrada.`,
       });
     }
     if (audit.flippedNormalRatio > 0.02) {
-      warnings.push({
+      findings.push({
         code: "NORMAL_INVERTIDA",
         part: audit.name,
         message: `${audit.name}: ${(audit.flippedNormalRatio * 100).toFixed(0)} % de caras con normal contraria a sus vértices; bobinado invertido.`,
       });
     }
     if (audit.inverted) {
-      warnings.push({
+      findings.push({
         code: "MALLA_INVERTIDA",
         part: audit.name,
         message: `${audit.name}: malla cerrada con volumen firmado negativo (${audit.signedVolume}); las caras miran hacia dentro.`,
       });
     }
     if (audit.degenerateTriangles > 0) {
-      warnings.push({
+      findings.push({
         code: "TRIANGULOS_DEGENERADOS",
         part: audit.name,
         message: `${audit.name}: ${audit.degenerateTriangles} triángulos de área nula.`,
@@ -1090,7 +1105,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
     }
   }
   if (patterns.length > 0 && selected.length === 0) {
-    warnings.push({
+    findings.push({
       code: "SELECCION_VACIA",
       part: null,
       message: `la selección (${patterns.join(", ")}) no coincide con ninguna pieza.`,
@@ -1110,7 +1125,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
     const contractAudits: ObjectReport[] = needsFullAudit
       ? model.parts.map((part) => ({ name: part.name, ...audit(part.mesh) }))
       : [];
-    warnings.push(
+    findings.push(
       ...checkBudget(budget, { parts: model.parts.length, triangles }, contractAudits),
     );
   }
@@ -1125,7 +1140,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
       model: part.matrix,
     })),
   );
-  warnings.push(...spatialWarnings(spatial));
+  findings.push(...spatialWarnings(spatial));
 
   // Extensión real de la caja, no el diámetro de la esfera envolvente repetido tres
   // veces, que es lo que decía antes: un dron de 1,7 m de envergadura y 25 cm de alto
@@ -1136,7 +1151,8 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
     aabb.max[1] - aabb.min[1],
     aabb.max[2] - aabb.min[2],
   ];
-  warnings.push(...checkScale(size, options.expectSize));
+  findings.push(...checkScale(size, options.expectSize));
+  const warnings = withSeverity(findings);
 
   return {
     sheet,

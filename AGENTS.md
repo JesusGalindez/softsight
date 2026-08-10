@@ -23,7 +23,7 @@ cambio rompa lo que no tocaba.
 2. **Banco de agentes** — `src/soft/agent/`. Carga, auditoría, parches, pliego,
    animación. Es la biblioteca que produce el JSON.
 3. **CLI** — `tools/agent3d.mjs`. JSON a stdout, progreso a stderr, salida 1 si hay
-   avisos y 2 si el error es de datos.
+   un defecto —un aviso de severidad `certeza`— y 2 si el error es de datos.
 4. **Demo de navegador** — `soft.html` + `src/soft/softMain.ts`. Prueba que el mismo
    código corre sin Node. **No es el producto.**
 
