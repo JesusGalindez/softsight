@@ -577,6 +577,13 @@ export interface ViewReport {
    * nuestros internos**, y entonces no está comparando dos renders sino dos
    * copias del mismo código. Publicarla es lo que convierte el pliego en algo
    * reproducible desde fuera.
+   *
+   * **Se usa con aspecto 1 sobre un tile cuadrado de `sheet.tileSize`**, y el
+   * pliego entero **no** es cuadrado: son `columns × rows` tiles. Es el único
+   * dato del encuadre que la cámara no lleva dentro, así que va escrito aquí:
+   * tomar el aspecto del pliego en vez del del tile es el error natural, y da
+   * cajas distintas sin que nada falle. `test:framing` lo comprueba
+   * reproduciendo cada caja de `partScreenBoxes` con esta cámara.
    */
   camera: Camera;
 }

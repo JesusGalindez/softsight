@@ -370,9 +370,31 @@ con su medida, y las puertas byte a byte que ya existen dicen si algo cambió.
 
 ### Fase E — Verificación de lo que se ve
 
-**E1. Paridad de encuadre** (los dos). Las cajas de pantalla de softsight contra
-las del editor para la misma cámara. Detecta un FOV o un aspect desalineados en
-un frame en vez de después de novecientos.
+**E1. Paridad de encuadre** (la mitad de softsight, hecha el 2026-08-10; la del
+editor, pendiente). Las cajas de pantalla de softsight contra las del editor para
+la misma cámara. Detecta un FOV o un aspect desalineados en un frame en vez de
+después de novecientos.
+
+La mitad de aquí es la condición sin la cual la otra no significa nada: **el
+informe tiene que bastar**. Si para reproducir una caja hiciera falta un dato que
+solo vive en nuestros internos, el editor no compararía dos encuadres, adivinaría
+el nuestro. `test:framing` lo comprueba reproduciendo **las 84 cajas** de cuatro
+fixtures —las tres escenas de paridad y el dron por `--model`— con la cámara
+publicada en `views[].camera`, y con el informe pasado por JSON de ida y vuelta,
+que es como le llega a un consumidor. Cero diferencias.
+
+Y destapó el dato que un consumidor **no puede adivinar**: la cámara se usa con
+**aspecto 1 sobre un tile cuadrado de `sheet.tileSize`**, mientras que el pliego
+entero no es cuadrado —480×320 con tiles de 160—. Tomar el aspecto del pliego es
+el error natural, da cajas distintas y no falla nada. Ya está escrito en
+`ViewReport.camera`, que es donde lo lee quien lo necesita.
+
+Para el editor queda `artifacts/agent/encuadre-control.json`: las seis cámaras de
+la escena de paridad con sus cajas, congeladas. Es un valor de control con el
+mismo papel que `render-hashes.json` —no una segunda fuente—, y convierte un
+cambio de encuadre nuestro en una puerta roja allí en vez de en una sorpresa. Se
+refija con `node tools/framing.test.mjs --write`, y refijarlo sin avisar al editor
+es exactamente lo que la puerta existe para impedir.
 
 **E2. Auditoría 2D del movimiento** (hecha el 2026-08-10, softsight).
 `screenAudit.ts` da los tres: `SALE_DE_CUADRO`, `ENTRADA_A_CIEGAS` y

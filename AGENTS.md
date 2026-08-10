@@ -80,12 +80,12 @@ dan el mismo número. `npm run test:animation` las corre todas menos `test:deter
 `test:worker` y `test:model-cache`; sueltas sirven para iterar sobre una.
 
 <!-- generado: puertas -->
-`npm run test:agents-md` · `npm run test:bind` · `npm run test:bridge` · `npm run test:bvh` · `npm run test:codes` · `npm run test:determinism` · `npm run test:geometry` · `npm run test:glb-writer` · `npm run test:incremental` · `npm run test:mcp` · `npm run test:model-cache` · `npm run test:rig` · `npm run test:screen` · `npm run test:story` · `npm run test:summary` · `npm run test:text` · `npm run test:text-plan` · `npm run test:worker`
+`npm run test:agents-md` · `npm run test:bind` · `npm run test:bridge` · `npm run test:bvh` · `npm run test:codes` · `npm run test:determinism` · `npm run test:framing` · `npm run test:geometry` · `npm run test:glb-writer` · `npm run test:incremental` · `npm run test:mcp` · `npm run test:model-cache` · `npm run test:rig` · `npm run test:screen` · `npm run test:story` · `npm run test:summary` · `npm run test:text` · `npm run test:text-plan` · `npm run test:worker`
 <!-- /generado: puertas -->
 
 Cinco de ellas leen el fixture certificado del editor, que vive en un repositorio privado.
 Sin él se declaran «no ejecutada» con su motivo y salen 0; `SOFTSIGHT_FIXTURES` cambia la
-ruta. En CI eso significa que el verde cubre tipos, determinismo y 15 de 20 puertas.
+ruta. En CI eso significa que el verde cubre tipos, determinismo y 16 de 21 puertas.
 
 ## Banderas del CLI
 

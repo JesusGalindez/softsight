@@ -93,6 +93,7 @@ La regla es una fuente por dato. Estas son las fuentes:
 | Contrato de integración | `SOFTSIGHT_CONTRACT.md` (editor) | describe la integración; el commit no lo repite |
 | Contrato de animación | `SOFTSIGHT_ANIMATION_CONTRACT.md` (editor) | el README de softsight apunta aquí |
 | Fixtures certificados | `public/fixtures/` (editor) | se regeneran con los scripts `softsight:*` |
+| Encuadre del pliego (cámaras y cajas) | `views[].camera` y `partScreenBoxes` del informe | el editor los consume y fija el control `artifacts/agent/encuadre-control.json`; la cámara se usa con aspecto 1 sobre un tile cuadrado |
 | Estado y orden del trabajo | **este fichero** (§5) y `plan-fases-bcd.md` | ningún otro sitio lleva la cuenta |
 
 Los contratos viven en el editor a propósito: **el consumidor pincha la versión
@@ -123,6 +124,7 @@ hecho por los dos lados, da el mismo hash.
 | `softsight:sample-gate` | Muestras de superficie: posiciones y normales | `npm run softsight:sample-gate` (editor) |
 | `softsight:gates` | Las dos anteriores, en cadena | `npm run softsight:gates` (editor) |
 | `test:agents-md` | El `AGENTS.md` commiteado contra el regenerado de `package.json` y `--help`, y su techo de 120 líneas | `npm run test:agents-md` (softsight), también dentro de `test:animation` |
+| `test:framing` | Que el informe basta para reproducir el encuadre: las 84 cajas de `partScreenBoxes` de cuatro fixtures, recalculadas con la cámara publicada tras pasar el informe por JSON, más el control congelado que fija el editor | `npm run test:framing` (softsight), también dentro de `test:animation` |
 | `test:screen` | La auditoría 2D del movimiento contra fotogramas calculados a mano: fuera de cuadro, entrada a ciegas, oclusión prolongada, el umbral que manda y lo que ya se tapaba en reposo; más el ejemplar animado por el CLI | `npm run test:screen` (softsight), también dentro de `test:animation` |
 | `test:incremental` | El informe con contrato de topología, con la caché de auditoría fría, caliente y sin caché, y tras un parche que cambia la malla | `npm run test:incremental` (softsight), también dentro de `test:animation` |
 | `test:mcp` | Cada una de las siete herramientas MCP contra el CLI directo —informe, pliego y GLB byte a byte—, y que los esquemas de parámetros son la traducción de `SCENE_SCHEMA` y `PATCH_SCHEMA` | `npm run test:mcp` (softsight), también dentro de `test:animation` |
@@ -141,12 +143,12 @@ tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
 alcance: cinco puertas —`animation-contract`, `glb-loader`, `sample-surface`,
 `glb-writer` y `bridge`— leen el fixture certificado del editor, que es un
 repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su
-motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **15 de
-las 20 puertas, con 92 de las 99 comprobaciones**; las cinco restantes solo las
+motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **16 de
+las 21 puertas, con 96 de las 103 comprobaciones**; las cinco restantes solo las
 cierra una ejecución local con los dos repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-10: **ambas puertas en `accepted`; las 99
+Estado hoy, verificado el 2026-08-10: **ambas puertas en `accepted`; las 103
 comprobaciones de softsight en verde**. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
@@ -271,7 +273,10 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     de presupuesto. **E2 hecha el 2026-08-10**: `screenAudit.ts` audita lo que se
     ve —fuera de cuadro, entrada a ciegas, oclusión prolongada— proyectando la
     caja de cada pieza con la cámara del pliego, sin rasterizar; puerta
-    `test:screen`. Queda E1, la paridad de encuadre, que necesita a los dos.
+    `test:screen`. **E1 hecha por la mitad el 2026-08-10**: la de softsight —el
+    informe basta para reproducir el encuadre, 84 cajas con cero diferencias, y
+    el control congelado en `artifacts/agent/encuadre-control.json` que el editor
+    fija—; la del editor, comparar sus cajas contra las nuestras, sigue allí.
 14. **Geometría compleja declarativa** (hecha). El agente ya no está limitado a
     colocar primitivas: perfiles con nombre —círculo, superelipse, Gielis y NACA—,
     `loft` de secciones, `sweep` de un perfil por un recorrido, cuatro
