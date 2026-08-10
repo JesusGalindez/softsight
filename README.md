@@ -267,6 +267,34 @@ salió, `--no-cache` la salta, y el directorio se recorta por mtime con
 `SOFTSIGHT_CACHE_MAX_MB` (256 por defecto), el mismo criterio que usan el puente y el
 worker.
 
+### Por MCP: las banderas dejan de ser prosa y pasan a ser tipos
+
+Un agente que llega a la CLI tiene que leerse 7,4 KB de `--help`, decidir qué banderas
+combina, construir una línea de órdenes y parsear el informe. Ninguno de esos errores lo
+caza el esquema, porque el esquema valida la **entrada**, no la **invocación**.
+
+`tools/mcp-server.mjs` publica siete herramientas tipadas —`softsight_inspect`,
+`_render`, `_patch`, `_scene`, `_story`, `_bvh` y `_schema`— por JSON-RPC sobre stdio, sin
+dependencias. `softsight_inspect` devuelve el resumen por defecto. Para registrarlo en un
+cliente MCP:
+
+```json
+{
+  "mcpServers": {
+    "softsight": {
+      "command": "node",
+      "args": ["/ruta/a/softsight/tools/mcp-server.mjs"]
+    }
+  }
+}
+```
+
+El servidor **no decide nada**: traduce la llamada a una petición del puente y devuelve lo
+que el puente devuelve. Los esquemas de parámetros se generan de `SCENE_SCHEMA`,
+`PATCH_SCHEMA` y `STORY_SCHEMA`, no se escriben a mano, y `npm run test:mcp` compara cada
+herramienta contra el CLI directo. La única traducción que hace es leer del disco los
+ficheros que el puente quiere en base64.
+
 ### El CLI que no se muere
 
 ```bash

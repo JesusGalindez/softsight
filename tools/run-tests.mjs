@@ -48,6 +48,7 @@ const projectRoot = resolve(here, "..");
  */
 const GATES = [
   "sample-surface.test.mjs", // 50,4 s — 26,2 s de CPU, el 62 % de la suite
+  "mcp.test.mjs", // 12,9 s — siete herramientas, cada una contra el CLI directo
   "bridge.test.mjs", // 6,3 s — 9,5 s de CPU, porque lanza el CLI
   "summary.test.mjs", // 5,4 s — renderiza el dron entero para medir el recorte
   "staging-spec.test.mjs", // 1,8 s

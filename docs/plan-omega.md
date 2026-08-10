@@ -321,6 +321,32 @@ de superficie, con clave `(GLB, semilla)`.
 
 ## Fase Ω3 — MCP: la superficie nativa
 
+**Hecha el 2026-08-09.** `tools/mcp-server.mjs`, JSON-RPC 2.0 por stdio y sin dependencias,
+con las siete herramientas sobre el modo residente: llama a `handleRequest` con el ejecutor
+en proceso, así que no lanza un proceso por herramienta.
+
+Las tres reglas se cumplen y se comprueban:
+
+1. El servidor traduce y no decide. `softsight_inspect` trae `summary: true` por defecto
+   —que es una elección de la herramienta, no un cálculo—, y lo demás pasa tal cual.
+2. `toJsonSchema` en `schema.ts` traduce `SCENE_SCHEMA`, `PATCH_SCHEMA` y `STORY_SCHEMA` a
+   JSON Schema. Vive **al lado de `typeMatches`** a propósito: traduce exactamente el
+   vocabulario de `type` que esa función reconoce, y separarlos sería garantizar que se
+   despeguen.
+3. `test:mcp` compara cada herramienta contra el CLI directo —informe, pliego y GLB byte a
+   byte— y comprueba que el esquema publicado es la traducción de `SCENE_SCHEMA`, no una
+   copia.
+
+Dos cosas que la fase necesitaba y no estaban: `summary` y `fields` como opciones del
+puente, y `part` en su comando `schema`. Añadir opciones no rompe a nadie, así que
+`bridgeContractVersion` sigue en 1, igual que cuando entraron los comandos `scene` y
+`story`.
+
+La única traducción que hace el servidor es leer del disco los ficheros que el puente
+quiere en base64: un agente que llama por MCP tiene rutas, y obligarle a codificar 2 MB de
+GLB en el argumento haría la herramienta inutilizable. El sandbox del puente sigue entero
+detrás.
+
 Aquí está el salto de nivel, y conviene decir por qué no es una moda.
 
 Softsight está **diseñado** para agentes —lo dice el README en la primera línea— y se

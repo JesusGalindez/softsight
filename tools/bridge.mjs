@@ -101,7 +101,7 @@ const COMMANDS = new Set(["inspect", "render", "patch", "sample", "scene", "bvh"
 
 // Opciones del CLI que el puente acepta, con su tipo. Todo lo demás se rechaza:
 // el puente no expande variables ni patrones, y solo ejecuta con argumentos fijos.
-const PASSTHROUGH = {
+export const PASSTHROUGH = {
   tile: "number",
   ground: "boolean",
   select: "string",
@@ -125,6 +125,11 @@ const PASSTHROUGH = {
   readingRate: "number",
   contrastRatio: "number",
   parity: "boolean",
+  // Recortes del informe (Ω1.1 y Ω1.2). Añadir una opción no rompe a nadie, así
+  // que `bridgeContractVersion` sigue en 1, igual que cuando entraron `scene` y
+  // `story`.
+  summary: "boolean",
+  fields: "string",
 };
 
 const OPTION_TO_FLAG = {
@@ -151,6 +156,8 @@ const OPTION_TO_FLAG = {
   readingRate: "--reading-rate",
   contrastRatio: "--contrast-ratio",
   parity: "--parity",
+  summary: "--summary",
+  fields: "--fields",
 };
 
 // Ficheros que admite cada comando: los opcionales solo se escriben si vienen.
@@ -470,7 +477,12 @@ export async function handleRequest(request, execute = spawnAgent) {
   }
   if (request.command === "schema") {
     // `schema` no toca ficheros ni sandbox: es leer lo que el propio CLI publica.
-    const { exitCode, stdout, stderr } = await execute(["--schema"]);
+    // `part` recorta el esquema a una de sus siete partes; sin ella, todo.
+    const part = request.options?.part;
+    if (part !== undefined && typeof part !== "string") {
+      throw new BridgeError("invalid-request", "part debe ser una cadena");
+    }
+    const { exitCode, stdout, stderr } = await execute(part === undefined ? ["--schema"] : ["--schema", part]);
     if (exitCode !== 0) throw new BridgeError("data-error", stderr.trim() || "error de datos");
     return {
       bridgeContractVersion: BRIDGE_CONTRACT_VERSION,

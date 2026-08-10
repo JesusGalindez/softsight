@@ -624,6 +624,65 @@ function typeMatches(value: unknown, type: string): boolean {
 }
 
 /**
+ * El mismo esquema, en JSON Schema.
+ *
+ * Existe porque un servidor MCP publica los parámetros de cada herramienta en
+ * JSON Schema y el runtime del cliente los valida **antes** de llamar. Escribir
+ * esas tablas a mano sería un segundo original de la forma de la escena, del
+ * parche y del guion, y divergiría en la primera bandera nueva. Se traduce.
+ *
+ * El vocabulario de `type` que se traduce aquí es exactamente el que reconoce
+ * `typeMatches` —de ahí que las dos funciones estén una al lado de la otra—: si
+ * alguien añade una forma allí y no aquí, el esquema publicado deja de describir
+ * lo que se valida.
+ */
+export function toJsonSchema(schema: ObjectSchema): Record<string, unknown> {
+  const properties: Record<string, unknown> = {};
+  const required: string[] = [];
+  for (const [name, field] of Object.entries(schema)) {
+    properties[name] = fieldToJsonSchema(field);
+    if (field.required === true) required.push(name);
+  }
+  const object: Record<string, unknown> = { type: "object", properties, additionalProperties: false };
+  if (required.length > 0) object.required = required;
+  return object;
+}
+
+function fieldToJsonSchema(field: FieldSchema): Record<string, unknown> {
+  const alternatives = field.type.split("|").map((alternative) => alternative.trim());
+  const literals = alternatives.filter((alternative) => alternative.startsWith('"'));
+  const shapes: Record<string, unknown>[] = [];
+
+  if (literals.length > 0) {
+    shapes.push({ type: "string", enum: literals.map((literal) => literal.slice(1, -1)) });
+  }
+  for (const alternative of alternatives) {
+    if (alternative.startsWith('"')) continue;
+    if (alternative === "number" || alternative === "string" || alternative === "boolean") {
+      shapes.push({ type: alternative });
+    } else if (alternative === "number[]") {
+      shapes.push({ type: "array", items: { type: "number" } });
+    } else if (alternative === "number[3]") {
+      shapes.push({ type: "array", items: { type: "number" }, minItems: 3, maxItems: 3 });
+    } else if (alternative === "object") {
+      shapes.push(field.fields !== undefined ? toJsonSchema(field.fields) : { type: "object" });
+    } else if (alternative === "object[]") {
+      shapes.push({
+        type: "array",
+        items: field.fields !== undefined ? toJsonSchema(field.fields) : { type: "object" },
+      });
+    }
+  }
+
+  // `anyOf` del esquema son formas alternativas del mismo campo —una geometría es
+  // primitiva, o cruda, o extrusión—, así que entran como alternativas más.
+  for (const alternative of field.anyOf ?? []) shapes.push(toJsonSchema(alternative));
+
+  const shape = shapes.length === 1 ? shapes[0] : { anyOf: shapes };
+  return { ...shape, description: field.description };
+}
+
+/**
  * Errores de forma, todos de una vez.
  *
  * De una vez y no el primero: cada llamada le cuesta un turno al agente, y devolverle

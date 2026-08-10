@@ -223,6 +223,7 @@ export {
   SCENE_ROLES,
   STAGING_SCHEMA,
   STORY_SCHEMA,
+  toJsonSchema,
   validate,
   assertValid,
 } from "./schema";
