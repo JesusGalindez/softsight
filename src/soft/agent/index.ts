@@ -145,6 +145,7 @@ export type {
 } from "./sceneSpec";
 export { auditGeometry } from "./geometryAudit";
 export { createScreenAudit, screenWarnings } from "./screenAudit";
+export { auditSkin } from "./skinAudit";
 export type {
   BlindEntrance,
   Occlusion,

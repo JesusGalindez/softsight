@@ -176,6 +176,27 @@ export const WARNING_CODES = {
     cause: "el emparejamiento entre dos secciones del loft gira más de un cuarto de vuelta; el giro puede ser deliberado",
   },
 
+  // La piel: skinAudit.ts, sobre los pesos que salen del atado. Los tres primeros
+  // son aritmética sobre lo escrito; el cuarto depende de la intención.
+  VERTICE_SIN_HUESO: {
+    severity: "certeza",
+    cause: "un vértice tiene los cuatro pesos a cero: no lo mueve ningún hueso",
+  },
+  PESOS_SIN_SUMAR: {
+    severity: "certeza",
+    cause: "los pesos de un vértice no suman 1, así que se deforma con una mezcla distinta de la declarada",
+  },
+  COSTURA_ROTA: {
+    severity: "certeza",
+    cause:
+      "dos piezas comparten un vértice en reposo y lo reparten distinto, habiendo declarado banda para soldarlo",
+  },
+  TORSION_APLASTADA: {
+    severity: "candidato",
+    cause:
+      "la banda reparte donde el hueso gira más de 90° sobre su propio eje; la mezcla lineal estrangula la piel ahí",
+  },
+
   // Animación: animationAudit.ts, sobre las claves declaradas.
   GIRO_AMBIGUO: {
     severity: "certeza",

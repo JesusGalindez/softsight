@@ -40,6 +40,7 @@ import {
   withSeverity,
   applyPatch,
   auditMesh,
+  auditSkin,
   compareWarnings,
   screenWarnings,
   projectFields,
@@ -1156,6 +1157,12 @@ async function main(argv) {
       bindings: spec.bindings,
     });
     riggedScene = bound.scene;
+
+    // Los invariantes de la piel: se miden sobre los pesos ya escritos, así que
+    // no dependen de por dónde entró el vínculo. Van a `warnings` y no a un
+    // apartado propio porque un vértice sin hueso es un defecto del modelo, del
+    // mismo orden que una malla abierta.
+    review.warnings.push(...withSeverity(auditSkin(bound, rig.skeleton)));
 
     // La auditoría de movimiento: lo que ninguna imagen revela porque ocurre en
     // un fotograma que nadie miró. Se apoya en el evaluador certificado.

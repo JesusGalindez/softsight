@@ -21,6 +21,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  auditSkin,
   bindModelToSkeleton,
   evaluatePose,
   loadModel,
@@ -252,6 +253,104 @@ for (const primitive of bandaLineal.scene.meshes[0].primitives) {
 }
 assert.equal(enLaCostura, 132, "los 66 pares de la costura reparten mitad y mitad por los dos lados");
 
+// --- Los invariantes de la piel ---------------------------------------------
+//
+// Los cuatro avisos de `auditSkin`, cada uno sobre un caso construido para él. Los
+// dos primeros no se pueden provocar por la vía pública —el atado escribe pesos
+// válidos siempre—, así que se le da a la auditoría un resultado ya roto: es una
+// función pura del atado, y romperlo a mano es la única forma de comprobar que lo
+// caza. Los otros dos sí salen de una escena mal declarada.
+
+const atado = (bindings, escena = CODO) =>
+  bindModelToSkeleton(modelFromScene({ ...escena, bindings }, "codo"), resolveRig(escena.skeleton, escena.clips).skeleton, {
+    schemaVersion: 1,
+    bindings,
+  });
+
+const esqueletoDelCodo = resolveRig(CODO.skeleton, CODO.clips).skeleton;
+
+assert.deepEqual(
+  auditSkin(atado(CON_BANDA), esqueletoDelCodo).map((aviso) => aviso.code),
+  [],
+  "el codo bien declarado no puede traer ni un aviso de piel",
+);
+assert.deepEqual(
+  auditSkin(atado(RIGIDO), esqueletoDelCodo).map((aviso) => aviso.code),
+  [],
+  "y el mismo codo rígido tampoco: dos piezas que comparten costura sin banda son el atado rígido de siempre",
+);
+
+const roto = (cambiar) => {
+  const base = atado(CON_BANDA);
+  const primitives = base.scene.meshes[0].primitives.map((primitive) => ({
+    ...primitive,
+    weights: Float32Array.from(primitive.weights),
+    joints: Uint16Array.from(primitive.joints),
+  }));
+  cambiar(primitives);
+  return { ...base, scene: { ...base.scene, meshes: [{ ...base.scene.meshes[0], primitives }] } };
+};
+
+const sinHueso = auditSkin(
+  roto((primitives) => {
+    for (let slot = 0; slot < 4; slot += 1) primitives[0].weights[slot] = 0;
+  }),
+  esqueletoDelCodo,
+);
+assert.deepEqual(sinHueso.map((aviso) => aviso.code), ["VERTICE_SIN_HUESO"]);
+assert.match(sinHueso[0].message, /el vértice 0 no lo mueve ningún hueso/);
+
+const sinSumar = auditSkin(
+  roto((primitives) => {
+    primitives[0].weights[0] = 0.25;
+    primitives[0].weights[1] = 0.25;
+  }),
+  esqueletoDelCodo,
+);
+assert.deepEqual(sinSumar.map((aviso) => aviso.code), ["PESOS_SIN_SUMAR"]);
+assert.match(sinSumar[0].message, /suman 0\.500000 y no 1/);
+
+// La costura rota de verdad: las dos bandas declaradas sin centrar en el mismo
+// sitio, que es el error que se comete al escribirlas de memoria.
+const descentrada = auditSkin(
+  atado([
+    { part: "antebrazo", joint: "codo", blend: { with: "hombro", from: -0.15, to: 0.15 } },
+    { part: "brazo", joint: "hombro", blend: { with: "codo", from: 0.9, to: 1.2 } },
+  ]),
+  esqueletoDelCodo,
+);
+assert.deepEqual(descentrada.map((aviso) => aviso.code), ["COSTURA_ROTA"]);
+assert.match(descentrada[0].message, /comparten un vértice en reposo y lo reparten distinto/);
+
+// Y la torsión: el eje del hueso es Y, así que girar el codo 120° sobre Y es girar
+// sobre su propio eje. Doblarlo sobre Z, que es lo que hace el clip de siempre, no
+// lo dispara: la mezcla lineal se porta bien flexionando.
+const torcido = {
+  ...CODO,
+  clips: [
+    {
+      name: "retorcer",
+      fps: 30,
+      tracks: [
+        {
+          joint: "codo",
+          property: "rotation",
+          keys: [
+            { frame: 0, value: [0, 0, 0] },
+            { frame: 30, value: [0, 120, 0] },
+          ],
+        },
+      ],
+    },
+  ],
+};
+const torsion = auditSkin(
+  atado(CON_BANDA, torcido),
+  resolveRig(torcido.skeleton, torcido.clips).skeleton,
+);
+assert.deepEqual(torsion.map((aviso) => aviso.code), ["TORSION_APLASTADA"]);
+assert.match(torsion[0].message, /gira 120° sobre su propio eje/);
+
 // --- Lo que hay que rechazar de una banda -----------------------------------
 
 const conBandaMala = (blend) => () =>
@@ -293,7 +392,8 @@ assertThrows(
 console.log(
   `skin binding: ok (2 piezas exactas, ${drone.parts.length} del dron sin deformar; ` +
     `la costura del codo pasa de ${sinBanda.toFixed(6)} a ${conBanda.toExponential(1)} con banda ` +
-    `—el reposo ya trae ${enReposo.toExponential(1)}—, ${vertices} vértices sumando 1)`,
+    `—el reposo ya trae ${enReposo.toExponential(1)}—, ${vertices} vértices sumando 1, ` +
+    `y los 4 avisos de piel saltan solo donde deben)`,
 );
 
 /**

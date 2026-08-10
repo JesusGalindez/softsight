@@ -1,8 +1,8 @@
 # Plan: los pesos se declaran, no se adivinan
 
-Estado: **pasos 0, 1, 2 y 4 hechos; el siguiente es el 3** (2026-08-10). El paso
-que podía matar el plan salió a favor: los pesos declarados deforman en Three.js
-exactamente igual que aquí. Nace de la nota que
+Estado: **pasos 0 a 4 hechos; quedan el 5 y el 6** (2026-08-10). El paso que podía
+matar el plan salió a favor: los pesos declarados deforman en Three.js exactamente
+igual que aquí. Nace de la nota que
 [`plan-movimiento.md`](plan-movimiento.md) §8 dejó anotada y que §2.4 del mismo
 documento mandó a un plan propio, por una razón que sigue siendo la buena: quitar
 el atado rígido es el desbloqueo grande **y** toca la única línea que este
@@ -256,27 +256,39 @@ este plan no pasa de dos influencias por §3.4—, así que sobra.
 
 *Cerrado: el codo doblado 90° sin grieta, y el rígido byte a byte por tercera vez.*
 
-### Paso 3 — Los invariantes, como avisos con código
+### Paso 3 — Los invariantes, como avisos con código — hecho el 2026-08-10
 
-Tres, y los tres son aritmética sobre el resultado, así que son **certeza**:
+`skinAudit.ts`, sobre los pesos ya escritos. Cuatro códigos, y la tabla pasa de
+36 a **40**:
 
-| Código propuesto | Qué mide |
-|---|---|
-| `PESOS_SIN_SUMAR` | algún vértice no suma 1 tras normalizar, o suma 0 |
-| `VERTICE_SIN_HUESO` | algún vértice queda sin ninguna influencia |
-| `COSTURA_ROTA` | dos vértices en la misma posición de reposo, en piezas distintas, reciben pesos distintos |
+| Código | Severidad | Qué mide |
+|---|---|---|
+| `VERTICE_SIN_HUESO` | certeza | los cuatro pesos de un vértice son cero: se queda clavado en reposo |
+| `PESOS_SIN_SUMAR` | certeza | no suman 1, así que se deforma con una mezcla distinta de la declarada |
+| `COSTURA_ROTA` | certeza | dos piezas comparten un vértice en reposo y lo reparten distinto |
+| `TORSION_APLASTADA` | candidato | la banda reparte donde el hueso gira más de 90° sobre su propio eje |
 
-El tercero es el que de verdad se rompe al usarlo: con reglas por pieza, dos
-piezas vecinas pueden recibir bandas distintas y abrirse justo por donde se
-tocan. Se mide con la maquinaria de posiciones repetidas que ya existe para la
-auditoría de topología.
+**`COSTURA_ROTA` solo mira donde hay banda**, y esa es la decisión que evita
+repetir el error de `SIMETRIA_ROTA`. Dos piezas rígidas atadas a huesos distintos
+que comparten vértices **tienen** pesos distintos: es la definición del atado
+rígido, y en un ensamblaje mecánico pasa en cada junta. La banda es lo que declara
+la intención de soldar; sin ella no hay nada que reprochar. Comprobado: el muñeco
+y el propio codo rígido no sacan ni un aviso.
 
-Y uno más, `candidato`, porque su conclusión depende de la intención:
-`TORSION_APLASTADA`, cuando la banda cruza una articulación que gira más de 90°
-sobre su propio eje —el envoltorio de caramelo de §3.3—. Se dice, no se arregla.
+Nadie declara qué piezas llevan banda: **lo dice el resultado**. Una primitiva con
+banda tiene vértices con dos influencias de peso no nulo. Pasarle además el
+vínculo a la auditoría sería pasar dos veces el mismo hecho, y el día que
+discreparan habría que decidir cuál manda.
 
-*Cierra: los cuatro saltan sobre un caso construido a propósito, y ninguno sobre
-el ejemplar.*
+`TORSION_APLASTADA` mide el giro **sobre el eje del hueso**, separado del resto
+con la descomposición clásica: se proyecta la parte vectorial del cuaternión sobre
+el eje y lo que queda, con la escalar, es la torsión. Doblar no lo dispara —la
+mezcla lineal se porta bien flexionando—; retorcer 120° sí.
+
+*Cerrado: los cuatro saltan sobre su caso y ninguno sobre el ejemplar. Los dos
+primeros no se pueden provocar por la vía pública —el atado escribe pesos válidos
+siempre—, así que la puerta le da a la auditoría un resultado roto a mano, que es
+la única forma de comprobar que lo caza.*
 
 ### Paso 4 — El cierre cruzado — hecho el 2026-08-10, y sale a favor
 
@@ -370,9 +382,9 @@ descubrimiento no exige leerse el repositorio.
 | Banda con `ease: linear` | peso en el punto medio | **0,5 a menos de 1e-6**: el `t` sale de posiciones ya en `Float32` |
 | Banda con `ease: smooth` | punto medio y cuarto | media exacta; el cuarto por debajo |
 | Banda fuera de la región | pesos | 1 y 0, sin banda intermedia |
-| Suma de pesos | todos los vértices | 1 tras `Math.fround`, sin excepción |
+| Suma de pesos | todos los vértices | 1 tras `Math.fround`, sin excepción; `PESOS_SIN_SUMAR` si no |
 | Codo a 90° | separación entre piezas | 0,106066 en el paso 0, **6,7e-8 con banda** |
-| Dos piezas con la misma costura | `COSTURA_ROTA` | salta si difieren, callado si no |
+| Dos piezas con la misma costura | `COSTURA_ROTA` | salta con bandas descentradas, callado con el atado rígido |
 | Pesos declarados | evaluador certificado contra `evaluatePose` | **4/4 hashes idénticos**, fotogramas 0, 10, 20 y 30 |
 | API, CLI y puente | el GLB de cada uno | **byte a byte** |
 | El dron entero | `render-hashes.json` | `46228b7c`, sin mover |

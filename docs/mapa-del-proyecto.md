@@ -299,8 +299,8 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     puerta `test:geometry` deja de excusar dos códigos y exige cero avisos de
     `certeza` sobre el ejemplar. Queda anotado en
     [`plan-geometria.md`](plan-geometria.md) §9.
-16. **Pesos declarados por fórmula** (en curso: pasos 0, 1, 2 y 4 hechos el
-    2026-08-10; queda el 3, el 5 y el 6). Ver [`plan-pesos.md`](plan-pesos.md). Es
+16. **Pesos declarados por fórmula** (en curso: pasos 0 a 4 hechos el
+    2026-08-10; quedan el 5 y el 6). Ver [`plan-pesos.md`](plan-pesos.md). Es
     el desbloqueo que sigue al atado rígido de E4 —piel suave, mallas continuas—
     sin cruzar la línea que E4 trazó: el agente declara la región y la curva, la
     herramienta evalúa una función determinista, y nadie adivina a qué hueso va
@@ -313,7 +313,12 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     control del GLB con pesos declarados **coinciden con Three.js**, con el
     control congelado en `artifacts/agent/codo-banda-poses.json` y la puerta
     `test:blend-contract`, que corre también en CI porque compara un número y no
-    ejecuta nada del editor.
+    ejecuta nada del editor. `skinAudit.ts` añade los cuatro invariantes
+    —`VERTICE_SIN_HUESO`, `PESOS_SIN_SUMAR`, `COSTURA_ROTA` y
+    `TORSION_APLASTADA`—, con lo que la tabla de códigos pasa de 36 a 40. La
+    costura solo se reprocha **donde hay banda**: dos piezas rígidas atadas a
+    huesos distintos que comparten vértices tienen pesos distintos por
+    definición, y avisar ahí sería repetir el ruido de `SIMETRIA_ROTA`.
 17. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
 18. **Plan Ω — el coste por turno del agente** (hecho, salvo Ω6.4, que vive en el
