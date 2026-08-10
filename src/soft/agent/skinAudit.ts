@@ -12,14 +12,20 @@
  * de peso no nulo, y una rígida no. Pasar además el vínculo sería pasar dos veces
  * el mismo hecho, y el día que discreparan habría que decidir cuál manda.
  *
- * ## Por qué `COSTURA_ROTA` solo mira donde hay banda
+ * ## Por qué `COSTURA_ROTA` mira el vértice y no la pieza
  *
  * Dos piezas rígidas atadas a huesos distintos que comparten vértices **tienen**
  * pesos distintos: es la definición de atado rígido, no un defecto, y en un
  * ensamblaje mecánico pasa en cada junta. Avisar ahí sería repetir el error de
  * `SIMETRIA_ROTA` —ruido en todas las piezas legítimas hasta que el agente deja
- * de leer los avisos—. La banda es lo que declara la intención de soldar, y solo
- * entonces una costura desigual es un fallo.
+ * de leer los avisos—. La banda es lo que declara la intención de soldar.
+ *
+ * Pero **«la pieza lleva banda» no vale como filtro**, y se comprobó midiendo: un
+ * brazo de tres piezas con banda en el codo y muñeca rígida sacaba `COSTURA_ROTA`
+ * en la muñeca, donde las dos piezas son rígidas y se tocan como siempre se han
+ * tocado. La banda estaba en el otro extremo de la misma pieza. Lo que decide es
+ * si **el vértice compartido cae dentro de una banda** —dos influencias con peso
+ * no nulo—, que es la pregunta que de verdad se quería hacer.
  */
 
 import type { SkinnedGlbPrimitive } from "./glbWriter";
@@ -126,7 +132,9 @@ export function auditSkin(result: BindResult, skeleton: SkeletonSource): Finding
     }
   }
 
-  // La costura, solo entre piezas donde alguna declaró banda. Ver la cabecera.
+  // La costura, solo donde el vértice compartido cae dentro de una banda. Ver la
+  // cabecera: el filtro por pieza daba falsos defectos en el otro extremo de una
+  // pieza con banda.
   const banded = primitives.map((primitive) => {
     const weights = primitive.weights;
     if (!weights) return false;
@@ -149,10 +157,12 @@ export function auditSkin(result: BindResult, skeleton: SkeletonSource): Finding
           continue;
         }
         if (twin.primitive === index) continue;
-        if (!banded[index] && !banded[twin.primitive]) continue;
 
         const here = influencesOf(primitive, vertex);
         const there = influencesOf(primitives[twin.primitive], twin.vertex);
+        // Ninguno de los dos está repartido: es una costura rígida, y esas se
+        // abren por definición. No hay nada declarado que incumplir.
+        if (here.length < 2 && there.length < 2) continue;
         const same =
           here.length === there.length &&
           here.every((influence) =>

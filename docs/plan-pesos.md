@@ -1,6 +1,6 @@
 # Plan: los pesos se declaran, no se adivinan
 
-Estado: **pasos 0 a 4 hechos; quedan el 5 y el 6** (2026-08-10). El paso que podía
+Estado: **pasos 0 a 5 hechos; queda el 6** (2026-08-10). El paso que podía
 matar el plan salió a favor: los pesos declarados deforman en Three.js exactamente
 igual que aquí. Nace de la nota que
 [`plan-movimiento.md`](plan-movimiento.md) §8 dejó anotada y que §2.4 del mismo
@@ -322,15 +322,25 @@ comprobaciones**.
 
 *Cerrado a favor. Sigue el paso 3.*
 
-### Paso 5 — Ejemplar versionado y puerta
+### Paso 5 — Ejemplar versionado y puerta — hecho el 2026-08-10
 
-Una pieza con banda en `artifacts/agent/`, limpia de defectos —cero avisos de
-`certeza`, como exige ya el ejemplar de geometría—, y la puerta que la audita. Es
-lo primero que copia un agente que llega nuevo.
+`artifacts/agent/codo-banda.json` es el ejemplar, y `test:blend-contract` le exige
+lo mismo que el ejemplar de geometría: **cero avisos de `certeza`** entre la
+escena y la piel. Es lo primero que copia un agente que quiere una piel que no se
+abra, y uno con defectos enseñaría justo lo que el banco rechaza.
 
-**No vale reutilizar `muneco.json`**: el paso 0 midió que sus piezas no comparten
-un solo vértice, así que no hay costura que repartir. El ejemplar se construye con
-una, y el codo del paso 0 ya tiene la forma.
+No hizo falta un fichero nuevo: el paso 4 ya lo había versionado como fixture de
+su puerta, y ser las dos cosas es lo correcto —el artefacto que se enseña es el
+que está certificado contra Three.js, no uno parecido—.
+
+Y no se reutilizó `muneco.json`, como avisaba este paso: el paso 0 midió que sus
+piezas no comparten un solo vértice, así que no hay costura que repartir.
+
+**El ejemplar se quedó en dos piezas por un límite que descubrió este paso.** El
+plan inicial pedía un brazo de tres —hombro, codo, muñeca—, y no se puede declarar
+limpio: una regla lleva **una** banda, así que la pieza del medio suelda el codo o
+la muñeca, pero no las dos. Está anotado en §9, que era donde ya vivía la idea de
+repartir entre más de dos huesos; ahora tiene un caso concreto que la pide.
 
 ### Paso 6 — Que se alcance por los tres caminos
 
@@ -358,6 +368,16 @@ descubrimiento no exige leerse el repositorio.
 - **`Mat4` es row-major** y los vectores se multiplican por la derecha. Es la
   primera invariante de `AGENTS.md` y la causa habitual de que una proyección
   «casi» funcione.
+- **«La pieza lleva banda» no vale como filtro de `COSTURA_ROTA`** (paso 5).
+  Medido: un brazo de tres piezas con banda en el codo y muñeca rígida sacaba el
+  aviso **en la muñeca**, donde las dos piezas son rígidas y se tocan como siempre.
+  La banda estaba en el otro extremo de la misma pieza. Lo que decide es si **el
+  vértice compartido cae dentro de una banda** —dos influencias con peso no nulo—,
+  que es la pregunta que se quería hacer. Cualquier filtro futuro que se plantee
+  por pieza tiene el mismo agujero.
+- **Una regla lleva una banda, así que una pieza intermedia solo suelda un
+  extremo** (paso 5). Es lo que impide hoy declarar un brazo de tres piezas
+  entero. Ver §9.
 - **Hay un suelo de ruido de 3,0e-8, y no lo pone el reparto** (paso 2). La
   costura del codo ya lo trae en reposo, porque las dos tapas se generan por
   caminos distintos y `Float32` no los redondea igual. Nada de lo que venga
@@ -411,9 +431,14 @@ sería justo el tipo de cosa que este banco existe para no producir.
 
 ## 9. Anotado, sin fase asignada
 
-- **Bandas sobre más de dos huesos.** Un hombro real reparte entre tres. Cuatro
-  influencias caben en el formato; lo que falta es una forma de declararlo que no
-  se convierta en un lenguaje de expresiones. Espera a un caso que lo pida.
+- **Más de una banda por regla, y bandas sobre más de dos huesos.** Ya hay un caso
+  que lo pide, y salió del paso 5: una pieza intermedia —el antebrazo de un brazo
+  de tres— tiene costura por los dos extremos y solo puede soldar una. Un hombro
+  real, además, reparte entre tres huesos. Cuatro influencias caben en el formato;
+  lo que falta es una forma de declararlo que no se convierta en un lenguaje de
+  expresiones. La más obvia —`blend` como lista— es también la que más fácil hace
+  escribir dos bandas que se solapan, así que antes hay que decidir qué pasa
+  entonces.
 - **Pesos traídos por mapa.** Un fichero aparte con un peso por vértice, para
   quien los tenga calculados fuera. Hoy esa vía ya existe cruda por
   `JOINTS_0`/`WEIGHTS_0`; lo que no hay es una forma declarada de referenciarla.

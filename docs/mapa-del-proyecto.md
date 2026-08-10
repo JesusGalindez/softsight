@@ -299,8 +299,8 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     puerta `test:geometry` deja de excusar dos códigos y exige cero avisos de
     `certeza` sobre el ejemplar. Queda anotado en
     [`plan-geometria.md`](plan-geometria.md) §9.
-16. **Pesos declarados por fórmula** (en curso: pasos 0 a 4 hechos el
-    2026-08-10; quedan el 5 y el 6). Ver [`plan-pesos.md`](plan-pesos.md). Es
+16. **Pesos declarados por fórmula** (en curso: pasos 0 a 5 hechos el
+    2026-08-10; queda el 6, que lo lleva al puente). Ver [`plan-pesos.md`](plan-pesos.md). Es
     el desbloqueo que sigue al atado rígido de E4 —piel suave, mallas continuas—
     sin cruzar la línea que E4 trazó: el agente declara la región y la curva, la
     herramienta evalúa una función determinista, y nadie adivina a qué hueso va
@@ -318,7 +318,10 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     `TORSION_APLASTADA`—, con lo que la tabla de códigos pasa de 36 a 40. La
     costura solo se reprocha **donde hay banda**: dos piezas rígidas atadas a
     huesos distintos que comparten vértices tienen pesos distintos por
-    definición, y avisar ahí sería repetir el ruido de `SIMETRIA_ROTA`.
+    definición, y avisar ahí sería repetir el ruido de `SIMETRIA_ROTA`. El
+    ejemplar es `artifacts/agent/codo-banda.json`, limpio de defectos y
+    certificado por la misma puerta. Límite conocido: una regla lleva **una**
+    banda, así que una pieza intermedia solo suelda uno de sus dos extremos.
 17. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
 18. **Plan Ω — el coste por turno del agente** (hecho, salvo Ω6.4, que vive en el

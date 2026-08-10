@@ -44,10 +44,13 @@ import { fileURLToPath } from "node:url";
 
 import { inspectGlbAnimation } from "../dist-node/agent3d.mjs";
 import {
+  auditSkin,
   bindModelToSkeleton,
   modelFromScene,
   resolveRig,
+  reviewScene,
   serializeSkinnedGlb,
+  withSeverity,
 } from "../dist-node/agent3d.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -116,8 +119,25 @@ assert.equal(
   "el control dice ser de otro modelo; regenerarlo es lo que esta puerta vigila",
 );
 
+// --- El ejemplar --------------------------------------------------------------
+//
+// La escena no es solo el fixture de esta puerta: es **lo primero que copia un
+// agente** que quiere una piel que no se abra, así que se le exige lo mismo que al
+// ejemplar de geometría —cero avisos de `certeza`—. Un ejemplar con defectos
+// enseñaría justo lo que el banco rechaza.
+
+const { warnings } = reviewScene(spec, { inspectOnly: true }).review;
+const todos = [...warnings, ...withSeverity(auditSkin(bound, rig.skeleton))];
+const defectos = todos.filter((aviso) => aviso.severity === "certeza");
+assert.deepEqual(
+  defectos,
+  [],
+  `el ejemplar trae defectos: ${defectos.map((aviso) => `${aviso.code} en ${aviso.part}`).join(", ")}`,
+);
+
 console.log(
   `blend contract: ok (${esperados.length} poses de control del codo con banda, ` +
     `${control.meshes.reduce((total, mesh) => total + mesh.vertices, 0)} vértices, ` +
-    `hashes idénticos a Three.js; GLB sha256:${createHash("sha256").update(new Uint8Array(glb)).digest("hex").slice(0, 8)})`,
+    `hashes idénticos a Three.js; GLB sha256:${createHash("sha256").update(new Uint8Array(glb)).digest("hex").slice(0, 8)}; ` +
+    `ejemplar sin un defecto: ${todos.length} avisos entre la escena y la piel)`,
 );
