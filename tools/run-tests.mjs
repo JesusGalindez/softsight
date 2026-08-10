@@ -55,6 +55,7 @@ const GATES = [
   "mcp.test.mjs", // 5,2 s — siete herramientas, cada una contra el CLI directo
   "summary.test.mjs", // 4,3 s — renderiza el dron entero para medir el recorte
   "rig-spec.test.mjs", // 1,3 s
+  "screen-audit.test.mjs", // 1,2 s
   "story-spec.test.mjs", // 1,1 s
   "staging-spec.test.mjs", // 1,0 s
   "sample-surface.test.mjs", // 0,8 s — eran 50,4 antes de Ω6.2 y Ω6.3

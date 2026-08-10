@@ -69,8 +69,10 @@ export {
   computeSceneBounds,
   hashSheet,
   measureObjectCoverage,
+  projectAabb,
   projectAabbToTile,
   frameCamera,
+  frameCameraFromAabb,
   DEFAULT_VIEWS,
 } from "./contactSheet";
 export { drawSDFText } from "../text";
@@ -141,6 +143,14 @@ export type {
   RepeatSpec,
 } from "./sceneSpec";
 export { auditGeometry } from "./geometryAudit";
+export { createScreenAudit, screenWarnings } from "./screenAudit";
+export type {
+  BlindEntrance,
+  Occlusion,
+  OffFrameEvent,
+  ScreenAudit,
+  ScreenAuditOptions,
+} from "./screenAudit";
 export {
   applyDeformers,
   createCircleProfile,
@@ -239,7 +249,7 @@ export type {
   RevolveSpec,
 } from "./sceneSpec";
 export type { MeshAudit } from "./inspect";
-export type { ContactSheet, ViewDefinition } from "./contactSheet";
+export type { ContactSheet, ProjectedAabb, ViewDefinition } from "./contactSheet";
 
 export interface ObjectReport extends MeshAudit {
   name: string;

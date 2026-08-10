@@ -269,21 +269,34 @@ export function frameCamera(
 }
 
 /**
- * Caja en píxeles que ocupa una caja de mundo vista por una cámara.
+ * Caja en píxeles de una caja de mundo, **sin recortar al tile**, y a qué
+ * distancia de la cámara queda.
  *
- * Es la pieza que permite señalar: sin ella, ver algo raro en el pliego no se puede
- * convertir en «esa pieza de ahí». Se proyectan las ocho esquinas y se toma el mínimo
- * y el máximo en pantalla, así que es la caja de la caja envolvente, no la silueta:
- * sirve para atribuir y para señalar, nunca para medir cobertura.
+ * Es lo que hace falta para auditar movimiento en 2D: `projectAabbToTile`
+ * devuelve `null` en cuanto la pieza sale del tile, y para decir «se sale por 47
+ * píxeles en el fotograma 30» hace falta el número de fuera. Aquí el recorte no
+ * se hace, y quien lo quiera recortado usa la de abajo.
  *
- * Devuelve `null` en dos casos que no son un fallo: la pieza queda fuera del tile, o
- * cruza el plano de la cámara y su proyección deja de estar definida.
+ * `depth` es la distancia del centro de la caja al plano de la cámara, medida en
+ * el eje de vista. Sirve para ordenar dos cajas que se solapan en pantalla —cuál
+ * tapa a cuál— y no para nada más: es la caja, no la silueta.
+ *
+ * Devuelve `null` cuando la caja cruza el plano de la cámara y su proyección deja
+ * de estar definida; eso no es un fallo, es que no hay respuesta.
  */
-export function projectAabbToTile(
+export interface ProjectedAabb {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  depth: number;
+}
+
+export function projectAabb(
   aabb: SceneAabb,
   camera: Camera,
   tileSize: number,
-): [number, number, number, number] | null {
+): ProjectedAabb | null {
   const view = lookAt(
     vec3(camera.position[0], camera.position[1], camera.position[2]),
     vec3(camera.target[0], camera.target[1], camera.target[2]),
@@ -318,6 +331,40 @@ export function projectAabbToTile(
     if (screenX > maxX) maxX = screenX;
     if (screenY > maxY) maxY = screenY;
   }
+
+  // La profundidad se mide en el eje de vista y no con la `w` del recorte, que en
+  // ortográfica vale uno para todo y no ordenaría nada.
+  const centerView: Vec4 = new Float32Array(4);
+  transformPoint(
+    view,
+    (aabb.min[0] + aabb.max[0]) / 2,
+    (aabb.min[1] + aabb.max[1]) / 2,
+    (aabb.min[2] + aabb.max[2]) / 2,
+    centerView,
+  );
+
+  return { minX, minY, maxX, maxY, depth: -centerView[2] };
+}
+
+/**
+ * Caja en píxeles que ocupa una caja de mundo vista por una cámara.
+ *
+ * Es la pieza que permite señalar: sin ella, ver algo raro en el pliego no se puede
+ * convertir en «esa pieza de ahí». Se proyectan las ocho esquinas y se toma el mínimo
+ * y el máximo en pantalla, así que es la caja de la caja envolvente, no la silueta:
+ * sirve para atribuir y para señalar, nunca para medir cobertura.
+ *
+ * Devuelve `null` en dos casos que no son un fallo: la pieza queda fuera del tile, o
+ * cruza el plano de la cámara y su proyección deja de estar definida.
+ */
+export function projectAabbToTile(
+  aabb: SceneAabb,
+  camera: Camera,
+  tileSize: number,
+): [number, number, number, number] | null {
+  const box = projectAabb(aabb, camera, tileSize);
+  if (box === null) return null;
+  const { minX, minY, maxX, maxY } = box;
 
   if (maxX <= 0 || maxY <= 0 || minX >= tileSize || minY >= tileSize) return null;
   // Un píxel de holgura: el antialiasing es una pasada de vecindad 3×3 sobre las

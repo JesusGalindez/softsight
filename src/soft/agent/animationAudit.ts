@@ -35,6 +35,10 @@ import type { ClipSpec } from "./rigSpec";
 import type { Warning } from "./index";
 import { auditSpatial } from "./spatialAudit";
 import type { PlacedPart } from "./spatialAudit";
+import { computeSceneAabb, DEFAULT_VIEWS, frameCameraFromAabb } from "./contactSheet";
+import type { ViewDefinition } from "./contactSheet";
+import { createScreenAudit } from "./screenAudit";
+import type { ScreenAudit, ScreenAuditOptions } from "./screenAudit";
 
 export interface AnimationAuditOptions {
   /**
@@ -56,6 +60,18 @@ export interface AnimationAuditOptions {
   groundY?: number;
   /** Hundimiento bajo el suelo que se tolera antes de avisar. */
   groundTolerance?: number;
+  /**
+   * Encuadre contra el que auditar **lo que se ve**. Sin esto, no se audita en
+   * 2D y `screen` sale nulo.
+   *
+   * Va aquí y no en una función aparte porque este recorrido ya visita todos los
+   * fotogramas y coloca todas las piezas: hacerlo otra vez costaría el doble
+   * para llegar al mismo sitio. Lo que decide de 2D vive en `screenAudit.ts`.
+   */
+  screen?: ScreenAuditOptions & {
+    /** Vista del pliego contra la que se mide. La 3/4 iluminada por defecto. */
+    view?: ViewDefinition;
+  };
 }
 
 /** Un cruce que la animación provocó y que en reposo no existía. */
@@ -92,6 +108,12 @@ export interface AnimationAudit {
   }>;
   crossings: AnimationCrossing[];
   groundBreaches: GroundBreach[];
+  /** Huesos con longitud cero: no orientan nada y suelen ser un descuido. */
+  /**
+   * Lo que se ve, no lo que pasa: fuera de cuadro, entradas a ciegas y
+   * oclusiones. Nulo cuando no se pidió encuadre contra el que medir.
+   */
+  screen: ScreenAudit | null;
   /** Huesos con longitud cero: no orientan nada y suelen ser un descuido. */
   zeroLengthBones: string[];
   /** Huesos que ninguna pista anima: el esqueleto los declara y nadie los usa. */
@@ -187,6 +209,20 @@ export function auditAnimation(
     });
 
   const restPlaced = place(restWorlds);
+  // El encuadre del fotograma cero, que es el que enseña el pliego y el que el
+  // espectador tiene delante. Encuadrar con la caja de todo el clip haría que
+  // nada se saliera nunca, por construcción.
+  const screen =
+    options.screen === undefined
+      ? null
+      : (() => {
+          const view = options.screen.view ?? DEFAULT_VIEWS[0];
+          const aabb = computeSceneAabb(
+            restPlaced.map((part) => ({ mesh: part.mesh, model: part.model })),
+          );
+          return createScreenAudit(frameCameraFromAabb(aabb, view), view.name, options.screen);
+        })();
+  screen?.observeRest(restPlaced);
   const restCrossings = new Set(auditSpatial(restPlaced).interpenetration.map((entry) => pairKey(entry.parts)));
   const groundY = options.groundY ?? Math.min(...restPlaced.map(minY));
 
@@ -211,12 +247,14 @@ export function auditAnimation(
     const { frames, complete } = framesToWalk(lastFrame, budget);
     const name = animation.name ?? `clip${clipIndex}`;
     clips.push({ name, sampled: frames, lastFrame, complete });
+    screen?.startClip(name);
 
     for (const frame of frames) {
       const states = buildNodeStates(document);
       applyAnimation(document, rigged.binary, rigged.decodedViews, animation, states, frame / fps);
       const worlds = computeWorlds(document, states).map((matrix) => Float32Array.from(matrix));
       const placed = place(worlds);
+      screen?.observe(frame, placed);
 
       for (const entry of auditSpatial(placed).interpenetration) {
         // Solo lo que la animación rompió: lo que ya se cruzaba en reposo no es
@@ -263,6 +301,7 @@ export function auditAnimation(
     clips,
     crossings,
     groundBreaches,
+    screen: screen === null ? null : screen.finish(),
     zeroLengthBones: [...new Set(zeroLengthBones)],
     staticBones,
     groundY,

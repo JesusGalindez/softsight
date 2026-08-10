@@ -176,6 +176,22 @@ export const WARNING_CODES = {
     cause: "dos claves de rotación consecutivas saltan media vuelta o más, y glTF interpola por el arco corto",
   },
 
+  // Lo que se ve: screenAudit.ts, sobre la caja de cada pieza proyectada con la
+  // cámara del pliego, fotograma a fotograma. Los tres son candidatos por la
+  // misma razón: es la caja, no la silueta.
+  SALE_DE_CUADRO: {
+    severity: "candidato",
+    cause: "la pieza se sale del encuadre del fotograma cero en algún fotograma del clip",
+  },
+  ENTRADA_A_CIEGAS: {
+    severity: "candidato",
+    cause: "la pieza empieza a moverse estando entera fuera del cuadro, así que el arranque no se ve",
+  },
+  OCLUSION_PROLONGADA: {
+    severity: "candidato",
+    cause: "dos piezas se tapan más fotogramas seguidos de los declarados",
+  },
+
   // Guion: storyAudit.ts. No hay geometría, solo texto y tiempo.
   ROL_AUSENTE: {
     severity: "certeza",

@@ -37,6 +37,8 @@ import {
   WARNING_CODE_LIST,
   applyPatch,
   auditMesh,
+  compareWarnings,
+  screenWarnings,
   projectFields,
   summarize,
   applyPatchToScene,
@@ -1152,8 +1154,22 @@ async function main(argv) {
         asModel,
         parsedRig,
         new Map(bound.bound.map((entry) => [entry.part, entry.joint])),
-        { sampleFrames, fps: rig.clips[0]?.fps ?? 30 },
+        // `screen: {}` enciende la auditoría 2D con sus umbrales por defecto:
+        // se mide contra el encuadre del fotograma cero de la vista 3/4, que es
+        // el que enseña el pliego.
+        { sampleFrames, fps: rig.clips[0]?.fps ?? 30, screen: {} },
       );
+
+      // Lo que se ve entra en los avisos, no solo en los hechos: el código de
+      // salida es lo que un proceso mira antes que el JSON. Y el delta se rehace
+      // con ellos dentro, porque un `warningsDelta` que no los cuenta diría que
+      // no hay nada nuevo justo cuando lo hay.
+      if (animationAudit.screen) {
+        review.warnings.push(...screenWarnings(animationAudit.screen));
+        if (previous.warnings) {
+          review.warningsDelta = compareWarnings(review.warnings, previous.warnings);
+        }
+      }
     }
   }
 

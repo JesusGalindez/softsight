@@ -315,6 +315,25 @@ pieza auditada en cada vista, y avisos redactados como diagnóstico, no como mé
 Cada aviso es `{ code, part, message }`: el texto lleva las cifras dentro y cambia en
 cada ejecución, así que lo que se compara es el código.
 
+### Auditoría del movimiento: lo que pasa, y lo que se ve
+
+La auditoría de animación mira **el espacio**: qué piezas se cruzan en el fotograma 42,
+cuáles atraviesan el suelo en el 18. Son las preguntas correctas para «¿está bien
+montado?» y las equivocadas para **«¿se ve?»**.
+
+Un rotor puede girar perfectamente y salirse del encuadre en el fotograma 30; una pieza
+puede empezar a moverse cuando todavía está fuera de cuadro, y entonces no se ve la
+entrada, se ve algo que ya venía en marcha; y dos piezas pueden pasarse veinte fotogramas
+una delante de la otra sin cruzarse en el espacio ni un milímetro. `animationAudit.screen`
+las caza: `SALE_DE_CUADRO`, `ENTRADA_A_CIEGAS` y `OCLUSION_PROLONGADA`.
+
+Se mide proyectando la caja de cada pieza con la cámara del pliego, **no rasterizando**:
+es exacto, determinista y cuesta una multiplicación de matrices en vez de un render por
+fotograma. El precio está declarado y es el mismo que paga la auditoría espacial —es la
+caja, no la silueta—, así que los tres avisos son `candidato`. Y solo se reporta lo que el
+movimiento rompió: en un muñeco el torso tapa a la cadera en reposo y lo seguirá haciendo
+en los sesenta fotogramas, así que eso no avisa.
+
 ### Auditoría entre piezas
 
 Lo que ninguna imagen revela y ninguna auditoría de malla puede ver, porque el fallo no

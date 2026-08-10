@@ -20,6 +20,7 @@
     "test:summary": "npm run build:agent3d && node tools/summary.test.mjs",
     "test:mcp": "npm run build:agent3d && node tools/mcp.test.mjs",
     "test:incremental": "npm run build:agent3d && node tools/incremental.test.mjs",
+    "test:screen": "npm run build:agent3d && node tools/screen-audit.test.mjs",
     "test:agents-md": "npm run build:agent3d && node tools/agents-md.mjs --check",
     "test:worker": "npm run build:agent3d && node tools/worker.test.mjs",
     "test:model-cache": "npm run build:agent3d && node tools/model-cache.test.mjs",

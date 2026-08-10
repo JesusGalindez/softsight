@@ -374,18 +374,37 @@ con su medida, y las puertas byte a byte que ya existen dicen si algo cambió.
 las del editor para la misma cámara. Detecta un FOV o un aspect desalineados en
 un frame en vez de después de novecientos.
 
-**E2. Auditoría 2D del movimiento** (softsight). La de hoy es 3D —cruces entre
-piezas, suelo atravesado—. Con `renderDiff` y los pliegos por frame se audita lo
-que de verdad se ve: un elemento que sale de cuadro, una entrada que ocurre fuera
-del encuadre, dos piezas que se tapan durante veinte frames.
+**E2. Auditoría 2D del movimiento** (hecha el 2026-08-10, softsight).
+`screenAudit.ts` da los tres: `SALE_DE_CUADRO`, `ENTRADA_A_CIEGAS` y
+`OCLUSION_PROLONGADA`, publicados en `animationAudit.screen` y emitidos como
+avisos, con su puerta `test:screen`.
+
+Con un cambio sobre lo que decía este punto, y conviene decir por qué: **no se
+usa `renderDiff` ni se rasteriza un pliego por fotograma**. La caja de cada pieza
+en pantalla sale de proyectar sus ocho esquinas con la cámara del pliego, que es
+exacto, determinista y cuesta una multiplicación de matrices, mientras que
+rasterizar cada fotograma para volver a leerlo costaría el render entero por
+fotograma. Es la misma decisión que tomó B1 con la caja del texto, y por el mismo
+motivo.
+
+El precio está declarado: **es la caja, no la silueta**, así que los tres avisos
+son `candidato`, igual que la interpenetración. Y se hereda la regla que hace
+utilizable la auditoría 3D —solo lo que el movimiento rompió—: en el muñeco de
+ejemplo pasa de seis oclusiones a **una**, porque torso, cadera y cabeza ya se
+tapaban en reposo.
+
+El recorrido de fotogramas no se duplica: `auditAnimation` ya los visita y ya
+coloca las piezas, así que la auditoría 2D es un recolector al que se le van
+dando esos fotogramas.
 
 ---
 
 ## 5. El coste de las puertas
 
 Una puerta lenta se acaba saltando, así que se presupuesta desde el principio.
-Hoy `npm run check` del editor son 344 pruebas y la suite de softsight, 19
-comprobaciones con dos builds.
+Hoy `npm run check` del editor son 344 pruebas y la suite de softsight, 99
+comprobaciones en 20 puertas con una sola compilación; el recuento y el tiempo
+de cada puerta los imprime la propia suite.
 
 | Cuándo corre | Qué | Presupuesto |
 |---|---|---|
