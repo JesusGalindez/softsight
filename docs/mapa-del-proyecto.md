@@ -139,11 +139,10 @@ puertas; las cinco restantes solo las cierra una ejecución local con los dos
 repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-06: **ambas puertas en `accepted`; las 71
-comprobaciones de softsight en verde** —43 de la puerta de geometría, 21 del resto
-del banco y 7 del puente—. El número sale de contar las líneas `ok` de
-`npm run test:animation`, no de sumar a mano: cuando alguien añada una puerta, el
-recuento se rehace ejecutando.
+Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 72
+comprobaciones de softsight en verde**. El número ya no se lleva a mano: lo
+imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
+emiten las propias puertas, junto con el tiempo de cada una.
 
 En el editor, **410 pruebas en verde y 6 en rojo**: las seis son de `mcp/`, el
 sidecar del paso F4.4 del plan del motor, que está a medio escribir y sin
@@ -281,9 +280,16 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     0,10 s de arranque por llamada y 47,3 s de suite— y el hueco de que nada de
     esto lo ejecutaba una máquina. **Ω4 hecha el 2026-08-09**: CI en tres
     trabajos, `npm run verify` como orden única, y el pliego del dron fijado en
-    `artifacts/agent/render-hashes.json` (`46228b7c`, contrato 3). Destapó que
-    cinco puertas dependen del fixture privado del editor y en CI no corren; ver
-    el aviso de alcance en §4.
+    `artifacts/agent/render-hashes.json` (`46228b7c`, contrato 3, **el mismo en
+    `ubuntu-latest` y en `macos-latest`**: el determinismo deja de ser política y
+    pasa a ser un hecho medido en dos aritméticas). Destapó que cinco puertas
+    dependen del fixture privado del editor y en CI no corren; ver el aviso de
+    alcance en §4. **Ω7 hecha el mismo día**: `tools/run-tests.mjs` imprime el
+    tiempo de cada puerta y el recuento de comprobaciones, y con eso se vio que
+    `sample-surface` es el 62 % de la CPU de la suite y que esta máquina tiene dos
+    núcleos físicos —repartir entre cuatro procesos la empeoraba de 61 s a 89 s—.
+    El reparto queda apagado tras `SOFTSIGHT_TEST_JOBS` y el objetivo de bajar de
+    20 s pasa a depender de Ω6.2 y Ω6.3, no del paralelismo.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

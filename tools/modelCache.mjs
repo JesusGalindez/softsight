@@ -16,7 +16,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 const CACHE_VERSION = 1;
@@ -135,7 +135,13 @@ export async function loadModelCached(path, parse, { root = ".cache", enabled = 
   const model = await parse();
   try {
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, serialize(model));
+    // Escribir y renombrar, no escribir encima: con la suite en paralelo hay
+    // varios procesos analizando el mismo GLB a la vez, y un lector que llega a
+    // medio `writeFileSync` no ve un fichero corrupto —que la caché perdona—
+    // sino uno que puede deserializar a medias. El renombrado es atómico.
+    const temporary = `${file}.${process.pid}.tmp`;
+    writeFileSync(temporary, serialize(model));
+    renameSync(temporary, file);
   } catch {
     // Guardar es una optimización: si el disco no deja, no pasa nada.
   }

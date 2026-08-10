@@ -363,6 +363,37 @@ después. El ruido del entorno es de ±25 %.
 
 ## Fase Ω7 — La suite
 
+**Hecha el 2026-08-09, y con las tres premisas refutadas por la medida.**
+`tools/run-tests.mjs` da los dos números que no había —tiempo por puerta y recuento de
+comprobaciones, **72**, contando las líneas `: ok` que emiten las propias puertas— y
+`test:animation` pasa a invocarlo. Los `test:*` sueltos se quedan.
+
+Lo que salió al medir, que es lo que valía la fase:
+
+1. **No había doce compilaciones redundantes.** `test:animation` ya compilaba **una vez**
+   y encadenaba trece `node`. Las que compilan por su cuenta son los `test:*` sueltos, que
+   existen justo para eso. El «1,6 s × 13» de este plan estaba mal leído.
+2. **Una puerta es la suite.** `sample-surface` cuesta **26,2 s de CPU de los ~44 s** del
+   total —el 62 %—, `bridge` otros 9,5 s, y las once restantes juntas menos de 8 s. Son
+   128 evaluaciones completas de la malla con skin releyendo las mismas IBM: exactamente
+   lo que persiguen Ω6.2 y Ω6.3.
+3. **La máquina tiene dos núcleos físicos**, no cuatro. `availableParallelism()` cuenta los
+   cuatro lógicos de un i5-5350U. Con la puerta gorda ya limitada por memoria, repartir no
+   da nada y desde tres procesos resta: **61 s en serie contra 89 s y 109 s con cuatro
+   procesos**, dos vueltas. Muy por encima del ±25 % de ruido, así que la regresión se
+   puede afirmar.
+
+Conclusión, y queda como descarte con su medida igual que los de `plan-renderizador.md`:
+el reparto **viene apagado**, `SOFTSIGHT_TEST_JOBS` lo enciende, y **el objetivo de bajar
+de 20 s no lo desbloquea el paralelismo sino abaratar `sample-surface`**. Se revisa cuando
+Ω6.2 y Ω6.3 estén hechas, que es cuando las once puertas pequeñas pasan a mandar.
+
+Medido hoy con el reparto apagado: **84,1 s** en local —esta máquina se degrada por
+temperatura a lo largo de la sesión, el mismo trabajo dio 61 s al empezar y 84 s al
+acabar, así que el número de pared de esta máquina no sirve para afirmar nada y el que
+manda es el de CPU—; y **22,2 s en CI**, donde las cinco puertas que dependen del fixture
+del editor no corren.
+
 47,3 s en serie, 13 ficheros, 4 núcleos, y **una sola compilación repetida trece veces**:
 cada script `test:*` empieza por `npm run build:agent3d`, que son 1,6 s.
 
