@@ -35,6 +35,8 @@ import {
   STORY_SCHEMA,
   WARNING_CODE_LIST,
   applyPatch,
+  projectFields,
+  summarize,
   applyPatchToScene,
   assertValid,
   auditAnimation,
@@ -655,6 +657,19 @@ Salida
                           material y colocación; .obj solo la geometría
   --save-scene <ruta>     guarda la escena ya parcheada, para seguir desde ahí
   --inspect-only          solo el informe JSON, sin renderizar: ~4 veces más rápido
+  --summary               recorta el informe a lo que cambia entre turnos:
+                          contractVersion, renderHash, warnings, warningsDelta y
+                          diff. Es el mismo informe con menos claves, no otra
+                          forma: nada se recalcula. El dron pasa de 16.537 B a
+                          menos de 2.000. exitCode no va dentro porque ya lo
+                          lleva el código de salida del proceso, y budget porque
+                          lo declaraste tú en la llamada
+  --fields "a,b.c"        proyecta las rutas que pidas, separadas por comas y con
+                          puntos para bajar —"warnings,renderHash,spatial.floating"—.
+                          Conserva los nombres y el anidamiento del informe
+                          completo. Una ruta que no existe es error de datos con
+                          sugerencia, no un hueco en silencio. Manda sobre
+                          --summary
 
 Selección y encuadre
   --select "a-*,b-*"      resalta las piezas que encajan; el encuadre las sigue
@@ -907,6 +922,34 @@ async function convertBvhFile(options) {
   };
 }
 
+/**
+ * Escribe el informe por stdout, recortado si el agente lo pidió.
+ *
+ * Es el único sitio por el que sale un informe, y a propósito: con seis ramas
+ * escribiendo cada una lo suyo, `--summary` acabaría funcionando en cuatro de
+ * las seis y nadie se enteraría hasta que un agente pagara los 16 KB en la
+ * quinta.
+ *
+ * `--fields` manda sobre `--summary`: una lista de rutas es una declaración más
+ * concreta que una opinión, y quien escribe las dos quiere la suya.
+ */
+function emitReport(report, options) {
+  const fields = options.get("fields");
+  let view = report;
+  if (fields !== undefined && fields !== "true") {
+    view = projectFields(
+      report,
+      fields
+        .split(",")
+        .map((field) => field.trim())
+        .filter((field) => field.length > 0),
+    );
+  } else if (options.get("summary") === "true") {
+    view = summarize(report);
+  }
+  process.stdout.write(`${JSON.stringify(view, null, 2)}\n`);
+}
+
 async function main() {
   const options = parseArguments(process.argv.slice(2));
 
@@ -923,7 +966,7 @@ async function main() {
   // tiempo. Va antes por el mismo motivo que el BVH.
   if (options.has("story")) {
     const report = auditStoryFile(options);
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    emitReport(report, options);
     process.exitCode = report.warnings.length > 0 ? 1 : 0;
     return;
   }
@@ -931,7 +974,7 @@ async function main() {
   // editor sobre un frame ya montado.
   if (options.has("staging")) {
     const report = auditStagingFile(options);
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    emitReport(report, options);
     process.exitCode = report.warnings.length > 0 ? 1 : 0;
     return;
   }
@@ -940,7 +983,7 @@ async function main() {
   // lo que produce sí entra después por --model como cualquier GLB.
   if (options.has("bvh")) {
     const report = await convertBvhFile(options);
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    emitReport(report, options);
     return;
   }
 
@@ -948,7 +991,7 @@ async function main() {
 
   if (options.has("model")) {
     const report = await reviewModelFile(options, outputPath);
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    emitReport(report, options);
     const failedEdits = (report.edits ?? []).filter((edit) => edit.error);
     process.exitCode = report.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;
     return;
@@ -1053,21 +1096,18 @@ async function main() {
     writeFileSync(savedScene, `${JSON.stringify(spec, null, 2)}\n`, "utf8");
   }
 
-  process.stdout.write(
-    `${JSON.stringify(
-      {
-        contractVersion: REPORT_CONTRACT_VERSION,
-        ...review,
-        ...(rig ? { rig: { joints: rig.skeleton.nodes.length, clips: rig.clips, mode: "rigid" } } : {}),
-        ...(animationAudit ? { animationAudit } : {}),
-        edits,
-        file: sheet ? outputPath : null,
-        exported,
-        savedScene,
-      },
-      null,
-      2,
-    )}\n`,
+  emitReport(
+    {
+      contractVersion: REPORT_CONTRACT_VERSION,
+      ...review,
+      ...(rig ? { rig: { joints: rig.skeleton.nodes.length, clips: rig.clips, mode: "rigid" } } : {}),
+      ...(animationAudit ? { animationAudit } : {}),
+      edits,
+      file: sheet ? outputPath : null,
+      exported,
+      savedScene,
+    },
+    options,
   );
   const failedEdits = (edits ?? []).filter((edit) => edit.error);
   process.exitCode = review.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;

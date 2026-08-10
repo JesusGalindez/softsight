@@ -217,6 +217,31 @@ mueve la cámara y el pliego entero se desplaza un píxel.
 `stdout` es JSON puro y el código de salida es 1 si hay avisos, así que encadena en CI
 sin interpretar nada.
 
+### Pagar solo lo que se va a leer
+
+El informe completo del dron son **16.493 B**, y el 45 % es `families`, que no cambia
+porque muevas un rotor. Un agente en bucle de veinte turnos paga veinte veces el mismo
+bloque.
+
+```bash
+# lo que cambia entre turnos: contractVersion, renderHash, warnings, warningsDelta, diff
+npm run agent3d -- --model dron.glb --out revision.png --summary
+
+# o dilo tú, con rutas separadas por puntos
+npm run agent3d -- --model dron.glb --inspect-only --fields "warnings,spatial.floating"
+```
+
+`--summary` deja el informe del dron en **1.108 B**, un 93 % menos, con sus dos avisos
+dentro. Es el mismo informe con menos claves, no otra forma: es una proyección sobre el
+objeto ya construido y **no recalcula nada**, porque un resumen que calculara por su
+cuenta sería un segundo origen del mismo dato. `exitCode` no va dentro —ya lo lleva el
+código de salida— ni `budget` —lo declaraste tú—.
+
+`--fields` proyecta las rutas que pidas conservando nombres y anidamiento, y manda sobre
+`--summary`. Una ruta que no existe es error de datos con sugerencia, no un hueco en
+silencio: recibir un objeto vacío por `spatial.floting` es indistinguible de que no haya
+piezas flotantes.
+
 `--schema` imprime la forma aceptada de la escena y del parche, más un informe de
 ejemplo. No es documentación aparte: el esquema **es** lo que valida la entrada, así que
 no puede divergir del código, y una errata se caza con sugerencia en vez de ignorarse.
@@ -226,7 +251,7 @@ la escena no encaja con el esquema:
   - objects[0].positon no existe; ¿querías decir position?
 ```
 
-`--help` lista todas las opciones: `--inspect-only`,
+`--help` lista todas las opciones: `--inspect-only`, `--summary`, `--fields`,
 `--baseline pliego.png`, `--baseline-report informe.json`, `--select-where "expr"`,
 `--patch` (repetible), `--undo`, `--dry-run`, `--save-scene`, `--no-cache`, `--tile N`,
 `--isolate true`, `--audit-limit N`, `--ground false`, las de presupuesto y `--debug`.

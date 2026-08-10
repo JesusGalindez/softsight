@@ -569,7 +569,7 @@ export const SAMPLE_REFERENCE_SCHEMA: ObjectSchema = {
 };
 
 /** Distancia de edición acotada: solo sirve para sugerir el campo que se quiso escribir. */
-function closeEnough(typo: string, candidate: string): boolean {
+export function closeEnough(typo: string, candidate: string): boolean {
   if (Math.abs(typo.length - candidate.length) > 2) return false;
   const a = typo.toLowerCase();
   const b = candidate.toLowerCase();

@@ -213,6 +213,7 @@ export {
   STORY_AUDIT_CONTRACT_VERSION,
 } from "./storyAudit";
 export type { SceneReading, StoryAudit, StoryAuditOptions, StoryWarning } from "./storyAudit";
+export { SUMMARY_KEYS, projectFields, summarize } from "./reportView";
 export { WARNING_CODES, WARNING_CODE_LIST } from "./warningCodes";
 export type { WarningCode, WarningCodeEntry, WarningSeverity } from "./warningCodes";
 export {

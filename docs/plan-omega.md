@@ -117,6 +117,29 @@ Objetivo medible: **el turno típico de un agente en bucle baja de 16,5 KB a men
 
 ### Ω1.1 `--summary` — el informe que un agente lee en bucle
 
+**Ω1.1 y Ω1.2 hechas el 2026-08-09.** El informe del dron con pliego pasa de **16.493 B a
+1.108 B**, un **93 % menos**, con sus dos avisos dentro: por debajo del techo de 2.000 B y
+muy por encima del objetivo de la fase. Cinco claves de treinta.
+
+`src/soft/agent/reportView.ts` tiene las dos proyecciones y ninguna aritmética. El CLI
+emite el informe por un solo sitio, `emitReport`: con seis ramas escribiendo lo suyo,
+`--summary` habría funcionado en cuatro y nadie se habría enterado hasta que un agente
+pagara los 16 KB en la quinta.
+
+Dos claves de la lista de este plan **no van dentro, y es correcto**: `exitCode` ya lo
+lleva el código de salida del proceso y el sobre de la respuesta del puente, y `budget` lo
+declaró el propio agente en la llamada. Meterlas sería un segundo original de cada una.
+Se quedan en `SUMMARY_KEYS` por si algún día un informe las trae.
+
+`--fields` valida contra **el informe producido**, no contra una forma declarada: el
+informe no tiene esquema propio —lo que publica `--schema` es un ejemplo— y sus claves
+dependen de lo que se pidiera. Así que el mensaje distingue la errata de la clave que esta
+llamada no produce. `--fields` manda sobre `--summary`.
+
+Puerta `test:summary`: cada clave del resumen `deepEqual` a la del completo, el techo de
+2.000 B con `assert`, la proyección con anidamiento, y la ruta inexistente saliendo 2 con
+sugerencia en la raíz y dentro. La suite pasa a 15 puertas y 79 comprobaciones.
+
 Una bandera que recorta el informe a lo que cambia entre turnos y a lo que decide el
 siguiente paso:
 

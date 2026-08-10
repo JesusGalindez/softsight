@@ -122,6 +122,7 @@ hecho por los dos lados, da el mismo hash.
 | `softsight:gate` | Poses de control: SoftSight contra Three.js | `npm run softsight:gate` (editor) |
 | `softsight:sample-gate` | Muestras de superficie: posiciones y normales | `npm run softsight:sample-gate` (editor) |
 | `softsight:gates` | Las dos anteriores, en cadena | `npm run softsight:gates` (editor) |
+| `test:summary` | El informe recortado contra el completo: cada clave del resumen es la misma, el resumen del dron cabe en 2.000 B, y una ruta de `--fields` que no existe sale 2 con sugerencia | `npm run test:summary` (softsight), también dentro de `test:animation` |
 | `test:codes` | El registro de códigos de aviso contra `src/soft/`, en las dos direcciones, y contra lo que publica `--schema` | `npm run test:codes` (softsight), también dentro de `test:animation` |
 | `test:determinism` | El pliego del dron dos veces en la misma máquina, y contra el `renderHash` fijado en `artifacts/agent/render-hashes.json` | `npm run test:determinism` (softsight), y en CI sobre `ubuntu-latest` y `macos-latest` |
 | `check` | Tipos, pruebas y build del editor | `npm run check` (editor) |
@@ -140,7 +141,7 @@ puertas; las cinco restantes solo las cierra una ejecución local con los dos
 repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 75
+Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 79
 comprobaciones de softsight en verde**. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
@@ -294,6 +295,10 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     33 códigos de aviso viven en `warningCodes.ts` y son el tipo del campo
     `code`, así que emitir uno que no esté en la tabla no compila; salen por
     `--schema` con su causa, su severidad —certeza o candidato— y su arreglo.
+    **Ω1.1 y Ω1.2 hechas**: `--summary` deja el informe del dron en 1.108 B
+    frente a 16.493 B —un 93 % menos, con sus dos avisos dentro— y `--fields`
+    proyecta rutas con punto; las dos son proyecciones sobre el informe ya
+    construido y no recalculan nada.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un
