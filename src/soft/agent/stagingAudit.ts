@@ -17,6 +17,8 @@
  * discutible enseña a discutir la puerta.
  */
 
+import type { WarningCode } from "./warningCodes";
+
 export const STAGING_VERSION = 1;
 export const STAGING_AUDIT_CONTRACT_VERSION = 1;
 
@@ -73,7 +75,8 @@ export interface StagingSpec {
 }
 
 export interface StagingWarning {
-  code: string;
+  /** Del registro de `warningCodes.ts`, igual que los avisos de topología. */
+  code: WarningCode;
   /** Escena a la que se refiere. */
   scene: string;
   /** Capa concreta, o `null` si el aviso es de la escena entera. */

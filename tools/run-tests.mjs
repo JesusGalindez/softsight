@@ -42,7 +42,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
 
 /**
- * Las trece puertas, **de la más lenta a la más rápida**, con el tiempo de pared
+ * Las puertas, **de la más lenta a la más rápida**, con el tiempo de pared
  * medido en serie el 2026-08-09. El orden solo importa con reparto encendido:
  * con una cola, dejar la más larga para el final la deja corriendo sola.
  */
@@ -57,6 +57,7 @@ const GATES = [
   "glb-loader.test.mjs", // 0,6 s
   "skin-binding.test.mjs", // 0,6 s
   "parity-mode.test.mjs", // 0,5 s
+  "warning-codes.test.mjs", // 0,5 s
   "glb-writer.test.mjs", // 0,3 s
   "geometry.test.mjs", // 0,3 s
   "text.test.mjs", // 0,3 s

@@ -33,6 +33,7 @@ import {
   SCENE_SCHEMA,
   STAGING_SCHEMA,
   STORY_SCHEMA,
+  WARNING_CODE_LIST,
   applyPatch,
   applyPatchToScene,
   assertValid,
@@ -692,8 +693,10 @@ Otras
                           rótulo y sobre negro. Sirve para enfrentar el pliego
                           con el de otro rasterizador, no para revisarlo a ojo
   --no-cache              rehace el análisis del modelo en vez de leer .cache/
-  --schema                forma aceptada de la escena y del parche, y un informe
-                          de ejemplo, todo generado por el propio código
+  --schema                forma aceptada de la escena y del parche, un informe
+                          de ejemplo y el registro de códigos de aviso —qué te
+                          puede salir, de qué severidad y si trae arreglo—, todo
+                          generado por el propio código
   --debug                 vuelca la pila en los errores
   --help                  esta ayuda
 
@@ -761,6 +764,7 @@ function printSchema() {
         sampleReference: SAMPLE_REFERENCE_SCHEMA,
         story: STORY_SCHEMA,
         storyRoles: ROLE_REQUIRED_DATA,
+        warningCodes: WARNING_CODE_LIST,
         reportExample: { contractVersion: REPORT_CONTRACT_VERSION, ...review },
         notes: [
           "El esquema es el que valida la entrada: un campo que no esté aquí se rechaza.",
@@ -768,6 +772,8 @@ function printSchema() {
           "Con pliego, el informe trae además sheet, views, renderHash y partScreenBoxes.",
           "story es el guion: la duración de la pieza es la suma de sus escenas, no se declara.",
           "storyRoles dice qué campos de data exige cada rol; quien ponga el guion en escena los necesita.",
+          "warningCodes es el registro completo de avisos: cargándolo una vez se interpreta cualquier informe futuro sin provocar cada caso.",
+          "severity 'certeza' sale de aritmética y no depende de la intención; 'candidato' tiene la medida firme y la conclusión no.",
           "staging es lo que el editor mide sobre un frame ya montado; SoftSight solo lo juzga.",
           "softsight dice qué versión responde: el consumidor compara su pin contra este commit, no contra un texto.",
         ],

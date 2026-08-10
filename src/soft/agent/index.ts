@@ -45,6 +45,7 @@ import { createGroundPlane, resolveScene, type SceneSpec } from "./sceneSpec";
 import { auditSpatial, type SpatialAudit } from "./spatialAudit";
 import { auditGeometry } from "./geometryAudit";
 import { auditClips } from "./animationAudit";
+import type { WarningCode } from "./warningCodes";
 import type { Camera, SceneNode } from "../renderer";
 import { SoftwareRenderer } from "../renderer";
 
@@ -212,6 +213,8 @@ export {
   STORY_AUDIT_CONTRACT_VERSION,
 } from "./storyAudit";
 export type { SceneReading, StoryAudit, StoryAuditOptions, StoryWarning } from "./storyAudit";
+export { WARNING_CODES, WARNING_CODE_LIST } from "./warningCodes";
+export type { WarningCode, WarningCodeEntry, WarningSeverity } from "./warningCodes";
 export {
   SCENE_SCHEMA,
   PATCH_SCHEMA,
@@ -249,7 +252,11 @@ export interface ObjectReport extends MeshAudit {
  * y es lo que hace posible responder «¿esto es nuevo o ya estaba?».
  */
 export interface Warning {
-  code: string;
+  /**
+   * Del registro de `warningCodes.ts`, no una cadena cualquiera: emitir un
+   * código que no esté en la tabla no compila.
+   */
+  code: WarningCode;
   /** Pieza a la que se refiere, o `null` si el aviso es del conjunto. */
   part: string | null;
   message: string;
@@ -664,7 +671,7 @@ function buildWarnings(
   objectCoverage: number | null,
 ): Warning[] {
   const warnings: Warning[] = [];
-  const add = (code: string, part: string | null, message: string, fix?: Edit): void => {
+  const add = (code: WarningCode, part: string | null, message: string, fix?: Edit): void => {
     warnings.push(fix !== undefined ? { code, part, message, fix } : { code, part, message });
   };
 

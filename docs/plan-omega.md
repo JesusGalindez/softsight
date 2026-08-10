@@ -151,6 +151,24 @@ contexto: el agente pide lo que va a leer y no paga lo demás.
 
 ### Ω1.3 Registro de códigos de aviso
 
+**Hecha el 2026-08-09.** `src/soft/agent/warningCodes.ts` con los **33 códigos** que
+emite el banco, y `Warning.code`, `StoryWarning.code` y `StagingWarning.code` pasan de
+`string` a `WarningCode`: emitir un código que no esté en la tabla **no compila**, que es
+más fuerte que fallar en ejecución. Sale por `--schema` en `warningCodes`, con `cause`,
+`hasFix` y `fixOp` —cuatro códigos traen arreglo: `align`, `delete`, `scale` y
+`setPivot`—.
+
+`severity` no se inventó: son las dos palabras que los propios mensajes ya usaban —«Es
+certeza, no candidato», «Candidato, no certeza»—. **25 de certeza y 8 candidatos.** La
+distinción importa porque un agente que las trata igual acaba «arreglando» piezas que
+estaban bien: una malla asimétrica solo está mal si tenía que ser simétrica.
+
+Puerta `test:codes`: el tipo cubre una dirección, pero no ve las entradas que sobran ni
+lo que se emita desde un `.mjs`, así que la puerta recorre `src/soft/` con una expresión
+regular sobre las dos formas de emitir —`code: "X"` y `add("X"`— y compara los dos
+conjuntos en ambos sentidos; y comprueba que lo que publica `--schema` es la misma tabla
+y no una copia recortada.
+
 Hoy los códigos —`PIEZA_FLOTANTE`, `MALLA_INVERTIDA`, `ESCALA_HERMANOS`,
 `BARRIDO_AUTOINTERSECADO`, `GIRO_AMBIGUO`, `TEXTO_ILEGIBLE`, `ROL_AUSENTE`,
 `ROLES_CONSECUTIVOS`, `BORDE_ABIERTO`…— están repartidos por los módulos que los emiten y

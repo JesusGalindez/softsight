@@ -278,6 +278,13 @@ Los avisos **sin** `fix` no son un olvido: una malla abierta se cierra de muchas
 maneras y ninguna es automática. Operaciones de arreglo: `align`, `setPivot`, `mirror`,
 además de mover, girar, escalar, colorear, ocultar, borrar, renombrar y añadir.
 
+Los códigos no hay que descubrirlos provocándolos: `--schema` publica el registro
+completo en `warningCodes` —qué provoca cada uno, si trae arreglo y con qué operación, y
+si es **certeza** —aritmética que no depende de la intención— o **candidato** —medida
+firme y conclusión abierta—. La tabla vive en `src/soft/agent/warningCodes.ts` y es la
+que manda: emitir un código que no esté en ella no compila, y `npm run test:codes`
+comprueba las dos direcciones contra `src/`.
+
 ### Probar, mirar, deshacer
 
 ```bash

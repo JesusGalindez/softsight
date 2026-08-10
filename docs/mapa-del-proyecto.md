@@ -122,6 +122,7 @@ hecho por los dos lados, da el mismo hash.
 | `softsight:gate` | Poses de control: SoftSight contra Three.js | `npm run softsight:gate` (editor) |
 | `softsight:sample-gate` | Muestras de superficie: posiciones y normales | `npm run softsight:sample-gate` (editor) |
 | `softsight:gates` | Las dos anteriores, en cadena | `npm run softsight:gates` (editor) |
+| `test:codes` | El registro de códigos de aviso contra `src/soft/`, en las dos direcciones, y contra lo que publica `--schema` | `npm run test:codes` (softsight), también dentro de `test:animation` |
 | `test:determinism` | El pliego del dron dos veces en la misma máquina, y contra el `renderHash` fijado en `artifacts/agent/render-hashes.json` | `npm run test:determinism` (softsight), y en CI sobre `ubuntu-latest` y `macos-latest` |
 | `check` | Tipos, pruebas y build del editor | `npm run check` (editor) |
 
@@ -139,7 +140,7 @@ puertas; las cinco restantes solo las cierra una ejecución local con los dos
 repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 72
+Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 75
 comprobaciones de softsight en verde**. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
@@ -289,7 +290,10 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     `sample-surface` es el 62 % de la CPU de la suite y que esta máquina tiene dos
     núcleos físicos —repartir entre cuatro procesos la empeoraba de 61 s a 89 s—.
     El reparto queda apagado tras `SOFTSIGHT_TEST_JOBS` y el objetivo de bajar de
-    20 s pasa a depender de Ω6.2 y Ω6.3, no del paralelismo.
+    20 s pasa a depender de Ω6.2 y Ω6.3, no del paralelismo. **Ω1.3 hecha**: los
+    33 códigos de aviso viven en `warningCodes.ts` y son el tipo del campo
+    `code`, así que emitir uno que no esté en la tabla no compila; salen por
+    `--schema` con su causa, su severidad —certeza o candidato— y su arreglo.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un
