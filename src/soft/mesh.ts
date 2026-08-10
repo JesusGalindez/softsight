@@ -416,6 +416,156 @@ export function createCylinder(
 }
 
 /**
+ * Generadores de perfil: familias de fórmulas que producen un polígono cerrado en
+ * el mismo formato que ya acepta `createExtrusion` —pares `x,z`, antihorario—.
+ *
+ * Son familias fijas con parámetros y no un evaluador de expresiones a propósito.
+ * Una fórmula libre dentro del JSON traería análisis sintáctico, un modo de fallo
+ * que no es «campo mal escrito» —el único que el esquema sabe cazar— y la duda de
+ * si dos máquinas la evalúan igual. Con cuatro familias se describe lo que hace
+ * falta describir.
+ */
+export function createSuperellipseProfile(
+  a: number,
+  b: number,
+  exponent: number,
+  points = 32,
+): number[] {
+  if (points < 3) throw new Error("un perfil necesita al menos tres puntos");
+  if (!(exponent > 0)) throw new Error(`el exponente de la superelipse debe ser positivo, no ${exponent}`);
+
+  const polygon: number[] = [];
+  for (let index = 0; index < points; index += 1) {
+    const angle = (index / points) * Math.PI * 2;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    if (exponent === 2) {
+      // El caso elíptico se resuelve sin pasar por la fórmula general, y no por
+      // velocidad: `Math.sign(-0)` vale `-0`, así que la forma general deja ceros
+      // negativos donde esta deja ceros positivos. Con la excepción, un círculo y
+      // una superelipse de exponente 2 son el mismo polígono número a número, que
+      // es justo lo que la puerta comprueba.
+      polygon.push(a * cos, b * sin);
+      continue;
+    }
+    const power = 2 / exponent;
+    polygon.push(
+      a * Math.sign(cos) * Math.abs(cos) ** power,
+      b * Math.sign(sin) * Math.abs(sin) ** power,
+    );
+  }
+  return polygon;
+}
+
+/** Un círculo es la superelipse de exponente 2 con los dos semiejes iguales. */
+export function createCircleProfile(radius = 1, points = 32): number[] {
+  return createSuperellipseProfile(radius, radius, 2, points);
+}
+
+/**
+ * Superfórmula de Gielis: una sola familia que recorre flores, estrellas,
+ * caparazones y secciones redondeadas según cuatro números.
+ */
+export function createGielisProfile(
+  m: number,
+  n1: number,
+  n2: number,
+  n3: number,
+  options: { a?: number; b?: number; radius?: number; points?: number } = {},
+): number[] {
+  const a = options.a ?? 1;
+  const b = options.b ?? 1;
+  const radius = options.radius ?? 1;
+  const points = options.points ?? 64;
+  if (points < 3) throw new Error("un perfil necesita al menos tres puntos");
+  if (a === 0 || b === 0) throw new Error("los parámetros a y b de Gielis no pueden ser cero");
+
+  const polygon: number[] = [];
+  for (let index = 0; index < points; index += 1) {
+    const angle = (index / points) * Math.PI * 2;
+    const quarter = (m * angle) / 4;
+    const sum =
+      Math.abs(Math.cos(quarter) / a) ** n2 + Math.abs(Math.sin(quarter) / b) ** n3;
+    if (!(sum > 0) || !Number.isFinite(sum)) {
+      // Sin esto sale un infinito que revienta tres capas más abajo, en la
+      // triangulación, sin decir de dónde vino.
+      throw new Error(
+        `los parámetros de Gielis no producen figura en el ángulo ${angle.toFixed(4)} rad`,
+      );
+    }
+    const r = radius * sum ** (-1 / n1);
+    polygon.push(r * Math.cos(angle), r * Math.sin(angle));
+  }
+  return polygon;
+}
+
+/**
+ * Perfil aerodinámico NACA de cuatro dígitos `MPXX`: curvatura máxima en
+ * centésimas de cuerda, su posición en décimas, y grosor en centésimas.
+ *
+ * Dos detalles que deciden si el perfil sirve:
+ *
+ * El último coeficiente del grosor es **−0,1036** y no el clásico −0,1015. Con el
+ * clásico, `yt(1)` no es cero: el borde de fuga queda abierto por unas milésimas
+ * de cuerda y cada ala arrastraría un `BORDE_ABIERTO` que no es culpa de quien la
+ * escribió. Con este, los cinco coeficientes suman cero y el borde de fuga es un
+ * punto, no dos.
+ *
+ * Y las estaciones se reparten en coseno, no uniformemente. Con reparto uniforme,
+ * el borde de ataque —donde la curvatura es máxima— se queda con dos o tres puntos
+ * y el perfil sale con una punta poligonal.
+ */
+export function createNacaProfile(digits: string, chord = 1, points = 64): number[] {
+  if (!/^\d{4}$/.test(digits)) {
+    throw new Error(`un perfil NACA son cuatro dígitos, no "${digits}"`);
+  }
+  if (points % 2 !== 0 || points < 8) {
+    throw new Error(`points de un NACA debe ser par y al menos 8, no ${points}`);
+  }
+
+  const camber = Number(digits[0]) / 100;
+  const camberPosition = Number(digits[1]) / 10;
+  const thickness = Number(digits.slice(2)) / 100;
+  const stations = points / 2 + 1;
+
+  const surface = (station: number, upper: boolean): [number, number] => {
+    const x = (1 - Math.cos((Math.PI * station) / (stations - 1))) / 2;
+    const halfThickness =
+      5 *
+      thickness *
+      (0.2969 * Math.sqrt(x) - 0.126 * x - 0.3516 * x * x + 0.2843 * x ** 3 - 0.1036 * x ** 4);
+
+    let center = 0;
+    let slope = 0;
+    if (camber !== 0 && camberPosition !== 0) {
+      if (x < camberPosition) {
+        center = (camber / camberPosition ** 2) * (2 * camberPosition * x - x * x);
+        slope = ((2 * camber) / camberPosition ** 2) * (camberPosition - x);
+      } else {
+        const tail = (1 - camberPosition) ** 2;
+        center = (camber / tail) * (1 - 2 * camberPosition + 2 * camberPosition * x - x * x);
+        slope = ((2 * camber) / tail) * (camberPosition - x);
+      }
+    }
+
+    const angle = Math.atan(slope);
+    return upper
+      ? [chord * (x - halfThickness * Math.sin(angle)), chord * (center + halfThickness * Math.cos(angle))]
+      : [chord * (x + halfThickness * Math.sin(angle)), chord * (center - halfThickness * Math.cos(angle))];
+  };
+
+  // Por debajo desde el borde de ataque hasta el de fuga, y por arriba de vuelta:
+  // recorrido antihorario en el plano `x,z`. Los dos extremos se emiten una sola
+  // vez —en la estación 0 las dos superficies coinciden en el origen, y en la
+  // última coinciden en el borde de fuga porque `yt(1)` es cero—, así que salen
+  // exactamente `points` pares.
+  const polygon: number[] = [];
+  for (let station = 0; station < stations; station += 1) polygon.push(...surface(station, false));
+  for (let station = stations - 2; station >= 1; station -= 1) polygon.push(...surface(station, true));
+  return polygon;
+}
+
+/**
  * Área firmada de un polígono en el plano XZ. El signo dice el sentido de giro, y
  * hace falta porque un polígono escrito al revés genera un sólido del revés.
  */
@@ -427,6 +577,69 @@ function signedArea(polygon: readonly number[]): number {
     total += polygon[index * 2] * polygon[next * 2 + 1] - polygon[next * 2] * polygon[index * 2 + 1];
   }
   return total / 2;
+}
+
+/**
+ * El mismo polígono con `samples` puntos repartidos por longitud de arco,
+ * empezando en su vértice cero.
+ *
+ * Es lo que elimina el fallo número uno del *loft*: dos secciones con distinto
+ * número de puntos, o con el mismo número mal emparejado, cosen una superficie
+ * retorcida en espiral. Remuestreando las dos al mismo número, un círculo de 24
+ * puntos y un perfil de 64 se cosen sin que nadie los iguale a mano.
+ *
+ * Cuando un punto de destino cae exactamente sobre un vértice —un cuadrado
+ * remuestreado a cuatro puntos, por ejemplo— sale el vértice **intacto**: el
+ * parámetro local vale cero y la interpolación devuelve el extremo sin tocarlo.
+ * De eso depende que un loft de dos secciones iguales dé exactamente lo mismo que
+ * una extrusión, y no «casi».
+ */
+function resamplePolygon(polygon: readonly number[], samples: number): number[] {
+  const count = polygon.length / 2;
+  if (count < 3) throw new Error("un polígono necesita al menos tres puntos");
+  if (samples < 3) throw new Error(`samples debe ser al menos 3, no ${samples}`);
+
+  const cumulative = new Float64Array(count + 1);
+  for (let index = 0; index < count; index += 1) {
+    const next = (index + 1) % count;
+    cumulative[index + 1] =
+      cumulative[index] +
+      Math.hypot(polygon[next * 2] - polygon[index * 2], polygon[next * 2 + 1] - polygon[index * 2 + 1]);
+  }
+  const perimeter = cumulative[count];
+  if (!(perimeter > 0)) throw new Error("un polígono de perímetro cero no se puede remuestrear");
+
+  const resampled: number[] = [];
+  let edge = 0;
+  for (let sample = 0; sample < samples; sample += 1) {
+    const target = (perimeter * sample) / samples;
+    while (edge < count - 1 && target >= cumulative[edge + 1]) edge += 1;
+    const span = cumulative[edge + 1] - cumulative[edge];
+    const t = span > 0 ? (target - cumulative[edge]) / span : 0;
+    const next = (edge + 1) % count;
+    resampled.push(
+      polygon[edge * 2] + (polygon[next * 2] - polygon[edge * 2]) * t,
+      polygon[edge * 2 + 1] + (polygon[next * 2 + 1] - polygon[edge * 2 + 1]) * t,
+    );
+  }
+  return resampled;
+}
+
+/**
+ * El polígono al revés **conservando su vértice cero**: `v0, v_{n-1}, … , v1`.
+ *
+ * `reversePolygon` no sirve aquí: empieza por el último vértice, así que
+ * normalizar el sentido de una sección movería también el punto de partida del
+ * remuestreo, y la correspondencia entre secciones giraría. La misma pieza
+ * escrita en un sentido y en el otro dejaría de dar la misma malla.
+ */
+function flipPolygonKeepingStart(polygon: readonly number[]): number[] {
+  const count = polygon.length / 2;
+  const flipped = [polygon[0], polygon[1]];
+  for (let index = count - 1; index >= 1; index -= 1) {
+    flipped.push(polygon[index * 2], polygon[index * 2 + 1]);
+  }
+  return flipped;
 }
 
 function isInsideTriangle(
@@ -590,6 +803,671 @@ export function createExtrusion(polygon: readonly number[], height = 1): Mesh {
     indices: Uint32Array.from(indices),
     boundingRadius: boundingRadiusOf(positions),
   };
+}
+
+export interface LoftSection {
+  position: readonly [number, number, number];
+  /** Polígono cerrado en el plano XZ, pares `x,z`. */
+  polygon: readonly number[];
+  /** Escala en x y en z; 1 y 1 por defecto. Las dos positivas. */
+  scale?: readonly [number, number];
+  /** Radianes alrededor de Y. Radianes aquí; los grados son cosa del documento. */
+  twist?: number;
+}
+
+/**
+ * Secciones cosidas: la generalización de la extrusión a más de dos perfiles y a
+ * perfiles distintos.
+ *
+ * Convención de planos, que no es adivinable y por eso se dice: el polígono de
+ * cada sección vive en el plano XZ —igual que en `createExtrusion`— y se traslada
+ * a su posición. Las secciones quedan **paralelas a XZ**, así que la pieza crece
+ * a lo largo de Y, y la posición puede además desplazarse en X y en Z para
+ * inclinarla o escalonarla. Un ala cuyo tramo va en horizontal se gira entera con
+ * la matriz del objeto. Es la convención de la extrusión, sin inventar una segunda.
+ *
+ * Los vértices del costado se comparten a lo largo del anillo, así que las
+ * normales salen promediadas y la superficie sombrea suave: es lo que quiere un
+ * perfil aerodinámico, y lo mismo que hace el revolucionado. Un canto vivo en la
+ * sección —un cuadrado— sombreará redondeado, que es el precio conocido de esa
+ * decisión.
+ */
+export function createLoft(
+  sections: readonly LoftSection[],
+  options: { samples?: number; caps?: "both" | "none" | "start" | "end" } = {},
+): Mesh {
+  if (sections.length < 2) throw new Error("un loft necesita al menos dos secciones");
+
+  const caps = options.caps ?? "both";
+  const samples =
+    options.samples ?? Math.max(...sections.map((section) => section.polygon.length / 2));
+  if (samples < 3) throw new Error(`samples debe ser al menos 3, no ${samples}`);
+
+  // El sentido del recorrido se normaliza igual que se normaliza el del polígono:
+  // una lista escrita de arriba abajo produciría el sólido del revés, y ordenarla
+  // cuesta menos que explicarle al agente en qué orden tenía que escribirla.
+  const ordered =
+    sections[sections.length - 1].position[1] >= sections[0].position[1]
+      ? [...sections]
+      : [...sections].reverse();
+
+  const rings: number[][] = [];
+  for (const [index, section] of ordered.entries()) {
+    if (index > 0) {
+      const previous = ordered[index - 1].position;
+      const here = section.position;
+      if (here[0] === previous[0] && here[1] === previous[1] && here[2] === previous[2]) {
+        throw new Error(`las secciones ${index - 1} y ${index} están en la misma posición`);
+      }
+    }
+    const [scaleX, scaleZ] = section.scale ?? [1, 1];
+    if (!(scaleX > 0) || !(scaleZ > 0)) {
+      throw new Error(`la escala de la sección ${index} debe ser positiva, no [${scaleX}, ${scaleZ}]`);
+    }
+
+    const oriented =
+      signedArea(section.polygon) < 0 ? flipPolygonKeepingStart(section.polygon) : [...section.polygon];
+    const resampled = resamplePolygon(oriented, samples);
+    const twist = section.twist ?? 0;
+    const cos = Math.cos(twist);
+    const sin = Math.sin(twist);
+
+    const ring: number[] = [];
+    for (let sample = 0; sample < samples; sample += 1) {
+      const x = resampled[sample * 2] * scaleX;
+      const z = resampled[sample * 2 + 1] * scaleZ;
+      // Mismo sentido de giro que `rotationY`, para que un twist en el documento y
+      // una rotación del objeto no giren en direcciones contrarias.
+      ring.push(cos * x - sin * z, sin * x + cos * z);
+    }
+    rings.push(ring);
+  }
+
+  const ringCount = rings.length;
+  const capStart = caps === "both" || caps === "start";
+  const capEnd = caps === "both" || caps === "end";
+  const startTriangles = capStart ? earClip(rings[0]) : [];
+  const endTriangles = capEnd ? earClip(rings[ringCount - 1]) : [];
+
+  const capVertices = (capStart ? samples : 0) + (capEnd ? samples : 0);
+  const vertexCount = ringCount * samples + capVertices;
+  const positions = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  const indices: number[] = [];
+
+  let vertex = 0;
+  for (let ring = 0; ring < ringCount; ring += 1) {
+    const y = ordered[ring].position[1];
+    const offsetX = ordered[ring].position[0];
+    const offsetZ = ordered[ring].position[2];
+    for (let sample = 0; sample < samples; sample += 1) {
+      positions[vertex * 3 + 0] = rings[ring][sample * 2] + offsetX;
+      positions[vertex * 3 + 1] = y;
+      positions[vertex * 3 + 2] = rings[ring][sample * 2 + 1] + offsetZ;
+      uvs[vertex * 2 + 0] = sample / samples;
+      uvs[vertex * 2 + 1] = ring / (ringCount - 1);
+      vertex += 1;
+    }
+  }
+
+  for (let ring = 0; ring < ringCount - 1; ring += 1) {
+    for (let sample = 0; sample < samples; sample += 1) {
+      const next = (sample + 1) % samples;
+      const a = ring * samples + sample;
+      const b = ring * samples + next;
+      const c = (ring + 1) * samples + next;
+      const d = (ring + 1) * samples + sample;
+      indices.push(a, c, b, a, d, c);
+    }
+  }
+
+  // Las tapas no comparten vértices con el costado: comparten posición pero no
+  // normal, y soldarlas redondearía el canto.
+  for (const [ring, triangles, upward] of [
+    [0, startTriangles, false],
+    [ringCount - 1, endTriangles, true],
+  ] as const) {
+    if (triangles.length === 0) continue;
+    const base = vertex;
+    const y = ordered[ring].position[1];
+    const offsetX = ordered[ring].position[0];
+    const offsetZ = ordered[ring].position[2];
+    for (let sample = 0; sample < samples; sample += 1) {
+      positions[vertex * 3 + 0] = rings[ring][sample * 2] + offsetX;
+      positions[vertex * 3 + 1] = y;
+      positions[vertex * 3 + 2] = rings[ring][sample * 2 + 1] + offsetZ;
+      uvs[vertex * 2 + 0] = sample / samples;
+      uvs[vertex * 2 + 1] = upward ? 1 : 0;
+      vertex += 1;
+    }
+    for (let entry = 0; entry < triangles.length; entry += 3) {
+      const [a, b, c] = [triangles[entry], triangles[entry + 1], triangles[entry + 2]];
+      // Un polígono antihorario en el papel `x,z` se ve horario desde +Y, así que
+      // la tapa de arriba va al revés que la de abajo. Es el mismo cuidado que ya
+      // se tuvo en la extrusión, donde escribirlo del otro modo sacó el sólido
+      // entero hacia dentro.
+      if (upward) indices.push(base + c, base + b, base + a);
+      else indices.push(base + a, base + b, base + c);
+    }
+  }
+
+  const mesh: Mesh = {
+    positions,
+    normals: new Float32Array(positions.length),
+    uvs,
+    indices: Uint32Array.from(indices),
+    boundingRadius: boundingRadiusOf(positions),
+  };
+  computeNormals(mesh);
+  return mesh;
+}
+
+type Point3 = readonly [number, number, number];
+
+export interface SweepStation {
+  position: Point3;
+  normal: Point3;
+  binormal: Point3;
+  /** Multiplica el perfil en esta estación. */
+  radius: number;
+  /** Radianes alrededor de la tangente. */
+  twist: number;
+}
+
+export interface SweepPath {
+  stations: SweepStation[];
+  /** Fracción de longitud recorrida en cada estación, de 0 a 1. */
+  u: number[];
+  /** Curvatura discreta en cada estación, en 1/unidad. */
+  curvature: number[];
+}
+
+/**
+ * Punto de una Catmull-Rom **centrípeta** entre `p1` y `p2`, con `p0` y `p3` de
+ * vecinos y `t` local de 0 a 1.
+ *
+ * Centrípeta —exponente 0,5 en el reparto de nudos— y no uniforme, y no es un
+ * detalle de gusto: la uniforme forma bucles y cúspides en cuanto los puntos
+ * están desigualmente espaciados, que es como los escribe cualquiera. La
+ * centrípeta tiene demostrado que no produce ninguna de las dos dentro de un
+ * segmento, así que el modo de fallo desaparece en vez de tener que avisarse.
+ */
+function catmullRom(p0: Point3, p1: Point3, p2: Point3, p3: Point3, t: number): Point3 {
+  const knot = (a: Point3, b: Point3, start: number): number =>
+    start + Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]));
+  const t0 = 0;
+  const t1 = knot(p0, p1, t0);
+  const t2 = knot(p1, p2, t1);
+  const t3 = knot(p2, p3, t2);
+  const at = t1 + t * (t2 - t1);
+
+  const mix = (a: Point3, b: Point3, from: number, to: number): Point3 => {
+    const span = to - from;
+    if (span === 0) return a;
+    const weight = (at - from) / span;
+    return [
+      a[0] + (b[0] - a[0]) * weight,
+      a[1] + (b[1] - a[1]) * weight,
+      a[2] + (b[2] - a[2]) * weight,
+    ];
+  };
+
+  const a1 = mix(p0, p1, t0, t1);
+  const a2 = mix(p1, p2, t1, t2);
+  const a3 = mix(p2, p3, t2, t3);
+  const b1 = mix(a1, a2, t0, t2);
+  const b2 = mix(a2, a3, t1, t3);
+  return mix(b1, b2, t1, t2);
+}
+
+/**
+ * Estaciones de un recorrido, con sus marcos por **transporte paralelo**.
+ *
+ * Va aparte de `createSweep` porque la auditoría necesita las estaciones y la
+ * curvatura sin construir la malla, y calcularlas dos veces con dos códigos
+ * distintos sería la divergencia servida.
+ *
+ * **Transporte paralelo y no Frenet.** El marco de Frenet sale de la derivada
+ * segunda: gira de golpe media vuelta al pasar por un punto de inflexión y queda
+ * indefinido donde la curvatura tiende a cero, es decir, en cualquier tramo recto.
+ * Un brazo recto con una curva al final saldría retorcido por la mitad. El
+ * transporte paralelo arrastra el marco anterior girándolo lo mínimo, así que en
+ * un tramo recto no gira nada.
+ */
+export function sweepStations(
+  through: readonly Point3[],
+  options: { kind?: "catmull-rom" | "polyline"; closed?: boolean; stations?: number } = {},
+): SweepPath {
+  const kind = options.kind ?? "catmull-rom";
+  const closed = options.closed ?? false;
+  const count = options.stations ?? 24;
+  if (through.length < 2) throw new Error("un recorrido necesita al menos dos puntos");
+  if (count < 2) throw new Error(`stations debe ser al menos 2, no ${count}`);
+  for (let index = 1; index < through.length; index += 1) {
+    const a = through[index - 1];
+    const b = through[index];
+    if (a[0] === b[0] && a[1] === b[1] && a[2] === b[2]) {
+      throw new Error(`los puntos ${index - 1} y ${index} del recorrido son el mismo`);
+    }
+  }
+
+  const last = through.length - 1;
+  // Los extremos de una curva abierta se completan por reflexión; en una cerrada,
+  // los vecinos se toman dando la vuelta.
+  const at = (index: number): Point3 => {
+    if (closed) return through[((index % through.length) + through.length) % through.length];
+    if (index < 0) {
+      return [
+        2 * through[0][0] - through[1][0],
+        2 * through[0][1] - through[1][1],
+        2 * through[0][2] - through[1][2],
+      ];
+    }
+    if (index > last) {
+      return [
+        2 * through[last][0] - through[last - 1][0],
+        2 * through[last][1] - through[last - 1][1],
+        2 * through[last][2] - through[last - 1][2],
+      ];
+    }
+    return through[index];
+  };
+
+  const segments = closed ? through.length : through.length - 1;
+  const positions: Point3[] = [];
+  for (let index = 0; index < count; index += 1) {
+    // Reparto uniforme en el parámetro, con el mismo número de estaciones por
+    // segmento. Una curva abierta llega al último punto; una cerrada no repite el
+    // primero.
+    const global = closed ? (index / count) * segments : (index / (count - 1)) * segments;
+    const segment = Math.min(segments - 1, Math.floor(global));
+    const local = global - segment;
+    positions.push(
+      kind === "polyline"
+        ? mixPoints(at(segment), at(segment + 1), local)
+        : catmullRom(at(segment - 1), at(segment), at(segment + 1), at(segment + 2), local),
+    );
+  }
+
+  // `u` no es el parámetro de la curva sino la **fracción de longitud recorrida**:
+  // quien escribe una tabla de radio quiere decir «de la raíz a la punta», y con el
+  // parámetro crudo de una centrípeta eso no coincide. Solo se etiquetan las
+  // estaciones ya colocadas; reparametrizar de verdad exigiría invertir la tabla
+  // numéricamente y traer una tolerancia nueva.
+  const steps: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const next = positions[(index + 1) % count];
+    const here = positions[index];
+    steps.push(Math.hypot(next[0] - here[0], next[1] - here[1], next[2] - here[2]));
+  }
+  const total = steps.slice(0, closed ? count : count - 1).reduce((sum, step) => sum + step, 0);
+  const u: number[] = [];
+  let travelled = 0;
+  for (let index = 0; index < count; index += 1) {
+    u.push(total > 0 ? travelled / total : 0);
+    travelled += steps[index];
+  }
+
+  const tangents: Point3[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const previous = positions[(index - 1 + count) % count];
+    const next = positions[(index + 1) % count];
+    const from = closed || index > 0 ? previous : positions[index];
+    const to = closed || index < count - 1 ? next : positions[index];
+    tangents.push(unit([to[0] - from[0], to[1] - from[1], to[2] - from[2]]));
+  }
+
+  // Normal inicial determinista: el eje del mundo menos alineado con la tangente.
+  // Con una elección arbitraria, dos ejecuciones darían mallas distintas y el
+  // `renderHash` dejaría de significar nada.
+  const axes: Point3[] = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ];
+  let chosen = axes[0];
+  let smallest = Infinity;
+  for (const axis of axes) {
+    const alignment = Math.abs(dotPoints(tangents[0], axis));
+    if (alignment < smallest) {
+      smallest = alignment;
+      chosen = axis;
+    }
+  }
+  const normals: Point3[] = [orthogonalize(chosen, tangents[0])];
+  for (let index = 1; index < count; index += 1) {
+    normals.push(transportNormal(normals[index - 1], tangents[index - 1], tangents[index]));
+  }
+
+  // Un recorrido cerrado no cierra solo: el marco vuelve al punto de partida con un
+  // giro residual que casi nunca es cero, y la costura queda desalineada. Se mide y
+  // se reparte a lo largo del recorrido.
+  let residual = 0;
+  if (closed) {
+    const returned = transportNormal(normals[count - 1], tangents[count - 1], tangents[0]);
+    const start = normals[0];
+    const startBinormal = crossPoints(tangents[0], start);
+    residual = Math.atan2(dotPoints(returned, startBinormal), dotPoints(returned, start));
+  }
+
+  const stations: SweepStation[] = [];
+  for (let index = 0; index < count; index += 1) {
+    stations.push({
+      position: positions[index],
+      normal: normals[index],
+      // La binormal se recalcula siempre, nunca se transporta aparte: transportar
+      // las dos deja el marco no ortogonal por acumulación.
+      binormal: crossPoints(tangents[index], normals[index]),
+      radius: 1,
+      twist: -residual * u[index],
+    });
+  }
+
+  const curvature: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    if (!closed && (index === 0 || index === count - 1)) {
+      curvature.push(0);
+      continue;
+    }
+    const previous = positions[(index - 1 + count) % count];
+    const here = positions[index];
+    const next = positions[(index + 1) % count];
+    const first: Point3 = [here[0] - previous[0], here[1] - previous[1], here[2] - previous[2]];
+    const second: Point3 = [next[0] - here[0], next[1] - here[1], next[2] - here[2]];
+    const lengthFirst = Math.hypot(first[0], first[1], first[2]);
+    const lengthSecond = Math.hypot(second[0], second[1], second[2]);
+    const axis = crossPoints(first, second);
+    const angle = Math.atan2(Math.hypot(axis[0], axis[1], axis[2]), dotPoints(first, second));
+    const span = (lengthFirst + lengthSecond) / 2;
+    curvature.push(span > 0 ? angle / span : 0);
+  }
+
+  return { stations, u, curvature };
+}
+
+function mixPoints(a: Point3, b: Point3, t: number): Point3 {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+}
+
+function dotPoints(a: Point3, b: Point3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function crossPoints(a: Point3, b: Point3): Point3 {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+function unit(v: Point3): Point3 {
+  const length = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / length, v[1] / length, v[2] / length];
+}
+
+/** La componente de `v` perpendicular a `axis`, normalizada. */
+function orthogonalize(v: Point3, axis: Point3): Point3 {
+  const projection = dotPoints(v, axis);
+  return unit([v[0] - axis[0] * projection, v[1] - axis[1] * projection, v[2] - axis[2] * projection]);
+}
+
+/**
+ * La normal girada por la rotación **mínima** que lleva una tangente a la otra.
+ *
+ * Con las dos tangentes paralelas —un tramo recto— el eje sale de longitud nula y
+ * la normal se conserva **tal cual**, sin pasar por ninguna fórmula: de eso
+ * depende que un brazo recto salga sin un grado de torsión.
+ */
+function transportNormal(normal: Point3, from: Point3, to: Point3): Point3 {
+  const axis = crossPoints(from, to);
+  const sine = Math.hypot(axis[0], axis[1], axis[2]);
+  if (sine < 1e-12) return normal;
+  const unitAxis: Point3 = [axis[0] / sine, axis[1] / sine, axis[2] / sine];
+  const angle = Math.atan2(sine, dotPoints(from, to));
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const cross = crossPoints(unitAxis, normal);
+  const projection = dotPoints(unitAxis, normal) * (1 - cos);
+  return unit([
+    normal[0] * cos + cross[0] * sin + unitAxis[0] * projection,
+    normal[1] * cos + cross[1] * sin + unitAxis[1] * projection,
+    normal[2] * cos + cross[2] * sin + unitAxis[2] * projection,
+  ]);
+}
+
+/**
+ * Perfil barrido por un recorrido. Generaliza el revolucionado: un círculo
+ * barrido alrededor de un eje **es** un revolucionado.
+ *
+ * El polígono se interpreta en el plano del marco —su `x` sobre la normal y su
+ * `z` sobre la binormal—, y el bobinado va al revés que en el *loft*: la terna
+ * `(normal, binormal, tangente)` es dextrógira, mientras que la del *loft*
+ * —`(X, Z, Y)`— es levógira. Con el mismo bobinado en los dos, uno de los dos
+ * saldría con todas las caras hacia dentro.
+ */
+export function createSweep(
+  polygon: readonly number[],
+  stations: readonly SweepStation[],
+  options: { closed?: boolean; caps?: "both" | "none" | "start" | "end" } = {},
+): Mesh {
+  const points = polygon.length / 2;
+  if (points < 3) throw new Error("un barrido necesita un perfil de al menos tres puntos");
+  if (stations.length < 2) throw new Error("un barrido necesita al menos dos estaciones");
+
+  const closed = options.closed ?? false;
+  // Un recorrido cerrado no tiene extremos que tapar, así que `caps` no se aplica.
+  const caps = closed ? "none" : options.caps ?? "both";
+  const oriented = signedArea(polygon) < 0 ? flipPolygonKeepingStart(polygon) : [...polygon];
+  const capStart = caps === "both" || caps === "start";
+  const capEnd = caps === "both" || caps === "end";
+  const startTriangles = capStart ? earClip(oriented) : [];
+  const endTriangles = capEnd ? earClip(oriented) : [];
+
+  const ringCount = stations.length;
+  const capVertices = (capStart ? points : 0) + (capEnd ? points : 0);
+  const vertexCount = ringCount * points + capVertices;
+  const positions = new Float32Array(vertexCount * 3);
+  const uvs = new Float32Array(vertexCount * 2);
+  const indices: number[] = [];
+
+  const place = (station: SweepStation, point: number): [number, number, number] => {
+    const cos = Math.cos(station.twist);
+    const sin = Math.sin(station.twist);
+    const x = oriented[point * 2] * station.radius;
+    const z = oriented[point * 2 + 1] * station.radius;
+    const alongNormal = cos * x - sin * z;
+    const alongBinormal = sin * x + cos * z;
+    return [
+      station.position[0] + station.normal[0] * alongNormal + station.binormal[0] * alongBinormal,
+      station.position[1] + station.normal[1] * alongNormal + station.binormal[1] * alongBinormal,
+      station.position[2] + station.normal[2] * alongNormal + station.binormal[2] * alongBinormal,
+    ];
+  };
+
+  let vertex = 0;
+  for (let ring = 0; ring < ringCount; ring += 1) {
+    for (let point = 0; point < points; point += 1) {
+      const world = place(stations[ring], point);
+      positions[vertex * 3 + 0] = world[0];
+      positions[vertex * 3 + 1] = world[1];
+      positions[vertex * 3 + 2] = world[2];
+      uvs[vertex * 2 + 0] = point / points;
+      uvs[vertex * 2 + 1] = ring / (ringCount - 1);
+      vertex += 1;
+    }
+  }
+
+  const gaps = closed ? ringCount : ringCount - 1;
+  for (let ring = 0; ring < gaps; ring += 1) {
+    const following = (ring + 1) % ringCount;
+    for (let point = 0; point < points; point += 1) {
+      const next = (point + 1) % points;
+      const a = ring * points + point;
+      const b = ring * points + next;
+      const c = following * points + next;
+      const d = following * points + point;
+      indices.push(a, b, c, a, c, d);
+    }
+  }
+
+  for (const [ring, triangles, atEnd] of [
+    [0, startTriangles, false],
+    [ringCount - 1, endTriangles, true],
+  ] as const) {
+    if (triangles.length === 0) continue;
+    const base = vertex;
+    for (let point = 0; point < points; point += 1) {
+      const world = place(stations[ring], point);
+      positions[vertex * 3 + 0] = world[0];
+      positions[vertex * 3 + 1] = world[1];
+      positions[vertex * 3 + 2] = world[2];
+      uvs[vertex * 2 + 0] = point / points;
+      uvs[vertex * 2 + 1] = atEnd ? 1 : 0;
+      vertex += 1;
+    }
+    for (let entry = 0; entry < triangles.length; entry += 3) {
+      const [a, b, c] = [triangles[entry], triangles[entry + 1], triangles[entry + 2]];
+      if (atEnd) indices.push(base + a, base + b, base + c);
+      else indices.push(base + c, base + b, base + a);
+    }
+  }
+
+  const mesh: Mesh = {
+    positions,
+    normals: new Float32Array(positions.length),
+    uvs,
+    indices: Uint32Array.from(indices),
+    boundingRadius: boundingRadiusOf(positions),
+  };
+  computeNormals(mesh);
+  return mesh;
+}
+
+export type Axis = "x" | "y" | "z";
+
+export type Deformer =
+  | { kind: "twist"; axis: Axis; radians: (u: number) => number }
+  | { kind: "taper"; axis: Axis; scale: (u: number) => number }
+  | { kind: "bend"; axis: Axis; into: Axis; radians: number }
+  | {
+      kind: "wave";
+      axis: Axis;
+      along: Axis;
+      amplitude: (u: number) => number;
+      cycles: number;
+      phase: number;
+    };
+
+const AXIS_INDEX: Record<Axis, number> = { x: 0, y: 1, z: 2 };
+
+/**
+ * Las dos coordenadas que no son la del eje, **en orden ascendente**.
+ *
+ * No es una elección libre: así el giro coincide con el de `rotationX`,
+ * `rotationY` y `rotationZ` de `math.ts` —eje x da (y,z), eje y da (x,z), eje z da
+ * (x,y)—, y un `twist` del documento gira en el mismo sentido que la rotación del
+ * objeto. Con el orden cíclico, el del eje y saldría al revés.
+ */
+function otherAxes(axis: Axis): [number, number] {
+  const index = AXIS_INDEX[axis];
+  const rest = [0, 1, 2].filter((candidate) => candidate !== index);
+  return [rest[0], rest[1]];
+}
+
+/**
+ * Deformadores aplicados **en su sitio**, en el orden en que vienen.
+ *
+ * El orden importa —torcer y luego doblar no es doblar y luego torcer—, y el
+ * parámetro `u` de cada uno sale de la caja envolvente **del momento**: el
+ * deformador anterior pudo cambiarla, y usar la caja original haría que el mismo
+ * documento significase cosas distintas según lo que hubiera delante.
+ *
+ * Al terminar deja la malla coherente, que es donde están los fallos silenciosos:
+ * `faceNormals` borrada —el rasterizador descarta caras con esa caché, y con las
+ * normales de antes de deformar aparecen agujeros que van y vienen al girar la
+ * cámara—, normales recalculadas y radio envolvente al día.
+ *
+ * Las funciones de `u` entran ya resueltas: aquí no se sabe qué es una tabla de
+ * variación ni qué son los grados del documento.
+ */
+export function applyDeformers(mesh: Mesh, deformers: readonly Deformer[]): void {
+  if (deformers.length === 0) return;
+  const { positions } = mesh;
+  const vertexCount = positions.length / 3;
+
+  for (const deformer of deformers) {
+    const axis = AXIS_INDEX[deformer.axis];
+    let minimum = Infinity;
+    let maximum = -Infinity;
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      const value = positions[vertex * 3 + axis];
+      if (value < minimum) minimum = value;
+      if (value > maximum) maximum = value;
+    }
+    const extent = maximum - minimum;
+    // Una malla sin extensión en el eje no tiene nada que recorrer; `u` vale cero
+    // en todas partes y el deformador no hace nada raro.
+    const parameterOf = (value: number): number => (extent > 0 ? (value - minimum) / extent : 0);
+
+    if (deformer.kind === "twist") {
+      const [b, c] = otherAxes(deformer.axis);
+      for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+        const offset = vertex * 3;
+        const angle = deformer.radians(parameterOf(positions[offset + axis]));
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const first = positions[offset + b];
+        const second = positions[offset + c];
+        positions[offset + b] = cos * first - sin * second;
+        positions[offset + c] = sin * first + cos * second;
+      }
+      continue;
+    }
+
+    if (deformer.kind === "taper") {
+      const [b, c] = otherAxes(deformer.axis);
+      for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+        const offset = vertex * 3;
+        const scale = deformer.scale(parameterOf(positions[offset + axis]));
+        positions[offset + b] *= scale;
+        positions[offset + c] *= scale;
+      }
+      continue;
+    }
+
+    if (deformer.kind === "bend") {
+      // Sin ángulo, el radio de doblado sería infinito. Y además la identidad
+      // tiene que salir bit a bit, no «casi».
+      if (deformer.radians === 0 || extent === 0) continue;
+      const into = AXIS_INDEX[deformer.into];
+      const radius = extent / deformer.radians;
+      for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+        const offset = vertex * 3;
+        const along = positions[offset + axis] - minimum;
+        const away = positions[offset + into];
+        const angle = along / radius;
+        positions[offset + axis] = minimum + (radius - away) * Math.sin(angle);
+        positions[offset + into] = radius - (radius - away) * Math.cos(angle);
+      }
+      continue;
+    }
+
+    const along = AXIS_INDEX[deformer.along];
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      const offset = vertex * 3;
+      const u = parameterOf(positions[offset + axis]);
+      positions[offset + along] +=
+        deformer.amplitude(u) * Math.sin(2 * Math.PI * deformer.cycles * u + deformer.phase);
+    }
+  }
+
+  // Recalcular, no transformar: la transformación correcta de una normal bajo una
+  // deformación no lineal es la traspuesta de la inversa del jacobiano en cada
+  // punto, y `computeNormals` ya está.
+  computeNormals(mesh);
+  delete mesh.faceNormals;
+  mesh.boundingRadius = boundingRadiusOf(positions);
 }
 
 /** El perfil recorrido en sentido contrario, conservando los pares radio,altura. */

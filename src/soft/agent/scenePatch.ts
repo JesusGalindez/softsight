@@ -23,7 +23,7 @@
 import { computeSceneAabb, type SceneAabb } from "./contactSheet";
 import { matchesName, type EditResult, type Patch } from "./model";
 import { assertValid, PATCH_SCHEMA } from "./schema";
-import { resolveObject, type ObjectSpec, type SceneSpec } from "./sceneSpec";
+import { resolveCopies, type ObjectSpec, type SceneSpec } from "./sceneSpec";
 
 function nameOf(object: ObjectSpec, index: number): string {
   return object.name ?? `objeto${index}`;
@@ -33,10 +33,14 @@ function asTriple(value: number | [number, number, number]): [number, number, nu
   return typeof value === "number" ? [value, value, value] : value;
 }
 
-/** Caja en mundo de un objeto del documento, resolviéndolo tal como está escrito. */
+/**
+ * Caja en mundo de un objeto del documento, resolviéndolo tal como está escrito.
+ *
+ * Con `repeat`, la caja es la de **todas** las copias: la de una sola dejaría el
+ * encuadre heredado del pliego mirando a un cuarto de la pieza.
+ */
 function boundsOf(object: ObjectSpec, index: number): SceneAabb {
-  const { node } = resolveObject(object, index);
-  return computeSceneAabb([node]);
+  return computeSceneAabb(resolveCopies(object, index).map((copy) => copy.node));
 }
 
 function unionOf(boxes: readonly SceneAabb[]): SceneAabb {

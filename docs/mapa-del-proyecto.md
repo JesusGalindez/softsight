@@ -24,6 +24,19 @@ El producto son **dos repositorios**, con una frontera que no se cruza.
 Lo que cae **entre** los dos repos —y por eso no cabe en ninguno de esos planes—
 va en [`plan-historias.md`](plan-historias.md) y [`plan-convergencia.md`](plan-convergencia.md).
 
+Y como hay **tres actores escribiendo a la vez y no todos pueden hablarse**, lo
+que va de uno a otro —peticiones, bloqueos, quién ve qué árbol— se registra en
+[`coordinacion.md`](coordinacion.md).
+
+Lo que viene después de que la pieza se monte sola —tipografía animada, ritmo,
+que el movimiento cuente la historia en vez de decorarla— está en
+[`plan-animacion.md`](plan-animacion.md).
+
+Y lo que hace falta para que un agente **describa** una pieza compleja —un ala, un
+fuselaje, una pata— en vez de solo colocar primitivas, está en
+[`plan-geometria.md`](plan-geometria.md). Que el **movimiento** se declare con el
+mismo vocabulario que la forma, en [`plan-movimiento.md`](plan-movimiento.md).
+
 **Regla de la frontera:** el editor nunca importa módulos internos de softsight.
 Se comunica solo por el contrato público —CLI, JSON, `--schema`, fixtures— y lo
 hace por un único fichero, `src/assets/softsight-adapter.ts`.
@@ -96,25 +109,46 @@ hecho por los dos lados, da el mismo hash.
 | Puerta | Qué compara | Cómo se ejecuta |
 |---|---|---|
 | `test:animation` | El evaluador contra sus propios fixtures y contra GLB defectuosos | `npm run test:animation` (softsight) |
-| `test:bridge` | El puente contra el CLI real: sample, inspect, render, patch y schema | `npm run test:bridge` (softsight), también dentro de `test:animation` |
+| `test:bridge` | El puente contra el CLI real —sample, inspect, render, patch y schema— y, en tercera columna, el modo residente contra el puente por proceso byte a byte, más veinte peticiones iguales seguidas al mismo proceso | `npm run test:bridge` (softsight), también dentro de `test:animation` |
 | `test:glb-writer` | Un GLB reescrito por nosotros contra los hashes de control del original | `npm run test:glb-writer` (softsight), también dentro de `test:animation` |
 | `test:bind` | El atado en reposo y con el hueso movido, exacto, y las 296 piezas del dron sin deformar | `npm run test:bind` (softsight), también dentro de `test:animation` |
 | `test:rig` | Esqueleto y clips declarados, la auditoría de animación, y la escena por el puente byte a byte | `npm run test:rig` (softsight), también dentro de `test:animation` |
 | `test:bvh` | La cinemática de un BVH contra el evaluador certificado por dos caminos, y la conversión por API, CLI y puente byte a byte | `npm run test:bvh` (softsight), también dentro de `test:animation` |
+| `test:staging` | La puesta en escena: los tres avisos, informes malos rechazados por su motivo, que cada obligatorio del esquema se compruebe quitándolo, y que API, CLI y puente digan lo mismo sin dejar artefactos | dentro de `npm run test:animation` (softsight) |
+| `test:geometry` | La geometría declarativa contra sus volúmenes analíticos: perfiles, loft, barrido, deformadores y repetición, más el ejemplar montado sin solape parcial ni piezas sueltas | `npm run test:geometry` (softsight), también dentro de `test:animation` |
+| `softsight:parity-gate` | Los dos rasterizadores sobre los tres fixtures: silueta contenida en una dilatación de un píxel, y cajas de pantalla exactas | `npm run softsight:parity-gate` (editor), bajo demanda |
 | `test:story` | El guion: duración derivada de la suma, guiones malos rechazados por su motivo, que `--schema` publique el mismo esquema que valida, la auditoría con sus tres avisos, que API, CLI y puente digan lo mismo, y que los dos ejemplares estén limpios y no compartan forma | `npm run test:story` (softsight), también dentro de `test:animation` |
 | `scene-roles.contract` | El vocabulario de roles y los campos que exige cada uno, del editor contra el contrato que publica softsight | dentro de `npm run check` (editor); el fixture se regenera con `npm run softsight:story-schema` |
 | `softsight:gate` | Poses de control: SoftSight contra Three.js | `npm run softsight:gate` (editor) |
 | `softsight:sample-gate` | Muestras de superficie: posiciones y normales | `npm run softsight:sample-gate` (editor) |
 | `softsight:gates` | Las dos anteriores, en cadena | `npm run softsight:gates` (editor) |
+| `test:agents-md` | El `AGENTS.md` commiteado contra el regenerado de `package.json` y `--help`, y su techo de 120 líneas | `npm run test:agents-md` (softsight), también dentro de `test:animation` |
+| `test:incremental` | El informe con contrato de topología, con la caché de auditoría fría, caliente y sin caché, y tras un parche que cambia la malla | `npm run test:incremental` (softsight), también dentro de `test:animation` |
+| `test:mcp` | Cada una de las siete herramientas MCP contra el CLI directo —informe, pliego y GLB byte a byte—, y que los esquemas de parámetros son la traducción de `SCENE_SCHEMA` y `PATCH_SCHEMA` | `npm run test:mcp` (softsight), también dentro de `test:animation` |
+| `test:summary` | El informe recortado contra el completo: cada clave del resumen es la misma, el resumen del dron cabe en 2.000 B, una ruta de `--fields` que no existe sale 2 con sugerencia, y la unión de las siete partes de `--schema` es el `--schema` completo | `npm run test:summary` (softsight), también dentro de `test:animation` |
+| `test:text-plan` | El plan de cartel: normalización de la copia, geometría de la caja, la escala que cabe, los colores por rol y la integración con el render | `npm run test:text-plan` (softsight), también dentro de `test:animation` |
+| `test:codes` | El registro de códigos de aviso contra `src/soft/`, en las dos direcciones, y contra lo que publica `--schema` | `npm run test:codes` (softsight), también dentro de `test:animation` |
+| `test:determinism` | El pliego del dron dos veces en la misma máquina, y contra el `renderHash` fijado en `artifacts/agent/render-hashes.json` | `npm run test:determinism` (softsight), y en CI sobre `ubuntu-latest` y `macos-latest` |
 | `check` | Tipos, pruebas y build del editor | `npm run check` (editor) |
 
 Las dos puertas llevan los fixtures y `--strict` en el propio script, así que se
 ejecutan sin argumentos; pasar los tuyos después de `--` los sustituye.
 
-Estado hoy, verificado el 2026-08-05: **ambas puertas en `accepted`; las
-diecinueve comprobaciones de softsight en verde** (trece del banco —contrato,
-robustez, muestreo, escritor, BVH, E3, atado, pliego, E6, las tres del guion y la
-auditoría de la historia— y seis del puente).
+**Quién las ejecuta, desde el 2026-08-09.** `.github/workflows/verify.yml` corre
+tipos, las puertas y el determinismo en cada empujón, con la versión de Node
+tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
+alcance: cinco puertas —`animation-contract`, `glb-loader`, `sample-surface`,
+`glb-writer` y `bridge`— leen el fixture certificado del editor, que es un
+repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su
+motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y 8 de 13
+puertas; las cinco restantes solo las cierra una ejecución local con los dos
+repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
+`SOFTSIGHT_FIXTURES` la sustituye.
+
+Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 89
+comprobaciones de softsight en verde**. El número ya no se lleva a mano: lo
+imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
+emiten las propias puertas, junto con el tiempo de cada una.
 
 En el editor, **410 pruebas en verde y 6 en rojo**: las seis son de `mcp/`, el
 sidecar del paso F4.4 del plan del motor, que está a medio escribir y sin
@@ -236,8 +270,54 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     cinco, así que la divergencia es real y no del medidor. Un fixture de solo
     caras planas separa dos causas: las aristas curvas casi tangentes, y algo
     propio de la vista superior que no es recorte ni rotación.
-14. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
+14. **Geometría compleja declarativa** (hecha). El agente ya no está limitado a
+    colocar primitivas: perfiles con nombre —círculo, superelipse, Gielis y NACA—,
+    `loft` de secciones, `sweep` de un perfil por un recorrido, cuatro
+    deformadores en cadena y `repeat` radial y espejo. Todo con su número exacto:
+    dos secciones iguales dan lo mismo que una extrusión, un barrido cerrado da lo
+    mismo que el toro, y la torsión conserva el volumen firmado. Plan cerrado en
+    [`plan-geometria.md`](plan-geometria.md), puerta `test:geometry` con 43
+    comprobaciones, ejemplar en `artifacts/agent/pieza-geometria.json`.
+15. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
+16. **Plan Ω — el coste por turno del agente** (en curso). Ver
+    [`plan-omega.md`](plan-omega.md). No añade funcionalidad: ataca lo que hace
+    caro operar el banco —16,5 KB por turno, 10.000 tokens de descubrimiento,
+    0,10 s de arranque por llamada y 47,3 s de suite— y el hueco de que nada de
+    esto lo ejecutaba una máquina. **Ω4 hecha el 2026-08-09**: CI en tres
+    trabajos, `npm run verify` como orden única, y el pliego del dron fijado en
+    `artifacts/agent/render-hashes.json` (`46228b7c`, contrato 3, **el mismo en
+    `ubuntu-latest` y en `macos-latest`**: el determinismo deja de ser política y
+    pasa a ser un hecho medido en dos aritméticas). Destapó que cinco puertas
+    dependen del fixture privado del editor y en CI no corren; ver el aviso de
+    alcance en §4. **Ω7 hecha el mismo día**: `tools/run-tests.mjs` imprime el
+    tiempo de cada puerta y el recuento de comprobaciones, y con eso se vio que
+    `sample-surface` es el 62 % de la CPU de la suite y que esta máquina tiene dos
+    núcleos físicos —repartir entre cuatro procesos la empeoraba de 61 s a 89 s—.
+    El reparto queda apagado tras `SOFTSIGHT_TEST_JOBS` y el objetivo de bajar de
+    20 s pasa a depender de Ω6.2 y Ω6.3, no del paralelismo. **Ω1.3 hecha**: los
+    33 códigos de aviso viven en `warningCodes.ts` y son el tipo del campo
+    `code`, así que emitir uno que no esté en la tabla no compila; salen por
+    `--schema` con su causa, su severidad —certeza o candidato— y su arreglo.
+    **Ω1.1 y Ω1.2 hechas**: `--summary` deja el informe del dron en 1.108 B
+    frente a 16.493 B —un 93 % menos, con sus dos avisos dentro— y `--fields`
+    proyecta rutas con punto; las dos son proyecciones sobre el informe ya
+    construido y no recalculan nada. **Ω1.4 hecha**: `--schema <parte>` baja el
+    descubrimiento de 46.226 B a 12.321 el parche o 940 la muestra, y el completo
+    se construye uniendo las partes. **Ω5 hecha**: `AGENTS.md` en la raíz, 110
+    líneas, con las secciones de comandos, puertas y banderas generadas por
+    `tools/agents-md.mjs`. **Ω2 hecha**: `agent3d --serve` atiende las peticiones
+    del puente sin morirse entre una y otra —0,454 s por proceso contra 0,143 s
+    residente, un 69 % menos—, importando `handleRequest` de `bridge.mjs` para no
+    tener dos contratos; y `tools/lru.mjs` deja el criterio de expulsión escrito
+    una vez para las tres cachés, con lo que `.cache/` deja de crecer sin tope.
+    **Ω3 hecha**: `tools/mcp-server.mjs` publica siete herramientas tipadas por
+    JSON-RPC sobre el modo residente, con los esquemas de parámetros generados de
+    `SCENE_SCHEMA` y compañía; el servidor traduce a una petición del puente y no
+    decide nada. **Ω6 hecha salvo Ω6.4**, que vive en el editor: `sample-surface`
+    de 50,4 s a 0,8 s, la suite de 61 s a 34,5, y el contrato de topología de
+    0,46 s de CPU a 0,02 gracias a una caché de auditoría con clave en la huella
+    de la malla. Ningún hash se movió: el pliego del dron sigue en `46228b7c`.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un
@@ -265,14 +345,16 @@ estado, que es el instrumento del propio renderer.
 
 Trabajo de eficiencia identificado, sin fase asignada todavía:
 
-- Precomputar áreas y pesos √área en `Float64` una vez por GLB; hoy el muestreo
-  los recalcula en cada llamada.
-- Reutilizar `decodedViews` entre frames consecutivos: hoy los skins leen las
-  mismas IBM cuatro veces (pose, normales, muestra).
+- Precomputar áreas y pesos √área en `Float64` una vez por GLB. **Hecho** (Ω6.2).
+- Reutilizar `decodedViews` entre frames consecutivos. **Hecho** (Ω6.3): con las
+  dos, `sample-surface` pasa de 50,4 s a 0,8 s y la suite de 61 s a 34,5.
 - Un solo `AnimationMixer` por lote de frames en `create-sample-contract.mjs`;
-  hoy se crea uno por frame.
-- Ampliar la caché del CLI a las muestras, con clave `(GLB, semilla)`.
-- Modo `--summary`/`--quiet` en `agent3d`: el informe completo es verboso para CI.
+  hoy se crea uno por frame. **Ese fichero vive en el editor**, no aquí.
+- Ampliar la caché del CLI a las muestras, con clave `(GLB, semilla)`. **Sigue
+  sin fase y ahora se sabe por qué**: no hay consumidor aquí. `sampleSurface` con
+  semilla lo llaman el editor y la puerta; el `--sample` del CLI evalúa
+  referencias que ya vienen dadas.
+- Modo `--summary`/`--quiet` en `agent3d`: **hecho**, Ω1.1 y Ω1.2.
 
 ---
 
@@ -374,3 +456,20 @@ Cosas que ya estaban rotas y conviene no volver a romper:
   hacer a propósito, no de paso.
 - `.claude/launch.json` no se versiona en ninguno de los dos repos: lleva rutas
   absolutas de la máquina donde se creó.
+- **`math.ts` guarda las matrices por filas**, no por columnas: `translation` deja
+  la traslación en los índices 3, 7 y 11. Leerlas por columnas produce resultados
+  plausibles y falsos, y dos errores así se cancelan entre sí sin que nada salte.
+  Lo destapó una prueba que comparaba contra un número absoluto —una caja que
+  medía 1,200 cuando tenía que medir 2,800—; comparar solo contra otra ejecución
+  del mismo código no lo habría visto.
+- **`validate` de `schema.ts` rechaza toda clave que no esté en el esquema**, así
+  que un diccionario de claves libres es imposible: lo que se declara por nombre va
+  como lista con `name`. Y **`anyOf` se aplica a un campo, no a los elementos de
+  una lista**: cuando hacen falta alternativas dentro de un `object[]`, van planas
+  y opcionales y quien exige que haya exactamente una es el resolutor.
+- **`assert.equal` distingue `-0` de `0`.** Usa `Math.abs` cuando el cero pueda
+  venir con signo.
+- **Una prueba que pasa no siempre prueba algo.** Un lazo cerrado plano tiene
+  holonomía nula, y uno simétrico también: la primera versión de la prueba del
+  residuo del barrido pasaba con `-9e-16` sin comprobar nada. Conviene que el caso
+  de control y el caso a medir sean distintos **a propósito**.

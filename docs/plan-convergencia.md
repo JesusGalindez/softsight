@@ -264,12 +264,20 @@ animación y avisos salen **idénticos**; solo se mueven los píxeles.
 siendo del plan del motor. La puerta la esquiva entregando coordenadas ya
 divididas, y está anotado en el código.
 
-**A5. El fixture difícil entra en la puerta.** Con skinning y 296 piezas es donde
-la paridad significa algo.
+**A5. El fixture difícil entra en la puerta** (hecho el 2026-08-05). El dron —296
+piezas, 37.950 triángulos, rotores finos— pasa: tres vistas exactas y la superior
+con 20 píxeles de diferencia dentro de la dilatación de uno declarada. La puerta
+corre los tres fixtures sin argumentos en **seis segundos**, contra los treinta
+de presupuesto.
+
+Lo que **no** cubre y conviene no dar por hecho: el dron entra sin skinning. La
+puerta compara geometría rasterizada, y evaluar el skin por el lado del editor
+sería reimplementar el evaluador que ya tiene su propia puerta byte a byte
+(`test:bind`). La deformación se certifica ahí, no aquí.
 
 ### Fase B — El bucle de historias se cierra
 
-**B1. Informe de puesta en escena** (editor). Por escena y por frame de muestra:
+**B1. Informe de puesta en escena** (hecho, editor). Por escena y por frame de muestra:
 caja de cada capa de texto, color medio del fondo bajo esa caja, y qué capas son
 visibles.
 
@@ -281,11 +289,35 @@ ya rasterizado, y para eso vale la lectura del framebuffer que ya existe. El
 rasterizador CPU recibe vértices e interpolantes: no tiene ruta de sprite ni de
 texto, y apoyarse en él aquí sería empezar por el sitio equivocado.
 
-**B2. Auditoría de puesta en escena** (softsight). Consume ese informe y devuelve
-las tres comprobaciones que el plan de historias dejó pendientes por imposibles:
-`ESCENA_VACIA`, `CAJA_FUERA_DE_CUADRO` y `CONTRASTE_INSUFICIENTE` —ratio WCAG,
-que es aritmética—. Se publica por `--schema` y llega por el puente como comando
-`staging`. *Cierra: `test:story` ampliada, API == CLI == puente.*
+Hecho el 2026-08-05, y con un matiz que condiciona B3: **el informe no se puede
+producir entero fuera de un navegador**. Medir glifos necesita un canvas y el
+color del fondo necesita un frame pintado, así que las dos cosas entran como
+dependencias —el motor las da en el editor, una prueba las fija—. Todo lo demás,
+incluida la caja, es aritmética: sprite de dos unidades de alto, y a distancia
+`d` la mitad del cuadro cubre `d · tan(fov/2)` unidades de mundo.
+
+La prueba hace el viaje completo —documento, informe, puente, auditoría— y los
+tres avisos salen **solos**: la escena vacía porque el guion la declara y nadie
+la montó, y el texto desbordado porque su caja cae fuera del cuadro. Retocar el
+informe a mano habría probado la auditoría, que ya tiene su puerta.
+
+**B2. Auditoría de puesta en escena** (hecha el 2026-08-05). Las tres
+comprobaciones que el plan de historias dejó por imposibles ya existen:
+`ESCENA_VACIA`, `CAJA_FUERA_DE_CUADRO` y `CONTRASTE_INSUFICIENTE`. Se publican
+por `--schema` y llegan por el puente como comando `staging`, sin artefactos, con
+su puerta `staging-spec` comprobando API == CLI == puente.
+
+El contrato de entrada —`stagingVersion 1`— queda congelado y es contra lo que se
+escribirá B1: cuadro en píxeles, y por escena su `sampleFrame` y sus capas con
+`visible`, y en el texto `box`, `color` y `backgroundColor`. **Solo al texto se
+le exigen caja y colores**: pedírselos a un modelo sería inventar datos.
+
+El contraste usa un **umbral único de 4,5:1**, decidido a propósito: la norma
+admite 3:1 en texto grande, pero distinguirlo obliga al informe a traer tamaño y
+peso de cada capa y a decidir qué es «grande» cuando el cuadro no es 1920×1080.
+Dos discusiones a cambio de menos avisos que, además, se pueden ignorar.
+
+`bridgeContractVersion` sigue en 1: añadir un comando no rompe a nadie.
 
 **B3. El bucle, encadenado** (editor). `brief → guion → puesta en escena →
 render`, con la puerta entre paso y paso y parada en la primera que avise. Es el
@@ -304,7 +336,7 @@ anterior con teclado. Solo lee el `activeScene` que ya calcula el evaluador.
 perfil determinista de F2.3. Va antes que el panel de edición porque convierte
 todo el plan de historias en un fichero que se puede enseñar, y cuesta menos.
 
-**C3. Panel de guion** (editor): nombre, rol y duración por escena, con
+**C3. Panel de guion** (hecho el 2026-08-05, editor): nombre, rol y duración por escena, con
 `createSetScenesCommand`, que ya existe y ya tiene undo. La duración de la
 composición se muestra derivada y no editable, como manda el esquema 12.
 

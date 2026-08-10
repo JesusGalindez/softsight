@@ -80,6 +80,66 @@ Da igual en qué sentido escribas el polígono o el perfil: se normalizan, porqu
 escribirlos al revés produciría un sólido con las caras hacia dentro y ese es el error
 más fácil de cometer.
 
+Con eso no se describe un ala ni un fuselaje, así que hay **cinco cosas más**. Los
+perfiles se declaran una vez y se usan por nombre —cuatro familias de fórmulas, entre
+ellas el perfil aerodinámico NACA de cuatro dígitos—:
+
+```json
+{ "profiles": [{ "name": "ala", "naca": "2412", "points": 48 }] }
+```
+
+`loft` cose secciones colocadas, y **dos secciones iguales son una extrusión**: mismo
+volumen, misma caja y los mismos triángulos. `sweep` barre un perfil por un recorrido, y
+**un círculo alrededor de un eje es un revolucionado**: da el mismo número que el toro.
+
+```json
+{ "geometry": { "loft": [
+    { "at": [0,0,0],   "profile": "ala", "scale": 0.34, "twist": 8 },
+    { "at": [0,0.8,0], "profile": "ala", "scale": 0.09, "twist": 1 }] } }
+
+{ "geometry": { "sweep": "ala",
+    "path": { "through": [[0,0,0], [0.3,0.2,0], [0.4,0,0]] },
+    "radius": { "at": [[0, 0.02], [1, 0.013]] } } }
+```
+
+`deform` es una lista **ordenada** —torcer y luego doblar no es doblar y luego torcer— y
+se aplica a cualquier geometría. `repeat` produce copias: radial a ángulos exactos, o
+espejo.
+
+```json
+{ "deform": [{ "twist": { "axis": "y", "degrees": 120 } },
+             { "taper": { "axis": "y", "scale": { "at": [[0,1],[1,0.4]] } } }] }
+
+{ "repeat": { "radial": { "count": 4, "axis": "y" } } }
+```
+
+Todo se verifica con el volumen exacto, no con la imagen: la torsión lo conserva, el
+afinado lo multiplica por `(1+k+k²)/3`, y un barrido que se corta a sí mismo salta como
+`BARRIDO_AUTOINTERSECADO` antes de generar nada. Hay un ejemplar con una pieza de cada
+mecánica en `artifacts/agent/pieza-geometria.json`.
+
+Y el movimiento se declara con **el mismo vocabulario que la forma**: una pista de un
+clip acepta la misma tabla —`linear`, `smooth`, `power:k`— en vez de doscientas claves
+escritas a mano, y `turns` gira las vueltas que le digas.
+
+```json
+{ "joint": "rotor", "property": "rotation", "axis": "y", "turns": 3, "frames": 60 }
+{ "joint": "cuerpo", "property": "translation",
+  "value": { "at": [[0,[0,0,0]], [0.5,[0,0.06,0]], [1,[0,0,0]]], "ease": "smooth" },
+  "frames": 20, "cycle": 3 }
+```
+
+`turns` no es azúcar: un muestreador de glTF interpola cuaterniones por el arco más
+corto, así que una vuelta entera escrita con dos claves **no gira nada**. Por eso hornea
+a 90° por clave, y `GIRO_AMBIGUO` avisa de las pistas escritas a mano que caen en la
+trampa.
+
+Para mirar el movimiento sin salir del repositorio, una tira de fotogramas:
+
+```bash
+npm run filmstrip -- --scene artifacts/agent/pieza-geometria.json --frames "0,1,2,3,4,5"
+```
+
 Crear es **incremental**: un parche puede añadir piezas, y aplicado a una escena edita
 el documento, no la geometría. Lo que sale vuelve a ser una escena.
 
@@ -157,23 +217,96 @@ mueve la cámara y el pliego entero se desplaza un píxel.
 `stdout` es JSON puro y el código de salida es 1 si hay avisos, así que encadena en CI
 sin interpretar nada.
 
+### Pagar solo lo que se va a leer
+
+El informe completo del dron son **16.493 B**, y el 45 % es `families`, que no cambia
+porque muevas un rotor. Un agente en bucle de veinte turnos paga veinte veces el mismo
+bloque.
+
+```bash
+# lo que cambia entre turnos: contractVersion, renderHash, warnings, warningsDelta, diff
+npm run agent3d -- --model dron.glb --out revision.png --summary
+
+# o dilo tú, con rutas separadas por puntos
+npm run agent3d -- --model dron.glb --inspect-only --fields "warnings,spatial.floating"
+```
+
+`--summary` deja el informe del dron en **1.108 B**, un 93 % menos, con sus dos avisos
+dentro. Es el mismo informe con menos claves, no otra forma: es una proyección sobre el
+objeto ya construido y **no recalcula nada**, porque un resumen que calculara por su
+cuenta sería un segundo origen del mismo dato. `exitCode` no va dentro —ya lo lleva el
+código de salida— ni `budget` —lo declaraste tú—.
+
+`--fields` proyecta las rutas que pidas conservando nombres y anidamiento, y manda sobre
+`--summary`. Una ruta que no existe es error de datos con sugerencia, no un hueco en
+silencio: recibir un objeto vacío por `spatial.floting` es indistinguible de que no haya
+piezas flotantes.
+
 `--schema` imprime la forma aceptada de la escena y del parche, más un informe de
 ejemplo. No es documentación aparte: el esquema **es** lo que valida la entrada, así que
 no puede divergir del código, y una errata se caza con sugerencia en vez de ignorarse.
+
+Entero son 46.226 B. `--schema <parte>` —`scene|patch|story|staging|sample|report|codes`—
+devuelve solo la que pidas: el parche son 12.321 B y el registro de códigos, 6.707. El
+completo **se construye uniendo las partes**, así que una parte no se puede quedar atrás
+del todo.
 
 ```
 la escena no encaja con el esquema:
   - objects[0].positon no existe; ¿querías decir position?
 ```
 
-`--help` lista todas las opciones: `--inspect-only`,
+`--help` lista todas las opciones: `--inspect-only`, `--summary`, `--fields`,
 `--baseline pliego.png`, `--baseline-report informe.json`, `--select-where "expr"`,
 `--patch` (repetible), `--undo`, `--dry-run`, `--save-scene`, `--no-cache`, `--tile N`,
 `--isolate true`, `--audit-limit N`, `--ground false`, las de presupuesto y `--debug`.
 
 El modelo analizado se guarda en `.cache/` con clave `(ruta, mtime, tamaño)`: analizar
 el GLB del dron son 56 ms y leer la caché, 5 ms. El informe dice en `cached` de dónde
-salió, y `--no-cache` la salta.
+salió, `--no-cache` la salta, y el directorio se recorta por mtime con
+`SOFTSIGHT_CACHE_MAX_MB` (256 por defecto), el mismo criterio que usan el puente y el
+worker.
+
+### Por MCP: las banderas dejan de ser prosa y pasan a ser tipos
+
+Un agente que llega a la CLI tiene que leerse 7,4 KB de `--help`, decidir qué banderas
+combina, construir una línea de órdenes y parsear el informe. Ninguno de esos errores lo
+caza el esquema, porque el esquema valida la **entrada**, no la **invocación**.
+
+`tools/mcp-server.mjs` publica siete herramientas tipadas —`softsight_inspect`,
+`_render`, `_patch`, `_scene`, `_story`, `_bvh` y `_schema`— por JSON-RPC sobre stdio, sin
+dependencias. `softsight_inspect` devuelve el resumen por defecto. Para registrarlo en un
+cliente MCP:
+
+```json
+{
+  "mcpServers": {
+    "softsight": {
+      "command": "node",
+      "args": ["/ruta/a/softsight/tools/mcp-server.mjs"]
+    }
+  }
+}
+```
+
+El servidor **no decide nada**: traduce la llamada a una petición del puente y devuelve lo
+que el puente devuelve. Los esquemas de parámetros se generan de `SCENE_SCHEMA`,
+`PATCH_SCHEMA` y `STORY_SCHEMA`, no se escriben a mano, y `npm run test:mcp` compara cada
+herramienta contra el CLI directo. La única traducción que hace es leer del disco los
+ficheros que el puente quiere en base64.
+
+### El CLI que no se muere
+
+```bash
+node tools/agent3d.mjs --serve      # peticiones NDJSON dentro, respuestas NDJSON fuera
+```
+
+El 43 % de una llamada barata era arranque de proceso. `--serve` atiende **las mismas
+peticiones que `tools/bridge.mjs`** —el mismo contrato, sin un campo nuevo— sobre un
+proceso que se queda: **0,454 s por petición lanzando proceso contra 0,143 s residente**,
+mejor de dos vueltas con el dron. Un proceso vivo acumula estado, así que la puerta manda
+veinte peticiones idénticas seguidas y comprueba que las veinte respuestas lo son y que
+el `renderHash` no se mueve.
 
 El informe trae, además del pliego: auditoría topológica por pieza —aristas de borde,
 no manifold, triángulos degenerados, normales invertidas, desviación del pivote,
@@ -217,6 +350,13 @@ dentro como fragmento de parche. El agente lo aplica tal cual, sin deducir nada:
 Los avisos **sin** `fix` no son un olvido: una malla abierta se cierra de muchas
 maneras y ninguna es automática. Operaciones de arreglo: `align`, `setPivot`, `mirror`,
 además de mover, girar, escalar, colorear, ocultar, borrar, renombrar y añadir.
+
+Los códigos no hay que descubrirlos provocándolos: `--schema` publica el registro
+completo en `warningCodes` —qué provoca cada uno, si trae arreglo y con qué operación, y
+si es **certeza** —aritmética que no depende de la intención— o **candidato** —medida
+firme y conclusión abierta—. La tabla vive en `src/soft/agent/warningCodes.ts` y es la
+que manda: emitir un código que no esté en ella no compila, y `npm run test:codes`
+comprueba las dos direcciones contra `src/`.
 
 ### Probar, mirar, deshacer
 
@@ -499,7 +639,9 @@ resultado que el CLI directo.
 | `raster.ts` | Span exacto, gradientes incrementales, regla top-left, curva ACES, dither |
 | `shading.ts` | Blinn-Phong, ambiente hemisférico, filtrado analítico de textura |
 | `shadowMap.ts` | Mapa de sombras direccional con profundidad lineal |
-| `renderer.ts` | Orquestación: visibilidad, vértices, recorte, rasterizado, postproceso |
+| `renderer.ts` | Orquestación: visibilidad, vértices, recorte, rasterizado, postproceso, título SDF |
+| `font.ts` | Tabla de glifos 5×7 en cadena hexadecimal, compartida por rótulo y texto |
+| `text.ts` | Texto SDF: campos de distancias por glifo, aristas suaves a cualquier escala |
 | `present.ts` | Buffer interno desacoplado del canvas visible |
 | `resolutionController.ts` | Resolución adaptativa con modelo de coste ajustado en vivo |
 | `parallel.ts`, `renderWorker.ts` | Paralelo por bandas con reparto adaptativo |

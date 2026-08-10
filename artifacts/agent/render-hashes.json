@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "name": "dron",
+      "args": [
+        "--model",
+        "artifacts/export/drone.glb"
+      ],
+      "contractVersion": 3,
+      "renderHash": {
+        "sheet": "46228b7c",
+        "byView": {
+          "3/4 iluminada": "412d3026",
+          "frontal": "55fc8bd9",
+          "lateral": "4b3797e2",
+          "superior": "82ec31b7",
+          "normales": "ed203fe1",
+          "wireframe": "e031b746"
+        }
+      }
+    }
+  ]
+}

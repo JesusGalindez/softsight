@@ -13,11 +13,12 @@
  * - **Solo se reportan los cruces nuevos.** Si dos piezas ya se solapaban en
  *   reposo, seguirán solapándose en todos los fotogramas y avisar de eso sería
  *   ruido que tapa la señal. Lo que importa es lo que la animación **rompió**.
- * - **Se muestrean fotogramas, no se recorren todos.** El coste es cuadrático
- *   en piezas, y un modelo de 296 piezas por 300 fotogramas no se audita en un
- *   tiempo razonable. Se toman unos pocos repartidos, y el informe dice cuáles.
- *   Es un muestreo y se declara como tal: puede perderse un cruce que solo
- *   ocurra entre dos fotogramas mirados.
+ * - **Se recorren todos los fotogramas del clip**, mientras quepan en un
+ *   presupuesto declarado. El coste es cuadrático en piezas, así que el tope
+ *   existe; pero muestrear ocho de trescientos se pierde por construcción
+ *   cualquier cruce que dure poco, que es exactamente lo que esto busca. Cuando
+ *   el clip no cabe, se reparten y el informe lo dice con `complete` en falso: un
+ *   recuento que no dice si es completo no sirve para afirmar nada.
  *
  * La evaluación del movimiento no se reimplementa: sale de `computeWorlds` y
  * `applyAnimation`, que son los que están certificados contra Three.js. Una
@@ -29,11 +30,21 @@ import type { Mat4 } from "../math";
 import { applyAnimation, buildNodeStates, computeWorlds } from "./animation";
 import type { ParsedGlb } from "./animation";
 import type { Model } from "./model";
+import type { ClipSpec } from "./rigSpec";
+// Solo el tipo: se borra al compilar, así que no hay ciclo en ejecución.
+import type { Warning } from "./index";
 import { auditSpatial } from "./spatialAudit";
 import type { PlacedPart } from "./spatialAudit";
 
 export interface AnimationAuditOptions {
-  /** Fotogramas a muestrear por clip, repartidos por su duración. 8 por defecto. */
+  /**
+   * Fotogramas a mirar por clip, **como máximo**. 512 por defecto.
+   *
+   * La auditoría recorre todos los del clip mientras quepan en este tope; solo si
+   * el clip es más largo se reparten por su duración, y entonces el informe lo
+   * dice con `complete` en falso. Antes esto era «cuántos muestreo», y ocho
+   * fotogramas de un clip de trescientos se pierden cualquier cruce que dure poco.
+   */
   sampleFrames?: number;
   /** Fotogramas por segundo con los que se numeran los fotogramas. 30 por defecto. */
   fps?: number;
@@ -71,6 +82,13 @@ export interface AnimationAudit {
     /** Los fotogramas que de verdad se miraron. */
     sampled: number[];
     lastFrame: number;
+    /**
+     * Si se miraron **todos** los fotogramas del clip.
+     *
+     * Un recuento que no dice si es completo no sirve para afirmar nada: con
+     * `complete` en falso, «no hay cruces» significa «no los hay en lo que miré».
+     */
+    complete: boolean;
   }>;
   crossings: AnimationCrossing[];
   groundBreaches: GroundBreach[];
@@ -101,15 +119,26 @@ function pairKey(parts: readonly [string, string]): string {
   return parts[0] < parts[1] ? `${parts[0]}|${parts[1]}` : `${parts[1]}|${parts[0]}`;
 }
 
-/** Fotogramas repartidos por la duración, incluidos el primero y el último. */
-function sampleFrames(lastFrame: number, count: number): number[] {
-  if (lastFrame <= 0) return [0];
-  const total = Math.max(2, Math.min(count, lastFrame + 1));
+/**
+ * Los fotogramas a mirar: **todos**, mientras quepan en el presupuesto.
+ *
+ * Muestrear ocho de trescientos se pierde por construcción cualquier cruce que
+ * dure poco, que es justo la clase de fallo que esta auditoría existe para cazar:
+ * el que no se ve en ninguna imagen porque ocurre en un fotograma que nadie miró.
+ * Con las piezas de este tamaño, recorrerlos todos cuesta poco.
+ */
+function framesToWalk(lastFrame: number, budget: number): { frames: number[]; complete: boolean } {
+  if (lastFrame <= 0) return { frames: [0], complete: true };
+  const whole = Math.floor(lastFrame) + 1;
+  if (whole <= budget) {
+    return { frames: Array.from({ length: whole }, (_entry, frame) => frame), complete: true };
+  }
+  const total = Math.max(2, budget);
   const frames: number[] = [];
   for (let index = 0; index < total; index += 1) {
     frames.push(Math.round((index * lastFrame) / (total - 1)));
   }
-  return [...new Set(frames)];
+  return { frames: [...new Set(frames)], complete: false };
 }
 
 /**
@@ -127,7 +156,7 @@ export function auditAnimation(
   const document = rigged.document;
   const nodes = document.nodes ?? [];
   const fps = options.fps ?? 30;
-  const perClip = options.sampleFrames ?? 8;
+  const budget = options.sampleFrames ?? 512;
   const tolerance = options.groundTolerance ?? 1e-4;
 
   const nodeByName = new Map<string, number>();
@@ -179,9 +208,9 @@ export function auditAnimation(
       if (typeof max === "number" && max > duration) duration = max;
     }
     const lastFrame = Math.round(duration * fps);
-    const frames = sampleFrames(lastFrame, perClip);
+    const { frames, complete } = framesToWalk(lastFrame, budget);
     const name = animation.name ?? `clip${clipIndex}`;
-    clips.push({ name, sampled: frames, lastFrame });
+    clips.push({ name, sampled: frames, lastFrame, complete });
 
     for (const frame of frames) {
       const states = buildNodeStates(document);
@@ -238,4 +267,58 @@ export function auditAnimation(
     staticBones,
     groundY,
   };
+}
+
+/**
+ * Vueltas ambiguas en una pista escrita a mano.
+ *
+ * Un muestreador de rotación de glTF interpola cuaterniones **por el arco más
+ * corto**. Dos claves separadas media vuelta o más no giran lo que dicen: giran
+ * menos, o al revés, y una vuelta completa escrita con dos claves —0° y 360°— no se
+ * mueve nada, porque los dos cuaterniones son el mismo. Es un fallo que no rompe
+ * nada al escribir el fichero y que solo se ve mirando el movimiento.
+ *
+ * Solo se puede juzgar cuando la clave viene en **grados**: el cuaternión ya ha
+ * perdido la intención —no existe un cuaternión de 360°— y ahí la herramienta no
+ * tiene nada honesto que decir. Con `turns` no puede pasar: hornea a 90° como
+ * mucho.
+ *
+ * Es certeza, no candidato: sale de restar dos números declarados.
+ */
+export function auditClips(clips: readonly ClipSpec[] = []): Warning[] {
+  const warnings: Warning[] = [];
+  for (const [clipIndex, clip] of clips.entries()) {
+    const name = clip.name ?? `clip${clipIndex}`;
+    for (const track of clip.tracks ?? []) {
+      if (track.property !== "rotation" || !Array.isArray(track.keys)) continue;
+      let worst = 0;
+      let where = 0;
+      for (let key = 1; key < track.keys.length; key += 1) {
+        const before = track.keys[key - 1]?.value;
+        const here = track.keys[key]?.value;
+        // Solo los grados dicen la intención; el cuaternión ya la ha perdido.
+        if (!Array.isArray(before) || !Array.isArray(here)) continue;
+        if (before.length !== 3 || here.length !== 3) continue;
+        for (let axis = 0; axis < 3; axis += 1) {
+          const step = Math.abs(here[axis] - before[axis]);
+          if (step > worst) {
+            worst = step;
+            where = key;
+          }
+        }
+      }
+      if (worst < 180) continue;
+      warnings.push({
+        code: "GIRO_AMBIGUO",
+        part: track.joint,
+        message:
+          `${name}, pista de ${track.joint}: entre las claves ${where - 1} y ${where} la rotación salta ` +
+          `${worst.toFixed(1)}°, media vuelta o más. El muestreador de glTF interpola cuaterniones por el ` +
+          "arco más corto, así que el reproductor no hará ese giro: hará el corto, o ninguno si el salto es " +
+          "de una vuelta entera. Parte el tramo en claves de 90° como mucho, o declara la pista con `turns`, " +
+          "que lo hornea así. Es certeza, no candidato: sale de restar dos números declarados.",
+      });
+    }
+  }
+  return warnings;
 }

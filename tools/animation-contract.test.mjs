@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { fixture, requireFixtures } from "./fixtures.mjs";
 
 import {
   applyAnimation,
@@ -13,12 +13,13 @@ import {
   parseGlbAnimation,
 } from "../dist-node/agent3d.mjs";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const projectRoot = resolve(here, "..");
 // El fixture de salto (jumping-jacks) vive en el proyecto hermano After effect ThreeJS.
-const targetRoot = resolve(projectRoot, "../../Codex/After effect ThreeJS");
-const modelPath = resolve(targetRoot, "public/fixtures/jumping-jacks.glb");
-const referencePath = resolve(targetRoot, "public/fixtures/jumping-jacks-control-poses.json");
+await requireFixtures("animation-contract", [
+  "jumping-jacks.glb",
+  "jumping-jacks-control-poses.json",
+]);
+const modelPath = fixture("jumping-jacks.glb");
+const referencePath = fixture("jumping-jacks-control-poses.json");
 
 const model = await readFile(modelPath);
 const reference = JSON.parse(await readFile(referencePath, "utf8"));

@@ -13,13 +13,31 @@
  * cada medida posterior en mentira, y el agente no tiene forma de saberlo. Por eso la
  * clave lleva **ruta, mtime y tamaño** —el tamaño porque dos ediciones dentro del
  * mismo segundo pueden dejar el mtime igual—, y por eso existe `--no-cache`.
+ *
+ * El techo: sin política de expulsión `.cache/` llegó a 130 MB en 59 ficheros.
+ * Ahora se recorta por mtime con `SOFTSIGHT_CACHE_MAX_MB` (256 por defecto), con
+ * el mismo criterio que el puente y el worker, importado de `lru.mjs` en vez de
+ * escrito por tercera vez.
+ *
+ * **Y no hay piso en memoria, a propósito.** Sería lo obvio para el modo
+ * residente —quitaría la lectura del fichero de caché en cada petición—, pero
+ * `applyPatch` **muta** el modelo que devuelve esta función, y las vistas que
+ * construye `deserialize` apuntan al búfer leído. Un modelo compartido entre
+ * peticiones significa que el parche de la primera se ve en la segunda: un fallo
+ * de determinismo silencioso, que es la peor clase. Devolver una copia cuesta un
+ * memcpy de los ~5 MB de mallas, más o menos lo que cuesta leer el fichero de la
+ * caché de páginas del sistema, así que no compra nada. Se anota como descarte
+ * con su motivo en vez de dejarlo puesto.
  */
 
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { trimDirectory } from "./lru.mjs";
+
 const CACHE_VERSION = 1;
+const DISK_MAX_BYTES = Number(process.env.SOFTSIGHT_CACHE_MAX_MB ?? 256) * 1024 * 1024;
 
 function cacheKey(path) {
   const stats = statSync(path);
@@ -135,7 +153,14 @@ export async function loadModelCached(path, parse, { root = ".cache", enabled = 
   const model = await parse();
   try {
     mkdirSync(dirname(file), { recursive: true });
-    writeFileSync(file, serialize(model));
+    // Escribir y renombrar, no escribir encima: con la suite en paralelo hay
+    // varios procesos analizando el mismo GLB a la vez, y un lector que llega a
+    // medio `writeFileSync` no ve un fichero corrupto —que la caché perdona—
+    // sino uno que puede deserializar a medias. El renombrado es atómico.
+    const temporary = `${file}.${process.pid}.tmp`;
+    writeFileSync(temporary, serialize(model));
+    renameSync(temporary, file);
+    trimDirectory(root, DISK_MAX_BYTES);
   } catch {
     // Guardar es una optimización: si el disco no deja, no pasa nada.
   }

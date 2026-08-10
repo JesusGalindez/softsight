@@ -43,8 +43,26 @@ import type { Mesh } from "../mesh";
 import { diffSheets, type RasterImage, type RenderDiff } from "./renderDiff";
 import { createGroundPlane, resolveScene, type SceneSpec } from "./sceneSpec";
 import { auditSpatial, type SpatialAudit } from "./spatialAudit";
+import { auditGeometry } from "./geometryAudit";
+import { auditClips } from "./animationAudit";
+import type { WarningCode } from "./warningCodes";
 import type { Camera, SceneNode } from "../renderer";
+import { SoftwareRenderer } from "../renderer";
 
+export { SoftwareRenderer };
+/** Texto SDF y planes de cartel → títulos quemados en el framebuffer. */
+export type { SdfTitle } from "../renderer";
+export {
+  buildSdfTitles,
+  fitSdfScale,
+  measureSdfText,
+  normalizeSdfCopy,
+  placeSdfOrigin,
+  resolveSdfColor,
+  DEFAULT_INK_RGB,
+  DEFAULT_ROLE_COLORS,
+} from "../text-plan";
+export type { SdfAnchorSide, SdfTextPlan } from "../text-plan";
 export {
   renderContactSheet,
   computeSceneAabb,
@@ -55,13 +73,23 @@ export {
   frameCamera,
   DEFAULT_VIEWS,
 } from "./contactSheet";
+export { drawSDFText } from "../text";
+export type { TextRun } from "../text";
 export { auditMesh } from "./inspect";
 export { parseGlb } from "./glbLoader";
 export { parseBvh, bvhToSkinnedScene } from "./bvhLoader";
 export { bindModelToSkeleton, restWorldMatrices, skeletonFromParsedGlb } from "./skinBinding";
 export { resolveRig, eulerToQuaternion } from "./rigSpec";
-export type { ClipSpec, JointSpec, KeySpec, ResolvedRig, SkeletonSpec, TrackSpec } from "./rigSpec";
-export { auditAnimation } from "./animationAudit";
+export type {
+  ClipSpec,
+  JointSpec,
+  KeySpec,
+  ResolvedRig,
+  SkeletonSpec,
+  TrackSpec,
+  VectorVariationSpec,
+} from "./rigSpec";
+export { auditAnimation, auditClips } from "./animationAudit";
 export type {
   AnimationAudit,
   AnimationAuditOptions,
@@ -100,7 +128,30 @@ export {
 export type { Model, ModelPart, PartFamily, Patch, Edit, EditResult, PropertyQuery } from "./model";
 export { diffSheets } from "./renderDiff";
 export type { RasterImage, RenderDiff, DiffRegion } from "./renderDiff";
-export { resolveScene, resolveObject, modelFromScene, createGroundPlane } from "./sceneSpec";
+export { resolveScene, resolveObject, resolveCopies, modelFromScene, createGroundPlane } from "./sceneSpec";
+export { evaluateVariation, resolveSweepPath } from "./sceneSpec";
+export type {
+  ProfileSpec,
+  LoftSpec,
+  LoftSectionSpec,
+  SweepSpec,
+  PathSpec,
+  VariationSpec,
+  DeformSpec,
+  RepeatSpec,
+} from "./sceneSpec";
+export { auditGeometry } from "./geometryAudit";
+export {
+  applyDeformers,
+  createCircleProfile,
+  createGielisProfile,
+  createLoft,
+  createNacaProfile,
+  createSuperellipseProfile,
+  createSweep,
+  sweepStations,
+} from "../mesh";
+export type { Axis, Deformer, LoftSection, SweepStation, SweepPath } from "../mesh";
 export { applyPatchToScene } from "./scenePatch";
 export { invertPatch } from "./invertPatch";
 export { auditSpatial } from "./spatialAudit";
@@ -138,18 +189,41 @@ export type {
 export { resolveStory, ROLE_REQUIRED_DATA, STORY_VERSION } from "./storySpec";
 export type { ResolvedScene, ResolvedStory, StoryScene, StorySpec } from "./storySpec";
 export {
+  auditStaging,
+  contrastRatio,
+  resolveStaging,
+  DEFAULT_CONTRAST_RATIO,
+  STAGING_AUDIT_CONTRACT_VERSION,
+  STAGING_VERSION,
+} from "./stagingAudit";
+export type {
+  LayerKind,
+  StagedLayer,
+  StagedScene,
+  StagingAudit,
+  StagingAuditOptions,
+  StagingSceneReading,
+  StagingSpec,
+  StagingWarning,
+} from "./stagingAudit";
+export {
   auditStory,
   DEFAULT_READING_RATE,
   REQUIRED_ROLES,
   STORY_AUDIT_CONTRACT_VERSION,
 } from "./storyAudit";
 export type { SceneReading, StoryAudit, StoryAuditOptions, StoryWarning } from "./storyAudit";
+export { SUMMARY_KEYS, projectFields, summarize } from "./reportView";
+export { WARNING_CODES, WARNING_CODE_LIST } from "./warningCodes";
+export type { WarningCode, WarningCodeEntry, WarningSeverity } from "./warningCodes";
 export {
   SCENE_SCHEMA,
   PATCH_SCHEMA,
   SAMPLE_REFERENCE_SCHEMA,
   SCENE_ROLES,
+  STAGING_SCHEMA,
   STORY_SCHEMA,
+  toJsonSchema,
   validate,
   assertValid,
 } from "./schema";
@@ -180,7 +254,11 @@ export interface ObjectReport extends MeshAudit {
  * y es lo que hace posible responder «¿esto es nuevo o ya estaba?».
  */
 export interface Warning {
-  code: string;
+  /**
+   * Del registro de `warningCodes.ts`, no una cadena cualquiera: emitir un
+   * código que no esté en la tabla no compila.
+   */
+  code: WarningCode;
   /** Pieza a la que se refiere, o `null` si el aviso es del conjunto. */
   part: string | null;
   message: string;
@@ -595,7 +673,7 @@ function buildWarnings(
   objectCoverage: number | null,
 ): Warning[] {
   const warnings: Warning[] = [];
-  const add = (code: string, part: string | null, message: string, fix?: Edit): void => {
+  const add = (code: WarningCode, part: string | null, message: string, fix?: Edit): void => {
     warnings.push(fix !== undefined ? { code, part, message, fix } : { code, part, message });
   };
 
@@ -764,6 +842,12 @@ export function reviewScene(
     ...budgetWarnings,
     ...checkScale(size, options.expectSize),
     ...spatialWarnings(spatial),
+    // Sobre el documento, no sobre la malla: hay geometría mal declarada que la
+    // malla ya no delata, como un barrido que se corta a sí mismo. Y lo mismo con
+    // el movimiento: una vuelta entera escrita con dos claves no se mueve, y el
+    // fichero sale igual de válido.
+    ...auditGeometry(spec),
+    ...auditClips(spec.clips),
   ];
 
   const review: SceneReview = {
@@ -869,12 +953,28 @@ export interface ModelReviewOptions extends ReviewOptions {
    * paga si se pide alguna de ellas.
    */
   budget?: Budget;
+  /**
+   * Quién audita una malla. Por defecto `auditMesh`, que es la función pura de
+   * siempre; el CLI le pone delante una caché en disco.
+   *
+   * Existe porque el coste de las cláusulas de topología es real —auditar las 296
+   * piezas del dron— y **`auditMesh` depende solo de la malla**, no de la matriz:
+   * la pieza que un parche movió pero no deformó tiene la misma auditoría. Quien
+   * pueda reconocer que la malla es la misma se ahorra el recorrido, y como lo
+   * que devuelve es la misma función sobre la misma entrada, el informe no puede
+   * salir distinto.
+   *
+   * La caché no vive aquí porque esta capa no toca el sistema de ficheros: la
+   * inyecta `tools/agent3d.mjs`, que sí.
+   */
+  auditMesh?: (mesh: Mesh) => MeshAudit;
 }
 
 export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
   sheet: ContactSheet | null;
   review: ModelReview;
 } {
+  const audit = options.auditMesh ?? auditMesh;
   const tileSize = options.tileSize ?? 320;
   const patterns = options.select ?? [];
   // Por nombre y por propiedad se suman: quien pide las dos cosas quiere las dos.
@@ -885,7 +985,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
     const audits = new Map<string, Record<string, number | boolean | null>>();
     if (needsAudit(queries)) {
       for (const part of model.parts) {
-        audits.set(part.name, auditMesh(part.mesh) as unknown as Record<string, number | boolean | null>);
+        audits.set(part.name, audit(part.mesh) as unknown as Record<string, number | boolean | null>);
       }
     }
     byProperty = selectWhere(model, queries, audits);
@@ -935,7 +1035,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
   const audited = selected.slice(0, auditLimit);
   const audits: ObjectReport[] = audited.map((part) => ({
     name: part.name,
-    ...auditMesh(part.mesh),
+    ...audit(part.mesh),
   }));
 
   const triangles = model.parts.reduce((total, part) => total + part.mesh.indices.length / 3, 0);
@@ -991,7 +1091,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
       budget.degenerateTriangles !== undefined ||
       budget.symmetryError !== undefined;
     const contractAudits: ObjectReport[] = needsFullAudit
-      ? model.parts.map((part) => ({ name: part.name, ...auditMesh(part.mesh) }))
+      ? model.parts.map((part) => ({ name: part.name, ...audit(part.mesh) }))
       : [];
     warnings.push(
       ...checkBudget(budget, { parts: model.parts.length, triangles }, contractAudits),

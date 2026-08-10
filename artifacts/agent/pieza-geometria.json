@@ -1,0 +1,94 @@
+{
+  "profiles": [
+    { "name": "ala", "naca": "2412", "chord": 1, "points": 48 },
+    { "name": "pala", "naca": "0012", "chord": 0.09, "points": 32 },
+    { "name": "tubo", "circle": 1, "points": 16 }
+  ],
+  "objects": [
+    {
+      "name": "cuerpo",
+      "geometry": {
+        "revolve": [0, 0, 0.16, 0.18, 0.2, 0.5, 0.14, 0.95, 0, 1.1],
+        "segments": 40
+      },
+      "deform": [
+        { "wave": { "axis": "y", "along": "z", "amplitude": 0.012, "cycles": 3 } }
+      ],
+      "color": [0.42, 0.44, 0.48]
+    },
+    {
+      "name": "ala",
+      "geometry": {
+        "loft": [
+          { "at": [0, 0, 0], "profile": "ala", "scale": 0.34, "twist": 8 },
+          { "at": [0, 0.42, 0.02], "profile": "ala", "scale": 0.2, "twist": 4 },
+          { "at": [0, 0.78, 0.04], "profile": "ala", "scale": 0.09, "twist": 1 }
+        ],
+        "samples": 48
+      },
+      "rotation": [0, 0, -90],
+      "position": [0.19, 0.62, -0.08],
+      "color": [0.62, 0.64, 0.68],
+      "repeat": { "mirror": "x" }
+    },
+    {
+      "name": "pata",
+      "geometry": {
+        "sweep": "tubo",
+        "path": {
+          "through": [[0.2, 0.46, 0], [0.31, 0.26, 0], [0.38, 0.07, 0], [0.42, 0, 0]],
+          "kind": "catmull-rom"
+        },
+        "radius": { "at": [[0, 0.02], [1, 0.013]] },
+        "stations": 20
+      },
+      "color": [0.3, 0.32, 0.36],
+      "repeat": { "mirror": "x" }
+    },
+    {
+      "name": "buje",
+      "geometry": { "revolve": [0, 1.1, 0.09, 1.11, 0.09, 1.17, 0, 1.18], "segments": 24 },
+      "color": [0.24, 0.25, 0.28]
+    },
+    {
+      "name": "pala",
+      "geometry": { "extrude": "pala", "height": 0.36 },
+      "deform": [{ "twist": { "axis": "y", "degrees": 22 } }],
+      "rotation": [0, 0, -90],
+      "position": [0.26, 1.19, 0],
+      "color": [0.18, 0.19, 0.22],
+      "repeat": { "radial": { "count": 4, "axis": "y" } }
+    }
+  ],
+  "skeleton": {
+    "joints": [
+      { "name": "estructura" },
+      { "name": "rotor", "parent": "estructura", "offset": [0, 1.15, 0] }
+    ]
+  },
+  "bindings": [
+    { "part": "pala-*", "joint": "rotor" },
+    { "part": "*", "joint": "estructura" }
+  ],
+  "clips": [
+    {
+      "name": "vuelo",
+      "fps": 30,
+      "tracks": [
+        { "joint": "rotor", "property": "rotation", "axis": "y", "turns": 3, "frames": 60 },
+        {
+          "joint": "estructura",
+          "property": "translation",
+          "value": { "at": [[0, [0, 0, 0]], [0.5, [0, 0.06, 0]], [1, [0, 0, 0]]], "ease": "smooth" },
+          "frames": 20,
+          "cycle": 3
+        }
+      ]
+    }
+  ],
+  "budget": {
+    "watertight": true,
+    "degenerateTriangles": 0,
+    "boundaryEdges": 0
+  }
+}

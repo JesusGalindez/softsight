@@ -409,7 +409,7 @@ function evaluateMeshPositionsAtNode(
   states: NodeState[],
   worlds: Mat4[],
 ): number[] {
-  const cache = new Map<number, NumericArray>();
+  const cache = accessorCache(decodedViews);
   const node = document.nodes?.[nodeIndex];
   if (!node) return [];
   const mesh = node.mesh === undefined ? undefined : document.meshes?.[node.mesh];
@@ -457,7 +457,7 @@ function evaluateMeshPositionsAtNode(
  * sale **por columnas**, como la guarda glTF, no por filas.
  */
 export function readAccessorValues(parsed: ParsedGlb, accessorIndex: number): Float64Array {
-  return readAccessor(parsed.document, parsed.binary, accessorIndex, new Map(), parsed.decodedViews);
+  return readAccessor(parsed.document, parsed.binary, accessorIndex, accessorCache(parsed.decodedViews), parsed.decodedViews);
 }
 
 /**
@@ -529,7 +529,7 @@ function evaluateNormalsAtNode(
   states: NodeState[],
   worlds: Mat4[],
 ): number[] {
-  const cache = new Map<number, NumericArray>();
+  const cache = accessorCache(decodedViews);
   const node = document.nodes?.[nodeIndex];
   if (!node) return [];
   const mesh = node.mesh === undefined ? undefined : document.meshes?.[node.mesh];
@@ -623,7 +623,7 @@ export function validateSampleReference(
   if (positionIndex === undefined) {
     throw new Error(`la primitiva ${reference.primitive} de ${reference.mesh} no declara POSITION; no se puede muestrear`);
   }
-  const cache = new Map<number, NumericArray>();
+  const cache = accessorCache(decodedViews);
   const base = readAccessor(document, binary, positionIndex, cache, decodedViews);
   const triangleCount = triangleCountOf(document, binary, decodedViews, primitive, base);
   if (reference.triangle >= triangleCount) {
@@ -654,7 +654,7 @@ function triangleCountOf(
   base: NumericArray,
 ): number {
   if (primitive.indices === undefined) return Math.floor(base.length / 9);
-  const cache = new Map<number, NumericArray>();
+  const cache = accessorCache(decodedViews);
   const indices = readAccessor(document, binary, primitive.indices, cache, decodedViews);
   return Math.floor(indices.length / 3);
 }
@@ -686,7 +686,74 @@ export function sampleSurface(
   options: { count: number; seed: number },
 ): SampleReference[] {
   const random = mulberry32(options.seed);
-  const cache = new Map<number, NumericArray>();
+  const { meshes, primitives, triangles, weights, total } = surfaceWeights(document, binary, decodedViews);
+  const nodes = document.nodes ?? [];
+  const nameOf = (meshIndex: number): string => {
+    const mesh = document.meshes?.[meshIndex];
+    if (mesh?.name) return mesh.name;
+    const instance = nodes.findIndex((node) => node.mesh === meshIndex);
+    return instance >= 0 && nodes[instance]?.name ? nodes[instance].name as string : `malla ${meshIndex}`;
+  };
+  const references: SampleReference[] = [];
+  for (let index = 0; index < options.count; index += 1) {
+    let pick = random() * total;
+    // Recorrido lineal, y **a propósito**: con la suma acumulada y una búsqueda
+    // binaria el orden de las sumas cambia, y en el borde de dos triángulos eso
+    // elige otro. Sería más rápido y movería las huellas, que es exactamente lo
+    // que este proyecto no hace por velocidad.
+    let entry = weights.length - 1;
+    for (let candidate = 0; candidate < weights.length; candidate += 1) {
+      pick -= weights[candidate];
+      if (pick <= 0) {
+        entry = candidate;
+        break;
+      }
+    }
+    const u = random();
+    const v = random();
+    const root = Math.sqrt(u);
+    references.push({
+      mesh: nameOf(meshes[entry]),
+      primitive: primitives[entry],
+      triangle: triangles[entry],
+      barycentric: [1 - root, root * (1 - v), root * v],
+    });
+  }
+  return references;
+}
+
+interface SurfaceWeights {
+  meshes: Int32Array;
+  primitives: Int32Array;
+  triangles: Int32Array;
+  /** Raíz del área de cada triángulo, en el orden de recorrido de las mallas. */
+  weights: Float64Array;
+  total: number;
+}
+
+/**
+ * Las áreas y los pesos √área, **una vez por GLB**.
+ *
+ * Dependen solo de la geometría, no de la semilla, y hasta aquí se recalculaban
+ * en cada `sampleSurface`: recorrer todos los triángulos leyendo posiciones e
+ * índices para volver a sacar los mismos números. Tres muestreos del mismo GLB
+ * eran tres recorridos idénticos.
+ *
+ * En `Float64Array` y no en una lista de objetos porque son solo números, y
+ * porque `Math.sqrt(area)` guardado ahí es el mismo bit que el número de JS: el
+ * muestreo no puede cambiar ni en el último dígito.
+ */
+const SURFACE_WEIGHTS = new WeakMap<Map<number, Uint8Array>, SurfaceWeights>();
+
+function surfaceWeights(
+  document: GltfDocument,
+  binary: Uint8Array,
+  decodedViews: Map<number, Uint8Array>,
+): SurfaceWeights {
+  const memo = SURFACE_WEIGHTS.get(decodedViews);
+  if (memo !== undefined) return memo;
+
+  const cache = accessorCache(decodedViews);
   const entries: Array<{ meshIndex: number; primitiveIndex: number; triangle: number; weight: number }> = [];
   const seenMesh = new Set<number>();
   const meshOrder: number[] = [];
@@ -715,36 +782,18 @@ export function sampleSurface(
   if (entries.length === 0) {
     throw new Error("el GLB no tiene triángulos muestreables (sin POSITION o sin área)");
   }
-  const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
-  const nodes = document.nodes ?? [];
-  const nameOf = (meshIndex: number): string => {
-    const mesh = document.meshes?.[meshIndex];
-    if (mesh?.name) return mesh.name;
-    const instance = nodes.findIndex((node) => node.mesh === meshIndex);
-    return instance >= 0 && nodes[instance]?.name ? nodes[instance].name as string : `malla ${meshIndex}`;
+
+  const resolved: SurfaceWeights = {
+    meshes: Int32Array.from(entries, (entry) => entry.meshIndex),
+    primitives: Int32Array.from(entries, (entry) => entry.primitiveIndex),
+    triangles: Int32Array.from(entries, (entry) => entry.triangle),
+    weights: Float64Array.from(entries, (entry) => entry.weight),
+    // La suma, en el mismo orden que antes: cambiarlo cambiaría el total y con
+    // él el triángulo elegido en el borde.
+    total: entries.reduce((sum, entry) => sum + entry.weight, 0),
   };
-  const references: SampleReference[] = [];
-  for (let index = 0; index < options.count; index += 1) {
-    let pick = random() * total;
-    let entry = entries[entries.length - 1];
-    for (const candidate of entries) {
-      pick -= candidate.weight;
-      if (pick <= 0) {
-        entry = candidate;
-        break;
-      }
-    }
-    const u = random();
-    const v = random();
-    const root = Math.sqrt(u);
-    references.push({
-      mesh: nameOf(entry.meshIndex),
-      primitive: entry.primitiveIndex,
-      triangle: entry.triangle,
-      barycentric: [1 - root, root * (1 - v), root * v],
-    });
-  }
-  return references;
+  SURFACE_WEIGHTS.set(decodedViews, resolved);
+  return resolved;
 }
 
 /** Los tres índices de un triángulo en el búfer de índices de la primitiva. */
@@ -756,7 +805,7 @@ function triangleVertices(
   decodedViews: Map<number, Uint8Array>,
 ): [number, number, number] {
   if (primitive.indices === undefined) return [triangle * 3, triangle * 3 + 1, triangle * 3 + 2];
-  const cache = new Map<number, NumericArray>();
+  const cache = accessorCache(decodedViews);
   const indices = readAccessor(document, binary, primitive.indices, cache, decodedViews);
   return [indices[triangle * 3] ?? 0, indices[triangle * 3 + 1] ?? 0, indices[triangle * 3 + 2] ?? 0];
 }
@@ -783,7 +832,7 @@ function attributeOffsets(
   mesh: GltfMesh,
   primitiveIndex: number,
 ): { positions: number; normals: number; uvs: number } {
-  const cache = new Map<number, NumericArray>();
+  const cache = accessorCache(decodedViews);
   let positions = 0;
   let normals = 0;
   let uvs = 0;
@@ -837,7 +886,7 @@ export function evaluateSample(
   const hasNormals = primitive.attributes.NORMAL !== undefined;
   const hasUvs = primitive.attributes.TEXCOORD_0 !== undefined;
 
-  const cache = new Map<number, NumericArray>();
+  const cache = accessorCache(decodedViews);
   const positions: number[] = [];
   const normals: number[] = [];
   const uvs: number[] = [];
@@ -1083,7 +1132,7 @@ export function applyAnimation(
   states: NodeState[],
   time: number,
 ): void {
-  const cache = new Map<number, NumericArray>();
+  const cache = accessorCache(decodedViews);
   for (const [channelIndex, channel] of animation.channels.entries()) {
     const nodeIndex = channel.target.node;
     const clipName = animation.name ?? "sin nombre";
@@ -1219,6 +1268,33 @@ export function computeWorlds(document: GltfDocument, states: NodeState[]): Mat4
   for (const root of roots) visit(root, identity());
   for (let index = 0; index < nodes.length; index += 1) visit(index, identity());
   return worlds;
+}
+
+/**
+ * Los accesores ya leídos, **una vez por GLB** en vez de una vez por llamada.
+ *
+ * Cada `readAccessor` convierte el búfer a `Float64Array` elemento a elemento, y
+ * hasta aquí cada función pública se traía su `Map` nuevo: evaluar la pose, las
+ * normales y una muestra del mismo fotograma releía las mismas matrices inversas
+ * de atado tres veces, y cuatro fotogramas eran doce lecturas de lo mismo. En
+ * `sample-surface` eso era el 62 % de la CPU de la suite entera.
+ *
+ * La clave es `decodedViews`, que es el objeto que identifica un GLB analizado, y
+ * el mapa es débil: cuando nadie tiene el GLB, la caché se va con él.
+ *
+ * Esto **no puede** cambiar ningún número, y por eso se puede hacer: los arrays
+ * que devuelve `readAccessor` ya se compartían dentro de una llamada, así que
+ * nadie los escribe; si alguien lo hiciera, el resultado ya sería incorrecto hoy.
+ */
+const ACCESSOR_CACHE = new WeakMap<Map<number, Uint8Array>, Map<number, NumericArray>>();
+
+function accessorCache(decodedViews: Map<number, Uint8Array>): Map<number, NumericArray> {
+  let cache = ACCESSOR_CACHE.get(decodedViews);
+  if (cache === undefined) {
+    cache = new Map<number, NumericArray>();
+    ACCESSOR_CACHE.set(decodedViews, cache);
+  }
+  return cache;
 }
 
 function readAccessor(

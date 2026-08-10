@@ -10,15 +10,27 @@
  */
 
 import {
+  applyDeformers,
   computeNormals,
   createBox,
+  createCircleProfile,
   createCylinder,
   createExtrusion,
+  createGielisProfile,
+  createLoft,
+  createNacaProfile,
   createPlane,
   createRevolution,
   createSphere,
+  createSuperellipseProfile,
+  createSweep,
   createTorus,
+  sweepStations,
+  type Axis,
+  type Deformer,
+  type LoftSection,
   type Mesh,
+  type SweepPath,
 } from "../mesh";
 import {
   identity,
@@ -31,11 +43,17 @@ import {
   translation,
   type Mat4,
 } from "../math";
+import { evaluateVariation, type VariationSpec } from "../variation";
 import { assertValid, SCENE_SCHEMA } from "./schema";
 import type { Model } from "./model";
 import type { ClipSpec, SkeletonSpec } from "./rigSpec";
 import type { SkinBindingRule } from "./skinBinding";
 import type { Material, SceneNode } from "../renderer";
+
+// Se reexportan desde aquí porque es donde vivían: mover un fichero no debe
+// obligar a que quien lo usaba cambie su import.
+export { evaluateVariation };
+export type { VariationSpec };
 
 export interface PrimitiveSpec {
   primitive: "box" | "sphere" | "torus" | "plane" | "cylinder" | "cone";
@@ -46,11 +64,88 @@ export interface PrimitiveSpec {
   parameters?: number[];
 }
 
+/**
+ * Perfil con nombre: un polígono cerrado generado por fórmula, declarado una vez
+ * y usado por nombre desde la geometría.
+ *
+ * Existe por el coste de turno. Un ala con ocho estaciones que repita el mismo
+ * polígono de 64 puntos son cuatro mil números en el documento, y el agente
+ * vuelve a leerlos en cada llamada.
+ *
+ * Los cuatro generadores van planos y opcionales porque `anyOf` del esquema se
+ * aplica a un campo y no a los elementos de una lista. Quien exige que haya
+ * exactamente uno es `buildProfile`, con un mensaje que dice cuáles encontró.
+ */
+export interface ProfileSpec {
+  /** Identifica, así que es único dentro de la escena. */
+  name: string;
+  /** Círculo de este radio. */
+  circle?: number;
+  /** Superelipse `[a, b, exponente]`; con exponente 2 es una elipse. */
+  superellipse?: number[];
+  /** Superfórmula de Gielis `[m, n1, n2, n3]`, con `a` y `b` opcionales detrás. */
+  gielis?: number[];
+  /** Perfil aerodinámico NACA de cuatro dígitos, como `"2412"`. */
+  naca?: string;
+  /** Puntos del polígono. Por defecto 32, salvo Gielis (64) y NACA (64). */
+  points?: number;
+  /** Cuerda del NACA; 1 por defecto. */
+  chord?: number;
+  /** Multiplicador del radio de Gielis; 1 por defecto. */
+  radius?: number;
+}
+
 export interface ExtrudeSpec {
-  /** Polígono en el plano XZ, pares `x,z`. Puede ser cóncavo; sin agujeros. */
-  extrude: number[];
+  /**
+   * Polígono en el plano XZ, pares `x,z`, o el nombre de un perfil declarado en
+   * `profiles`. Puede ser cóncavo; sin agujeros.
+   */
+  extrude: number[] | string;
   /** Altura total; se reparte a ambos lados del origen. */
   height?: number;
+}
+
+export interface LoftSectionSpec {
+  /** Dónde se coloca la sección. */
+  at: [number, number, number];
+  /** Polígono en el plano XZ, pares `x,z`, o el nombre de un perfil. */
+  profile: number[] | string;
+  /** Escala uniforme, o `[sx, sz]`; 1 por defecto. */
+  scale?: number | [number, number];
+  /** Grados alrededor de Y, sobre el origen local del polígono; 0 por defecto. */
+  twist?: number;
+}
+
+export interface LoftSpec {
+  /** Secciones a coser, al menos dos. */
+  loft: LoftSectionSpec[];
+  /** Puntos por sección tras remuestrear; el mayor de las secciones por defecto. */
+  samples?: number;
+  /** Qué extremos se tapan; `both` por defecto. */
+  caps?: "both" | "none" | "start" | "end";
+}
+
+export interface PathSpec {
+  /** Puntos por los que pasa el recorrido; al menos dos. */
+  through: number[][];
+  /** `catmull-rom` por defecto, o `polyline`. */
+  kind?: "catmull-rom" | "polyline";
+  /** Si el recorrido se cierra sobre sí mismo. */
+  closed?: boolean;
+}
+
+export interface SweepSpec {
+  /** Polígono en el plano XZ, pares `x,z`, o el nombre de un perfil. */
+  sweep: number[] | string;
+  path: PathSpec;
+  /** Multiplica el perfil en cada estación; 1 por defecto. */
+  radius?: number | VariationSpec;
+  /** Grados alrededor de la tangente; 0 por defecto. */
+  twist?: number | VariationSpec;
+  /** Estaciones a lo largo del recorrido; 24 por defecto. */
+  stations?: number;
+  /** Qué extremos se tapan; `both` por defecto. Un recorrido cerrado no los tiene. */
+  caps?: "both" | "none" | "start" | "end";
 }
 
 export interface RevolveSpec {
@@ -70,11 +165,77 @@ export interface RawMeshSpec {
   uvs?: number[];
 }
 
-export type GeometrySpec = PrimitiveSpec | RawMeshSpec | ExtrudeSpec | RevolveSpec;
+export type GeometrySpec =
+  | PrimitiveSpec
+  | RawMeshSpec
+  | ExtrudeSpec
+  | RevolveSpec
+  | LoftSpec
+  | SweepSpec;
+
+/**
+ * Una deformación de la lista. Los cuatro van planos y opcionales, y que haya
+ * exactamente uno lo exige el resolutor: `anyOf` del esquema se aplica a un campo
+ * y no a los elementos de una lista.
+ *
+ * `degrees`, `scale` y `amplitude` admiten los tres un número o una tabla de
+ * variación, que es un solo modismo para las tres cosas.
+ */
+export interface DeformSpec {
+  /** Gira alrededor del eje, proporcionalmente al recorrido. */
+  twist?: { axis: Axis; degrees: number | VariationSpec };
+  /** Escala las dos coordenadas que no son la del eje. */
+  taper?: { axis: Axis; scale: number | VariationSpec };
+  /** Dobla el eje sobre un arco, hacia `into`. */
+  bend?: { axis: Axis; into: Axis; degrees: number };
+  /** Ondula desplazando a lo largo de `along`. */
+  wave?: {
+    axis: Axis;
+    along: Axis;
+    amplitude: number | VariationSpec;
+    cycles?: number;
+    phase?: number;
+  };
+}
+
+/**
+ * Copias de una pieza. Va en el objeto porque **produce piezas y no forma**, y se
+ * aplica después de `deform`: se deforma la pieza y luego se repite.
+ *
+ * `radial` y `mirror` son excluyentes. Con cualquiera de los dos, la pieza pasa a
+ * llamarse `nombre-1` … `nombre-n`, que encaja con los patrones de selección que
+ * ya existen.
+ */
+export interface RepeatSpec {
+  /** Copias alrededor de un eje, a ángulos exactos de `2πi/count`. */
+  radial?: { count: number; axis?: Axis };
+  /** Una copia reflejada en este eje. */
+  mirror?: Axis;
+  /**
+   * Punto por el que pasa el eje de giro, o el plano del espejo. El origen por
+   * defecto.
+   *
+   * Sin esto, un rotor solo se puede poner sobre el eje del mundo: cuatro palas en
+   * la punta de un brazo orbitarían el centro de la escena en vez de su propio
+   * buje.
+   */
+  about?: [number, number, number];
+}
 
 export interface ObjectSpec {
   name?: string;
   geometry: GeometrySpec;
+  /** Copias de la pieza. Solo tiene efecto por el camino de escena. */
+  repeat?: RepeatSpec;
+  /**
+   * Deformaciones en el orden en que se aplican, sobre la malla ya generada y
+   * **antes** de la matriz de colocación.
+   *
+   * Va aquí y no en `geometry` porque `geometry` es una unión de seis formas:
+   * meterlo dentro obligaría a repetir el campo en las seis, y el generador
+   * número siete se lo dejaría.
+   */
+  deform?: DeformSpec[];
   /**
    * Colocación exacta, que manda sobre posición, rotación y escala.
    *
@@ -94,6 +255,11 @@ export interface ObjectSpec {
 
 export interface SceneSpec {
   objects: ObjectSpec[];
+  /**
+   * Catálogo de perfiles. Uno declarado y no usado no es error: un catálogo puede
+   * tener piezas de repuesto.
+   */
+  profiles?: ProfileSpec[];
   /**
    * Huesos que animarán las piezas. Declararlo no calcula pesos: el atado es
    * rígido y el vínculo se dice pieza a pieza en `bindings`.
@@ -129,6 +295,193 @@ function isExtrude(geometry: GeometrySpec): geometry is ExtrudeSpec {
 
 function isRevolve(geometry: GeometrySpec): geometry is RevolveSpec {
   return (geometry as RevolveSpec).revolve !== undefined;
+}
+
+function isLoft(geometry: GeometrySpec): geometry is LoftSpec {
+  return (geometry as LoftSpec).loft !== undefined;
+}
+
+function isSweep(geometry: GeometrySpec): geometry is SweepSpec {
+  return (geometry as SweepSpec).sweep !== undefined;
+}
+
+const DEFORM_KINDS = ["twist", "taper", "bend", "wave"] as const;
+const AXES: readonly Axis[] = ["x", "y", "z"];
+const AXIS_INDEX: Record<Axis, number> = { x: 0, y: 1, z: 2 };
+
+function checkAxis(value: unknown, what: string): Axis {
+  if (typeof value !== "string" || !AXES.includes(value as Axis)) {
+    throw new Error(`${what}: el eje es "x", "y" o "z", no ${JSON.stringify(value)}`);
+  }
+  return value as Axis;
+}
+
+/** Las deformaciones del documento a las que entiende `applyDeformers`. */
+function buildDeformers(specs: readonly DeformSpec[], name: string): Deformer[] {
+  return specs.map((spec, index) => {
+    const what = `${name}: la deformación ${index}`;
+    const declared = DEFORM_KINDS.filter((kind) => spec[kind] !== undefined);
+    if (declared.length === 0) {
+      throw new Error(`${what} no declara ninguna; admitidas: ${DEFORM_KINDS.join(", ")}`);
+    }
+    if (declared.length > 1) {
+      throw new Error(`${what} declara ${declared.length} (${declared.join(" y ")}); declara una`);
+    }
+
+    if (spec.twist !== undefined) {
+      const axis = checkAxis(spec.twist.axis, `${what} (twist)`);
+      const degrees = spec.twist.degrees ?? 0;
+      return {
+        kind: "twist" as const,
+        axis,
+        radians: (u: number) =>
+          evaluateVariation(degrees, u, `${what} (twist.degrees)`) * DEGREES_TO_RADIANS,
+      };
+    }
+    if (spec.taper !== undefined) {
+      const axis = checkAxis(spec.taper.axis, `${what} (taper)`);
+      const scale = spec.taper.scale ?? 1;
+      return {
+        kind: "taper" as const,
+        axis,
+        scale: (u: number) => evaluateVariation(scale, u, `${what} (taper.scale)`),
+      };
+    }
+    if (spec.bend !== undefined) {
+      const axis = checkAxis(spec.bend.axis, `${what} (bend)`);
+      const into = checkAxis(spec.bend.into, `${what} (bend.into)`);
+      if (into === axis) throw new Error(`${what}: bend.into ("${into}") no puede ser el propio eje`);
+      return { kind: "bend" as const, axis, into, radians: (spec.bend.degrees ?? 0) * DEGREES_TO_RADIANS };
+    }
+
+    const wave = spec.wave as NonNullable<DeformSpec["wave"]>;
+    const axis = checkAxis(wave.axis, `${what} (wave)`);
+    const along = checkAxis(wave.along, `${what} (wave.along)`);
+    if (along === axis) throw new Error(`${what}: wave.along ("${along}") no puede ser el propio eje`);
+    const amplitude = wave.amplitude ?? 0;
+    return {
+      kind: "wave" as const,
+      axis,
+      along,
+      amplitude: (u: number) => evaluateVariation(amplitude, u, `${what} (wave.amplitude)`),
+      cycles: wave.cycles ?? 1,
+      phase: wave.phase ?? 0,
+    };
+  });
+}
+
+/** Estaciones del recorrido declarado, con el radio y la torsión ya aplicados. */
+export function resolveSweepPath(spec: SweepSpec): SweepPath {
+  const through = spec.path?.through;
+  if (!Array.isArray(through)) throw new Error("un barrido necesita `path.through`");
+  for (const [index, point] of through.entries()) {
+    if (!Array.isArray(point) || point.length !== 3) {
+      throw new Error(`el punto ${index} del recorrido son tres números`);
+    }
+  }
+
+  const path = sweepStations(
+    through.map((point) => [point[0], point[1], point[2]] as const),
+    { kind: spec.path.kind, closed: spec.path.closed, stations: spec.stations },
+  );
+  path.stations = path.stations.map((station, index) => ({
+    ...station,
+    radius: evaluateVariation(spec.radius ?? 1, path.u[index], "radius"),
+    // El giro que corrige el residuo del recorrido cerrado ya viene puesto; lo
+    // declarado se suma, y los grados del documento pasan a radianes aquí.
+    twist:
+      station.twist + evaluateVariation(spec.twist ?? 0, path.u[index], "twist") * DEGREES_TO_RADIANS,
+  }));
+  return path;
+}
+
+/** Las secciones del documento a las que entiende `createLoft`. */
+function buildLoftSections(
+  spec: LoftSpec,
+  profiles: ReadonlyMap<string, number[]> | undefined,
+): LoftSection[] {
+  return spec.loft.map((section, index) => {
+    if (section.at === undefined || section.at.length !== 3) {
+      throw new Error(`la sección ${index} del loft necesita \`at\` con tres números`);
+    }
+    const scale = section.scale ?? 1;
+    return {
+      position: [section.at[0], section.at[1], section.at[2]] as const,
+      polygon: polygonOf(section.profile, profiles),
+      scale: (typeof scale === "number" ? [scale, scale] : scale) as readonly [number, number],
+      // Los grados son cosa del documento; el generador trabaja en radianes.
+      twist: (section.twist ?? 0) * DEGREES_TO_RADIANS,
+    };
+  });
+}
+
+const PROFILE_GENERATORS = ["circle", "superellipse", "gielis", "naca"] as const;
+
+/** Un perfil declarado a su polígono. Exige exactamente un generador. */
+function buildProfile(spec: ProfileSpec): number[] {
+  const declared = PROFILE_GENERATORS.filter((key) => spec[key] !== undefined);
+  if (declared.length === 0) {
+    throw new Error(
+      `el perfil "${spec.name}" no declara generador; admitidos: ${PROFILE_GENERATORS.join(", ")}`,
+    );
+  }
+  if (declared.length > 1) {
+    throw new Error(
+      `el perfil "${spec.name}" declara ${declared.length} generadores (${declared.join(" y ")}); declara uno`,
+    );
+  }
+
+  if (spec.circle !== undefined) return createCircleProfile(spec.circle, spec.points ?? 32);
+  if (spec.superellipse !== undefined) {
+    const [a, b, exponent] = spec.superellipse;
+    if (a === undefined || b === undefined || exponent === undefined) {
+      throw new Error(`el perfil "${spec.name}": superellipse son tres números, [a, b, exponente]`);
+    }
+    return createSuperellipseProfile(a, b, exponent, spec.points ?? 32);
+  }
+  if (spec.gielis !== undefined) {
+    const [m, n1, n2, n3, a, b] = spec.gielis;
+    if (m === undefined || n1 === undefined || n2 === undefined || n3 === undefined) {
+      throw new Error(
+        `el perfil "${spec.name}": gielis son al menos cuatro números, [m, n1, n2, n3]`,
+      );
+    }
+    return createGielisProfile(m, n1, n2, n3, {
+      a,
+      b,
+      radius: spec.radius,
+      points: spec.points ?? 64,
+    });
+  }
+  return createNacaProfile(spec.naca as string, spec.chord ?? 1, spec.points ?? 64);
+}
+
+/** El catálogo entero, resuelto una vez por escena. */
+export function resolveProfiles(specs: readonly ProfileSpec[] | undefined): Map<string, number[]> {
+  const profiles = new Map<string, number[]>();
+  for (const spec of specs ?? []) {
+    if (profiles.has(spec.name)) {
+      throw new Error(`hay dos perfiles llamados "${spec.name}"; el nombre identifica`);
+    }
+    profiles.set(spec.name, buildProfile(spec));
+  }
+  return profiles;
+}
+
+export function polygonOf(
+  extrude: number[] | string,
+  profiles: ReadonlyMap<string, number[]> | undefined,
+): number[] {
+  if (typeof extrude !== "string") return extrude;
+  const polygon = profiles?.get(extrude);
+  if (polygon === undefined) {
+    const declared = profiles === undefined ? [] : [...profiles.keys()];
+    throw new Error(
+      `no hay ningún perfil llamado "${extrude}"; ` +
+        (declared.length > 0 ? `declarados: ${declared.join(", ")}` : "la escena no declara perfiles"),
+    );
+  }
+  return polygon;
 }
 
 function buildPrimitive(spec: PrimitiveSpec): Mesh {
@@ -227,20 +580,168 @@ function buildMaterial(spec: ObjectSpec): Material {
   };
 }
 
-/** Una pieza declarativa a nodo de escena. Suelta, para poder añadir de una en una. */
-export function resolveObject(object: ObjectSpec, index = 0): ResolvedObject {
+/**
+ * Una pieza declarativa a nodo de escena. Suelta, para poder añadir de una en una.
+ *
+ * La tabla de perfiles es opcional porque esta función es pública y el parche la
+ * llama pieza a pieza, fuera de una escena entera.
+ */
+export function resolveObject(
+  object: ObjectSpec,
+  index = 0,
+  profiles?: ReadonlyMap<string, number[]>,
+): ResolvedObject {
   const geometry = object.geometry;
   const mesh = isRawMesh(geometry)
     ? buildRawMesh(geometry)
     : isExtrude(geometry)
-      ? createExtrusion(geometry.extrude, geometry.height ?? 1)
+      ? createExtrusion(polygonOf(geometry.extrude, profiles), geometry.height ?? 1)
       : isRevolve(geometry)
         ? createRevolution(geometry.revolve, geometry.segments ?? 32)
-        : buildPrimitive(geometry);
+        : isLoft(geometry)
+          ? createLoft(buildLoftSections(geometry, profiles), {
+              samples: geometry.samples,
+              caps: geometry.caps,
+            })
+          : isSweep(geometry)
+            ? createSweep(
+                polygonOf(geometry.sweep, profiles),
+                resolveSweepPath(geometry).stations,
+                { closed: geometry.path?.closed, caps: geometry.caps },
+              )
+            : buildPrimitive(geometry);
+  const name = object.name ?? `objeto${index}`;
+  if (object.deform !== undefined) applyDeformers(mesh, buildDeformers(object.deform, name));
   return {
-    name: object.name ?? `objeto${index}`,
+    name,
     node: { mesh, model: buildModelMatrix(object), material: buildMaterial(object) },
   };
+}
+
+/**
+ * La malla reflejada en un eje, horneada.
+ *
+ * Negar una coordenada invierte la orientación del espacio, así que el bobinado de
+ * cada triángulo se invierte también; sin eso la copia saldría con todas las caras
+ * hacia dentro. Las normales llevan negada la misma coordenada, y el radio
+ * envolvente no cambia porque reflejar no mueve ningún punto respecto al origen.
+ */
+function mirrorMesh(mesh: Mesh, axis: number): Mesh {
+  const positions = Float32Array.from(mesh.positions);
+  const normals = Float32Array.from(mesh.normals);
+  for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+    positions[vertex * 3 + axis] = -positions[vertex * 3 + axis];
+    normals[vertex * 3 + axis] = -normals[vertex * 3 + axis];
+  }
+  const indices = Uint32Array.from(mesh.indices);
+  for (let triangle = 0; triangle < indices.length; triangle += 3) {
+    const swap = indices[triangle + 1];
+    indices[triangle + 1] = indices[triangle + 2];
+    indices[triangle + 2] = swap;
+  }
+  return {
+    positions,
+    normals,
+    uvs: Float32Array.from(mesh.uvs),
+    indices,
+    boundingRadius: mesh.boundingRadius,
+  };
+}
+
+function reflectionMatrix(axis: Axis): Mat4 {
+  return scaling(axis === "x" ? -1 : 1, axis === "y" ? -1 : 1, axis === "z" ? -1 : 1);
+}
+
+/**
+ * La transformación `t` llevada al punto `about`: `T(a)·t·T(−a)`.
+ *
+ * Es la misma idea que ya usa el espejo con la reflexión, aplicada al sitio: girar
+ * o reflejar «alrededor de aquí» es hacerlo en el origen con el mundo trasladado.
+ * Con `about` en el origen devuelve `t` intacta, así que lo escrito antes de que
+ * existiera el campo sigue dando exactamente lo mismo.
+ */
+function around(transform: Mat4, about: readonly [number, number, number] | undefined): Mat4 {
+  if (about === undefined || (about[0] === 0 && about[1] === 0 && about[2] === 0)) return transform;
+  return multiply(
+    multiply(translation(about[0], about[1], about[2]), transform),
+    translation(-about[0], -about[1], -about[2]),
+  );
+}
+
+function axisRotation(axis: Axis, angle: number): Mat4 {
+  if (axis === "x") return rotationX(angle);
+  if (axis === "z") return rotationZ(angle);
+  return rotationY(angle);
+}
+
+/**
+ * Una pieza y sus copias. Existe aparte de `resolveObject` porque aquella es
+ * pública y hay dos sitios que la llaman esperando **una** pieza.
+ */
+export function resolveCopies(
+  object: ObjectSpec,
+  index = 0,
+  profiles?: ReadonlyMap<string, number[]>,
+): ResolvedObject[] {
+  const base = resolveObject(object, index, profiles);
+  const repeat = object.repeat;
+  if (repeat === undefined) return [base];
+
+  const declared = (["radial", "mirror"] as const).filter((kind) => repeat[kind] !== undefined);
+  if (declared.length === 0) {
+    throw new Error(`${base.name}: repeat no declara ni radial ni mirror`);
+  }
+  if (declared.length > 1) {
+    throw new Error(`${base.name}: repeat declara radial y mirror; son excluyentes`);
+  }
+
+  if (repeat.radial !== undefined) {
+    const count = repeat.radial.count;
+    if (!Number.isInteger(count) || count < 2) {
+      throw new Error(`${base.name}: repeat.radial.count es un entero de 2 en adelante, no ${count}`);
+    }
+    const axis = checkAxis(repeat.radial.axis ?? "y", `${base.name}: repeat.radial`);
+    return Array.from({ length: count }, (_value, copy) => ({
+      name: `${base.name}-${copy + 1}`,
+      node: {
+        ...base.node,
+        // El ángulo se **calcula**, nunca se acumula sumando el paso a la copia
+        // anterior: acumular arrastra error y la última pala deja de estar donde
+        // dice. Y la malla se comparte: son la misma geometría en sitios
+        // distintos, y clonarla sería tirar memoria y romper el agrupado de
+        // mallas repetidas del exportador de GLB.
+        model: multiply(
+          around(axisRotation(axis, (copy * 2 * Math.PI) / count), repeat.about),
+          base.node.model,
+        ),
+      },
+    }));
+  }
+
+  const axis = checkAxis(repeat.mirror as Axis, `${base.name}: repeat.mirror`);
+  const reflection = reflectionMatrix(axis);
+  // La matriz va **conjugada**, `S·M·S`, y el espejo horneado en la malla. Con la
+  // matriz reflejada a secas el determinante sería negativo: el rasterizador
+  // apagaría el descarte en espacio de objeto, y la copia daría volumen firmado
+  // negativo, o sea un `MALLA_INVERTIDA` falso sobre una pieza correcta. Conjugar
+  // deja el determinante como estaba —`det(S)·det(M)·det(S)`— y sigue siendo el
+  // reflejo exacto, porque `S·S` es la identidad.
+  //
+  // Con el plano desplazado, la de la izquierda es la reflexión llevada al punto y
+  // la de la derecha sigue siendo la pura: el espejo horneado en la malla es el de
+  // siempre —negar una coordenada— y así la geometría no se aleja de su origen. El
+  // determinante sigue saliendo positivo, porque las dos son reflexiones.
+  const mirrored = multiply(
+    multiply(around(reflection, repeat.about), base.node.model),
+    reflection,
+  );
+  return [
+    { name: `${base.name}-1`, node: base.node },
+    {
+      name: `${base.name}-2`,
+      node: { ...base.node, mesh: mirrorMesh(base.node.mesh, AXIS_INDEX[axis]), model: mirrored },
+    },
+  ];
 }
 
 export function resolveScene(spec: SceneSpec): ResolvedObject[] {
@@ -251,7 +752,8 @@ export function resolveScene(spec: SceneSpec): ResolvedObject[] {
     throw new Error("la escena necesita al menos un objeto en `objects`");
   }
 
-  return spec.objects.map((object, index) => resolveObject(object, index));
+  const profiles = resolveProfiles(spec.profiles);
+  return spec.objects.flatMap((object, index) => resolveCopies(object, index, profiles));
 }
 
 /**

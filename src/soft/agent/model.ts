@@ -418,6 +418,14 @@ function radiusOf(positions: Float32Array): number {
 
 /** Pieza nueva a partir de su descripción declarativa, ya colocada en el mundo. */
 function partFromSpec(object: ObjectSpec, index: number): ModelPart {
+  if (object.repeat !== undefined) {
+    // Rechazar y no ignorar: aquí se añade **una** pieza, y expandir la
+    // multiplicidad metería el mismo campo significando dos cosas según por dónde
+    // entre. Quien quiera copias las escribe en el documento de escena.
+    throw new Error(
+      "`repeat` es del documento de escena; en un parche sobre modelo, añade cada copia con su `add`",
+    );
+  }
   const resolved = resolveObject(object, index);
   return {
     name: resolved.name,

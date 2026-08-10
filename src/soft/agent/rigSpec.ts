@@ -23,6 +23,7 @@
  * la forma más barata de que nadie confíe en ninguna.
  */
 
+import { evaluateVariation, type VariationSpec } from "../variation";
 import type { SkinnedGlbAnimation, SkinnedGlbNode, SkinnedGlbSampler } from "./glbWriter";
 import type { SkeletonSource } from "./skinBinding";
 
@@ -47,12 +48,216 @@ export interface KeySpec {
   value: number[];
 }
 
+/**
+ * Una función vectorial declarada como tabla, con la misma forma y la misma
+ * interpolación que las de la geometría: `at` son pares `(u, valor)` con `u` de 0
+ * a 1, y `ease` es `linear`, `smooth` o `power:k`.
+ *
+ * La diferencia con `VariationSpec` es que aquí el valor es el del `property` —tres
+ * números—, y se evalúa **componente a componente** con la misma curva. No hay
+ * interpolación nueva: hay tres tablas escalares de las que ya existen.
+ */
+export interface VectorVariationSpec {
+  at: Array<[number, number[]]>;
+  ease?: string;
+}
+
 export interface TrackSpec {
   joint: string;
   property: "translation" | "rotation" | "scale";
   /** `linear` por defecto; `step` mantiene el valor hasta el siguiente clave. */
   interpolation?: "linear" | "step";
-  keys: KeySpec[];
+  /** Fotogramas clave escritos a mano. Excluyente con `value`. */
+  keys?: KeySpec[];
+  /**
+   * La pista como función declarada, en vez de como lista de claves. Necesita
+   * `frames`, y se hornea a claves al resolver.
+   */
+  value?: VectorVariationSpec;
+  /** Cuánto dura la pista declarada con `value`, en fotogramas. */
+  frames?: number;
+  /**
+   * Claves a emitir al hornear: `bake + 1`, repartidas de 0 a `frames`. Por
+   * defecto una por fotograma, salvo en `turns`.
+   */
+  bake?: number;
+  /**
+   * Vueltas completas alrededor de `axis` en `frames` fotogramas. Negativo, al
+   * revés. Solo en `rotation`, y excluyente con `keys` y `value`.
+   */
+  turns?: number;
+  /** Eje de `turns`; `y` por defecto. */
+  axis?: "x" | "y" | "z";
+  /**
+   * Repeticiones del contenido de la pista, una detrás de otra. Con `turns` no:
+   * ahí las vueltas ya se cuentan con el propio número.
+   */
+  cycle?: number;
+  /**
+   * Desfase, en fotogramas del ciclo. **Trata la pista como periódica**: lo que
+   * sale por el final vuelve a entrar por el principio, que es lo que hace que
+   * cuatro patas iguales caminen desacompasadas.
+   *
+   * Solo con `value`, porque el desfase se aplica al **parámetro** antes de
+   * hornear. Sobre claves ya escritas habría que remuestrearlas, y remuestrear una
+   * rotación en cuaterniones no es interpolar tres números.
+   */
+  offsetFrames?: number;
+}
+
+/** Tope de claves por pista. Un GLB no se rompe por esto, pero un descuido sí. */
+const MAX_BAKED_KEYS = 4096;
+
+/**
+ * Paso máximo entre claves de una rotación horneada.
+ *
+ * No es un ajuste de calidad: un muestreador de rotación de glTF interpola
+ * cuaterniones **por el arco más corto**, así que dos claves separadas más de media
+ * vuelta giran poco y al revés, y una vuelta completa escrita con dos claves no se
+ * mueve nada —los dos cuaterniones son el mismo—. Con 90° el camino corto y el
+ * declarado son el mismo.
+ */
+const MAX_DEGREES_PER_KEY = 90;
+
+function checkCycle(track: TrackSpec, at: string): number {
+  const cycles = track.cycle ?? 1;
+  if (!Number.isInteger(cycles) || cycles < 1) {
+    throw new Error(`${at}: 'cycle' es un entero de 1 en adelante, no ${track.cycle}`);
+  }
+  return cycles;
+}
+
+/**
+ * Claves escritas a mano, repetidas `cycle` veces.
+ *
+ * La primera clave de cada repetición cae justo donde la última de la anterior, y
+ * dos claves en el mismo fotograma no son un muestreador válido: se emite una sola
+ * vez. Si el principio y el final de la pista no valen lo mismo, ahí se ve un
+ * salto, y es el que dice el propio documento.
+ */
+function repeatKeys(keys: readonly KeySpec[], cycles: number, at: string): KeySpec[] {
+  if (cycles === 1) return [...keys];
+  const span = keys[keys.length - 1]?.frame ?? 0;
+  if (!(span > 0)) throw new Error(`${at}: 'cycle' necesita que la pista dure más de un fotograma`);
+  const repeated: KeySpec[] = [...keys];
+  for (let round = 1; round < cycles; round += 1) {
+    for (const key of keys.slice(1)) repeated.push({ frame: key.frame + span * round, value: key.value });
+  }
+  return repeated;
+}
+
+/** `turns` vueltas alrededor de un eje, horneadas a claves de 90° como mucho. */
+function bakeTurns(track: TrackSpec, at: string): KeySpec[] {
+  if (track.property !== "rotation") {
+    throw new Error(`${at}: 'turns' solo tiene sentido en una pista de rotation, no de ${track.property}`);
+  }
+  const turns = track.turns as number;
+  if (!Number.isFinite(turns) || turns === 0) {
+    throw new Error(`${at}: 'turns' es un número distinto de cero, no ${track.turns}`);
+  }
+  const frames = track.frames;
+  if (!Number.isFinite(frames) || (frames as number) <= 0) {
+    throw new Error(`${at}: una pista con 'turns' necesita 'frames', y son más de cero`);
+  }
+  const axis = track.axis ?? "y";
+  if (axis !== "x" && axis !== "y" && axis !== "z") {
+    throw new Error(`${at}: 'axis' es "x", "y" o "z", no ${JSON.stringify(track.axis)}`);
+  }
+
+  const total = turns * 360;
+  const minimum = Math.ceil(Math.abs(total) / MAX_DEGREES_PER_KEY);
+  const steps = track.bake ?? minimum;
+  if (!Number.isInteger(steps) || steps < 1) {
+    throw new Error(`${at}: 'bake' es un entero de 1 en adelante, no ${track.bake}`);
+  }
+  if (Math.abs(total) / steps > MAX_DEGREES_PER_KEY) {
+    throw new Error(
+      `${at}: con 'bake' ${steps}, cada clave saltaría ${(Math.abs(total) / steps).toFixed(1)}° y el ` +
+        `muestreador de glTF interpola por el arco más corto; hacen falta al menos ${minimum} pasos`,
+    );
+  }
+  if (steps + 1 > MAX_BAKED_KEYS) {
+    throw new Error(`${at}: hornear ${steps + 1} claves pasa del tope de ${MAX_BAKED_KEYS}; baja 'turns' o sube 'frames'`);
+  }
+
+  const slot = axis === "x" ? 0 : axis === "y" ? 1 : 2;
+  return Array.from({ length: steps + 1 }, (_entry, step) => {
+    const degrees = [0, 0, 0];
+    degrees[slot] = (total * step) / steps;
+    return { frame: ((frames as number) * step) / steps, value: degrees };
+  });
+}
+
+/**
+ * La pista declarada como función, horneada a claves.
+ *
+ * Se hornea porque glTF admite `LINEAR`, `STEP` y `CUBICSPLINE` y nada más:
+ * `smooth` y `power:k` no existen ahí. Es la misma decisión que ya toma la
+ * geometría —la receta vive en el JSON y la malla se hornea al exportar— y tiene
+ * la misma ventaja: lo que sale lo abre cualquiera, sin extensiones inventadas.
+ *
+ * **El número de claves es declarado, no elegido por la herramienta.** Un número
+ * que la herramienta escoge sola es un número que nadie puede reproducir.
+ */
+function bakeTrack(track: TrackSpec, at: string, components: number): KeySpec[] {
+  const table = track.value as VectorVariationSpec;
+  if (!Array.isArray(table.at) || table.at.length === 0) {
+    throw new Error(`${at}.value: 'at' necesita al menos un par (u, valor)`);
+  }
+  const frames = track.frames;
+  if (!Number.isFinite(frames) || (frames as number) <= 0) {
+    throw new Error(`${at}: una pista con 'value' necesita 'frames', y son más de cero`);
+  }
+
+  // La rotación declarada como función va en **grados**, no en cuaternión:
+  // interpolar cuaterniones componente a componente no es una rotación, es un
+  // vector de cuatro números que pasa por dentro de la esfera. Los cuaterniones
+  // ya escritos siguen valiendo por `keys`.
+  const expected = track.property === "rotation" ? 3 : components;
+  const columns: VariationSpec[] = Array.from({ length: expected }, () => ({ at: [], ease: table.ease }));
+  table.at.forEach((entry, index) => {
+    if (!Array.isArray(entry) || entry.length !== 2 || !Number.isFinite(entry[0])) {
+      throw new Error(`${at}.value.at[${index}]: cada entrada es (u, valor), con u entre 0 y 1`);
+    }
+    const value = entry[1];
+    if (!Array.isArray(value) || value.length !== expected) {
+      throw new Error(
+        track.property === "rotation"
+          ? `${at}.value.at[${index}]: una rotación declarada como función son 3 grados en orden Y·X·Z, no ${Array.isArray(value) ? value.length : "otra cosa"}; el cuaternión solo cabe en 'keys'`
+          : `${at}.value.at[${index}]: ${track.property} pide ${expected} números, hay ${Array.isArray(value) ? value.length : "otra cosa"}`,
+      );
+    }
+    value.forEach((component, axis) => {
+      if (!Number.isFinite(component)) {
+        throw new Error(`${at}.value.at[${index}]: hay un componente que no es un número`);
+      }
+      columns[axis].at.push([entry[0], component]);
+    });
+  });
+
+  const steps = track.bake ?? Math.max(1, Math.round(frames as number));
+  if (!Number.isInteger(steps) || steps < 1) {
+    throw new Error(`${at}: 'bake' es un entero de 1 en adelante, no ${track.bake}`);
+  }
+  const cycles = checkCycle(track, at);
+  // El desfase se aplica al parámetro, no a las claves ya horneadas: es exacto y
+  // no obliga a remuestrear nada.
+  const phase = (track.offsetFrames ?? 0) / (frames as number);
+  const total = steps * cycles;
+  if (total + 1 > MAX_BAKED_KEYS) {
+    throw new Error(`${at}: hornear ${total + 1} claves pasa del tope de ${MAX_BAKED_KEYS}; baja 'bake' o 'cycle'`);
+  }
+
+  return Array.from({ length: total + 1 }, (_entry, step) => {
+    const u = (((step / steps + phase) % 1) + 1) % 1;
+    // El último fotograma de un ciclo sin desfase es el final de la curva, no su
+    // principio: `u` valdría 0 por el módulo y la pista se quedaría a medias.
+    const at01 = step === total && phase === 0 ? 1 : u;
+    return {
+      frame: ((frames as number) * step) / steps,
+      value: columns.map((column) => evaluateVariation(column, at01, `${at}.value`)),
+    };
+  });
 }
 
 export interface ClipSpec {
@@ -217,15 +422,37 @@ export function resolveRig(skeleton: SkeletonSpec, clips: readonly ClipSpec[] = 
       if (components === undefined) {
         throw new Error(`${at}: property '${track.property}' no existe; usa translation, rotation o scale`);
       }
-      if (!Array.isArray(track.keys) || track.keys.length === 0) {
+      const declared = (["keys", "value", "turns"] as const).filter((kind) => track[kind] !== undefined);
+      if (declared.length === 0) {
+        throw new Error(`${at}: una pista se escribe con 'keys', 'value' o 'turns', y no trae ninguno`);
+      }
+      if (declared.length > 1) {
+        throw new Error(`${at}: 'keys', 'value' y 'turns' son excluyentes; declara uno (${declared.join(" y ")})`);
+      }
+      if (track.offsetFrames !== undefined && track.value === undefined) {
+        throw new Error(
+          `${at}: 'offsetFrames' desfasa el parámetro antes de hornear, así que solo va con 'value'; ` +
+            "sobre claves escritas a mano habría que remuestrearlas",
+        );
+      }
+      if (track.cycle !== undefined && track.turns !== undefined) {
+        throw new Error(`${at}: 'cycle' con 'turns' sobra; las vueltas ya se cuentan con 'turns'`);
+      }
+      const keys =
+        track.turns !== undefined
+          ? bakeTurns(track, at)
+          : track.value !== undefined
+            ? bakeTrack(track, at, components)
+            : repeatKeys(track.keys as KeySpec[], checkCycle(track, at), at);
+      if (!Array.isArray(keys) || keys.length === 0) {
         throw new Error(`${at}: 'keys' debe ser una lista no vacía`);
       }
 
-      const times = new Float32Array(track.keys.length);
-      const values = new Float32Array(track.keys.length * components);
+      const times = new Float32Array(keys.length);
+      const values = new Float32Array(keys.length * components);
       let previousFrame = -1;
 
-      track.keys.forEach((key, keyIndex) => {
+      keys.forEach((key, keyIndex) => {
         const here = `${at}.keys[${keyIndex}]`;
         if (!Number.isFinite(key.frame) || key.frame < 0) {
           throw new Error(`${here}: 'frame' debe ser un número no negativo`);

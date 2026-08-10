@@ -22,6 +22,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { openAuditCache } from "./auditCache.mjs";
 import { loadModelCached } from "./modelCache.mjs";
 import { deflateSync, inflateSync } from "node:zlib";
 
@@ -31,11 +32,17 @@ import {
   ROLE_REQUIRED_DATA,
   SAMPLE_REFERENCE_SCHEMA,
   SCENE_SCHEMA,
+  STAGING_SCHEMA,
   STORY_SCHEMA,
+  WARNING_CODE_LIST,
   applyPatch,
+  auditMesh,
+  projectFields,
+  summarize,
   applyPatchToScene,
   assertValid,
   auditAnimation,
+  auditStaging,
   auditStory,
   bindModelToSkeleton,
   bvhToSkinnedScene,
@@ -109,7 +116,7 @@ function chunk(type, payload) {
  * CRC-32; los datos son las filas precedidas por un byte de filtro y comprimidas
  * con zlib, que Node trae de serie. Treinta líneas y ninguna dependencia.
  */
-function encodePng(pixels, width, height) {
+export function encodePng(pixels, width, height) {
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
@@ -441,8 +448,15 @@ async function reviewModelFile(options, outputPath) {
   }
 
   const select = options.get("select");
+  // La auditoría de topología se cachea por la huella de la malla: `auditMesh`
+  // depende solo de ella, así que un parche que mueve una pieza no obliga a
+  // reauditar las 296. `--no-cache` la apaga igual que apaga la del modelo.
+  const audits = openAuditCache(modelPath, auditMesh, {
+    enabled: options.get("no-cache") !== "true",
+  });
   const { sheet, review } = reviewModel(model, {
     ...commonOptions(options),
+    auditMesh: audits.auditMesh,
     budget: readBudget(options),
     baselineWarnings: previous.warnings,
     select: select ? select.split(",").map((pattern) => pattern.trim()) : [],
@@ -453,6 +467,7 @@ async function reviewModelFile(options, outputPath) {
     baseline,
     frameAabb,
   });
+  audits.flush();
 
   if (sheet) {
     mkdirSync(dirname(outputPath), { recursive: true });
@@ -617,9 +632,10 @@ Esqueleto y clips declarados en la escena (solo --scene)
   bindings (qué pieza a qué hueso) y clips (pistas con fotogramas clave).
   Con esqueleto, --export escribe el GLB atado y animado, y el informe trae
   rig y animationAudit. Ver --schema para la forma exacta.
-  --audit-frames <n>      fotogramas a muestrear por clip en la auditoría (8).
-                          La auditoría muestrea, no recorre: puede perderse un
-                          cruce que solo ocurra entre dos fotogramas mirados
+  --audit-frames <n>      fotogramas a mirar por clip, como máximo (512). La
+                          auditoría los recorre **todos** mientras quepan; si el
+                          clip es más largo, los reparte y el informe lo dice con
+                          'complete' en falso
 
 Conversión de BVH (solo --bvh)
   --bvh-scale <n>         factor sobre desplazamientos y traslaciones (1). Un BVH
@@ -634,6 +650,13 @@ Guion (solo --story)
   --reading-rate <n>      caracteres por segundo que se suponen legibles (15).
                           Es una suposición declarada, no una medida
 
+Puesta en escena (solo --staging)
+  --staging <ruta.json>   audita una puesta en escena ya montada: qué se ve, si
+                          el texto cabe en el cuadro y si se lee sobre su fondo.
+                          El informe lo produce el editor, que es quien mide
+  --contrast-ratio <n>    contraste mínimo exigido al texto (4.5, el AA de WCAG).
+                          Es un umbral declarado, no una medida
+
   Ejemplares en artifacts/agent/guion-*.json: dos piezas completas y limpias.
   Se leen antes de escribir, para saber a qué suena esto cuando está bien; no
   se rellenan, que para eso harían falta huecos y aquí no los hay.
@@ -644,6 +667,19 @@ Salida
                           material y colocación; .obj solo la geometría
   --save-scene <ruta>     guarda la escena ya parcheada, para seguir desde ahí
   --inspect-only          solo el informe JSON, sin renderizar: ~4 veces más rápido
+  --summary               recorta el informe a lo que cambia entre turnos:
+                          contractVersion, renderHash, warnings, warningsDelta y
+                          diff. Es el mismo informe con menos claves, no otra
+                          forma: nada se recalcula. El dron pasa de 16.537 B a
+                          menos de 2.000. exitCode no va dentro porque ya lo
+                          lleva el código de salida del proceso, y budget porque
+                          lo declaraste tú en la llamada
+  --fields "a,b.c"        proyecta las rutas que pidas, separadas por comas y con
+                          puntos para bajar —"warnings,renderHash,spatial.floating"—.
+                          Conserva los nombres y el anidamiento del informe
+                          completo. Una ruta que no existe es error de datos con
+                          sugerencia, no un hueco en silencio. Manda sobre
+                          --summary
 
 Selección y encuadre
   --select "a-*,b-*"      resalta las piezas que encajan; el encuadre las sigue
@@ -682,8 +718,18 @@ Otras
                           rótulo y sobre negro. Sirve para enfrentar el pliego
                           con el de otro rasterizador, no para revisarlo a ojo
   --no-cache              rehace el análisis del modelo en vez de leer .cache/
-  --schema                forma aceptada de la escena y del parche, y un informe
-                          de ejemplo, todo generado por el propio código
+  --schema [parte]        forma aceptada de la escena y del parche, un informe
+                          de ejemplo y el registro de códigos de aviso —qué te
+                          puede salir, de qué severidad y si trae arreglo—, todo
+                          generado por el propio código. Sin argumento son ~40 KB
+                          de una vez; con parte —scene|patch|story|staging|sample|
+                          report|codes— solo esa. El completo se construye
+                          uniendo las partes, así que no pueden divergir
+  --serve                 modo residente: peticiones NDJSON por stdin,
+                          respuestas NDJSON por stdout, con el mismo contrato que
+                          tools/bridge.mjs. El módulo se carga una vez y la caché
+                          del modelo vive entre peticiones, así que la llamada
+                          barata deja de pagar el arranque del proceso
   --debug                 vuelca la pila en los errores
   --help                  esta ayuda
 
@@ -739,27 +785,87 @@ function softsightVersion() {
   return { version, commit };
 }
 
-function printSchema() {
-  const { review } = reviewScene(DEMO_SCENE, { inspectOnly: true });
-  process.stdout.write(
+/**
+ * El esquema, por partes.
+ *
+ * Los 39.657 B del bloque entero son ~10.000 tokens que el agente paga aunque
+ * solo vaya a escribir un parche. Cada entrada trae sus claves y las notas que
+ * hablan de ellas, y **el esquema completo se construye uniéndolas**: así la
+ * parte no es un recorte que pueda quedarse atrás del todo, es el todo el que se
+ * arma con las partes. La puerta comprueba la unión contra el completo, que con
+ * esta forma es una comprobación de que nadie ha metido una clave por fuera.
+ *
+ * `reportExample` cuesta revisar la escena de demostración, así que solo se
+ * calcula si se pide su parte: `--schema codes` no paga un render.
+ */
+const SCHEMA_PARTS = {
+  scene: () => ({
+    scene: SCENE_SCHEMA,
+    notes: ["El esquema es el que valida la entrada: un campo que no esté aquí se rechaza."],
+  }),
+  patch: () => ({ patch: PATCH_SCHEMA, notes: [] }),
+  story: () => ({
+    story: STORY_SCHEMA,
+    storyRoles: ROLE_REQUIRED_DATA,
+    notes: [
+      "story es el guion: la duración de la pieza es la suma de sus escenas, no se declara.",
+      "storyRoles dice qué campos de data exige cada rol; quien ponga el guion en escena los necesita.",
+    ],
+  }),
+  staging: () => ({
+    staging: STAGING_SCHEMA,
+    notes: ["staging es lo que el editor mide sobre un frame ya montado; SoftSight solo lo juzga."],
+  }),
+  sample: () => ({ sampleReference: SAMPLE_REFERENCE_SCHEMA, notes: [] }),
+  report: () => ({
+    reportExample: {
+      contractVersion: REPORT_CONTRACT_VERSION,
+      ...reviewScene(DEMO_SCENE, { inspectOnly: true }).review,
+    },
+    notes: [
+      "reportExample sale de revisar la escena de demostración con --inspect-only.",
+      "Con pliego, el informe trae además sheet, views, renderHash y partScreenBoxes.",
+      "Con --summary o --fields sale un subconjunto de estas mismas claves, sin recalcular ninguna.",
+    ],
+  }),
+  codes: () => ({
+    warningCodes: WARNING_CODE_LIST,
+    notes: [
+      "warningCodes es el registro completo de avisos: cargándolo una vez se interpreta cualquier informe futuro sin provocar cada caso.",
+      "severity 'certeza' sale de aritmética y no depende de la intención; 'candidato' tiene la medida firme y la conclusión no.",
+    ],
+  }),
+};
+
+/**
+ * Une las partes pedidas. `softsight` va en todas: identifica quién responde y
+ * son dos líneas, y sin él una parte suelta no se puede comparar contra el pin
+ * del consumidor.
+ */
+function buildSchema(names) {
+  const merged = { softsight: softsightVersion() };
+  // La nota del sobre va primero y en todas las partes: así unir dos partes y
+  // quitar repetidas da exactamente las notas del completo, en su orden.
+  const notes = [
+    "softsight dice qué versión responde: el consumidor compara su pin contra este commit, no contra un texto.",
+  ];
+  for (const name of names) {
+    const { notes: own, ...keys } = SCHEMA_PARTS[name]();
+    Object.assign(merged, keys);
+    notes.push(...own);
+  }
+  return { ...merged, notes };
+}
+
+function printSchema(part) {
+  if (part !== undefined && !(part in SCHEMA_PARTS)) {
+    throw new Error(
+      `--schema ${part} no existe; las partes son ${Object.keys(SCHEMA_PARTS).join("|")}`,
+    );
+  }
+  emit(
     `${JSON.stringify(
-      {
-        softsight: softsightVersion(),
-        scene: SCENE_SCHEMA,
-        patch: PATCH_SCHEMA,
-        sampleReference: SAMPLE_REFERENCE_SCHEMA,
-        story: STORY_SCHEMA,
-        storyRoles: ROLE_REQUIRED_DATA,
-        reportExample: { contractVersion: REPORT_CONTRACT_VERSION, ...review },
-        notes: [
-          "El esquema es el que valida la entrada: un campo que no esté aquí se rechaza.",
-          "reportExample sale de revisar la escena de demostración con --inspect-only.",
-          "Con pliego, el informe trae además sheet, views, renderHash y partScreenBoxes.",
-          "story es el guion: la duración de la pieza es la suma de sus escenas, no se declara.",
-          "storyRoles dice qué campos de data exige cada rol; quien ponga el guion en escena los necesita.",
-          "softsight dice qué versión responde: el consumidor compara su pin contra este commit, no contra un texto.",
-        ],
-      },
+      buildSchema(part === undefined ? Object.keys(SCHEMA_PARTS) : [part]),
       null,
       2,
     )}\n`,
@@ -793,6 +899,27 @@ function auditStoryFile(options) {
   }
 
   return { source: storyPath, ...auditStory(story, readingRate === undefined ? {} : { readingRate }) };
+}
+
+/**
+ * Audita una puesta en escena ya montada. Tampoco escribe nada: lo que entra son
+ * medidas que hizo el editor —cajas, colores, qué se ve— y lo que sale son
+ * hechos sobre ellas.
+ */
+function auditStagingFile(options) {
+  const stagingPath = resolve(options.get("staging"));
+  const staging = JSON.parse(readFileSync(stagingPath, "utf8"));
+
+  const ratioFlag = options.get("contrast-ratio");
+  const contrastRatio = ratioFlag === undefined || ratioFlag === "true" ? undefined : Number(ratioFlag);
+  if (ratioFlag !== undefined && ratioFlag !== "true" && (!Number.isFinite(contrastRatio) || contrastRatio < 1)) {
+    throw new Error(`--contrast-ratio inválido: '${ratioFlag}'; debe ser un número mayor o igual que 1`);
+  }
+
+  return {
+    source: stagingPath,
+    ...auditStaging(staging, contrastRatio === undefined ? {} : { contrastRatio }),
+  };
 }
 
 async function convertBvhFile(options) {
@@ -868,43 +995,97 @@ async function convertBvhFile(options) {
   };
 }
 
-async function main() {
-  const options = parseArguments(process.argv.slice(2));
+/**
+ * Escribe el informe por stdout, recortado si el agente lo pidió.
+ *
+ * Es el único sitio por el que sale un informe, y a propósito: con seis ramas
+ * escribiendo cada una lo suyo, `--summary` acabaría funcionando en cuatro de
+ * las seis y nadie se enteraría hasta que un agente pagara los 16 KB en la
+ * quinta.
+ *
+ * `--fields` manda sobre `--summary`: una lista de rutas es una declaración más
+ * concreta que una opinión, y quien escribe las dos quiere la suya.
+ */
+/**
+ * A dónde va lo que escribe el CLI.
+ *
+ * En la invocación normal es el stdout del proceso. En modo residente
+ * (`--serve`) la misma orden se ejecuta dentro de un proceso que ya está vivo y
+ * lo que produce es la respuesta de **una** petición, así que se acumula aparte:
+ * si escribiera en el stdout del proceso se mezclaría con el NDJSON.
+ */
+let sink = null;
+
+function emit(text) {
+  if (sink === null) process.stdout.write(text);
+  else sink.push(text);
+}
+
+function emitReport(report, options) {
+  const fields = options.get("fields");
+  let view = report;
+  if (fields !== undefined && fields !== "true") {
+    view = projectFields(
+      report,
+      fields
+        .split(",")
+        .map((field) => field.trim())
+        .filter((field) => field.length > 0),
+    );
+  } else if (options.get("summary") === "true") {
+    view = summarize(report);
+  }
+  emit(`${JSON.stringify(view, null, 2)}\n`);
+}
+
+/**
+ * Ejecuta una orden y **devuelve** su código de salida en vez de escribirlo en
+ * `process.exitCode`: en modo residente hay muchas órdenes por proceso y el
+ * código es de cada una, no del proceso.
+ */
+async function main(argv) {
+  const options = parseArguments(argv);
 
   if (options.has("help")) {
-    process.stdout.write(`${USAGE}\n`);
-    return;
+    emit(`${USAGE}\n`);
+    return 0;
   }
 
   if (options.has("schema")) {
-    printSchema();
-    return;
+    const part = options.get("schema");
+    printSchema(part === "true" ? undefined : part);
+    return 0;
   }
   // El guion tampoco es un modelo: no hay geometría que mirar, solo texto y
   // tiempo. Va antes por el mismo motivo que el BVH.
   if (options.has("story")) {
     const report = auditStoryFile(options);
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-    process.exitCode = report.warnings.length > 0 ? 1 : 0;
-    return;
+    emitReport(report, options);
+    return report.warnings.length > 0 ? 1 : 0;
+  }
+  // La puesta en escena tampoco trae geometría: son las medidas que hizo el
+  // editor sobre un frame ya montado.
+  if (options.has("staging")) {
+    const report = auditStagingFile(options);
+    emitReport(report, options);
+    return report.warnings.length > 0 ? 1 : 0;
   }
   // El BVH va antes que todo lo demás porque no es un modelo: no tiene malla, así
   // que no hay nada que encuadrar, rasterizar ni auditar. Es una conversión, y
   // lo que produce sí entra después por --model como cualquier GLB.
   if (options.has("bvh")) {
     const report = await convertBvhFile(options);
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-    return;
+    emitReport(report, options);
+    return 0;
   }
 
   const outputPath = resolve(options.get("out") ?? "artifacts/agent/contact-sheet.png");
 
   if (options.has("model")) {
     const report = await reviewModelFile(options, outputPath);
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    emitReport(report, options);
     const failedEdits = (report.edits ?? []).filter((edit) => edit.error);
-    process.exitCode = report.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;
-    return;
+    return report.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;
   }
 
   const scenePath = options.get("scene");
@@ -923,11 +1104,8 @@ async function main() {
   }
 
   if (options.get("dry-run") === "true") {
-    process.stdout.write(
-      `${JSON.stringify({ objects: spec.objects.length, edits, dryRun: true }, null, 2)}\n`,
-    );
-    process.exitCode = (edits ?? []).some((edit) => edit.error) ? 1 : 0;
-    return;
+    emit(`${JSON.stringify({ objects: spec.objects.length, edits, dryRun: true }, null, 2)}\n`);
+    return (edits ?? []).some((edit) => edit.error) ? 1 : 0;
   }
 
   const { sheet, review } = reviewScene(spec, {
@@ -965,7 +1143,7 @@ async function main() {
     if ((spec.clips ?? []).length > 0) {
       const framesFlag = options.get("audit-frames");
       const sampleFrames =
-        framesFlag === undefined || framesFlag === "true" ? 8 : Number(framesFlag);
+        framesFlag === undefined || framesFlag === "true" ? 512 : Number(framesFlag);
       if (!Number.isInteger(sampleFrames) || sampleFrames < 2) {
         throw new Error(`--audit-frames inválido: '${framesFlag}'; debe ser un entero de 2 en adelante`);
       }
@@ -1006,36 +1184,64 @@ async function main() {
     writeFileSync(savedScene, `${JSON.stringify(spec, null, 2)}\n`, "utf8");
   }
 
-  process.stdout.write(
-    `${JSON.stringify(
-      {
-        contractVersion: REPORT_CONTRACT_VERSION,
-        ...review,
-        ...(rig ? { rig: { joints: rig.skeleton.nodes.length, clips: rig.clips, mode: "rigid" } } : {}),
-        ...(animationAudit ? { animationAudit } : {}),
-        edits,
-        file: sheet ? outputPath : null,
-        exported,
-        savedScene,
-      },
-      null,
-      2,
-    )}\n`,
+  emitReport(
+    {
+      contractVersion: REPORT_CONTRACT_VERSION,
+      ...review,
+      ...(rig ? { rig: { joints: rig.skeleton.nodes.length, clips: rig.clips, mode: "rigid" } } : {}),
+      ...(animationAudit ? { animationAudit } : {}),
+      edits,
+      file: sheet ? outputPath : null,
+      exported,
+      savedScene,
+    },
+    options,
   );
   const failedEdits = (edits ?? []).filter((edit) => edit.error);
-  process.exitCode = review.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;
+  return review.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;
+}
+
+/**
+ * Ejecuta una orden **dentro de este proceso** y devuelve lo que habría escrito.
+ *
+ * Es lo que convierte al CLI en algo que se puede llamar sin pagar 0,10 s de
+ * arranque de Node y de importación del módulo. Devuelve exactamente los tres
+ * datos que devolvía el proceso —código, stdout y stderr— para que quien lo use
+ * no tenga que decidir nada distinto de lo que decidía antes.
+ *
+ * El error se traduce aquí igual que en la invocación normal: mensaje limpio en
+ * stderr y salida 2, con la pila solo si va `--debug`.
+ */
+export async function runAgent(argv) {
+  const chunks = [];
+  const previous = sink;
+  sink = chunks;
+  try {
+    const exitCode = await main(argv);
+    return { exitCode: exitCode ?? 0, stdout: chunks.join(""), stderr: "" };
+  } catch (error) {
+    const debug = argv.includes("--debug");
+    const message = error instanceof Error ? (debug ? error.stack : error.message) : String(error);
+    return { exitCode: 2, stdout: chunks.join(""), stderr: `${message}\n` };
+  } finally {
+    sink = previous;
+  }
 }
 
 // Solo se ejecuta si es el programa invocado, no si alguien lo importa: así el
 // decodificador PNG se puede comprobar desde fuera sin que importarlo renderice.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((error) => {
+  const argv = process.argv.slice(2);
+  if (argv.includes("--serve")) {
+    const { serve } = await import("./serve.mjs");
+    await serve(runAgent);
+  } else {
     // Mensaje limpio, no volcado de pila: los errores de este CLI son de datos
     // —extensión no soportada, patrón sin coincidencias, fichero ilegible— y llevan
     // la corrección dentro. La pila solo estorba, y con `--debug` sigue disponible.
-    const debug = process.argv.includes("--debug");
-    const message = error instanceof Error ? (debug ? error.stack : error.message) : String(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 2;
-  });
+    const { exitCode, stdout, stderr } = await runAgent(argv);
+    if (stdout) process.stdout.write(stdout);
+    if (stderr) process.stderr.write(stderr);
+    process.exitCode = exitCode;
+  }
 }

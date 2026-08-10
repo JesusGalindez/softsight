@@ -16,6 +16,7 @@
  */
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -30,6 +31,7 @@ import {
   evaluatePose,
   modelFromScene,
   parseGlbAnimation,
+  auditClips,
   resolveRig,
   serializeSkinnedGlb,
 } from "../dist-node/agent3d.mjs";
@@ -340,6 +342,518 @@ function matrixFromQuaternion([x, y, z, w]) {
     x * z2 - w * y2, y * z2 + w * x2, 1 - (x * x2 + y * y2), 0,
     0, 0, 0, 1,
   ];
+}
+
+// --- 6. La pista declarada como función: `value` en vez de `keys`
+
+// Con `ease: linear` y dos entradas, hornear tiene que dar exactamente lo mismo
+// que escribir las claves a mano. Si no, el atajo no es un atajo: es otra cosa.
+const aMano = resolveRig({ joints: [{ name: "eje" }] }, [
+  {
+    name: "recto",
+    fps: 30,
+    tracks: [
+      {
+        joint: "eje",
+        property: "translation",
+        keys: Array.from({ length: 11 }, (_entrada, paso) => ({
+          frame: paso,
+          value: [paso / 10, 0, (paso / 10) * -2],
+        })),
+      },
+    ],
+  },
+]);
+const porFuncion = resolveRig({ joints: [{ name: "eje" }] }, [
+  {
+    name: "recto",
+    fps: 30,
+    tracks: [
+      {
+        joint: "eje",
+        property: "translation",
+        value: { at: [[0, [0, 0, 0]], [1, [1, 0, -2]]] },
+        frames: 10,
+      },
+    ],
+  },
+]);
+assertClose(
+  Array.from(porFuncion.skeleton.animations[0].samplers[0].times),
+  Array.from(aMano.skeleton.animations[0].samplers[0].times),
+  "los tiempos horneados",
+);
+assertClose(
+  Array.from(porFuncion.skeleton.animations[0].samplers[0].values),
+  Array.from(aMano.skeleton.animations[0].samplers[0].values),
+  "los valores horneados",
+);
+
+// `smooth` es Hermite con tangentes nulas: en el punto medio vale la media, y a un
+// cuarto se queda por debajo. Es la misma curva que usa la geometría.
+const suave = resolveRig({ joints: [{ name: "eje" }] }, [
+  {
+    name: "suave",
+    fps: 30,
+    tracks: [
+      {
+        joint: "eje",
+        property: "translation",
+        value: { at: [[0, [0, 0, 0]], [1, [8, 0, 0]]], ease: "smooth" },
+        frames: 40,
+        bake: 4,
+      },
+    ],
+  },
+]);
+const suaves = Array.from(suave.skeleton.animations[0].samplers[0].values);
+assert.equal(suaves.length, 15, "bake: 4 son cinco claves");
+assert.ok(Math.abs(suaves[6] - 4) < 1e-6, `el punto medio de smooth vale ${suaves[6]} y debía valer 4`);
+assert.ok(suaves[3] < 2, `a un cuarto, smooth va por debajo de la recta: ${suaves[3]}`);
+
+// Y lo que de verdad sostiene el atajo: el GLB horneado, leído con el **evaluador
+// certificado**, da la misma pose que la tabla evaluada a mano. Sin esto, hornear
+// sería una segunda implementación del movimiento.
+const brazoModelo = modelFromScene({
+  objects: [{ name: "brazo", geometry: { primitive: "box", parameters: [0.2, 0.2, 0.2] }, position: [1, 0, 0] }],
+});
+const rigFuncion = resolveRig({ joints: [{ name: "eje" }] }, [
+  {
+    name: "empuje",
+    fps: 30,
+    tracks: [
+      {
+        joint: "eje",
+        property: "translation",
+        value: { at: [[0, [0, 0, 0]], [1, [0, 3, 0]]], ease: "smooth" },
+        frames: 30,
+      },
+    ],
+  },
+]);
+const atadoFuncion = bindModelToSkeleton(brazoModelo, rigFuncion.skeleton, {
+  schemaVersion: 1,
+  bindings: [{ part: "*", joint: "eje" }],
+});
+const glbFuncion = parseGlbAnimation(serializeSkinnedGlb(atadoFuncion.scene));
+const reposoFuncion = evaluatePose(glbFuncion.document, glbFuncion.binary, glbFuncion.decodedViews, 0, 0, 0);
+for (const frame of [0, 7, 15, 23, 30]) {
+  const pose = evaluatePose(glbFuncion.document, glbFuncion.binary, glbFuncion.decodedViews, frame / 30, 0, 0);
+  const t = frame / 30;
+  const esperado = 3 * (t * t * (3 - 2 * t));
+  const subida = pose[1] - reposoFuncion[1];
+  assert.ok(
+    Math.abs(subida - esperado) < 1e-4,
+    `fotograma ${frame}: el evaluador certificado dice ${subida} y la tabla dice ${esperado}`,
+  );
+}
+
+// Una pista con `keys` sigue dando el mismo GLB **byte a byte** que antes de que
+// `value` existiera. La huella se midió con el `rigSpec` anterior al cambio, así
+// que no es una foto de lo que hay: es la de lo que había.
+assert.equal(
+  createHash("sha256").update(new Uint8Array(serializeSkinnedGlb(bound.scene))).digest("hex"),
+  "c43987954f101649fe113b7b8f21aa3d7916645f52ef9eccae608f22ba5359c0",
+  "el camino de `keys` no puede haberse movido",
+);
+
+// Errores, cada uno por su motivo.
+const conPista = (track) => () => resolveRig({ joints: [{ name: "eje" }] }, [{ tracks: [track] }]);
+assertThrows(
+  conPista({ joint: "eje", property: "translation" }),
+  /se escribe con 'keys', 'value' o 'turns', y no trae ninguno/,
+  "una pista sin claves ni función",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "translation", keys: [{ frame: 0, value: [0, 0, 0] }], value: { at: [[0, [0, 0, 0]]] }, frames: 5 }),
+  /son excluyentes/,
+  "las dos formas a la vez",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "translation", value: { at: [[0, [0, 0, 0]]] } }),
+  /necesita 'frames'/,
+  "una función sin duración",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "rotation", value: { at: [[0, [0, 0, 0, 1]], [1, [0, 1, 0, 0]]] }, frames: 10 }),
+  /son 3 grados en orden Y·X·Z.*el cuaternión solo cabe en 'keys'/s,
+  "un cuaternión en una función",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "translation", value: { at: [[0, [0, 0]]] }, frames: 10 }),
+  /pide 3 números/,
+  "un vector con los componentes cambiados",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "translation", value: { at: [[0, [0, 0, 0]], [1, [1, 0, 0]]] }, frames: 10, bake: 99999 }),
+  /pasa del tope de 4096/,
+  "hornear sin tope",
+);
+
+console.log(
+  "rig value: ok (función ≡ claves a mano, smooth con su media, y el evaluador certificado confirma la curva en 5 fotogramas)",
+);
+
+// --- 7. `turns`, y el aviso que hace falta con él
+
+// Una vuelta se hornea en claves de 90° como mucho, y el evaluador certificado
+// confirma que la orientación es la declarada en los cuartos de vuelta.
+const gira = resolveRig({ joints: [{ name: "rotor" }] }, [
+  { name: "giro", fps: 30, tracks: [{ joint: "rotor", property: "rotation", turns: 1, frames: 24 }] },
+]);
+const muestreador = gira.skeleton.animations[0].samplers[0];
+assert.equal(muestreador.times.length, 5, "una vuelta son cuatro pasos de 90° y cinco claves");
+assertClose(Array.from(muestreador.times), [0, 0.2, 0.4, 0.6, 0.8].map((t) => t), "los tiempos de la vuelta");
+
+const aspa = modelFromScene({
+  objects: [{ name: "pala", geometry: { primitive: "box", parameters: [0.1, 0.1, 1] }, position: [0, 0, 0.6] }],
+});
+const atadoGiro = bindModelToSkeleton(aspa, gira.skeleton, {
+  schemaVersion: 1,
+  bindings: [{ part: "*", joint: "rotor" }],
+});
+const glbGiro = parseGlbAnimation(serializeSkinnedGlb(atadoGiro.scene));
+const poseEn = (frame) => evaluatePose(glbGiro.document, glbGiro.binary, glbGiro.decodedViews, frame / 30, 0, 0);
+const inicio = poseEn(0);
+// A un cuarto de vuelta, lo que estaba en +Z está en +X: giro de 90° en Y.
+const cuarto = poseEn(6);
+assert.ok(
+  Math.abs(cuarto[0] - inicio[2]) < 1e-4 && Math.abs(cuarto[2] + inicio[0]) < 1e-4,
+  `a un cuarto de vuelta el punto tenía que rotar 90° en Y: ${inicio.slice(0, 3)} → ${cuarto.slice(0, 3)}`,
+);
+// Y a media vuelta está enfrente: es la comprobación de que gira de verdad y no
+// se queda quieto, que es justo lo que pasaría con dos claves.
+const media = poseEn(12);
+assert.ok(
+  Math.abs(media[0] + inicio[0]) < 1e-4 && Math.abs(media[2] + inicio[2]) < 1e-4,
+  `a media vuelta el punto tenía que estar enfrente: ${inicio.slice(0, 3)} → ${media.slice(0, 3)}`,
+);
+
+// Tres vueltas son tres vueltas: doce pasos.
+const tres = resolveRig({ joints: [{ name: "r" }] }, [
+  { name: "g", fps: 30, tracks: [{ joint: "r", property: "rotation", turns: 3, frames: 60 }] },
+]);
+assert.equal(tres.skeleton.animations[0].samplers[0].times.length, 13);
+// Al revés, también.
+const alReves = resolveRig({ joints: [{ name: "r" }] }, [
+  { name: "g", fps: 30, tracks: [{ joint: "r", property: "rotation", turns: -1, frames: 24, axis: "x" }] },
+]);
+assert.ok(alReves.skeleton.animations[0].samplers[0].values[0 * 4 + 0] === 0);
+assert.ok(
+  alReves.skeleton.animations[0].samplers[0].values[1 * 4 + 0] < 0,
+  "una vuelta negativa gira al otro lado",
+);
+
+// El aviso: dos claves a 0° y 360° no giran nada, y el fichero sale igual de válido.
+const ambiguo = auditClips([
+  {
+    name: "malo",
+    tracks: [
+      {
+        joint: "rotor",
+        property: "rotation",
+        keys: [{ frame: 0, value: [0, 0, 0] }, { frame: 24, value: [0, 360, 0] }],
+      },
+    ],
+  },
+]);
+assert.equal(ambiguo.length, 1);
+assert.equal(ambiguo[0].code, "GIRO_AMBIGUO");
+assert.equal(ambiguo[0].part, "rotor");
+assert.match(ambiguo[0].message, /salta 360\.0°/);
+assert.match(ambiguo[0].message, /arco más corto/);
+
+// El mismo giro partido en cuartos, no avisa. Ni la pista horneada por `turns`.
+const enCuartos = auditClips([
+  {
+    name: "bueno",
+    tracks: [
+      {
+        joint: "rotor",
+        property: "rotation",
+        keys: [0, 90, 180, 270, 360].map((grados, paso) => ({ frame: paso * 6, value: [0, grados, 0] })),
+      },
+    ],
+  },
+]);
+assert.deepEqual(enCuartos, []);
+assert.deepEqual(
+  auditClips([{ name: "t", tracks: [{ joint: "rotor", property: "rotation", turns: 5, frames: 60 }] }]),
+  [],
+  "`turns` no puede disparar el aviso: hornea a 90°",
+);
+// Y una traslación grande tampoco: el aviso es de rotaciones.
+assert.deepEqual(
+  auditClips([
+    {
+      name: "t",
+      tracks: [
+        {
+          joint: "rotor",
+          property: "translation",
+          keys: [{ frame: 0, value: [0, 0, 0] }, { frame: 10, value: [900, 0, 0] }],
+        },
+      ],
+    },
+  ]),
+  [],
+);
+
+// Errores de `turns`, por su motivo.
+assertThrows(
+  conPista({ joint: "eje", property: "translation", turns: 1, frames: 10 }),
+  /'turns' solo tiene sentido en una pista de rotation/,
+  "turns en una traslación",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "rotation", turns: 1 }),
+  /necesita 'frames'/,
+  "turns sin duración",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "rotation", turns: 1, frames: 24, bake: 2 }),
+  /cada clave saltaría 180\.0°.*al menos 4 pasos/s,
+  "turns con menos pasos de los que caben",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "rotation", turns: 1, frames: 24, keys: [{ frame: 0, value: [0, 0, 0] }] }),
+  /son excluyentes/,
+  "turns y keys a la vez",
+);
+
+console.log(
+  "rig turns: ok (una vuelta en cinco claves, media vuelta enfrente por el evaluador certificado, y GIRO_AMBIGUO caza el 0→360)",
+);
+
+// --- 8. Ciclo y desfase
+
+// `cycle` repite el contenido, y la pista dura tantas veces más.
+const unCiclo = resolveRig({ joints: [{ name: "pata" }] }, [
+  {
+    name: "paso",
+    fps: 30,
+    tracks: [
+      {
+        joint: "pata",
+        property: "translation",
+        value: { at: [[0, [0, 0, 0]], [0.5, [1, 0, 0]], [1, [0, 0, 0]]] },
+        frames: 20,
+        bake: 20,
+      },
+    ],
+  },
+]);
+const tresCiclos = resolveRig({ joints: [{ name: "pata" }] }, [
+  {
+    name: "paso",
+    fps: 30,
+    tracks: [
+      {
+        joint: "pata",
+        property: "translation",
+        value: { at: [[0, [0, 0, 0]], [0.5, [1, 0, 0]], [1, [0, 0, 0]]] },
+        frames: 20,
+        bake: 20,
+        cycle: 3,
+      },
+    ],
+  },
+]);
+assert.equal(unCiclo.clips[0].lastFrame, 20);
+assert.equal(tresCiclos.clips[0].lastFrame, 60, "tres ciclos de 20 fotogramas duran 60");
+const uno = Array.from(unCiclo.skeleton.animations[0].samplers[0].values);
+const repetido = Array.from(tresCiclos.skeleton.animations[0].samplers[0].values);
+// Los tres tramos son el mismo movimiento.
+for (let round = 0; round < 3; round += 1) {
+  for (let key = 0; key < 20; key += 1) {
+    const desde = (round * 20 + key) * 3;
+    assertClose(repetido.slice(desde, desde + 3), uno.slice(key * 3, key * 3 + 3), `ciclo ${round}, clave ${key}`);
+  }
+}
+
+// `offsetFrames` desfasa **el parámetro**: la pista arranca donde arrancaría a un
+// cuarto de camino, que es lo que hace que cuatro patas iguales no vayan a la vez.
+const desfasada = resolveRig({ joints: [{ name: "pata" }] }, [
+  {
+    name: "paso",
+    fps: 30,
+    tracks: [
+      {
+        joint: "pata",
+        property: "translation",
+        value: { at: [[0, [0, 0, 0]], [0.5, [1, 0, 0]], [1, [0, 0, 0]]] },
+        frames: 20,
+        bake: 20,
+        offsetFrames: 5,
+      },
+    ],
+  },
+]);
+const conDesfase = Array.from(desfasada.skeleton.animations[0].samplers[0].values);
+for (let key = 0; key < 15; key += 1) {
+  assertClose(
+    conDesfase.slice(key * 3, key * 3 + 3),
+    uno.slice((key + 5) * 3, (key + 5) * 3 + 3),
+    `desfase de 5: la clave ${key} vale lo que valía la ${key + 5}`,
+  );
+}
+// Y lo que sale por el final vuelve a entrar por el principio: la clave 16 vale lo
+// que la 1 de la pista sin desfasar.
+assertClose(conDesfase.slice(16 * 3, 16 * 3 + 3), uno.slice(1 * 3, 1 * 3 + 3), "el desfase envuelve");
+
+// Sobre claves escritas a mano, `cycle` también repite, sin duplicar la frontera.
+const clavesRepetidas = resolveRig({ joints: [{ name: "p" }] }, [
+  {
+    name: "r",
+    fps: 30,
+    tracks: [
+      {
+        joint: "p",
+        property: "translation",
+        keys: [
+          { frame: 0, value: [0, 0, 0] },
+          { frame: 5, value: [1, 0, 0] },
+          { frame: 10, value: [0, 0, 0] },
+        ],
+        cycle: 3,
+      },
+    ],
+  },
+]);
+assert.deepEqual(
+  Array.from(clavesRepetidas.skeleton.animations[0].samplers[0].times).map((t) => Math.round(t * 30)),
+  [0, 5, 10, 15, 20, 25, 30],
+  "tres ciclos de tres claves son siete, no nueve: la frontera no se duplica",
+);
+
+// Errores, por su motivo.
+assertThrows(
+  conPista({ joint: "eje", property: "rotation", turns: 2, frames: 40, cycle: 2 }),
+  /'cycle' con 'turns' sobra/,
+  "ciclo sobre vueltas",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "translation", keys: [{ frame: 0, value: [0, 0, 0] }], offsetFrames: 3 }),
+  /solo va con 'value'/,
+  "desfase sobre claves escritas a mano",
+);
+assertThrows(
+  conPista({ joint: "eje", property: "translation", value: { at: [[0, [0, 0, 0]], [1, [1, 0, 0]]] }, frames: 10, cycle: 0 }),
+  /'cycle' es un entero de 1 en adelante/,
+  "un ciclo de cero",
+);
+
+console.log(
+  "rig cycle: ok (tres ciclos idénticos y de 60 fotogramas, y el desfase de 5 envuelve por el principio)",
+);
+
+// --- 9. La auditoría recorre, no muestrea
+
+// Un cruce que existe en **un solo fotograma**, el 7. Muestreando ocho de treinta
+// no se mira el 7, así que el muestreo dice que todo está bien. Recorriendo, no.
+const rigDeUnFotograma = resolveRig(esqueleto, [
+  {
+    name: "tic",
+    fps: 30,
+    tracks: [
+      {
+        joint: "hombro",
+        property: "translation",
+        keys: [
+          { frame: 0, value: [0.9, 0.5, 0] },
+          { frame: 6, value: [0.9, 0.5, 0] },
+          { frame: 7, value: [0, 0.5, 0] },
+          { frame: 8, value: [0.9, 0.5, 0] },
+          { frame: 30, value: [0.9, 0.5, 0] },
+        ],
+      },
+    ],
+  },
+]);
+const atadoTic = bindModelToSkeleton(model, rigDeUnFotograma.skeleton, binding);
+const riggedTic = parseGlbAnimation(serializeSkinnedGlb(atadoTic.scene));
+const jointOfTic = new Map(atadoTic.bound.map((entry) => [entry.part, entry.joint]));
+
+const muestreado = auditAnimation(model, riggedTic, jointOfTic, { fps: 30, sampleFrames: 8 });
+assert.equal(muestreado.clips[0].complete, false, "con presupuesto 8 y 30 fotogramas no se recorre entero");
+assert.ok(
+  !muestreado.clips[0].sampled.includes(7),
+  `el muestreo de 8 no debía caer en el 7: ${muestreado.clips[0].sampled}`,
+);
+assert.equal(muestreado.crossings.length, 0, "muestreando, el cruce de un fotograma se escapa");
+
+const recorrido = auditAnimation(model, riggedTic, jointOfTic, { fps: 30 });
+assert.equal(recorrido.clips[0].complete, true, "por defecto se recorren los 31 fotogramas");
+assert.equal(recorrido.clips[0].sampled.length, 31);
+const enElSiete = recorrido.crossings.filter((crossing) => crossing.frame === 7);
+assert.ok(enElSiete.length > 0, "recorriendo, el cruce del fotograma 7 tiene que salir");
+assert.deepEqual(enElSiete[0].parts.slice().sort(), ["brazo", "torso"]);
+
+console.log(
+  `rig recorrido: ok (el cruce del fotograma 7 se escapa muestreando 8 y se caza recorriendo los 31)`,
+);
+
+// --- 10. El ejemplar: una pieza descrita por fórmulas, animada y auditada
+
+// El mismo documento que ya lleva las cinco mecánicas de geometría gana esqueleto
+// y movimiento. Un fichero y una orden: es lo que un agente va a copiar.
+{
+  const ejemplar = JSON.parse(
+    readFileSync(resolve(projectRoot, "artifacts/agent/pieza-geometria.json"), "utf8"),
+  );
+  const rigEjemplar = resolveRig(ejemplar.skeleton, ejemplar.clips);
+  assert.deepEqual(rigEjemplar.clips, [{ name: "vuelo", fps: 30, lastFrame: 60, tracks: 2 }]);
+
+  const modeloEjemplar = modelFromScene(ejemplar, "ejemplar");
+  const atadoEjemplar = bindModelToSkeleton(modeloEjemplar, rigEjemplar.skeleton, {
+    schemaVersion: 1,
+    bindings: ejemplar.bindings,
+  });
+  const glbEjemplar = parseGlbAnimation(serializeSkinnedGlb(atadoEjemplar.scene));
+  const auditEjemplar = auditAnimation(
+    modeloEjemplar,
+    glbEjemplar,
+    new Map(atadoEjemplar.bound.map((entry) => [entry.part, entry.joint])),
+    { fps: 30 },
+  );
+
+  assert.equal(auditEjemplar.clips[0].complete, true, "el ejemplar se audita entero, no muestreado");
+  assert.equal(auditEjemplar.clips[0].sampled.length, 61);
+  assert.deepEqual(auditEjemplar.crossings, [], "el movimiento del ejemplar no puede cruzar nada");
+  assert.deepEqual(auditEjemplar.groundBreaches, [], "ni hundir nada bajo el suelo");
+  assert.deepEqual(auditEjemplar.staticBones, [], "un hueso que nadie anima es un descuido");
+  assert.deepEqual(auditEjemplar.zeroLengthBones, []);
+  assert.deepEqual(auditClips(ejemplar.clips), [], "ningún giro ambiguo");
+
+  // Y el rotor gira **de verdad**, medido con el evaluador certificado: un vértice
+  // de pala mantiene su radio al eje y avanza un cuarto de vuelta cada cinco
+  // fotogramas, que son las tres vueltas en sesenta que declara el documento.
+  const poseEjemplar = (frame) =>
+    evaluatePose(glbEjemplar.document, glbEjemplar.binary, glbEjemplar.decodedViews, frame / 30, 0, 0);
+  const puntoDePala = poseEjemplar(0).length - 3;
+  const radioAl = (frame) => {
+    const pose = poseEjemplar(frame);
+    return Math.hypot(pose[puntoDePala], pose[puntoDePala + 2]);
+  };
+  const radio = radioAl(0);
+  assert.ok(radio > 0.4, `el punto elegido tiene que estar lejos del eje, y está a ${radio}`);
+  for (const frame of [5, 10, 15, 20, 40, 60]) {
+    assert.ok(
+      Math.abs(radioAl(frame) - radio) < 1e-4,
+      `fotograma ${frame}: girar no cambia el radio al eje, y pasó de ${radio} a ${radioAl(frame)}`,
+    );
+  }
+  const inicioPala = poseEjemplar(0);
+  const cuartoPala = poseEjemplar(5);
+  assert.ok(
+    Math.abs(cuartoPala[puntoDePala] - inicioPala[puntoDePala + 2]) < 1e-3,
+    "a los cinco fotogramas la pala tiene que haber girado un cuarto de vuelta",
+  );
+
+  console.log(
+    `rig ejemplar: ok (${modeloEjemplar.parts.length} piezas animadas, 61 fotogramas recorridos, ` +
+      "0 cruces, y el rotor da su cuarto de vuelta cada cinco fotogramas)",
+  );
 }
 
 function assertClose(actual, expected, what) {

@@ -1,0 +1,67 @@
+# La verificación, ejecutada por una máquina.
+#
+# El argumento del proyecto es «esto es determinista y se comprueba con números».
+# Hasta este workflow esos números corrían cuando alguien se acordaba, que es una
+# promesa, no una afirmación.
+#
+# La versión de Node sale de `.nvmrc` y nunca se escribe aquí: `Math.sin`, `cos`,
+# `tan` y `hypot` no están especificados al último bit por el estándar, así que
+# comparar hashes exige el mismo aritmético a los dos lados. Un número escrito a
+# mano en este fichero sería un segundo original de ese dato.
+
+name: verify
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  # El más rápido, y el que falla primero.
+  types:
+    name: tipos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+
+  # Las puertas del banco. Cinco de las trece leen el fixture certificado del
+  # editor, que vive en un repositorio privado: aquí se declaran «no ejecutada»
+  # en voz alta y el registro de la ejecución enseña cuáles fueron.
+  gates:
+    name: puertas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:animation
+
+  # El trabajo que justifica el proyecto: el pliego del dron dos veces en la
+  # misma máquina, y contra el hash fijado en el repositorio. En dos sistemas
+  # operativos, así que el determinismo deja de ser política y pasa a ser un
+  # hecho medido en dos aritméticas distintas. `fail-fast: false` a propósito: si
+  # una diverge queremos el hash de la otra, no una ejecución cancelada.
+  determinism:
+    name: determinismo (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:determinism

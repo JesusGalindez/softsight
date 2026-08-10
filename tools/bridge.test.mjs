@@ -15,20 +15,25 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createInterface } from "node:readline";
 import { promisify } from "node:util";
+
+import { fixture, requireFixtures } from "./fixtures.mjs";
 
 const execFileAsync = promisify(execFile);
 
 const here = dirname(fileURLToPath(import.meta.url));
-const projectRoot = resolve(here, "..");
 const BRIDGE = resolve(here, "bridge.mjs");
 const CLI = resolve(here, "agent3d.mjs");
 // El fixture de salto (jumping-jacks) vive en el proyecto hermano After effect ThreeJS.
-const targetRoot = resolve(projectRoot, "../../Codex/After effect ThreeJS");
-const fixtures = resolve(targetRoot, "public/fixtures");
-const modelPath = resolve(fixtures, "jumping-jacks.glb");
-const posesPath = resolve(fixtures, "jumping-jacks-control-poses.json");
-const refsPath = resolve(fixtures, "jumping-jacks-refs.json");
+await requireFixtures("bridge", [
+  "jumping-jacks.glb",
+  "jumping-jacks-control-poses.json",
+  "jumping-jacks-refs.json",
+]);
+const modelPath = fixture("jumping-jacks.glb");
+const posesPath = fixture("jumping-jacks-control-poses.json");
+const refsPath = fixture("jumping-jacks-refs.json");
 
 const modelBytes = await readFile(modelPath);
 const posesBytes = await readFile(posesPath);
@@ -55,6 +60,28 @@ function runBridge(request, env = {}) {
     });
     child.stdin.end(`${JSON.stringify(request)}\n`);
   });
+}
+
+/**
+ * Abre un `agent3d --serve` y devuelve con qué hablarle. Una respuesta por
+ * línea, en el mismo orden que las peticiones, que es lo que promete NDJSON.
+ */
+function openResident() {
+  const child = spawn(process.execPath, [CLI, "--serve"]);
+  const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
+  const iterator = lines[Symbol.asyncIterator]();
+  return {
+    async send(request) {
+      child.stdin.write(`${JSON.stringify(request)}\n`);
+      const { value, done } = await iterator.next();
+      if (done) throw new Error("el residente cerró stdout antes de responder");
+      return JSON.parse(value);
+    },
+    close() {
+      child.stdin.end();
+      child.kill();
+    },
+  };
 }
 
 /** Lanza el CLI directo y devuelve { exitCode, stdout } como JSON o null. */
@@ -238,6 +265,75 @@ console.log("puente: errores de petición y de datos");
   assert.equal(failingEdit.exitCode, 1, "un parche fallido debe salir con 1, como el CLI");
   assert.equal(failingEdit.response.exitCode, 1);
   assert.equal(failingEdit.response.report.edits[0].error, "ningún nombre o ruta coincide con el patrón");
+}
+
+// La tercera columna: el mismo contrato por un proceso que no se muere. Es
+// transporte y no contrato, así que la prueba de que está bien hecho es que no
+// se distinga del puente de un disparo en ningún byte.
+console.log("puente residente: mismo contrato, mismo informe");
+{
+  const resident = openResident();
+  try {
+    const casos = [
+      { bridgeContractVersion: 1, command: "schema" },
+      {
+        bridgeContractVersion: 1,
+        command: "inspect",
+        files: { model: modelFile, controlPoses: posesFile },
+        options: { noCache: true },
+      },
+      {
+        bridgeContractVersion: 1,
+        command: "render",
+        files: { model: modelFile },
+        options: { tile: 320, noCache: true },
+      },
+      // Y un error de datos, que también tiene que viajar igual por los dos.
+      {
+        bridgeContractVersion: 1,
+        command: "sample",
+        files: { model: modelFile, references: refsFile },
+        options: { frames: "0,abc", fps: 30 },
+      },
+    ];
+    // Las rutas del directorio de trabajo y los tiempos cambian en cada petición
+    // por diseño —sandbox nuevo, reloj distinto—, así que se normalizan con el
+    // mismo criterio que los casos de arriba. Todo lo demás tiene que coincidir
+    // byte a byte, el pliego en base64 incluido.
+    const comparable = (response) =>
+      JSON.stringify(
+        response.report?.source === undefined
+          ? response
+          : { ...response, report: withoutFilePaths(response.report, "<sandbox>") },
+      );
+    for (const caso of casos) {
+      const { response: unDisparo } = await runBridge(caso);
+      const enResidente = await resident.send(caso);
+      assert.equal(
+        comparable(enResidente),
+        comparable(unDisparo),
+        `${caso.command}: el residente no coincide con el puente por proceso`,
+      );
+    }
+    console.log(`puente residente: ok (${casos.length} casos idénticos al puente por proceso)`);
+
+    // El riesgo real de un proceso que no se muere: acumula estado, y el estado
+    // es enemigo del determinismo. Veinte veces la misma petición contra el
+    // mismo proceso; si algo se filtra entre peticiones, se ve aquí.
+    const repetida = casos[2];
+    const primera = comparable(await resident.send(repetida));
+    for (let vuelta = 0; vuelta < 19; vuelta += 1) {
+      assert.equal(
+        comparable(await resident.send(repetida)),
+        primera,
+        `la petición ${vuelta + 2} no dio la misma respuesta que la primera`,
+      );
+    }
+    const { renderHash } = JSON.parse(primera).report;
+    console.log(`puente residente: ok (20 peticiones iguales, renderHash ${renderHash.sheet} quieto)`);
+  } finally {
+    resident.close();
+  }
 }
 
 console.log("bridge: ok");

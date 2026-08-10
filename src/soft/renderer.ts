@@ -40,6 +40,7 @@ import {
 } from "./math";
 import { ensureFaceNormals, type Mesh } from "./mesh";
 import { applyDepthEdgeAntialias } from "./postprocess";
+import { drawSDFText } from "./text";
 import { ShadowMap } from "./shadowMap";
 import {
   extractFrustumPlanes,
@@ -158,6 +159,35 @@ export interface RenderOptions {
   fogColor: [number, number, number];
   fogDensity: number;
   clearColor: [number, number, number];
+  /**
+   * Título de texto SDF que se quema en el framebuffer después del postproceso.
+   * Vive en la propia imagen, no en una capa del navegador: el render headless
+   * lo lleva dentro, así que video y pliego muestran lo mismo.
+   */
+  title?: SdfTitle;
+  /**
+   * Varios títulos en el mismo frame: una plantilla de cartel (kicker + hero +
+   * pie) los declara como lista. Alternativa de compatibilidad a `title` — si
+   * vienen ambos, se dibujan los dos.
+   */
+  titles?: readonly SdfTitle[];
+}
+
+/** Texto SDF quemado en el framebuffer: esquina superior izquierda en píxeles. */
+export interface SdfTitle {
+  text: string;
+  originX: number;
+  originY: number;
+  /** Píxeles de pantalla por píxel de fuente (5×7). */
+  scale: number;
+  color?: readonly [number, number, number];
+}
+
+/** Unión de los títulos de `options` (compatibilidad `title` + lista `titles`). */
+function listTitles(options: RenderOptions): readonly SdfTitle[] {
+  if (!options.title) return options.titles ?? [];
+  if (!options.titles) return [options.title];
+  return [options.title, ...options.titles];
 }
 
 export interface FrameStats extends RasterStats {
@@ -390,6 +420,22 @@ export class SoftwareRenderer {
       const postprocessStart = performance.now();
       stats.smoothedPixels = applyDepthEdgeAntialias(framebuffer);
       stats.postprocessMilliseconds = performance.now() - postprocessStart;
+    }
+
+    for (const run of listTitles(options)) {
+      drawSDFText(
+        framebuffer.color,
+        framebuffer.width,
+        framebuffer.height,
+        run.originX,
+        run.originY,
+        {
+          text: run.text,
+          scale: run.scale,
+          color: run.color ?? [236, 239, 245],
+        },
+        framebuffer.rowOffset,
+      );
     }
 
     stats.totalMilliseconds = performance.now() - startTime;

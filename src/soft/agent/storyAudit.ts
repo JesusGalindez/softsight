@@ -22,6 +22,7 @@
 
 import { resolveStory, type StorySpec } from "./storySpec";
 import { SCENE_ROLES, type SceneRole } from "./schema";
+import type { WarningCode } from "./warningCodes";
 
 /**
  * Caracteres por segundo que se suponen legibles en pantalla.
@@ -46,7 +47,8 @@ export const REQUIRED_ROLES: readonly SceneRole[] = ["cierre"];
 export const STORY_AUDIT_CONTRACT_VERSION = 1;
 
 export interface StoryWarning {
-  code: string;
+  /** Del registro de `warningCodes.ts`, igual que los avisos de topología. */
+  code: WarningCode;
   /** Escena a la que se refiere, o `null` si el aviso es de la pieza entera. */
   scene: string | null;
   message: string;
