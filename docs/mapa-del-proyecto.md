@@ -122,10 +122,22 @@ hecho por los dos lados, da el mismo hash.
 | `softsight:gate` | Poses de control: SoftSight contra Three.js | `npm run softsight:gate` (editor) |
 | `softsight:sample-gate` | Muestras de superficie: posiciones y normales | `npm run softsight:sample-gate` (editor) |
 | `softsight:gates` | Las dos anteriores, en cadena | `npm run softsight:gates` (editor) |
+| `test:determinism` | El pliego del dron dos veces en la misma máquina, y contra el `renderHash` fijado en `artifacts/agent/render-hashes.json` | `npm run test:determinism` (softsight), y en CI sobre `ubuntu-latest` y `macos-latest` |
 | `check` | Tipos, pruebas y build del editor | `npm run check` (editor) |
 
 Las dos puertas llevan los fixtures y `--strict` en el propio script, así que se
 ejecutan sin argumentos; pasar los tuyos después de `--` los sustituye.
+
+**Quién las ejecuta, desde el 2026-08-09.** `.github/workflows/verify.yml` corre
+tipos, las puertas y el determinismo en cada empujón, con la versión de Node
+tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
+alcance: cinco puertas —`animation-contract`, `glb-loader`, `sample-surface`,
+`glb-writer` y `bridge`— leen el fixture certificado del editor, que es un
+repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su
+motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y 8 de 13
+puertas; las cinco restantes solo las cierra una ejecución local con los dos
+repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
+`SOFTSIGHT_FIXTURES` la sustituye.
 
 Estado hoy, verificado el 2026-08-06: **ambas puertas en `accepted`; las 71
 comprobaciones de softsight en verde** —43 de la puerta de geometría, 21 del resto
@@ -263,6 +275,15 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     comprobaciones, ejemplar en `artifacts/agent/pieza-geometria.json`.
 15. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
+16. **Plan Ω — el coste por turno del agente** (en curso). Ver
+    [`plan-omega.md`](plan-omega.md). No añade funcionalidad: ataca lo que hace
+    caro operar el banco —16,5 KB por turno, 10.000 tokens de descubrimiento,
+    0,10 s de arranque por llamada y 47,3 s de suite— y el hueco de que nada de
+    esto lo ejecutaba una máquina. **Ω4 hecha el 2026-08-09**: CI en tres
+    trabajos, `npm run verify` como orden única, y el pliego del dron fijado en
+    `artifacts/agent/render-hashes.json` (`46228b7c`, contrato 3). Destapó que
+    cinco puertas dependen del fixture privado del editor y en CI no corren; ver
+    el aviso de alcance en §4.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

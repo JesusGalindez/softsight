@@ -17,18 +17,22 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+import { fixture, requireFixtures } from "./fixtures.mjs";
+
 const execFileAsync = promisify(execFile);
 
 const here = dirname(fileURLToPath(import.meta.url));
-const projectRoot = resolve(here, "..");
 const BRIDGE = resolve(here, "bridge.mjs");
 const CLI = resolve(here, "agent3d.mjs");
 // El fixture de salto (jumping-jacks) vive en el proyecto hermano After effect ThreeJS.
-const targetRoot = resolve(projectRoot, "../../Codex/After effect ThreeJS");
-const fixtures = resolve(targetRoot, "public/fixtures");
-const modelPath = resolve(fixtures, "jumping-jacks.glb");
-const posesPath = resolve(fixtures, "jumping-jacks-control-poses.json");
-const refsPath = resolve(fixtures, "jumping-jacks-refs.json");
+await requireFixtures("bridge", [
+  "jumping-jacks.glb",
+  "jumping-jacks-control-poses.json",
+  "jumping-jacks-refs.json",
+]);
+const modelPath = fixture("jumping-jacks.glb");
+const posesPath = fixture("jumping-jacks-control-poses.json");
+const refsPath = fixture("jumping-jacks-refs.json");
 
 const modelBytes = await readFile(modelPath);
 const posesBytes = await readFile(posesPath);
