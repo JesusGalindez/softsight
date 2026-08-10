@@ -239,3 +239,61 @@ Qué falta en el motor para convergencia (F1/F3/F4): la medida y maquetación
 determinista sin canvas (`text-layout` ya es puro, falta la pasada de medida), la
 escala tipográfica por rol y la rejilla de márgenes. El texto sigue siendo un
 billboard; si en algún punto dejara de serlo, aviso aquí antes de tocar nada.
+
+### 2026-08-10 · Arquitectura — control de encuadre para fijar, y E2 cerrada
+
+Qué cambié, todo en `softsight`, `main` en `96b7b21` y CI en verde: el plan Ω
+entero —21 puertas y 103 comprobaciones, contra las 13 puertas de antes—, la
+auditoría 2D del movimiento (E2) y la mitad de softsight de la paridad de
+encuadre (E1). Detalle en [`plan-omega.md`](plan-omega.md) y en
+[`plan-convergencia.md`](plan-convergencia.md); aquí va solo lo que cruza al otro
+árbol.
+
+**Qué necesito, de Convergencia** — dos cosas, y la primera es la que pedía E1:
+
+1. **Fijar `artifacts/agent/encuadre-control.json`.** Congela las seis cámaras de
+   `escena-paridad.json` con sus `partScreenBoxes`, con tile 160 sobre un pliego
+   de 480×320. Mismo papel que `render-hashes.json`: valor de control, no segunda
+   fuente. Con él, un cambio de encuadre por mi lado se convierte en una puerta
+   roja allí en vez de en una sorpresa a los novecientos frames. Se refija con
+   `node tools/framing.test.mjs --write`, y si lo refijo, aviso aquí.
+
+   Lo que mi mitad ya deja probado: **el informe basta**. `test:framing`
+   reproduce las 84 cajas de `partScreenBoxes` de cuatro fixtures —las tres
+   escenas de paridad y el dron por `--model`, que es otro camino— usando solo
+   `views[].camera`, `column`, `row` y `sheet.tileSize`, y con el informe pasado
+   por JSON de ida y vuelta. Cero diferencias. Si allí no cuadran, la
+   discrepancia es de aritmética de proyección, no de un dato que me haya
+   guardado.
+
+2. **El dato que la cámara no lleva dentro**, y que es el error natural al
+   consumirla: se usa con **aspecto 1 sobre un tile cuadrado de
+   `sheet.tileSize`**, no con el aspecto del pliego, que no es cuadrado
+   —480×320—. Tomar el del pliego da cajas distintas y no falla nada. Está
+   escrito en `ViewReport.camera` y comprobado por la puerta; si el rasterizador
+   del editor toma el otro, ahí está la diferencia.
+
+**Lo que cambió en el informe**, por si algo de allí lo enumera:
+
+- Tres códigos de aviso nuevos, todos `candidato`: `SALE_DE_CUADRO`,
+  `ENTRADA_A_CIEGAS` y `OCLUSION_PROLONGADA`, de la auditoría 2D. Salen en
+  `warnings` y los hechos en `animationAudit.screen`. Un consumidor que enumere
+  códigos ya no tiene que leerse el código: `--schema codes` publica los 36 con
+  su causa, su severidad y su arreglo.
+- `--summary` y `--fields "warnings,spatial.floating"` recortan el informe
+  —el del dron pasa de 16.493 B a 1.108— y `--schema <parte>` lo mismo con el
+  contrato, de 46.226 B a 12.321 el parche. Todo aditivo.
+- **`contractVersion` sigue en 3 y `bridgeContractVersion` en 1.** Ningún hash se
+  movió: el pliego del dron sigue en `46228b7c`, y ahora igual en `ubuntu-latest`
+  y en `macos-latest`, porque CI lo comprueba en cada empujón.
+
+**Aviso de alcance sobre CI**, que afecta a cómo se lee su verde: cinco puertas
+—`bridge`, `sample-surface`, `animation-contract`, `glb-loader` y `glb-writer`—
+leen el fixture certificado del editor, que es privado mientras `softsight` es
+público. En CI se declaran «no ejecutada» con su motivo y salen 0, así que el
+verde cubre **16 de 21 puertas y 96 de 103 comprobaciones**. Las cinco solo las
+cierra una ejecución local con los dos repositorios al lado. `SOFTSIGHT_FIXTURES`
+cambia la ruta.
+
+Qué está bloqueado por mí: nada. De `plan-convergencia.md` no queda nada asignado
+a softsight; lo abierto —E1 por el lado del editor, B3, C1, C2 y D1–D4— vive allí.
