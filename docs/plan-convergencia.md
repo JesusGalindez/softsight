@@ -424,8 +424,8 @@ dando esos fotogramas.
 ## 5. El coste de las puertas
 
 Una puerta lenta se acaba saltando, así que se presupuesta desde el principio.
-Hoy `npm run check` del editor son 344 pruebas y la suite de softsight, 99
-comprobaciones en 20 puertas con una sola compilación; el recuento y el tiempo
+Hoy `npm run check` del editor son 344 pruebas y la suite de softsight, 104
+comprobaciones en 22 puertas con una sola compilación; el recuento y el tiempo
 de cada puerta los imprime la propia suite.
 
 | Cuándo corre | Qué | Presupuesto |

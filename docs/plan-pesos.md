@@ -1,6 +1,8 @@
 # Plan: los pesos se declaran, no se adivinan
 
-Estado: **pasos 0, 1 y 2 hechos; el siguiente es el 4** (2026-08-10). Nace de la nota que
+Estado: **pasos 0, 1, 2 y 4 hechos; el siguiente es el 3** (2026-08-10). El paso
+que podía matar el plan salió a favor: los pesos declarados deforman en Three.js
+exactamente igual que aquí. Nace de la nota que
 [`plan-movimiento.md`](plan-movimiento.md) §8 dejó anotada y que §2.4 del mismo
 documento mandó a un plan propio, por una razón que sigue siendo la buena: quitar
 el atado rígido es el desbloqueo grande **y** toca la única línea que este
@@ -276,21 +278,37 @@ sobre su propio eje —el envoltorio de caramelo de §3.3—. Se dice, no se arr
 *Cierra: los cuatro saltan sobre un caso construido a propósito, y ninguno sobre
 el ejemplar.*
 
-### Paso 4 — El cierre cruzado, que es el paso que decide
+### Paso 4 — El cierre cruzado — hecho el 2026-08-10, y sale a favor
 
-Un GLB con pesos declarados, evaluado por `evaluatePose` y por el evaluador
-certificado del editor, fotograma a fotograma: **mismos hashes**. Es el mismo
-cierre que hizo E1 con el esqueleto (4/4) y E2 con el BVH sobre tres órdenes de
-rotación.
+**Los cuatro hashes coinciden.** Un GLB con pesos declarados por softsight —el
+codo con banda, 268 vértices— evaluado por `evaluatePose` y por Three.js con su
+`GLTFLoader`, en los fotogramas 0, 10, 20 y 30: **la misma huella SHA-256 de las
+posiciones deformadas, bit a bit**. Es el mismo cierre que hizo E1 con el
+esqueleto y E2 con el BVH, y significa que softsight escribe pesos suaves que el
+reproductor del mundo real reproduce igual.
 
-Sin esto, los tres pasos anteriores son una animación bonita que nadie puede
-afirmar. Con esto, softsight escribe pesos suaves que Three.js reproduce igual.
+Con esto **el plan deja de poder morir por §8**, que era lo que este paso venía a
+resolver.
 
-**Aviso de alcance honesto:** esta puerta lee el fixture certificado, que vive en
-el repositorio privado del editor. Como las otras cinco, en CI se declarará «no
-ejecutada» y solo cierra en una ejecución local con los dos repositorios al lado.
+Dos decisiones sobre cómo quedó montado, y las dos se apartan de lo que decía
+este documento:
 
-*Cierra: el plan. Si aquí no hay coincidencia exacta, §8 dice qué se hace.*
+- **La puerta corre también en CI.** El borrador daba por hecho una sexta «no
+  ejecutada», y no hace falta: lo que se compara es un número, no una ejecución.
+  El control vive en `artifacts/agent/codo-banda-poses.json`, lo produce el editor
+  con `create-control-pose-fixture.mjs`, y tiene el mismo papel que
+  `render-hashes.json` —valor de control, no segunda fuente—. Refijarlo sin mirar
+  qué movió los pesos es justo lo que la puerta impide.
+- **La comparación es explícita.** `--control-poses` **no verifica nada**: dice
+  qué fotogramas evaluar, y publicar los hashes es todo lo que hace. Se comprobó
+  falseando un hash de la referencia y el informe siguió saliendo `accepted`, así
+  que apoyarse en ese `status` habría sido una puerta de mentira.
+
+`test:blend-contract`, y con dientes comprobados: mover la banda de `0.15` a
+`0.16` la pone roja en el fotograma 10. La suite pasa a **22 puertas y 104
+comprobaciones**.
+
+*Cerrado a favor. Sigue el paso 3.*
 
 ### Paso 5 — Ejemplar versionado y puerta
 
@@ -355,7 +373,7 @@ descubrimiento no exige leerse el repositorio.
 | Suma de pesos | todos los vértices | 1 tras `Math.fround`, sin excepción |
 | Codo a 90° | separación entre piezas | 0,106066 en el paso 0, **6,7e-8 con banda** |
 | Dos piezas con la misma costura | `COSTURA_ROTA` | salta si difieren, callado si no |
-| Pesos declarados | evaluador certificado contra `evaluatePose` | mismos hashes, fotograma a fotograma |
+| Pesos declarados | evaluador certificado contra `evaluatePose` | **4/4 hashes idénticos**, fotogramas 0, 10, 20 y 30 |
 | API, CLI y puente | el GLB de cada uno | **byte a byte** |
 | El dron entero | `render-hashes.json` | `46228b7c`, sin mover |
 

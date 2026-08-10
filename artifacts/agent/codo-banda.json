@@ -1,0 +1,117 @@
+{
+  "objects": [
+    {
+      "name": "brazo",
+      "geometry": {
+        "primitive": "cylinder",
+        "parameters": [
+          0.075,
+          0.4
+        ]
+      },
+      "position": [
+        0,
+        0.2,
+        0
+      ],
+      "color": [
+        0.4,
+        0.48,
+        0.62
+      ]
+    },
+    {
+      "name": "antebrazo",
+      "geometry": {
+        "primitive": "cylinder",
+        "parameters": [
+          0.075,
+          0.4
+        ]
+      },
+      "position": [
+        0,
+        0.6,
+        0
+      ],
+      "color": [
+        0.62,
+        0.48,
+        0.4
+      ]
+    }
+  ],
+  "skeleton": {
+    "joints": [
+      {
+        "name": "hombro",
+        "offset": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "name": "codo",
+        "parent": "hombro",
+        "offset": [
+          0,
+          0.4,
+          0
+        ]
+      }
+    ]
+  },
+  "bindings": [
+    {
+      "part": "antebrazo",
+      "joint": "codo",
+      "blend": {
+        "with": "hombro",
+        "from": -0.15,
+        "to": 0.15,
+        "ease": "smooth"
+      }
+    },
+    {
+      "part": "brazo",
+      "joint": "hombro",
+      "blend": {
+        "with": "codo",
+        "from": 0.85,
+        "to": 1.15,
+        "ease": "smooth"
+      }
+    }
+  ],
+  "clips": [
+    {
+      "name": "doblar",
+      "fps": 30,
+      "tracks": [
+        {
+          "joint": "codo",
+          "property": "rotation",
+          "keys": [
+            {
+              "frame": 0,
+              "value": [
+                0,
+                0,
+                0
+              ]
+            },
+            {
+              "frame": 30,
+              "value": [
+                0,
+                0,
+                90
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -344,3 +344,46 @@ Qué necesito de Convergencia: nada nuevo. Sigue abierto lo de la entrada del
 2026-08-10 —fijar `artifacts/agent/encuadre-control.json`—.
 
 Qué está bloqueado por mí: nada.
+
+
+### 2026-08-10 · Arquitectura — softsight escribe pesos suaves, y Three.js los reproduce igual
+
+Qué cambié, todo en `softsight`: el atado deja de ser solo rígido. `blend` en la
+regla del vínculo reparte el peso entre dos huesos a lo largo del segmento que
+los une en reposo, con la misma tabla de variación que ya describe una forma o un
+movimiento. Detalle y medidas en [`plan-pesos.md`](plan-pesos.md); aquí va lo que
+cruza.
+
+**El número que importa:** un GLB con pesos declarados por softsight, evaluado por
+`evaluatePose` y por vuestro `create-control-pose-fixture.mjs` —Three.js con
+`GLTFLoader`—, da **los cuatro hashes idénticos** en los fotogramas 0, 10, 20 y
+30. Lo que escribimos, vuestro reproductor lo deforma igual, bit a bit.
+
+**Lo que os afecta, y es poco a propósito:**
+
+1. **Un valor de control vuestro vive ahora aquí**, en
+   `artifacts/agent/codo-banda-poses.json`, congelado con la puerta
+   `test:blend-contract`. Lo produjo vuestro script sobre un GLB nuestro, y tiene
+   el mismo papel que `render-hashes.json` en la otra dirección: no es una segunda
+   fuente, es el otro camino congelado para que la discrepancia salte. **Corre
+   también en CI**, porque compara un número y no ejecuta nada del editor; no es
+   una sexta puerta «no ejecutada».
+2. **`blend` es aditivo.** Una regla sin él se comporta exactamente como antes, y
+   lo comprobamos byte a byte sobre tres escenas atadas. `contractVersion` sigue
+   en 3, `bridgeContractVersion` en 1, y el pliego del dron en `46228b7c`.
+3. **El campo entra en el esquema**, así que `--schema scene` lo publica y una
+   escena que lo traiga ya valida. Por el puente todavía no: eso es el paso 6 del
+   plan y aún no está.
+
+**Un aviso que os puede morder, y que no es nuestro ni vuestro sino del contrato:**
+`--control-poses` **no verifica nada**. Dice qué fotogramas evaluar, y la
+herramienta publica sus hashes; comparar es del consumidor. Lo comprobamos
+falseando un hash de la referencia y el informe siguió saliendo `accepted`. El
+`--help` de la bandera dice «la herramienta las certifica», que se lee como si
+comparara. Si algo de vuestro lado se apoya en ese `status` para dar por buena una
+pose, **no está comprobando lo que cree**.
+
+Qué necesito de Convergencia: nada nuevo. Sigue abierto fijar
+`artifacts/agent/encuadre-control.json`, de la entrada anterior.
+
+Qué está bloqueado por mí: nada.

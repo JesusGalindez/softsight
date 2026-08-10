@@ -144,12 +144,12 @@ tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
 alcance: cinco puertas —`animation-contract`, `glb-loader`, `sample-surface`,
 `glb-writer` y `bridge`— leen el fixture certificado del editor, que es un
 repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su
-motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **16 de
-las 21 puertas, con 96 de las 103 comprobaciones**; las cinco restantes solo las
+motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **17 de
+las 22 puertas, con 97 de las 104 comprobaciones**; las cinco restantes solo las
 cierra una ejecución local con los dos repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-10: **ambas puertas en `accepted`; las 103
+Estado hoy, verificado el 2026-08-10: **ambas puertas en `accepted`; las 104
 comprobaciones de softsight en verde**. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
@@ -299,17 +299,21 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     puerta `test:geometry` deja de excusar dos códigos y exige cero avisos de
     `certeza` sobre el ejemplar. Queda anotado en
     [`plan-geometria.md`](plan-geometria.md) §9.
-16. **Pesos declarados por fórmula** (plan escrito el 2026-08-10, sin empezar).
-    Ver [`plan-pesos.md`](plan-pesos.md). Es el desbloqueo grande que sigue al
-    atado rígido de E4 —piel suave, mallas continuas— y el plan existe para que
-    no cruce la línea que E4 trazó: el agente declara la región y la curva, la
+16. **Pesos declarados por fórmula** (en curso: pasos 0, 1, 2 y 4 hechos el
+    2026-08-10; queda el 3, el 5 y el 6). Ver [`plan-pesos.md`](plan-pesos.md). Es
+    el desbloqueo que sigue al atado rígido de E4 —piel suave, mallas continuas—
+    sin cruzar la línea que E4 trazó: el agente declara la región y la curva, la
     herramienta evalúa una función determinista, y nadie adivina a qué hueso va
-    un vértice. Su paso 0 es una medida que todavía no está tomada —cuánto se
-    abre un codo declarado como dos piezas rígidas—, y de ella depende que el
-    resto valga la pena. Lo que ya no hay que construir es el instrumento:
-    `applySkin` mezcla cuatro influencias y está certificado contra el evaluador
-    del editor, así que softsight **ya sabe verificar los pesos que no sabe
-    escribir**.
+    un vértice. `blend` en la regla del vínculo reparte el peso entre dos huesos
+    a lo largo del segmento que los une en reposo, con la misma tabla de
+    variación que describe una forma o un movimiento. **La costura del codo pasa
+    de 0,106066 a 6,7e-8** —el suelo de ruido de `Float32`, que ya trae 3,0e-8 en
+    reposo— y el atado rígido sale **byte a byte** igual que antes. El paso que
+    podía matar el plan, el cierre cruzado, salió a favor: los cuatro hashes de
+    control del GLB con pesos declarados **coinciden con Three.js**, con el
+    control congelado en `artifacts/agent/codo-banda-poses.json` y la puerta
+    `test:blend-contract`, que corre también en CI porque compara un número y no
+    ejecuta nada del editor.
 17. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
 18. **Plan Ω — el coste por turno del agente** (hecho, salvo Ω6.4, que vive en el

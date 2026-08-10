@@ -12,6 +12,7 @@
     "test:glb-writer": "npm run build:agent3d && node tools/glb-writer.test.mjs",
     "test:bvh": "npm run build:agent3d && node tools/bvh-loader.test.mjs",
     "test:bind": "npm run build:agent3d && node tools/skin-binding.test.mjs",
+    "test:blend-contract": "npm run build:agent3d && node tools/blend-contract.test.mjs",
     "test:rig": "npm run build:agent3d && node tools/rig-spec.test.mjs",
     "test:story": "npm run build:agent3d && node tools/story-spec.test.mjs",
     "test:geometry": "npm run build:agent3d && node tools/geometry.test.mjs",

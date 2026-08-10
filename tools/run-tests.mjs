@@ -65,6 +65,7 @@ const GATES = [
   "parity-mode.test.mjs", // 0,4 s
   "animation-contract.test.mjs", // 0,3 s
   "skin-binding.test.mjs", // 0,3 s
+  "blend-contract.test.mjs", // 0,2 s — compara contra el control certificado, sin ejecutar nada del editor
   "warning-codes.test.mjs", // 0,3 s
   "glb-loader.test.mjs", // 0,2 s
   "geometry.test.mjs", // 0,2 s

@@ -189,47 +189,21 @@ assert.deepEqual(primeraGana.unusedJoints, ["Brazo"]);
 // abre esa cifra, y con banda no se abre nada. Una tolerancia generosa taparía
 // justo el fallo que esto vigila, así que el cerrado se exige a cero exacto.
 
-const CODO = {
-  objects: [
-    { name: "brazo", geometry: { primitive: "cylinder", parameters: [0.075, 0.4] }, position: [0, 0.2, 0] },
-    { name: "antebrazo", geometry: { primitive: "cylinder", parameters: [0.075, 0.4] }, position: [0, 0.6, 0] },
-  ],
-  skeleton: {
-    joints: [
-      { name: "hombro", offset: [0, 0, 0] },
-      { name: "codo", parent: "hombro", offset: [0, 0.4, 0] },
-    ],
-  },
-  clips: [
-    {
-      name: "doblar",
-      fps: 30,
-      tracks: [
-        {
-          joint: "codo",
-          property: "rotation",
-          keys: [
-            { frame: 0, value: [0, 0, 0] },
-            { frame: 30, value: [0, 0, 90] },
-          ],
-        },
-      ],
-    },
-  ],
-};
+// La escena es la versionada, no una copia: `test:blend-contract` certifica sus
+// hashes contra Three.js, y dos escenas parecidas en dos ficheros acabarían
+// midiendo cosas distintas con el mismo nombre.
+//
+// Sus dos bandas declaran la misma costura desde cada lado: el brazo la tiene en
+// t = 1 de su segmento hombro→codo, y el antebrazo en t = 0 del suyo codo→hombro.
+// Las dos están centradas en ella, así que el vértice compartido sale 0,5 y 0,5.
+const CODO = JSON.parse(
+  await readFile(resolve(projectRoot, "artifacts/agent/codo-banda.json"), "utf8"),
+);
+const CON_BANDA = CODO.bindings;
+assert.equal(CON_BANDA.filter((rule) => rule.blend).length, 2, "la escena versionada trae dos bandas");
 
-const RIGIDO = [
-  { part: "antebrazo", joint: "codo" },
-  { part: "brazo", joint: "hombro" },
-];
-
-// La misma costura, declarada desde cada lado: el brazo la tiene en t = 1 de su
-// segmento hombro→codo, y el antebrazo en t = 0 del suyo codo→hombro. Las dos
-// bandas están centradas en ella, así que el vértice compartido sale 0,5 y 0,5.
-const CON_BANDA = [
-  { part: "antebrazo", joint: "codo", blend: { with: "hombro", from: -0.15, to: 0.15 } },
-  { part: "brazo", joint: "hombro", blend: { with: "codo", from: 0.85, to: 1.15 } },
-];
+/** La misma escena sin repartir: es lo que había antes de que existiera `blend`. */
+const RIGIDO = CON_BANDA.map(({ part, joint }) => ({ part, joint }));
 
 const sinBanda = aperturaDeLaCostura(CODO, RIGIDO);
 assert.equal(

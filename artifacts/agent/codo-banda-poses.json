@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "model": "codo-banda.glb",
+  "fps": 30,
+  "meshes": [
+    {
+      "name": "piel_1",
+      "vertices": 134
+    },
+    {
+      "name": "piel_2",
+      "vertices": 134
+    }
+  ],
+  "clips": {
+    "doblar": [
+      {
+        "frame": 0,
+        "positionsHash": "sha256:6e00cf1128fca28b0b66073a6ca97b528de0d420c30589778a9c76e86c71fae5"
+      },
+      {
+        "frame": 10,
+        "positionsHash": "sha256:82ebc3d5d4679c55e5c4c55006dd5385569ca3a0b20e50060512f3a288da62c7"
+      },
+      {
+        "frame": 20,
+        "positionsHash": "sha256:a4aa350db03c201d4be0325e73f4eb00ed696e10ee008951ce71919da8008bb5"
+      },
+      {
+        "frame": 30,
+        "positionsHash": "sha256:7f98bcd24073398a31f570dc51cf329fbee469d47c985fcd6eb6f54ef475417d"
+      }
+    ]
+  }
+}
