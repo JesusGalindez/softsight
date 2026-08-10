@@ -18,6 +18,7 @@
     "test:bridge": "npm run build:agent3d && node tools/bridge.test.mjs",
     "test:codes": "npm run build:agent3d && node tools/warning-codes.test.mjs",
     "test:summary": "npm run build:agent3d && node tools/summary.test.mjs",
+    "test:agents-md": "npm run build:agent3d && node tools/agents-md.mjs --check",
     "test:worker": "npm run build:agent3d && node tools/worker.test.mjs",
     "test:model-cache": "npm run build:agent3d && node tools/model-cache.test.mjs",
     "test:determinism": "npm run build:agent3d && node tools/render-hashes.mjs",

@@ -377,6 +377,19 @@ CI ejecuten literalmente la misma orden y no dos listas que se desincronizan.
 
 ## Fase Ω5 — La entrada del agente frío
 
+**Hecha el 2026-08-09.** `AGENTS.md` en la raíz, **110 líneas de las 120** de techo, con
+las cuatro identidades y la regla de dónde va un cambio, las tres invariantes, cómo
+descubrir el contrato por partes, y punteros —no copias— al mapa, al README y a los planes.
+
+Se generan **tres** bloques, no dos: comandos y puertas de `package.json`, y además las
+**banderas del CLI de la salida de `--help`**, que es el sitio donde una lista escrita a
+mano envejece más rápido. `tools/agents-md.mjs` los reescribe y `--check` sale 1 si el
+fichero commiteado no es idéntico al regenerado **o si pasa de 120 líneas**: un techo que
+nadie comprueba no es un techo.
+
+La lista de puertas va en una línea y no en tabla. Con tabla eran 17 líneas para decir lo
+que ya está en `package.json`, y el techo se lo comía la propia tabla.
+
 Un agente que abre este repositorio hoy tiene delante 609 líneas de README y 12
 documentos con 5.391 líneas. Todo bueno, todo denso, y nada de ello dice en veinte líneas
 **qué orden ejecutar primero**.

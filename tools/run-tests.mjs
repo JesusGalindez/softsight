@@ -59,6 +59,7 @@ const GATES = [
   "skin-binding.test.mjs", // 0,6 s
   "parity-mode.test.mjs", // 0,5 s
   "warning-codes.test.mjs", // 0,5 s
+  "agents-md.mjs --check", // 0,5 s — no acaba en .test.mjs porque también regenera
   "glb-writer.test.mjs", // 0,3 s
   "geometry.test.mjs", // 0,3 s
   "text.test.mjs", // 0,3 s
@@ -102,7 +103,10 @@ const results = [];
 async function drain() {
   for (let gate = pending.shift(); gate !== undefined; gate = pending.shift()) {
     const started = performance.now();
-    const { code, out } = await run(process.execPath, [resolve(here, gate)]);
+    // Una puerta puede llevar argumentos —`agents-md.mjs --check`—, así que la
+    // entrada se parte por espacios en vez de ser solo un nombre de fichero.
+    const [file, ...args] = gate.split(" ");
+    const { code, out } = await run(process.execPath, [resolve(here, file), ...args]);
     const milliseconds = performance.now() - started;
     const checks = out.split("\n").filter((line) => line.includes(": ok")).length;
     const skipped = out.includes(": no ejecutada —");

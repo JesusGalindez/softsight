@@ -122,6 +122,7 @@ hecho por los dos lados, da el mismo hash.
 | `softsight:gate` | Poses de control: SoftSight contra Three.js | `npm run softsight:gate` (editor) |
 | `softsight:sample-gate` | Muestras de superficie: posiciones y normales | `npm run softsight:sample-gate` (editor) |
 | `softsight:gates` | Las dos anteriores, en cadena | `npm run softsight:gates` (editor) |
+| `test:agents-md` | El `AGENTS.md` commiteado contra el regenerado de `package.json` y `--help`, y su techo de 120 líneas | `npm run test:agents-md` (softsight), también dentro de `test:animation` |
 | `test:summary` | El informe recortado contra el completo: cada clave del resumen es la misma, el resumen del dron cabe en 2.000 B, una ruta de `--fields` que no existe sale 2 con sugerencia, y la unión de las siete partes de `--schema` es el `--schema` completo | `npm run test:summary` (softsight), también dentro de `test:animation` |
 | `test:codes` | El registro de códigos de aviso contra `src/soft/`, en las dos direcciones, y contra lo que publica `--schema` | `npm run test:codes` (softsight), también dentro de `test:animation` |
 | `test:determinism` | El pliego del dron dos veces en la misma máquina, y contra el `renderHash` fijado en `artifacts/agent/render-hashes.json` | `npm run test:determinism` (softsight), y en CI sobre `ubuntu-latest` y `macos-latest` |
@@ -141,7 +142,7 @@ puertas; las cinco restantes solo las cierra una ejecución local con los dos
 repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 80
+Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 81
 comprobaciones de softsight en verde**. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
@@ -298,7 +299,11 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     **Ω1.1 y Ω1.2 hechas**: `--summary` deja el informe del dron en 1.108 B
     frente a 16.493 B —un 93 % menos, con sus dos avisos dentro— y `--fields`
     proyecta rutas con punto; las dos son proyecciones sobre el informe ya
-    construido y no recalculan nada.
+    construido y no recalculan nada. **Ω1.4 hecha**: `--schema <parte>` baja el
+    descubrimiento de 46.226 B a 12.321 el parche o 940 la muestra, y el completo
+    se construye uniendo las partes. **Ω5 hecha**: `AGENTS.md` en la raíz, 110
+    líneas, con las secciones de comandos, puertas y banderas generadas por
+    `tools/agents-md.mjs`.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un
