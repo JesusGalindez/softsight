@@ -282,9 +282,40 @@ const SKELETON_FIELDS: ObjectSchema = {
   },
 };
 
+const BLEND_FIELDS: ObjectSchema = {
+  with: {
+    type: "string",
+    required: true,
+    description: "El otro hueso del reparto. Debe existir y no puede ser el de la regla.",
+  },
+  from: {
+    type: "number",
+    required: true,
+    description:
+      "Dónde empieza la banda, en unidades del segmento entre los dos huesos: 0 es el hueso de la " +
+      "regla y 1 es `with`. Se sale del rango a propósito cuando la costura cae fuera.",
+  },
+  to: {
+    type: "number",
+    required: true,
+    description: "Dónde acaba. Mayor que `from`. Después de aquí, todo el peso es de `with`.",
+  },
+  ease: {
+    type: "string",
+    description: "linear (por defecto), smooth o power:k. La misma tabla que la forma y el movimiento.",
+  },
+};
+
 const BINDING_FIELDS: ObjectSchema = {
   part: { type: "string", required: true, description: "Patrón de pieza, como --select: `rotor-*`." },
   joint: { type: "string", required: true, description: "Hueso al que se ata. Debe existir." },
+  blend: {
+    type: "object",
+    description:
+      "Reparto del peso con otro hueso alrededor de la articulación. Sin esto el atado es rígido, " +
+      "peso 1 sobre `joint`, que para una pieza rígida de verdad es la respuesta exacta.",
+    fields: BLEND_FIELDS,
+  },
 };
 
 const KEY_FIELDS: ObjectSchema = {

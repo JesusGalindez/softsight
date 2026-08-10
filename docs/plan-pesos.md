@@ -1,6 +1,6 @@
 # Plan: los pesos se declaran, no se adivinan
 
-Estado: **pasos 0 y 1 hechos, el resto sin empezar** (2026-08-10). Nace de la nota que
+Estado: **pasos 0, 1 y 2 hechos; el siguiente es el 4** (2026-08-10). Nace de la nota que
 [`plan-movimiento.md`](plan-movimiento.md) §8 dejó anotada y que §2.4 del mismo
 documento mandó a un plan propio, por una razón que sigue siendo la buena: quitar
 el atado rígido es el desbloqueo grande **y** toca la única línea que este
@@ -215,14 +215,44 @@ se corrige antes que el código:
   un parámetro para el paso siguiente. El paso 2 la ensancha cuando tenga qué
   meter dentro.
 
-### Paso 2 — La banda entre dos huesos
+### Paso 2 — La banda entre dos huesos — hecho el 2026-08-10
 
-`blend` como la describe §4, con sus rechazos: hueso `with` que no existe, banda
-invertida (`from ≥ to`), banda fuera de `[0, 1]`, `ease` desconocido. Los mismos
-errores con el mismo tono que ya dan `rigSpec` y el vínculo: qué está mal, y qué
-se esperaba.
+`blend` en la regla del vínculo, con su esquema —así que una escena lo acepta y
+`--schema` lo publica— y sus rechazos: `with` que no existe, `with` igual al hueso
+de la regla, `from ≥ to`, y `ease` desconocido. El de la curva no se comprueba con
+una lista propia: se evalúa la banda una vez al resolverla, y quien dice qué curvas
+existen sigue siendo `evaluateVariation`.
 
-*Cierra: un codo doblado 90° sin grieta, con la separación del paso 0 en cero.*
+**El codo del paso 0 pasa de 0,106066 a 6,7e-8.** No se afirma cero exacto, y el
+porqué es un hallazgo del propio paso: la costura ya trae **3,0e-8 en reposo**,
+antes de doblar nada, porque las dos tapas se generan por caminos distintos
+—`0,2 + 0,2` y `0,6 − 0,2`— y `Float32` no los redondea igual. Lo que la puerta
+afirma es que doblar 90° no separa la costura más allá de ese ruido: contra la
+grieta de antes, un factor de **1,6 millones**.
+
+La banda que lo consigue, y que enseña la mecánica mejor que §4:
+
+```json
+{ "part": "antebrazo", "joint": "codo",  "blend": { "with": "hombro", "from": -0.15, "to": 0.15 } }
+{ "part": "brazo",     "joint": "hombro", "blend": { "with": "codo",   "from":  0.85, "to": 1.15 } }
+```
+
+La misma costura desde cada lado. Las bandas son distintas porque la costura cae a
+distinta altura del hueso de cada pieza —en `t = 0` para el antebrazo y en `t = 1`
+para el brazo—, y las dos están centradas en ella, así que el vértice compartido
+sale 0,5 y 0,5 por los dos caminos.
+
+Entra en `test:bind`, que ahora afirma las dos mitades: **sin banda la costura se
+abre exactamente la cuerda medida en el paso 0**, y con banda no se abre. Más los
+268 vértices sumando 1 y los 132 de la costura repartiendo mitad y mitad. Cinco
+rechazos con su mensaje.
+
+Un intento que no entró, por si a alguien le tienta: escribir las dos influencias
+ordenadas por índice de hueso, para que los dos lados de la costura acumulen en el
+mismo orden. **No cambia ni un bit** —la suma de dos flotantes es conmutativa, y
+este plan no pasa de dos influencias por §3.4—, así que sobra.
+
+*Cerrado: el codo doblado 90° sin grieta, y el rígido byte a byte por tercera vez.*
 
 ### Paso 3 — Los invariantes, como avisos con código
 
@@ -298,6 +328,12 @@ descubrimiento no exige leerse el repositorio.
 - **`Mat4` es row-major** y los vectores se multiplican por la derecha. Es la
   primera invariante de `AGENTS.md` y la causa habitual de que una proyección
   «casi» funcione.
+- **Hay un suelo de ruido de 3,0e-8, y no lo pone el reparto** (paso 2). La
+  costura del codo ya lo trae en reposo, porque las dos tapas se generan por
+  caminos distintos y `Float32` no los redondea igual. Nada de lo que venga
+  después —`COSTURA_ROTA` en el paso 3, los hashes del paso 4— puede exigir
+  igualdad exacta entre dos vértices que *deberían* coincidir: el umbral se
+  declara, y este es el número contra el que se declara.
 - **La grieta es la cuerda `2·r·sin(θ/2)`** (paso 0). Depende del radio de la
   pieza y del ángulo, y de nada más: ni de la longitud, ni de la resolución de la
   malla, ni de la escala del modelo. Sirve como valor esperado en cualquier caso
@@ -313,11 +349,11 @@ descubrimiento no exige leerse el repositorio.
 | Qué | Comprobación | Valor esperado |
 |---|---|---|
 | Regla sin `blend` | GLB antes y después | **byte a byte** |
-| Banda con `ease: linear` | peso en el punto medio | 0,5 exacto |
+| Banda con `ease: linear` | peso en el punto medio | **0,5 a menos de 1e-6**: el `t` sale de posiciones ya en `Float32` |
 | Banda con `ease: smooth` | punto medio y cuarto | media exacta; el cuarto por debajo |
 | Banda fuera de la región | pesos | 1 y 0, sin banda intermedia |
 | Suma de pesos | todos los vértices | 1 tras `Math.fround`, sin excepción |
-| Codo a 90° | separación entre piezas | 0,106066 en el paso 0, ahora en cero |
+| Codo a 90° | separación entre piezas | 0,106066 en el paso 0, **6,7e-8 con banda** |
 | Dos piezas con la misma costura | `COSTURA_ROTA` | salta si difieren, callado si no |
 | Pesos declarados | evaluador certificado contra `evaluatePose` | mismos hashes, fotograma a fotograma |
 | API, CLI y puente | el GLB de cada uno | **byte a byte** |

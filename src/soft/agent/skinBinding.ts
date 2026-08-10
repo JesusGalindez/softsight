@@ -39,6 +39,38 @@ import type {
 } from "./glbWriter";
 import { matchesPattern } from "./model";
 import type { Model, ModelPart } from "./model";
+import { evaluateVariation } from "../variation";
+import type { VariationSpec } from "../variation";
+
+/**
+ * Reparto del peso entre el hueso de la regla y otro, a lo largo del segmento que
+ * los une en reposo.
+ *
+ * El parámetro `t` es la proyección de cada vértice sobre ese segmento: **0 en el
+ * hueso de la regla y 1 en `with`**, y **no se sujeta al rango**, porque la
+ * costura de una pieza cae fuera de él tantas veces como dentro. En el codo de dos
+ * cilindros del plan, la misma costura se declara así desde cada lado:
+ *
+ * - el brazo, atado a `hombro`, la tiene en `t = 1` → banda `[0.85, 1.15]`;
+ * - el antebrazo, atado a `codo`, la tiene en `t = 0` → banda `[-0.15, 0.15]`.
+ *
+ * En los dos casos el vértice de la costura sale a mitad de camino —0,5 y 0,5— y
+ * por eso no se abre al doblar. Las bandas son distintas porque la costura está a
+ * distinta altura del hueso de cada pieza, no porque haya dos reglas.
+ *
+ * Qué es de quién: `w` es lo que se lleva **`with`**, y `1 − w` se queda en el
+ * hueso de la regla.
+ */
+export interface BlendSpec {
+  /** El otro hueso. Debe existir, y no puede ser el de la regla. */
+  with: string;
+  /** Dónde empieza la banda, en unidades del segmento. Antes de aquí, todo al hueso de la regla. */
+  from: number;
+  /** Dónde acaba. Después de aquí, todo a `with`. Tiene que ser mayor que `from`. */
+  to: number;
+  /** `linear` por defecto; `smooth`; o `power:k`. La misma tabla que la forma y el movimiento. */
+  ease?: string;
+}
 
 /** Una regla: las piezas que encajan con `part` se atan al hueso `joint`. */
 export interface SkinBindingRule {
@@ -46,6 +78,12 @@ export interface SkinBindingRule {
   part: string;
   /** Nombre del nodo del esqueleto. Debe existir. */
   joint: string;
+  /**
+   * Reparto con otro hueso alrededor de la articulación. Sin esto el atado es
+   * rígido —peso 1 sobre `joint`—, que para una pieza rígida de verdad no es una
+   * simplificación sino la respuesta exacta.
+   */
+  blend?: BlendSpec;
 }
 
 /**
@@ -116,31 +154,83 @@ export function skeletonFromParsedGlb(parsed: ParsedGlb): SkeletonSource {
 }
 
 /**
+ * Una banda ya resuelta contra el esqueleto: los índices de los dos huesos, el
+ * segmento que los une en reposo y la tabla que reparte a lo largo de él.
+ *
+ * Se resuelve **una vez por regla** y no una vez por vértice: buscar el hueso por
+ * nombre y restar dos posiciones dentro del bucle sería repetir por cada vértice
+ * un trabajo que no depende del vértice.
+ */
+interface ResolvedBlend {
+  other: number;
+  /** Posición de reposo del hueso de la regla, en espacio de modelo. */
+  origin: [number, number, number];
+  /** Vector hacia el otro hueso, sin normalizar; `t` sale dividiendo por su módulo al cuadrado. */
+  axis: [number, number, number];
+  axisLengthSquared: number;
+  /** El reparto como tabla de variación: `from` da 0 y `to` da 1. */
+  band: VariationSpec;
+  /** Para los mensajes de error, que salen mientras se evalúa. */
+  what: string;
+}
+
+/**
  * Los pesos de una pieza: qué hueso mueve cada vértice y cuánto.
  *
- * Es **el único sitio donde se decide un peso**, y por eso existe aunque hoy no
- * decida gran cosa. Escrito dentro del bucle de primitivas, un reparto entre dos
- * huesos quedaría entre la aritmética de posiciones, normales y UVs, y cada una
- * de las cuatro cosas se leería peor. Aquí entra lo medido y sale lo escrito, sin
- * tocar nada más.
+ * Es **el único sitio donde se decide un peso**. Escrito dentro del bucle de
+ * primitivas, este reparto quedaría entre la aritmética de posiciones, normales y
+ * UVs, y cada una de las cuatro cosas se leería peor. Aquí entra lo medido y sale
+ * lo escrito, sin tocar nada más.
  *
- * Hoy el atado es **rígido**: cada vértice pesa 1 sobre un solo hueso. No es una
- * simplificación de algo mejor —para una pieza rígida de verdad es la respuesta
- * exacta—, así que este camino no debe cambiar ni un bit cuando llegue el
- * reparto suave. Ver [`docs/plan-pesos.md`](../../../docs/plan-pesos.md).
+ * **Sin banda el atado es rígido**: cada vértice pesa 1 sobre un solo hueso. No es
+ * una simplificación de algo mejor —para una pieza rígida de verdad es la
+ * respuesta exacta—, y ese camino sale byte a byte igual que antes de que
+ * existiera este otro. Ver [`docs/plan-pesos.md`](../../../docs/plan-pesos.md).
+ *
+ * **Con banda**, cada vértice se proyecta sobre el segmento entre los dos huesos
+ * en reposo y el parámetro se pasa por la misma tabla de variación que describe
+ * una forma o un movimiento. No hay curva nueva que mantener: `from` es donde la
+ * tabla vale 0 y `to` donde vale 1, y fuera del rango `evaluateVariation` sujeta
+ * al primero o al último, que es justo lo que hace falta —antes de la banda todo
+ * al hueso de la regla, después todo al otro—.
+ *
+ * Aquí no se normaliza nada: dos pesos que salen de `w` y `1 − w` suman uno por
+ * construcción, y el redondeo a `Float32` que hace el propio array lo absorbe el
+ * lector, que divide por el total antes de mezclar.
  *
  * Los cuatro huecos por vértice son los de `JOINTS_0`/`WEIGHTS_0`: glTF los
  * escribe siempre en grupos de cuatro, y los que no se usan van a cero.
  */
 function weightsFor(
-  vertexCount: number,
+  positions: Float32Array,
   joint: number,
+  blend: ResolvedBlend | null,
 ): { joints: Uint16Array; weights: Float32Array } {
+  const vertexCount = positions.length / 3;
   const joints = new Uint16Array(vertexCount * 4);
   const weights = new Float32Array(vertexCount * 4);
+
+  if (blend === null) {
+    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+      joints[vertex * 4] = joint;
+      weights[vertex * 4] = 1;
+    }
+    return { joints, weights };
+  }
+
+  const [ox, oy, oz] = blend.origin;
+  const [ax, ay, az] = blend.axis;
   for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const t =
+      ((positions[vertex * 3] - ox) * ax +
+        (positions[vertex * 3 + 1] - oy) * ay +
+        (positions[vertex * 3 + 2] - oz) * az) /
+      blend.axisLengthSquared;
+    const share = evaluateVariation(blend.band, t, blend.what);
     joints[vertex * 4] = joint;
-    weights[vertex * 4] = 1;
+    weights[vertex * 4] = 1 - share;
+    joints[vertex * 4 + 1] = blend.other;
+    weights[vertex * 4 + 1] = share;
   }
   return { joints, weights };
 }
@@ -257,18 +347,29 @@ export function bindModelToSkeleton(model: Model, skeleton: SkeletonSource, bind
     if (node.name !== undefined && !indexByName.has(node.name)) indexByName.set(node.name, index);
   });
 
-  const unknown = binding.bindings.filter((rule) => !indexByName.has(rule.joint));
+  // El hueso de la regla y el de la banda se comprueban juntos: los dos tienen que
+  // existir, y un `with` inventado falla igual de pronto que un `joint` inventado.
+  const unknown = binding.bindings.flatMap((rule) =>
+    [rule.joint, rule.blend?.with].filter(
+      (name): name is string => name !== undefined && !indexByName.has(name),
+    ),
+  );
   if (unknown.length > 0) {
     const names = [...indexByName.keys()].slice(0, 12).join(", ");
     throw new Error(
-      `vínculo: el esqueleto no tiene ${unknown.map((rule) => `'${rule.joint}'`).join(", ")}; ` +
+      `vínculo: el esqueleto no tiene ${unknown.map((name) => `'${name}'`).join(", ")}; ` +
         `los huesos disponibles son ${names}${indexByName.size > 12 ? "…" : ""}`,
     );
   }
 
   // Resolver antes de construir nada: si falta una pieza por atar, el error sale
   // con la lista entera y no de una en una.
-  const resolved: Array<{ part: ModelPart; joint: number; jointName: string }> = [];
+  const resolved: Array<{
+    part: ModelPart;
+    joint: number;
+    jointName: string;
+    rule: SkinBindingRule;
+  }> = [];
   const orphans: string[] = [];
   for (const part of model.parts) {
     const rule = binding.bindings.find((candidate) => matchesPattern(part, candidate.part));
@@ -276,7 +377,7 @@ export function bindModelToSkeleton(model: Model, skeleton: SkeletonSource, bind
       orphans.push(part.name);
       continue;
     }
-    resolved.push({ part, joint: indexByName.get(rule.joint)!, jointName: rule.joint });
+    resolved.push({ part, joint: indexByName.get(rule.joint)!, jointName: rule.joint, rule });
   }
   if (orphans.length > 0) {
     const shown = orphans.slice(0, 8).join(", ");
@@ -303,6 +404,49 @@ export function bindModelToSkeleton(model: Model, skeleton: SkeletonSource, bind
     toColumnMajor(inverse, inverseBindMatrices, index * 16);
   }
 
+  // Las bandas se resuelven una vez por regla, con la pose de reposo ya calculada:
+  // el segmento sobre el que se mide no depende del vértice.
+  const blendByRule = new Map<SkinBindingRule, ResolvedBlend>();
+  for (const rule of binding.bindings) {
+    const blend = rule.blend;
+    if (!blend) continue;
+    const what = `vínculo: la banda de '${rule.part}'`;
+    if (blend.with === rule.joint) {
+      throw new Error(`${what} reparte '${rule.joint}' consigo mismo; \`with\` tiene que ser otro hueso`);
+    }
+    if (!(blend.from < blend.to)) {
+      throw new Error(
+        `${what} va de ${blend.from} a ${blend.to}: \`from\` tiene que ser menor que \`to\`, ` +
+          "porque es donde el reparto empieza y donde acaba",
+      );
+    }
+    const other = indexByName.get(blend.with)!;
+    const own = indexByName.get(rule.joint)!;
+    const from: [number, number, number] = [worlds[own][3], worlds[own][7], worlds[own][11]];
+    const to: [number, number, number] = [worlds[other][3], worlds[other][7], worlds[other][11]];
+    const axis: [number, number, number] = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+    const axisLengthSquared = axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2];
+    if (axisLengthSquared === 0) {
+      throw new Error(
+        `${what}: '${rule.joint}' y '${blend.with}' ocupan el mismo sitio en reposo, ` +
+          "así que no hay segmento sobre el que medir el reparto",
+      );
+    }
+    const band: VariationSpec = {
+      at: [
+        [blend.from, 0],
+        [blend.to, 1],
+      ],
+      ...(blend.ease !== undefined ? { ease: blend.ease } : {}),
+    };
+    // Una evaluación de prueba para que un `ease` inventado falle aquí, con la
+    // regla delante, y no en el primer vértice de una malla que ya se estaba
+    // escribiendo. El vocabulario de curvas lo dice `evaluateVariation` y nadie
+    // más: comprobarlo con una lista propia serían dos fuentes del mismo dato.
+    evaluateVariation(band, (blend.from + blend.to) / 2, what);
+    blendByRule.set(rule, { other, origin: from, axis, axisLengthSquared, band, what });
+  }
+
   // Los vértices van a espacio de modelo, que es donde vive la pose de reposo del
   // esqueleto. Sin este paso cada pieza quedaría en su propio espacio local y el
   // modelo saldría explotado en cuanto se aplicara la primera pose.
@@ -310,7 +454,7 @@ export function bindModelToSkeleton(model: Model, skeleton: SkeletonSource, bind
   const direction = new Float32Array(3);
   const normals = mat4();
 
-  const primitives: SkinnedGlbPrimitive[] = resolved.map(({ part, joint }) => {
+  const primitives: SkinnedGlbPrimitive[] = resolved.map(({ part, joint, rule }) => {
     const source = part.mesh;
     const vertexCount = source.positions.length / 3;
     const positions = new Float32Array(source.positions.length);
@@ -346,7 +490,11 @@ export function bindModelToSkeleton(model: Model, skeleton: SkeletonSource, bind
       }
     }
 
-    const { joints: jointIndices, weights: jointWeights } = weightsFor(vertexCount, joint);
+    const { joints: jointIndices, weights: jointWeights } = weightsFor(
+      positions,
+      joint,
+      blendByRule.get(rule) ?? null,
+    );
 
     return {
       positions,

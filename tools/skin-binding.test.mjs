@@ -26,6 +26,7 @@ import {
   loadModel,
   modelFromScene,
   parseGlbAnimation,
+  resolveRig,
   serializeSkinnedGlb,
   skeletonFromParsedGlb,
 } from "../dist-node/agent3d.mjs";
@@ -180,7 +181,206 @@ assert.deepEqual(
 );
 assert.deepEqual(primeraGana.unusedJoints, ["Brazo"]);
 
-console.log(`skin binding: ok (2 piezas exactas, ${drone.parts.length} del dron sin deformar)`);
+// --- La banda: la costura deja de abrirse ----------------------------------
+//
+// El paso 0 de docs/plan-pesos.md midió la grieta de un codo declarado como dos
+// piezas rígidas que se tocan: **0,106066 unidades a 90°**, que es exactamente la
+// cuerda 2·r·sin(θ/2). Aquí se afirma lo mismo por los dos lados: sin banda se
+// abre esa cifra, y con banda no se abre nada. Una tolerancia generosa taparía
+// justo el fallo que esto vigila, así que el cerrado se exige a cero exacto.
+
+const CODO = {
+  objects: [
+    { name: "brazo", geometry: { primitive: "cylinder", parameters: [0.075, 0.4] }, position: [0, 0.2, 0] },
+    { name: "antebrazo", geometry: { primitive: "cylinder", parameters: [0.075, 0.4] }, position: [0, 0.6, 0] },
+  ],
+  skeleton: {
+    joints: [
+      { name: "hombro", offset: [0, 0, 0] },
+      { name: "codo", parent: "hombro", offset: [0, 0.4, 0] },
+    ],
+  },
+  clips: [
+    {
+      name: "doblar",
+      fps: 30,
+      tracks: [
+        {
+          joint: "codo",
+          property: "rotation",
+          keys: [
+            { frame: 0, value: [0, 0, 0] },
+            { frame: 30, value: [0, 0, 90] },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+const RIGIDO = [
+  { part: "antebrazo", joint: "codo" },
+  { part: "brazo", joint: "hombro" },
+];
+
+// La misma costura, declarada desde cada lado: el brazo la tiene en t = 1 de su
+// segmento hombro→codo, y el antebrazo en t = 0 del suyo codo→hombro. Las dos
+// bandas están centradas en ella, así que el vértice compartido sale 0,5 y 0,5.
+const CON_BANDA = [
+  { part: "antebrazo", joint: "codo", blend: { with: "hombro", from: -0.15, to: 0.15 } },
+  { part: "brazo", joint: "hombro", blend: { with: "codo", from: 0.85, to: 1.15 } },
+];
+
+const sinBanda = aperturaDeLaCostura(CODO, RIGIDO);
+assert.equal(
+  Number(sinBanda.toFixed(6)),
+  0.106066,
+  `sin banda la costura tiene que abrirse la cuerda medida en el paso 0, y se abrió ${sinBanda}`,
+);
+
+// Con banda no se abre, y «no se abre» tiene un suelo que conviene decir: la
+// costura ya trae 3,0e-8 **en reposo**, porque las dos tapas se generan por
+// caminos distintos —0,2+0,2 y 0,6−0,2— y `Float32` no los redondea igual. Lo que
+// se afirma es que doblar 90° no la separa más allá de ese ruido, no que dos
+// números flotantes salgan idénticos.
+const enReposo = aperturaDeLaCostura(CODO, CON_BANDA, 0);
+const conBanda = aperturaDeLaCostura(CODO, CON_BANDA);
+assert.ok(enReposo < 1e-7, `la costura en reposo ya trae ${enReposo}, que no es ruido de Float32`);
+assert.ok(
+  conBanda < 1e-7,
+  `con banda la costura no se abre más que el ruido de Float32, y se abrió ${conBanda}`,
+);
+
+// Los pesos, uno a uno: suman 1 en todos los vértices, y en la costura el reparto
+// es mitad y mitad. `linear` da la media exacta en el punto medio de la banda, que
+// es lo que hace comprobable la curva sin depender de la forma de la malla.
+const bandaLineal = bindModelToSkeleton(modelFromScene({ ...CODO, bindings: CON_BANDA }), resolveRig(CODO.skeleton, CODO.clips).skeleton, {
+  schemaVersion: 1,
+  bindings: CON_BANDA,
+});
+let vertices = 0;
+let enLaCostura = 0;
+for (const primitive of bandaLineal.scene.meshes[0].primitives) {
+  const total = primitive.weights.length / 4;
+  for (let vertex = 0; vertex < total; vertex += 1) {
+    const suma =
+      primitive.weights[vertex * 4] +
+      primitive.weights[vertex * 4 + 1] +
+      primitive.weights[vertex * 4 + 2] +
+      primitive.weights[vertex * 4 + 3];
+    assert.ok(Math.abs(suma - 1) < 1e-6, `un vértice pesa ${suma} en total, y tiene que pesar 1`);
+    // Mitad y mitad, con la misma holgura que el resto: el `t` de un vértice sale
+    // de restar posiciones ya redondeadas a Float32, así que un lado de la costura
+    // cae en 0,5 exacto y el otro a un ulp.
+    if (Math.abs(primitive.weights[vertex * 4] - 0.5) < 1e-6) enLaCostura += 1;
+    vertices += 1;
+  }
+}
+assert.equal(enLaCostura, 132, "los 66 pares de la costura reparten mitad y mitad por los dos lados");
+
+// --- Lo que hay que rechazar de una banda -----------------------------------
+
+const conBandaMala = (blend) => () =>
+  bindModelToSkeleton(
+    modelFromScene({ ...CODO, bindings: RIGIDO }),
+    resolveRig(CODO.skeleton, CODO.clips).skeleton,
+    {
+      schemaVersion: 1,
+      bindings: [{ part: "*", joint: "codo", blend }],
+    },
+  );
+
+assertThrows(
+  conBandaMala({ with: "muñeca", from: 0, to: 1 }),
+  /el esqueleto no tiene 'muñeca'/,
+  "una banda hacia un hueso que no existe",
+);
+assertThrows(
+  conBandaMala({ with: "codo", from: 0, to: 1 }),
+  /reparte 'codo' consigo mismo/,
+  "una banda de un hueso contra sí mismo",
+);
+assertThrows(
+  conBandaMala({ with: "hombro", from: 1, to: 0 }),
+  /`from` tiene que ser menor que `to`/,
+  "una banda con el rango del revés",
+);
+assertThrows(
+  conBandaMala({ with: "hombro", from: 0, to: 0 }),
+  /`from` tiene que ser menor que `to`/,
+  "una banda de ancho cero",
+);
+assertThrows(
+  conBandaMala({ with: "hombro", from: 0, to: 1, ease: "rebote" }),
+  /ease desconocido "rebote"/,
+  "una banda con una curva que no existe",
+);
+
+console.log(
+  `skin binding: ok (2 piezas exactas, ${drone.parts.length} del dron sin deformar; ` +
+    `la costura del codo pasa de ${sinBanda.toFixed(6)} a ${conBanda.toExponential(1)} con banda ` +
+    `—el reposo ya trae ${enReposo.toExponential(1)}—, ${vertices} vértices sumando 1)`,
+);
+
+/**
+ * Cuánto se abre la costura entre dos piezas en el fotograma más doblado.
+ *
+ * La costura son los vértices que en reposo ocupan la misma posición y están en
+ * piezas distintas. Es la misma definición con la que se midió el paso 0, y la
+ * que usará `COSTURA_ROTA`.
+ */
+function aperturaDeLaCostura(spec, bindings, soloFrame = null) {
+  const bound = bindModelToSkeleton(
+    modelFromScene({ ...spec, bindings }),
+    resolveRig(spec.skeleton, spec.clips).skeleton,
+    { schemaVersion: 1, bindings },
+  );
+  const rigged = parseGlbAnimation(serializeSkinnedGlb(bound.scene));
+  const pose = (time) => evaluatePose(rigged.document, rigged.binary, rigged.decodedViews, time, 0, 0);
+
+  const cuentas = bound.scene.meshes[0].primitives.map((primitive) => primitive.positions.length / 3);
+  const arranques = [];
+  let acumulado = 0;
+  for (const cuenta of cuentas) {
+    arranques.push(acumulado);
+    acumulado += cuenta;
+  }
+
+  const reposo = pose(0);
+  const punto = (posiciones, indice) => [
+    posiciones[indice * 3],
+    posiciones[indice * 3 + 1],
+    posiciones[indice * 3 + 2],
+  ];
+  const clave = (p) => p.map((valor) => valor.toFixed(6)).join(",");
+
+  const costura = [];
+  for (let a = 0; a < cuentas.length; a += 1) {
+    const porPosicion = new Map();
+    for (let i = 0; i < cuentas[a]; i += 1) porPosicion.set(clave(punto(reposo, arranques[a] + i)), arranques[a] + i);
+    for (let b = a + 1; b < cuentas.length; b += 1) {
+      for (let i = 0; i < cuentas[b]; i += 1) {
+        const gemelo = porPosicion.get(clave(punto(reposo, arranques[b] + i)));
+        if (gemelo !== undefined) costura.push([gemelo, arranques[b] + i]);
+      }
+    }
+  }
+  assert.equal(costura.length, 66, "el codo de dos cilindros comparte 66 vértices en reposo");
+
+  const fps = spec.clips[0].fps;
+  const ultimo =
+    soloFrame ?? Math.max(...spec.clips[0].tracks.flatMap((track) => track.keys.map((key) => key.frame)));
+  let peor = 0;
+  for (let frame = soloFrame ?? 0; frame <= ultimo; frame += 1) {
+    const posiciones = pose(frame / fps);
+    for (const [a, b] of costura) {
+      const pa = punto(posiciones, a);
+      const pb = punto(posiciones, b);
+      peor = Math.max(peor, Math.hypot(pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]));
+    }
+  }
+  return peor;
+}
 
 /** Posiciones de cada pieza ya en espacio de modelo, en el orden del modelo. */
 function modelSpacePositions(source) {
