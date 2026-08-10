@@ -209,6 +209,31 @@ mantiene a mano diverge; una tabla comprobada contra el código, no.
 
 ### Ω1.4 `--schema` por partes
 
+**Hecha el 2026-08-09.** Y con el orden invertido respecto a lo que decía este plan: en vez
+de recortar el completo en partes, **el completo se construye uniendo las partes**. Con un
+recorte, la parte se puede quedar atrás del todo sin que nadie lo note; construyéndolo al
+revés, meter una clave por fuera de las partes es imposible y la puerta solo tiene que
+comprobar que sigue siendo así.
+
+Tamaños medidos, sobre un completo que hoy son **46.226 B** —creció desde los 39.657 de
+este documento porque ahora lleva el registro de códigos—:
+
+| Parte | Bytes | Lo que era antes |
+|---|---|---|
+| `sample` | 940 | 46.226 |
+| `story` | 2.161 | 46.226 |
+| `staging` | 3.384 | 46.226 |
+| `report` | 5.193 | 46.226 |
+| `codes` | 6.707 | 46.226 |
+| `patch` | 12.321 | 46.226 |
+| `scene` | 16.948 | 46.226 |
+
+El agente que solo va a escribir un parche paga **12.321 B en vez de 46.226**, y el que
+solo quiere saber qué avisos existen, 6.707. `reportExample` además solo se calcula si se
+pide su parte, así que `--schema codes` ya no paga una revisión de la escena de
+demostración. Sin argumento sigue devolviendo todo, así que `tools/bridge.mjs` y el editor
+no se enteran. Una parte que no existe sale 2 con la lista de las que hay.
+
 39.657 B en un bloque son 10.000 tokens que el agente paga aunque solo vaya a escribir un
 parche. `--schema scene|patch|story|staging|sample|report|codes` devuelve la parte, y
 `--schema` sin argumento sigue devolviendo todo, para no romper a quien ya lo consume.

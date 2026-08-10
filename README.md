@@ -246,6 +246,11 @@ piezas flotantes.
 ejemplo. No es documentación aparte: el esquema **es** lo que valida la entrada, así que
 no puede divergir del código, y una errata se caza con sugerencia en vez de ignorarse.
 
+Entero son 46.226 B. `--schema <parte>` —`scene|patch|story|staging|sample|report|codes`—
+devuelve solo la que pidas: el parche son 12.321 B y el registro de códigos, 6.707. El
+completo **se construye uniendo las partes**, así que una parte no se puede quedar atrás
+del todo.
+
 ```
 la escena no encaja con el esquema:
   - objects[0].positon no existe; ¿querías decir position?

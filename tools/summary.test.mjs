@@ -121,6 +121,32 @@ try {
   const ambas = await runCli([...inspect, "--summary", "--fields", "warnings"]);
   assert.deepEqual(Object.keys(JSON.parse(ambas.stdout)), ["warnings"]);
   console.log("fields: ok (--fields manda sobre --summary)");
+
+  // 4. `--schema <parte>`, que es el mismo problema en el descubrimiento: 46 KB
+  //    de una vez para escribir un parche de tres líneas. La unión de las partes
+  //    tiene que ser el completo —el completo se construye así, y esto comprueba
+  //    que nadie ha metido una clave por fuera de las partes—.
+  const partes = ["scene", "patch", "story", "staging", "sample", "report", "codes"];
+  const completo = JSON.parse((await runCli(["--schema"])).stdout);
+  const union = { notes: [] };
+  const tamaños = [];
+  for (const parte of partes) {
+    const { stdout } = await runCli(["--schema", parte]);
+    const { notes, ...claves } = JSON.parse(stdout);
+    Object.assign(union, claves);
+    union.notes.push(...notes.filter((note) => !union.notes.includes(note)));
+    tamaños.push(`${parte} ${Buffer.byteLength(stdout, "utf8")} B`);
+  }
+  assert.deepEqual(union, completo, "la unión de las partes no es el --schema completo");
+
+  const mala = await runCli(["--schema", "escena"]);
+  assert.equal(mala.exitCode, 2);
+  assert.match(mala.stderr, /las partes son scene\|patch\|story\|staging\|sample\|report\|codes/);
+
+  console.log(
+    `schema: ok (unión de ${partes.length} partes == completo de ` +
+      `${Buffer.byteLength(JSON.stringify(completo), "utf8")} B; ${tamaños.join(", ")})`,
+  );
 } finally {
   await rm(work, { recursive: true, force: true });
 }

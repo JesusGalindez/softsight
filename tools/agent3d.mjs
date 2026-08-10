@@ -708,10 +708,13 @@ Otras
                           rótulo y sobre negro. Sirve para enfrentar el pliego
                           con el de otro rasterizador, no para revisarlo a ojo
   --no-cache              rehace el análisis del modelo en vez de leer .cache/
-  --schema                forma aceptada de la escena y del parche, un informe
+  --schema [parte]        forma aceptada de la escena y del parche, un informe
                           de ejemplo y el registro de códigos de aviso —qué te
                           puede salir, de qué severidad y si trae arreglo—, todo
-                          generado por el propio código
+                          generado por el propio código. Sin argumento son ~40 KB
+                          de una vez; con parte —scene|patch|story|staging|sample|
+                          report|codes— solo esa. El completo se construye
+                          uniendo las partes, así que no pueden divergir
   --debug                 vuelca la pila en los errores
   --help                  esta ayuda
 
@@ -767,32 +770,87 @@ function softsightVersion() {
   return { version, commit };
 }
 
-function printSchema() {
-  const { review } = reviewScene(DEMO_SCENE, { inspectOnly: true });
+/**
+ * El esquema, por partes.
+ *
+ * Los 39.657 B del bloque entero son ~10.000 tokens que el agente paga aunque
+ * solo vaya a escribir un parche. Cada entrada trae sus claves y las notas que
+ * hablan de ellas, y **el esquema completo se construye uniéndolas**: así la
+ * parte no es un recorte que pueda quedarse atrás del todo, es el todo el que se
+ * arma con las partes. La puerta comprueba la unión contra el completo, que con
+ * esta forma es una comprobación de que nadie ha metido una clave por fuera.
+ *
+ * `reportExample` cuesta revisar la escena de demostración, así que solo se
+ * calcula si se pide su parte: `--schema codes` no paga un render.
+ */
+const SCHEMA_PARTS = {
+  scene: () => ({
+    scene: SCENE_SCHEMA,
+    notes: ["El esquema es el que valida la entrada: un campo que no esté aquí se rechaza."],
+  }),
+  patch: () => ({ patch: PATCH_SCHEMA, notes: [] }),
+  story: () => ({
+    story: STORY_SCHEMA,
+    storyRoles: ROLE_REQUIRED_DATA,
+    notes: [
+      "story es el guion: la duración de la pieza es la suma de sus escenas, no se declara.",
+      "storyRoles dice qué campos de data exige cada rol; quien ponga el guion en escena los necesita.",
+    ],
+  }),
+  staging: () => ({
+    staging: STAGING_SCHEMA,
+    notes: ["staging es lo que el editor mide sobre un frame ya montado; SoftSight solo lo juzga."],
+  }),
+  sample: () => ({ sampleReference: SAMPLE_REFERENCE_SCHEMA, notes: [] }),
+  report: () => ({
+    reportExample: {
+      contractVersion: REPORT_CONTRACT_VERSION,
+      ...reviewScene(DEMO_SCENE, { inspectOnly: true }).review,
+    },
+    notes: [
+      "reportExample sale de revisar la escena de demostración con --inspect-only.",
+      "Con pliego, el informe trae además sheet, views, renderHash y partScreenBoxes.",
+      "Con --summary o --fields sale un subconjunto de estas mismas claves, sin recalcular ninguna.",
+    ],
+  }),
+  codes: () => ({
+    warningCodes: WARNING_CODE_LIST,
+    notes: [
+      "warningCodes es el registro completo de avisos: cargándolo una vez se interpreta cualquier informe futuro sin provocar cada caso.",
+      "severity 'certeza' sale de aritmética y no depende de la intención; 'candidato' tiene la medida firme y la conclusión no.",
+    ],
+  }),
+};
+
+/**
+ * Une las partes pedidas. `softsight` va en todas: identifica quién responde y
+ * son dos líneas, y sin él una parte suelta no se puede comparar contra el pin
+ * del consumidor.
+ */
+function buildSchema(names) {
+  const merged = { softsight: softsightVersion() };
+  // La nota del sobre va primero y en todas las partes: así unir dos partes y
+  // quitar repetidas da exactamente las notas del completo, en su orden.
+  const notes = [
+    "softsight dice qué versión responde: el consumidor compara su pin contra este commit, no contra un texto.",
+  ];
+  for (const name of names) {
+    const { notes: own, ...keys } = SCHEMA_PARTS[name]();
+    Object.assign(merged, keys);
+    notes.push(...own);
+  }
+  return { ...merged, notes };
+}
+
+function printSchema(part) {
+  if (part !== undefined && !(part in SCHEMA_PARTS)) {
+    throw new Error(
+      `--schema ${part} no existe; las partes son ${Object.keys(SCHEMA_PARTS).join("|")}`,
+    );
+  }
   process.stdout.write(
     `${JSON.stringify(
-      {
-        softsight: softsightVersion(),
-        scene: SCENE_SCHEMA,
-        staging: STAGING_SCHEMA,
-        patch: PATCH_SCHEMA,
-        sampleReference: SAMPLE_REFERENCE_SCHEMA,
-        story: STORY_SCHEMA,
-        storyRoles: ROLE_REQUIRED_DATA,
-        warningCodes: WARNING_CODE_LIST,
-        reportExample: { contractVersion: REPORT_CONTRACT_VERSION, ...review },
-        notes: [
-          "El esquema es el que valida la entrada: un campo que no esté aquí se rechaza.",
-          "reportExample sale de revisar la escena de demostración con --inspect-only.",
-          "Con pliego, el informe trae además sheet, views, renderHash y partScreenBoxes.",
-          "story es el guion: la duración de la pieza es la suma de sus escenas, no se declara.",
-          "storyRoles dice qué campos de data exige cada rol; quien ponga el guion en escena los necesita.",
-          "warningCodes es el registro completo de avisos: cargándolo una vez se interpreta cualquier informe futuro sin provocar cada caso.",
-          "severity 'certeza' sale de aritmética y no depende de la intención; 'candidato' tiene la medida firme y la conclusión no.",
-          "staging es lo que el editor mide sobre un frame ya montado; SoftSight solo lo juzga.",
-          "softsight dice qué versión responde: el consumidor compara su pin contra este commit, no contra un texto.",
-        ],
-      },
+      buildSchema(part === undefined ? Object.keys(SCHEMA_PARTS) : [part]),
       null,
       2,
     )}\n`,
@@ -959,7 +1017,8 @@ async function main() {
   }
 
   if (options.has("schema")) {
-    printSchema();
+    const part = options.get("schema");
+    printSchema(part === "true" ? undefined : part);
     return;
   }
   // El guion tampoco es un modelo: no hay geometría que mirar, solo texto y
