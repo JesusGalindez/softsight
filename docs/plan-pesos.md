@@ -1,6 +1,6 @@
 # Plan: los pesos se declaran, no se adivinan
 
-Estado: **escrito, sin empezar** (2026-08-10). Nace de la nota que
+Estado: **paso 0 hecho, el resto sin empezar** (2026-08-10). Nace de la nota que
 [`plan-movimiento.md`](plan-movimiento.md) §8 dejó anotada y que §2.4 del mismo
 documento mandó a un plan propio, por una razón que sigue siendo la buena: quitar
 el atado rígido es el desbloqueo grande **y** toca la única línea que este
@@ -27,8 +27,10 @@ mejor por lo que se puede y no se puede declarar:
 | «esta malla continua es un brazo» | no entra: no hay forma de repartir un vértice |
 | «la piel cede alrededor de la articulación» | lo trae quien lo tenga, por `JOINTS_0`/`WEIGHTS_0` |
 
-**Paso 0 del plan es medir la grieta**, porque hasta ahora nadie ha puesto el
-número y este documento no va a estimarlo. La medida y cómo se toma están en §5.
+**El paso 0 era medir la grieta**, porque nadie había puesto el número y este
+documento no iba a estimarlo. Ya está: **0,106066 unidades a 90°, 39,6 px sobre un
+tile de 320**, y resulta ser exactamente la cuerda `2·r·sin(θ/2)`. El detalle y el
+veredicto, en §5.
 
 Lo que sí está medido es el otro lado, y cambia el tamaño del plan: **la mitad de
 lectura ya existe y ya está certificada**. `applySkin`
@@ -148,20 +150,44 @@ del paso 1.
 
 ## 5. Los pasos
 
-### Paso 0 — La medida que falta
+### Paso 0 — La medida que faltaba — hecho el 2026-08-10
 
-Antes de escribir una línea. Un codo declarado de las dos maneras que hoy se
-puede —dos piezas rígidas que se tocan, y una pieza única girando entera— doblado
-90°, y medir:
+Un codo declarado como dos cilindros de radio 0,075 que se tocan en el plano de la
+articulación, atados a `hombro` y `codo`, doblando 90° en 30 fotogramas. La
+costura son **66 pares de vértices que en reposo ocupan la misma posición**, que
+es la definición que usará `COSTURA_ROTA`. Evaluado con `evaluatePose`, el mismo
+camino que recorre la auditoría:
 
-- la **separación máxima** entre las dos piezas en el fotograma más doblado, en
-  unidades de modelo y en píxeles del pliego;
-- cuántas piezas del muñeco versionado (`artifacts/agent/muneco.json`, 10 piezas)
-  tendrían banda si el vínculo la admitiera.
+| Ángulo | Separación (unidades) |
+|---|---|
+| 0° | 0 |
+| 30° | 0,038823 |
+| 60° | 0,075000 |
+| 90° | **0,106066** |
 
-Se toma con lo que ya hay: `--audit-frames` recorriendo el clip y
-`partScreenBoxes` de la vista del pliego. *Cierra: el número que justifica —o
-no— el resto del plan. Si la grieta no se ve, este plan se aparca y se dice.*
+**La grieta es la cuerda.** La separación medida coincide con `2·r·sin(θ/2)` con
+una diferencia máxima de **5e-7** —el redondeo a `Float32` de las posiciones—, así
+que los dos caminos independientes que exige la casa ya están: el evaluador y la
+trigonometría. Y con eso el número deja de ser de este fixture: **la grieta es
+proporcional al radio de la pieza**, no a su longitud ni a la resolución de la
+malla. A 90° vale 1,41 radios. Un miembro más grueso se abre más.
+
+En pantalla, proyectando los dos extremos con la cámara que publica
+`views[].camera` sobre tiles de 320: **39,6 px en la vista frontal**, que es el
+12 % del lado del tile. La vista superior da 123,1 px, y no es que allí sea peor:
+es que desde arriba el modelo es un disco de 0,15 y el encuadre se acerca —su
+escala es de 163 px por 0,1 unidades contra los 37 px de la frontal—. El número
+que hay que citar es el de la frontal.
+
+**Veredicto: el plan sigue.** Una grieta de 40 px sobre 320 no se discute.
+
+Y un hallazgo que cambia el paso 5: **el muñeco versionado no sirve de ejemplar**.
+Sus siete piezas dan **cero costuras exactas** —ningún vértice compartido entre
+piezas atadas a huesos distintos—; o se cruzan por la caja (`torso` con los dos
+brazos) o ni se tocan (`cadera` y `torso` se quedan a 0,056). Es una figura de
+piezas sueltas, no un cuerpo articulado, así que ahí una banda no tiene dónde
+agarrarse. El ejemplar del paso 5 hay que construirlo con costura de verdad, y el
+codo de esta medida es el candidato natural.
 
 ### Paso 1 — El sitio del peso, con el rígido intacto
 
@@ -226,6 +252,10 @@ Una pieza con banda en `artifacts/agent/`, limpia de defectos —cero avisos de
 `certeza`, como exige ya el ejemplar de geometría—, y la puerta que la audita. Es
 lo primero que copia un agente que llega nuevo.
 
+**No vale reutilizar `muneco.json`**: el paso 0 midió que sus piezas no comparten
+un solo vértice, así que no hay costura que repartir. El ejemplar se construye con
+una, y el codo del paso 0 ya tiene la forma.
+
 ### Paso 6 — Que se alcance por los tres caminos
 
 `--bind` con `blend`, `bindings` de la escena con `blend`, y el comando `scene`
@@ -252,6 +282,10 @@ descubrimiento no exige leerse el repositorio.
 - **`Mat4` es row-major** y los vectores se multiplican por la derecha. Es la
   primera invariante de `AGENTS.md` y la causa habitual de que una proyección
   «casi» funcione.
+- **La grieta es la cuerda `2·r·sin(θ/2)`** (paso 0). Depende del radio de la
+  pieza y del ángulo, y de nada más: ni de la longitud, ni de la resolución de la
+  malla, ni de la escala del modelo. Sirve como valor esperado en cualquier caso
+  nuevo sin volver a medirlo.
 - **Ningún hash debería moverse.** El camino rígido sale byte a byte igual, así
   que `contractVersion` se queda en 3. **Si un `renderHash` se mueve, hay que
   parar y decirlo** antes de seguir: es la tercera invariante.
@@ -267,7 +301,7 @@ descubrimiento no exige leerse el repositorio.
 | Banda con `ease: smooth` | punto medio y cuarto | media exacta; el cuarto por debajo |
 | Banda fuera de la región | pesos | 1 y 0, sin banda intermedia |
 | Suma de pesos | todos los vértices | 1 tras `Math.fround`, sin excepción |
-| Codo a 90° | separación entre piezas | la del paso 0, ahora en cero |
+| Codo a 90° | separación entre piezas | 0,106066 en el paso 0, ahora en cero |
 | Dos piezas con la misma costura | `COSTURA_ROTA` | salta si difieren, callado si no |
 | Pesos declarados | evaluador certificado contra `evaluatePose` | mismos hashes, fotograma a fotograma |
 | API, CLI y puente | el GLB de cada uno | **byte a byte** |
