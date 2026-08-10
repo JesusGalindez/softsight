@@ -115,6 +115,36 @@ export function skeletonFromParsedGlb(parsed: ParsedGlb): SkeletonSource {
   };
 }
 
+/**
+ * Los pesos de una pieza: qué hueso mueve cada vértice y cuánto.
+ *
+ * Es **el único sitio donde se decide un peso**, y por eso existe aunque hoy no
+ * decida gran cosa. Escrito dentro del bucle de primitivas, un reparto entre dos
+ * huesos quedaría entre la aritmética de posiciones, normales y UVs, y cada una
+ * de las cuatro cosas se leería peor. Aquí entra lo medido y sale lo escrito, sin
+ * tocar nada más.
+ *
+ * Hoy el atado es **rígido**: cada vértice pesa 1 sobre un solo hueso. No es una
+ * simplificación de algo mejor —para una pieza rígida de verdad es la respuesta
+ * exacta—, así que este camino no debe cambiar ni un bit cuando llegue el
+ * reparto suave. Ver [`docs/plan-pesos.md`](../../../docs/plan-pesos.md).
+ *
+ * Los cuatro huecos por vértice son los de `JOINTS_0`/`WEIGHTS_0`: glTF los
+ * escribe siempre en grupos de cuatro, y los que no se usan van a cero.
+ */
+function weightsFor(
+  vertexCount: number,
+  joint: number,
+): { joints: Uint16Array; weights: Float32Array } {
+  const joints = new Uint16Array(vertexCount * 4);
+  const weights = new Float32Array(vertexCount * 4);
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    joints[vertex * 4] = joint;
+    weights[vertex * 4] = 1;
+  }
+  return { joints, weights };
+}
+
 export interface BindResult {
   scene: SkinnedGlbScene;
   /** Qué pieza acabó en qué hueso, en el orden del modelo. Para el informe. */
@@ -316,14 +346,7 @@ export function bindModelToSkeleton(model: Model, skeleton: SkeletonSource, bind
       }
     }
 
-    // Atado rígido: un hueso por vértice, peso 1. Lo único que se puede afirmar
-    // sin inventar; los pesos suaves los trae quien los tenga.
-    const jointIndices = new Uint16Array(vertexCount * 4);
-    const jointWeights = new Float32Array(vertexCount * 4);
-    for (let vertex = 0; vertex < vertexCount; vertex += 1) {
-      jointIndices[vertex * 4] = joint;
-      jointWeights[vertex * 4] = 1;
-    }
+    const { joints: jointIndices, weights: jointWeights } = weightsFor(vertexCount, joint);
 
     return {
       positions,

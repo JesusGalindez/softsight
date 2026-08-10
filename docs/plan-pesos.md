@@ -1,6 +1,6 @@
 # Plan: los pesos se declaran, no se adivinan
 
-Estado: **paso 0 hecho, el resto sin empezar** (2026-08-10). Nace de la nota que
+Estado: **pasos 0 y 1 hechos, el resto sin empezar** (2026-08-10). Nace de la nota que
 [`plan-movimiento.md`](plan-movimiento.md) §8 dejó anotada y que §2.4 del mismo
 documento mandó a un plan propio, por una razón que sigue siendo la buena: quitar
 el atado rígido es el desbloqueo grande **y** toca la única línea que este
@@ -143,8 +143,8 @@ Cómo se evalúa, sin nada que no esté ya escrito en el repositorio:
 
 **El atado rígido es el caso degenerado**: una regla sin `blend` da peso 1, y el
 GLB tiene que salir **byte a byte igual** al de hoy. Es la propiedad de seguridad
-del plan entero —lo que ya funciona no se entera— y es la primera comprobación
-del paso 1.
+del plan entero —lo que ya funciona no se entera—, y ya está cobrada: el paso 1
+la dejó comprobada sobre tres escenas atadas.
 
 ---
 
@@ -189,15 +189,31 @@ piezas sueltas, no un cuerpo articulado, así que ahí una banda no tiene dónde
 agarrarse. El ejemplar del paso 5 hay que construirlo con costura de verdad, y el
 codo de esta medida es el candidato natural.
 
-### Paso 1 — El sitio del peso, con el rígido intacto
+### Paso 1 — El sitio del peso, con el rígido intacto — hecho el 2026-08-10
 
-`SkinBindingRule` acepta `blend`; el camino sin `blend` produce el mismo GLB byte
-a byte. Los pesos dejan de escribirse en el bucle de primitivas y pasan a una
-función pura `weightsFor(part, rule, restJoints)`, que es lo único que este plan
-va a ir llenando.
+Los pesos dejan de escribirse en el bucle de primitivas y pasan a `weightsFor` en
+[`skinBinding.ts`](../src/soft/agent/skinBinding.ts), función pura y **único sitio
+donde se decide un peso**. Es lo que este plan va a ir llenando: el paso 2 le
+añade la banda y nadie más tiene que enterarse.
 
-*Cierra: `test:bind` y `test:rig` pasan sin tocar una prueba, y el GLB del dron es
-el mismo fichero.*
+Byte a byte, comprobado sobre tres escenas atadas —el muñeco versionado, el
+ejemplar de geometría y el codo del paso 0—: **los tres GLB son idénticos**.
+`npm run verify` en verde, 21 puertas y 103 comprobaciones, **sin tocar una sola
+prueba**: `test:bind`, `test:rig` y `test:determinism` ya comparaban GLB y hashes,
+así que la propiedad la verifica lo que ya existía.
+
+Dos cosas salieron distintas de como las escribía este documento, y el documento
+se corrige antes que el código:
+
+- **`blend` no entra todavía en `SkinBindingRule`.** Un campo declarado que la
+  herramienta ignora es justo lo que `validate` existe para impedir —`positon` sale
+  con sugerencia, no en silencio—, y uno que siempre da error es prometer algo que
+  no está. El campo entra en el paso 2, el día que hace algo, con su esquema y su
+  rechazo.
+- **La firma es `weightsFor(vertexCount, joint)`**, no la de tres argumentos que
+  proponía el borrador: `noUnusedParameters` está encendido y aquí no se declara
+  un parámetro para el paso siguiente. El paso 2 la ensancha cuando tenga qué
+  meter dentro.
 
 ### Paso 2 — La banda entre dos huesos
 
