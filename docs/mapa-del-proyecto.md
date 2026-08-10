@@ -109,7 +109,7 @@ hecho por los dos lados, da el mismo hash.
 | Puerta | Qué compara | Cómo se ejecuta |
 |---|---|---|
 | `test:animation` | El evaluador contra sus propios fixtures y contra GLB defectuosos | `npm run test:animation` (softsight) |
-| `test:bridge` | El puente contra el CLI real: sample, inspect, render, patch y schema | `npm run test:bridge` (softsight), también dentro de `test:animation` |
+| `test:bridge` | El puente contra el CLI real —sample, inspect, render, patch y schema— y, en tercera columna, el modo residente contra el puente por proceso byte a byte, más veinte peticiones iguales seguidas al mismo proceso | `npm run test:bridge` (softsight), también dentro de `test:animation` |
 | `test:glb-writer` | Un GLB reescrito por nosotros contra los hashes de control del original | `npm run test:glb-writer` (softsight), también dentro de `test:animation` |
 | `test:bind` | El atado en reposo y con el hueso movido, exacto, y las 296 piezas del dron sin deformar | `npm run test:bind` (softsight), también dentro de `test:animation` |
 | `test:rig` | Esqueleto y clips declarados, la auditoría de animación, y la escena por el puente byte a byte | `npm run test:rig` (softsight), también dentro de `test:animation` |
@@ -142,7 +142,7 @@ puertas; las cinco restantes solo las cierra una ejecución local con los dos
 repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 81
+Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 83
 comprobaciones de softsight en verde**. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
@@ -303,7 +303,11 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     descubrimiento de 46.226 B a 12.321 el parche o 940 la muestra, y el completo
     se construye uniendo las partes. **Ω5 hecha**: `AGENTS.md` en la raíz, 110
     líneas, con las secciones de comandos, puertas y banderas generadas por
-    `tools/agents-md.mjs`.
+    `tools/agents-md.mjs`. **Ω2 hecha**: `agent3d --serve` atiende las peticiones
+    del puente sin morirse entre una y otra —0,454 s por proceso contra 0,143 s
+    residente, un 69 % menos—, importando `handleRequest` de `bridge.mjs` para no
+    tener dos contratos; y `tools/lru.mjs` deja el criterio de expulsión escrito
+    una vez para las tres cachés, con lo que `.cache/` deja de crecer sin tope.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un
@@ -337,8 +341,11 @@ Trabajo de eficiencia identificado, sin fase asignada todavía:
   mismas IBM cuatro veces (pose, normales, muestra).
 - Un solo `AnimationMixer` por lote de frames en `create-sample-contract.mjs`;
   hoy se crea uno por frame.
-- Ampliar la caché del CLI a las muestras, con clave `(GLB, semilla)`.
-- Modo `--summary`/`--quiet` en `agent3d`: el informe completo es verboso para CI.
+- Ampliar la caché del CLI a las muestras, con clave `(GLB, semilla)`. **Sigue
+  sin fase y ahora se sabe por qué**: no hay consumidor aquí. `sampleSurface` con
+  semilla lo llaman el editor y la puerta; el `--sample` del CLI evalúa
+  referencias que ya vienen dadas.
+- Modo `--summary`/`--quiet` en `agent3d`: **hecho**, Ω1.1 y Ω1.2.
 
 ---
 

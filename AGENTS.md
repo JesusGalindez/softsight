@@ -92,7 +92,7 @@ ruta. En CI eso significa que el verde cubre tipos, determinismo y 10 de 15 puer
 La explicación de cada una está en `--help`, que es donde vive.
 
 <!-- generado: banderas -->
-`--model` · `--scene` · `--bvh` · `--patch` · `--dry-run` · `--undo` · `--control-poses` · `--sample` · `--frames` · `--fps` · `--skeleton` · `--bind` · `--audit-frames` · `--bvh-scale` · `--bvh-clip` · `--story` · `--reading-rate` · `--staging` · `--contrast-ratio` · `--out` · `--export` · `--save-scene` · `--inspect-only` · `--summary` · `--fields` · `--select` · `--select-where` · `--isolate` · `--audit-limit` · `--tile` · `--ground` · `--material-colors` · `--baseline` · `--baseline-report` · `--expect-size` · `--max-triangles` · `--max-parts` · `--require-watertight` · `--max-boundary-edges` · `--max-degenerate` · `--max-symmetry-error` · `--parity` · `--no-cache` · `--schema` · `--debug` · `--help`
+`--model` · `--scene` · `--bvh` · `--patch` · `--dry-run` · `--undo` · `--control-poses` · `--sample` · `--frames` · `--fps` · `--skeleton` · `--bind` · `--audit-frames` · `--bvh-scale` · `--bvh-clip` · `--story` · `--reading-rate` · `--staging` · `--contrast-ratio` · `--out` · `--export` · `--save-scene` · `--inspect-only` · `--summary` · `--fields` · `--select` · `--select-where` · `--isolate` · `--audit-limit` · `--tile` · `--ground` · `--material-colors` · `--baseline` · `--baseline-report` · `--expect-size` · `--max-triangles` · `--max-parts` · `--require-watertight` · `--max-boundary-edges` · `--max-degenerate` · `--max-symmetry-error` · `--parity` · `--no-cache` · `--schema` · `--serve` · `--debug` · `--help`
 <!-- /generado: banderas -->
 
 ## A dónde ir después

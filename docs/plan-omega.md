@@ -244,6 +244,45 @@ Verificación: la concatenación de las partes es `deepEqual` al todo.
 
 ## Fase Ω2 — Modo residente
 
+**Hecha el 2026-08-09.** `agent3d --serve` atiende peticiones NDJSON con el contrato del
+puente sin inventar un campo, y para que no haya dos contratos **importa `handleRequest`
+de `bridge.mjs`**: lo único que cambia es `execute`, que en vez de lanzar un proceso llama
+al CLI dentro del suyo. Para eso `main` pasa a recibir su `argv` y a **devolver** el código
+de salida, y `runAgent(argv)` devuelve los tres datos que devolvía el proceso.
+
+Medido con el dron, mejor de dos vueltas: **0,454 s por petición lanzando proceso contra
+0,143 s residente**, un **69 % menos**. No los 0,05 s de este plan, y el motivo es que la
+aritmética de aquí no salía: de los 0,23 s de la llamada barata solo 0,10 eran arranque,
+así que quitarlo entero deja 0,13 s de trabajo real. Bajar de ahí no es transporte, es
+Ω6.
+
+Sobre «el puente pasa a ser cliente del residente»: `bridge.mjs` es de un disparo —lee
+stdin una vez y muere—, y con NDJSON por stdin/stdout un proceso así no se puede enganchar
+al de otro. Enchufarlo pedía un socket que este plan no pide, así que **el cliente del
+residente es quien mantenga la tubería**, que es el servidor MCP de Ω3. `bridge.mjs` se
+comporta exactamente como hoy.
+
+**Ω2.2**: `tools/lru.mjs` con el criterio de expulsión escrito una vez —`MemoryLru` por
+bytes y `trimDirectory` por mtime—, y los tres consumidores importándolo: la caché del
+motor (`SOFTSIGHT_CACHE_MAX_MB`, 256 MB, que **no tenía ninguna política** y llegó a
+130 MB en 59 ficheros), la del modelo del puente y la del worker.
+
+Dos cosas de esta fase **no se hacen, con su motivo**:
+
+- **Caché del modelo en memoria en el residente.** Sería lo obvio, pero `applyPatch` muta
+  el modelo que devuelve `loadModelCached` y las vistas de `deserialize` apuntan al búfer
+  leído: compartirlo entre peticiones significa que el parche de la primera se ve en la
+  segunda, un fallo de determinismo silencioso. Devolver una copia cuesta el memcpy de los
+  ~5 MB de mallas, más o menos lo que cuesta leer el fichero de la caché de páginas, así
+  que no compra nada.
+- **Caché de las muestras de superficie con clave `(GLB, semilla)`.** **No hay consumidor
+  en este repositorio**: `sampleSurface` con semilla lo llaman el editor y la puerta, y el
+  `--sample` del CLI evalúa referencias que ya vienen dadas, no las genera. Se queda donde
+  estaba en el mapa §5, sin fase, hasta que alguien lo pague.
+
+Y de paso, la caché del motor escribe y renombra en vez de escribir encima: con la suite
+en paralelo hay varios procesos analizando el mismo GLB a la vez.
+
 Objetivo medible: **la llamada barata baja de 0,23 s a menos de 0,05 s**, y el puente
 deja de lanzar un proceso por petición.
 

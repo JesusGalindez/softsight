@@ -43,6 +43,8 @@ import { cpus } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { MemoryLru } from "./lru.mjs";
+
 const here = dirname(fileURLToPath(import.meta.url));
 const BRIDGE = resolve(here, "bridge.mjs");
 const BRIDGE_CONTRACT_VERSION = 1;
@@ -66,8 +68,10 @@ const HTTP_TIMEOUT_MS = BRIDGE_TIMEOUT_MS + 30_000;
 
 const CACHE_ENABLED = process.env.WORKER_CACHE === undefined || process.env.WORKER_CACHE !== "0";
 const CACHE_MAX_BYTES = Number(process.env.WORKER_CACHE_MB ?? 64) * 1024 * 1024;
-const cache = new Map(); // clave sha256 -> { size, exitCode, body }
-let cacheBytes = 0;
+// El criterio de expulsión es el de `lru.mjs`, compartido con la caché del CLI y
+// con la del modelo del puente: escribirlo aquí otra vez serían tres sitios donde
+// arreglar el mismo fallo.
+const cache = new MemoryLru(CACHE_MAX_BYTES, (entry) => entry.size);
 
 const pool = { pending: [], running: 0, order: 0 };
 const metrics = { jobs: 0, cacheHits: 0, cacheMisses: 0, errors: 0, startedAt: Date.now() };
@@ -118,31 +122,14 @@ function logJob(entry) {
 }
 
 function cachePut(key, entry) {
-  const size = Buffer.byteLength(JSON.stringify(entry.body));
-  if (size > CACHE_MAX_BYTES) return; // no cabe ni una vez
-  cache.delete(key);
-  cache.set(key, { ...entry, size });
-  cacheBytes += size;
-  while (cacheBytes > CACHE_MAX_BYTES && cache.size > 1) {
-    const oldest = cache.keys().next().value;
-    cacheBytes -= cache.get(oldest).size;
-    cache.delete(oldest);
-  }
-}
-
-function cacheGet(key) {
-  const hit = cache.get(key);
-  if (!hit) return undefined;
-  cache.delete(key);
-  cache.set(key, hit); // toque LRU
-  return hit;
+  cache.set(key, { ...entry, size: Buffer.byteLength(JSON.stringify(entry.body)) });
 }
 
 /** La puerta única al trabajo: caché determinista primero, pool después. */
 async function dispatch(requestText, command) {
   const key = createHash("sha256").update(requestText).digest("hex");
   if (CACHE_ENABLED) {
-    const hit = cacheGet(key);
+    const hit = cache.get(key);
     if (hit && hit.exitCode !== 2 && !(hit.body && typeof hit.body.code === "string")) {
       metrics.jobs += 1;
       metrics.cacheHits += 1;
@@ -155,16 +142,7 @@ async function dispatch(requestText, command) {
   metrics.cacheMisses += 1;
   const cacheable = result.exitCode !== 2 && !(result.body && typeof result.body.code === "string");
   if (CACHE_ENABLED && cacheable) {
-    const size = Buffer.byteLength(JSON.stringify(result.body));
-    if (size <= CACHE_MAX_BYTES) {
-      cache.set(key, { exitCode: result.exitCode, body: result.body, size });
-      cacheBytes += size;
-    }
-    while (cacheBytes > CACHE_MAX_BYTES && cache.size > 1) {
-      const oldest = cache.keys().next().value;
-      cacheBytes -= cache.get(oldest).size;
-      cache.delete(oldest);
-    }
+    cachePut(key, { exitCode: result.exitCode, body: result.body });
   }
   return result;
 }

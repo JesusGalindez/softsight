@@ -15,6 +15,11 @@
  *   - `noCache: true` con variable activa → nada se escribe (`--no-cache` manda)
  *   - tope en cero                        → el guardián borra lo escrito
  *
+ * Y la otra caché, la del motor —`.cache/`, con el modelo ya analizado—, que
+ * hasta Ω2.2 no tenía ninguna política y llegó a 130 MB en 59 ficheros:
+ *
+ *   - `SOFTSIGHT_CACHE_MAX_MB` → el directorio se queda por debajo del tope
+ *
  * Necesita `dist-node/agent3d.mjs` construido: se ejecuta con
  * `npm run test:model-cache`, que hace el build antes.
  */
@@ -22,7 +27,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +39,19 @@ const MODEL = resolve(projectRoot, "artifacts/export/drone.glb");
 
 const modelBytes = await readFile(MODEL);
 const modelFile = { name: "drone.glb", data: modelBytes.toString("base64") };
+
+/** Lanza el CLI en un directorio de trabajo propio, para que `.cache/` sea suyo. */
+function runCli(args, cwd, env = {}) {
+  return new Promise((done, reject) => {
+    const child = spawn(process.execPath, [resolve(here, "agent3d.mjs"), ...args], {
+      cwd,
+      env: { ...process.env, ...env },
+      stdio: "ignore",
+    });
+    child.on("error", reject);
+    child.on("close", (exitCode) => done({ exitCode }));
+  });
+}
 
 /** Lanza el puente con una petición en stdin y devuelve { exitCode, response }. */
 function runBridge(request, env = {}) {
@@ -108,6 +126,32 @@ try {
   await runBridge(renderRequest(modelFile, { tile: 96, noCache: true }), cacheEnv);
   const entries4 = await readdir(cacheDir);
   assert.equal(entries4.length, 2, "noCache:true manda sobre la variable");
+
+  console.log("model-cache: la caché del motor respeta su tope");
+  {
+    // El modelo del dron cacheado ocupa varios MB, así que con el tope en 1 MB el
+    // recorte tiene que dejar el directorio vacío: expulsar por mtime hasta
+    // volver al tope, sin excepciones para el que acaba de entrar.
+    const engineDir = await mkdtemp(join(tmpdir(), "softsight-engine-cache-"));
+    const { exitCode } = await runCli(["--model", MODEL, "--inspect-only", "true"], engineDir, {
+      SOFTSIGHT_CACHE_MAX_MB: "1",
+    });
+    assert.equal(exitCode, 1, "el dron trae avisos");
+    const cached = join(engineDir, ".cache");
+    let total = 0;
+    for (const entry of await readdir(cached)) {
+      total += (await stat(join(cached, entry))).size;
+    }
+    assert.ok(total <= 1024 * 1024, `.cache/ se quedó en ${total} B con el tope en 1 MB`);
+
+    // Y sin tope apretado, el modelo sí se queda: el recorte expulsa, no impide.
+    const roomyDir = await mkdtemp(join(tmpdir(), "softsight-engine-cache-roomy-"));
+    await runCli(["--model", MODEL, "--inspect-only", "true"], roomyDir);
+    assert.equal((await readdir(join(roomyDir, ".cache"))).length, 1, "con tope holgado el modelo se guarda");
+
+    await rm(engineDir, { recursive: true, force: true });
+    await rm(roomyDir, { recursive: true, force: true });
+  }
 
   console.log("model-cache: tope en cero → la caché se desactiva");
   const tinyDir = await mkdtemp(join(tmpdir(), "softsight-model-cache-tiny-"));

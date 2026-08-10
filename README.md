@@ -263,7 +263,22 @@ la escena no encaja con el esquema:
 
 El modelo analizado se guarda en `.cache/` con clave `(ruta, mtime, tamaño)`: analizar
 el GLB del dron son 56 ms y leer la caché, 5 ms. El informe dice en `cached` de dónde
-salió, y `--no-cache` la salta.
+salió, `--no-cache` la salta, y el directorio se recorta por mtime con
+`SOFTSIGHT_CACHE_MAX_MB` (256 por defecto), el mismo criterio que usan el puente y el
+worker.
+
+### El CLI que no se muere
+
+```bash
+node tools/agent3d.mjs --serve      # peticiones NDJSON dentro, respuestas NDJSON fuera
+```
+
+El 43 % de una llamada barata era arranque de proceso. `--serve` atiende **las mismas
+peticiones que `tools/bridge.mjs`** —el mismo contrato, sin un campo nuevo— sobre un
+proceso que se queda: **0,454 s por petición lanzando proceso contra 0,143 s residente**,
+mejor de dos vueltas con el dron. Un proceso vivo acumula estado, así que la puerta manda
+veinte peticiones idénticas seguidas y comprueba que las veinte respuestas lo son y que
+el `renderHash` no se mueve.
 
 El informe trae, además del pliego: auditoría topológica por pieza —aristas de borde,
 no manifold, triángulos degenerados, normales invertidas, desviación del pivote,

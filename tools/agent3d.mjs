@@ -715,6 +715,11 @@ Otras
                           de una vez; con parte —scene|patch|story|staging|sample|
                           report|codes— solo esa. El completo se construye
                           uniendo las partes, así que no pueden divergir
+  --serve                 modo residente: peticiones NDJSON por stdin,
+                          respuestas NDJSON por stdout, con el mismo contrato que
+                          tools/bridge.mjs. El módulo se carga una vez y la caché
+                          del modelo vive entre peticiones, así que la llamada
+                          barata deja de pagar el arranque del proceso
   --debug                 vuelca la pila en los errores
   --help                  esta ayuda
 
@@ -848,7 +853,7 @@ function printSchema(part) {
       `--schema ${part} no existe; las partes son ${Object.keys(SCHEMA_PARTS).join("|")}`,
     );
   }
-  process.stdout.write(
+  emit(
     `${JSON.stringify(
       buildSchema(part === undefined ? Object.keys(SCHEMA_PARTS) : [part]),
       null,
@@ -991,6 +996,21 @@ async function convertBvhFile(options) {
  * `--fields` manda sobre `--summary`: una lista de rutas es una declaración más
  * concreta que una opinión, y quien escribe las dos quiere la suya.
  */
+/**
+ * A dónde va lo que escribe el CLI.
+ *
+ * En la invocación normal es el stdout del proceso. En modo residente
+ * (`--serve`) la misma orden se ejecuta dentro de un proceso que ya está vivo y
+ * lo que produce es la respuesta de **una** petición, así que se acumula aparte:
+ * si escribiera en el stdout del proceso se mezclaría con el NDJSON.
+ */
+let sink = null;
+
+function emit(text) {
+  if (sink === null) process.stdout.write(text);
+  else sink.push(text);
+}
+
 function emitReport(report, options) {
   const fields = options.get("fields");
   let view = report;
@@ -1005,37 +1025,40 @@ function emitReport(report, options) {
   } else if (options.get("summary") === "true") {
     view = summarize(report);
   }
-  process.stdout.write(`${JSON.stringify(view, null, 2)}\n`);
+  emit(`${JSON.stringify(view, null, 2)}\n`);
 }
 
-async function main() {
-  const options = parseArguments(process.argv.slice(2));
+/**
+ * Ejecuta una orden y **devuelve** su código de salida en vez de escribirlo en
+ * `process.exitCode`: en modo residente hay muchas órdenes por proceso y el
+ * código es de cada una, no del proceso.
+ */
+async function main(argv) {
+  const options = parseArguments(argv);
 
   if (options.has("help")) {
-    process.stdout.write(`${USAGE}\n`);
-    return;
+    emit(`${USAGE}\n`);
+    return 0;
   }
 
   if (options.has("schema")) {
     const part = options.get("schema");
     printSchema(part === "true" ? undefined : part);
-    return;
+    return 0;
   }
   // El guion tampoco es un modelo: no hay geometría que mirar, solo texto y
   // tiempo. Va antes por el mismo motivo que el BVH.
   if (options.has("story")) {
     const report = auditStoryFile(options);
     emitReport(report, options);
-    process.exitCode = report.warnings.length > 0 ? 1 : 0;
-    return;
+    return report.warnings.length > 0 ? 1 : 0;
   }
   // La puesta en escena tampoco trae geometría: son las medidas que hizo el
   // editor sobre un frame ya montado.
   if (options.has("staging")) {
     const report = auditStagingFile(options);
     emitReport(report, options);
-    process.exitCode = report.warnings.length > 0 ? 1 : 0;
-    return;
+    return report.warnings.length > 0 ? 1 : 0;
   }
   // El BVH va antes que todo lo demás porque no es un modelo: no tiene malla, así
   // que no hay nada que encuadrar, rasterizar ni auditar. Es una conversión, y
@@ -1043,7 +1066,7 @@ async function main() {
   if (options.has("bvh")) {
     const report = await convertBvhFile(options);
     emitReport(report, options);
-    return;
+    return 0;
   }
 
   const outputPath = resolve(options.get("out") ?? "artifacts/agent/contact-sheet.png");
@@ -1052,8 +1075,7 @@ async function main() {
     const report = await reviewModelFile(options, outputPath);
     emitReport(report, options);
     const failedEdits = (report.edits ?? []).filter((edit) => edit.error);
-    process.exitCode = report.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;
-    return;
+    return report.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;
   }
 
   const scenePath = options.get("scene");
@@ -1072,11 +1094,8 @@ async function main() {
   }
 
   if (options.get("dry-run") === "true") {
-    process.stdout.write(
-      `${JSON.stringify({ objects: spec.objects.length, edits, dryRun: true }, null, 2)}\n`,
-    );
-    process.exitCode = (edits ?? []).some((edit) => edit.error) ? 1 : 0;
-    return;
+    emit(`${JSON.stringify({ objects: spec.objects.length, edits, dryRun: true }, null, 2)}\n`);
+    return (edits ?? []).some((edit) => edit.error) ? 1 : 0;
   }
 
   const { sheet, review } = reviewScene(spec, {
@@ -1169,19 +1188,50 @@ async function main() {
     options,
   );
   const failedEdits = (edits ?? []).filter((edit) => edit.error);
-  process.exitCode = review.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;
+  return review.warnings.length > 0 || failedEdits.length > 0 ? 1 : 0;
+}
+
+/**
+ * Ejecuta una orden **dentro de este proceso** y devuelve lo que habría escrito.
+ *
+ * Es lo que convierte al CLI en algo que se puede llamar sin pagar 0,10 s de
+ * arranque de Node y de importación del módulo. Devuelve exactamente los tres
+ * datos que devolvía el proceso —código, stdout y stderr— para que quien lo use
+ * no tenga que decidir nada distinto de lo que decidía antes.
+ *
+ * El error se traduce aquí igual que en la invocación normal: mensaje limpio en
+ * stderr y salida 2, con la pila solo si va `--debug`.
+ */
+export async function runAgent(argv) {
+  const chunks = [];
+  const previous = sink;
+  sink = chunks;
+  try {
+    const exitCode = await main(argv);
+    return { exitCode: exitCode ?? 0, stdout: chunks.join(""), stderr: "" };
+  } catch (error) {
+    const debug = argv.includes("--debug");
+    const message = error instanceof Error ? (debug ? error.stack : error.message) : String(error);
+    return { exitCode: 2, stdout: chunks.join(""), stderr: `${message}\n` };
+  } finally {
+    sink = previous;
+  }
 }
 
 // Solo se ejecuta si es el programa invocado, no si alguien lo importa: así el
 // decodificador PNG se puede comprobar desde fuera sin que importarlo renderice.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((error) => {
+  const argv = process.argv.slice(2);
+  if (argv.includes("--serve")) {
+    const { serve } = await import("./serve.mjs");
+    await serve(runAgent);
+  } else {
     // Mensaje limpio, no volcado de pila: los errores de este CLI son de datos
     // —extensión no soportada, patrón sin coincidencias, fichero ilegible— y llevan
     // la corrección dentro. La pila solo estorba, y con `--debug` sigue disponible.
-    const debug = process.argv.includes("--debug");
-    const message = error instanceof Error ? (debug ? error.stack : error.message) : String(error);
-    process.stderr.write(`${message}\n`);
-    process.exitCode = 2;
-  });
+    const { exitCode, stdout, stderr } = await runAgent(argv);
+    if (stdout) process.stdout.write(stdout);
+    if (stderr) process.stderr.write(stderr);
+    process.exitCode = exitCode;
+  }
 }

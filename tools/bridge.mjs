@@ -35,6 +35,12 @@
  * El puente sale con el mismo código que el CLI (0 sin avisos, 1 con avisos o
  * parches fallidos) para que el consumidor no tenga que interpretar el informe.
  *
+ * Modo residente: `agent3d --serve` atiende **estas mismas peticiones** por
+ * NDJSON sin morirse entre una y otra, y para no tener dos contratos importa de
+ * aquí `handleRequest`; lo único que cambia es `execute`, que en vez de lanzar un
+ * proceso llama al CLI dentro del suyo. Medido con el dron: 0,454 s por petición
+ * lanzando proceso contra 0,143 s residente, mejor de dos vueltas.
+ *
  * Sandbox: un directorio de trabajo dedicado por petición; los ficheros se
  * nombran de forma plana y validada (ni `..` ni separadores), hay límite de
  * tamaño para el JSON, los ficheros y los artefactos, timeout por petición, y
@@ -60,17 +66,16 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
-  statSync,
-  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+
+import { trimDirectory } from "./lru.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -188,7 +193,7 @@ function readStdin() {
   });
 }
 
-class BridgeError extends Error {
+export class BridgeError extends Error {
   constructor(code, message) {
     super(message);
     this.code = code;
@@ -241,42 +246,9 @@ function writeFileModelCached(slot, payload) {
   if (!existsSync(target)) {
     mkdirSync(MODEL_CACHE_DIR, { recursive: true });
     writeFileSync(target, bytes);
-    trimModelCache();
+    trimDirectory(MODEL_CACHE_DIR, MODEL_CACHE_MAX_BYTES);
   }
   return target;
-}
-
-/** Borra los ficheros más viejos del directorio hasta volver al tope. */
-function trimModelCache() {
-  let entries;
-  try {
-    entries = readdirSync(MODEL_CACHE_DIR);
-  } catch {
-    return;
-  }
-  const files = [];
-  for (const entry of entries) {
-    const path = join(MODEL_CACHE_DIR, entry);
-    try {
-      const stats = statSync(path);
-      if (stats.isFile()) files.push({ path, size: stats.size, mtimeMs: stats.mtimeMs });
-    } catch {
-      // otro proceso pudo borrarlo a mitad de listado
-    }
-  }
-  let total = 0;
-  for (const file of files) total += file.size;
-  if (total <= MODEL_CACHE_MAX_BYTES) return;
-  files.sort((a, b) => a.mtimeMs - b.mtimeMs);
-  for (const file of files) {
-    if (total <= MODEL_CACHE_MAX_BYTES) break;
-    try {
-      unlinkSync(file.path);
-      total -= file.size;
-    } catch {
-      // ya no existe; sigue con el siguiente
-    }
-  }
 }
 
 function readArtifact(workDir, name, mimeType) {
@@ -396,48 +368,56 @@ function buildArgs(request, workDir) {
   return flags;
 }
 
-async function runCommand(request) {
+/**
+ * Ejecuta el CLI **lanzando un proceso**, que es lo que hace el puente de un
+ * disparo. Devuelve `{ exitCode, stdout, stderr }` y traduce a `BridgeError` lo
+ * que no es una salida del CLI: el timeout y el fallo al invocar.
+ */
+async function spawnAgent(args) {
+  try {
+    const { stdout, stderr } = await execFileAsync(process.execPath, [AGENT3D, ...args], {
+      maxBuffer: MAX_ARTIFACT_BYTES,
+      timeout: TIMEOUT_MS,
+      killSignal: "SIGKILL",
+      shell: false,
+    });
+    return { exitCode: 0, stdout: stdout.toString("utf8"), stderr: stderr.toString("utf8") };
+  } catch (error) {
+    // execFile rechaza con el código de salida del hijo: 1 son avisos del
+    // informe (éxito con informe), 2 es un error de datos, y el timeout se
+    // reconoce porque el hijo murió por señal o por 'ETIMEDOUT'.
+    const cause = error;
+    if (cause?.killed || cause?.signal === "SIGKILL" || cause?.code === "ETIMEDOUT") {
+      throw new BridgeError("bridge-timeout", `la petición excedió ${TIMEOUT_MS} ms`);
+    }
+    if (cause?.code !== 1 && cause?.code !== 2) {
+      throw new BridgeError(
+        "bridge-spawn-error",
+        `no se pudo invocar al CLI: ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+    }
+    return {
+      exitCode: cause.code,
+      stdout: (cause.stdout ?? Buffer.alloc(0)).toString("utf8"),
+      stderr: (cause.stderr ?? Buffer.alloc(0)).toString("utf8"),
+    };
+  }
+}
+
+async function runCommand(request, execute) {
   const workDir = mkdtempSync(join(tmpdir(), "softsight-bridge-"));
   try {
     const args = buildArgs(request, workDir);
-    let stdout;
-    let stderr;
-    let exitCode;
-    try {
-      ({ stdout, stderr } = await execFileAsync(process.execPath, [AGENT3D, ...args], {
-        maxBuffer: MAX_ARTIFACT_BYTES,
-        timeout: TIMEOUT_MS,
-        killSignal: "SIGKILL",
-        shell: false,
-      }));
-      exitCode = 0;
-    } catch (error) {
-      // execFile rechaza con el código de salida del hijo: 1 son avisos del
-      // informe (éxito con informe), 2 es un error de datos, y el timeout se
-      // reconoce porque el hijo murió por señal o por 'ETIMEDOUT'.
-      const cause = error;
-      if (cause?.killed || cause?.signal === "SIGKILL" || cause?.code === "ETIMEDOUT") {
-        throw new BridgeError("bridge-timeout", `la petición excedió ${TIMEOUT_MS} ms`);
-      }
-      stdout = cause?.stdout ?? Buffer.alloc(0);
-      stderr = cause?.stderr ?? Buffer.alloc(0);
-      if (cause?.code === 2) {
-        throw new BridgeError("data-error", stderr.toString("utf8").trim() || "error de datos");
-      }
-      if (cause?.code !== 1) {
-        throw new BridgeError(
-          "bridge-spawn-error",
-          `no se pudo invocar al CLI: ${cause instanceof Error ? cause.message : String(cause)}`,
-        );
-      }
-      exitCode = 1;
+    const { exitCode, stdout, stderr } = await execute(args);
+    if (exitCode === 2) {
+      throw new BridgeError("data-error", stderr.trim() || "error de datos");
     }
 
     let report;
     try {
-      report = JSON.parse(stdout.toString("utf8"));
+      report = JSON.parse(stdout);
     } catch {
-      throw new BridgeError("data-error", `el CLI no devolvió JSON: ${stderr.toString("utf8").trim() || "sin stderr"}`);
+      throw new BridgeError("data-error", `el CLI no devolvió JSON: ${stderr.trim() || "sin stderr"}`);
     }
 
     const artifacts = [];
@@ -456,27 +436,29 @@ async function runCommand(request) {
         artifacts.push(readArtifact(workDir, "undo.json", "application/json"));
       }
     }
-    process.stdout.write(
-      `${JSON.stringify(
-        { bridgeContractVersion: BRIDGE_CONTRACT_VERSION, command: request.command, exitCode, report, artifacts },
-        null,
-        2,
-      )}\n`,
-    );
-    process.exitCode = exitCode;
+    return {
+      bridgeContractVersion: BRIDGE_CONTRACT_VERSION,
+      command: request.command,
+      exitCode,
+      report,
+      artifacts,
+    };
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
 }
 
-async function main() {
-  const input = await readStdin();
-  let request;
-  try {
-    request = JSON.parse(input.toString("utf8"));
-  } catch {
-    throw new BridgeError("invalid-request", "la petición no es JSON válido");
-  }
+/**
+ * Valida una petición y devuelve la respuesta. **Es el contrato**, y por eso
+ * vive aquí y no en dos sitios: el modo residente de `agent3d --serve` importa
+ * esta misma función y solo cambia `execute`, que es transporte. Si el contrato
+ * se hubiera copiado allí, los dos caminos habrían empezado a divergir en la
+ * primera opción nueva y la puerta habría dejado de significar algo.
+ *
+ * `execute(args) -> { exitCode, stdout, stderr }`: lanzar un proceso o llamar al
+ * CLI dentro de este. Por defecto, lo primero.
+ */
+export async function handleRequest(request, execute = spawnAgent) {
   if (typeof request !== "object" || request === null || Array.isArray(request)) {
     throw new BridgeError("invalid-request", "la petición debe ser un objeto");
   }
@@ -487,23 +469,52 @@ async function main() {
     throw new BridgeError("invalid-request", `comando desconocido: ${String(request.command)}`);
   }
   if (request.command === "schema") {
-    const { stdout } = await execFileAsync(process.execPath, [AGENT3D, "--schema"], { maxBuffer: 8 * 1024 * 1024 });
-    const report = JSON.parse(stdout);
-    process.stdout.write(
-      `${JSON.stringify({ bridgeContractVersion: BRIDGE_CONTRACT_VERSION, command: "schema", exitCode: 0, report }, null, 2)}\n`,
-    );
-    return;
+    // `schema` no toca ficheros ni sandbox: es leer lo que el propio CLI publica.
+    const { exitCode, stdout, stderr } = await execute(["--schema"]);
+    if (exitCode !== 0) throw new BridgeError("data-error", stderr.trim() || "error de datos");
+    return {
+      bridgeContractVersion: BRIDGE_CONTRACT_VERSION,
+      command: "schema",
+      exitCode: 0,
+      report: JSON.parse(stdout),
+    };
   }
   if (request.files !== undefined && (typeof request.files !== "object" || request.files === null || Array.isArray(request.files))) {
     throw new BridgeError("invalid-request", "files debe ser un objeto");
   }
-  await runCommand(request);
+  return runCommand(request, execute);
 }
 
-main().catch((error) => {
-  if (error instanceof BridgeError) {
-    fail(error.code, error.message);
-    return;
+/** La respuesta de error del puente, con la misma forma que escribe `fail`. */
+export function errorResponse(error) {
+  const { code, message } =
+    error instanceof BridgeError
+      ? error
+      : { code: "bridge-internal", message: error instanceof Error ? error.message : String(error) };
+  return { bridgeContractVersion: BRIDGE_CONTRACT_VERSION, code, message };
+}
+
+async function main() {
+  const input = await readStdin();
+  let request;
+  try {
+    request = JSON.parse(input.toString("utf8"));
+  } catch {
+    throw new BridgeError("invalid-request", "la petición no es JSON válido");
   }
-  fail("bridge-internal", error instanceof Error ? error.message : String(error));
-});
+  const response = await handleRequest(request);
+  process.stdout.write(`${JSON.stringify(response, null, 2)}\n`);
+  process.exitCode = response.exitCode;
+}
+
+// Solo cuando es el programa invocado: `agent3d --serve` importa este fichero
+// para reusar el contrato, y entonces no hay stdin que leer aquí.
+if (process.argv[1] && resolve(process.argv[1]) === resolve(here, "bridge.mjs")) {
+  main().catch((error) => {
+    if (error instanceof BridgeError) {
+      fail(error.code, error.message);
+      return;
+    }
+    fail("bridge-internal", error instanceof Error ? error.message : String(error));
+  });
+}
