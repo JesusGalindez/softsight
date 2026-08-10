@@ -28,7 +28,7 @@ Las siete fases hechas salvo Ω6.4, que vive en el editor. Lo que se movió de v
 | Llamada del puente | 0,454 s por proceso | **0,143 s** residente |
 | Contrato de topología (CPU) | 0,46 s sobre la consulta | **0,02 s** con la caché caliente |
 | `sample-surface` | 50,4 s de pared, 26,2 de CPU | **0,8 s** de pared, 0,88 de CPU |
-| Suite entera | 61 s, 13 puertas | **34,5 s, 18 puertas y 88 comprobaciones** |
+| Suite entera | 61 s, 13 puertas | **34,5 s, 19 puertas y 89 comprobaciones** |
 | Quién ejecuta la verificación | nadie | CI en cada empujón, en dos sistemas |
 
 Y ningún número se movió: `renderHash.sheet` del dron sigue en `46228b7c`, igual en
@@ -719,7 +719,7 @@ en `package.json`, `src/soft/agent/index.ts` y `src/soft/renderer.ts`. El primer
 antes de empezar Ω4**, no durante.
 
 **Cerrado el 2026-08-09** en el commit `54f1eae`, con `test:text-plan` y `test:animation`
-en verde. Queda una cosa dicha y no hecha a propósito: `test:text-plan` **no entra en
-`test:animation`**, así que la puerta del cartel existe y CI no la ejecuta. Meterla ahí
-habría cambiado el recuento de comprobaciones justo antes de que Ω7 lo fije, que es la
-forma más rápida de que la puerta de Ω7 no signifique nada. Se decide después de Ω7.
+en verde. `test:text-plan` se dejó fuera de `test:animation` a propósito hasta que Ω7
+fijara el recuento —meterla antes habría hecho que la puerta de Ω7 no significara nada— y
+**entró el 2026-08-10**, ahora que el recuento lo imprime la propia suite: 19 puertas y
+89 comprobaciones.

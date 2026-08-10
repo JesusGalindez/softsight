@@ -126,6 +126,7 @@ hecho por los dos lados, da el mismo hash.
 | `test:incremental` | El informe con contrato de topología, con la caché de auditoría fría, caliente y sin caché, y tras un parche que cambia la malla | `npm run test:incremental` (softsight), también dentro de `test:animation` |
 | `test:mcp` | Cada una de las siete herramientas MCP contra el CLI directo —informe, pliego y GLB byte a byte—, y que los esquemas de parámetros son la traducción de `SCENE_SCHEMA` y `PATCH_SCHEMA` | `npm run test:mcp` (softsight), también dentro de `test:animation` |
 | `test:summary` | El informe recortado contra el completo: cada clave del resumen es la misma, el resumen del dron cabe en 2.000 B, una ruta de `--fields` que no existe sale 2 con sugerencia, y la unión de las siete partes de `--schema` es el `--schema` completo | `npm run test:summary` (softsight), también dentro de `test:animation` |
+| `test:text-plan` | El plan de cartel: normalización de la copia, geometría de la caja, la escala que cabe, los colores por rol y la integración con el render | `npm run test:text-plan` (softsight), también dentro de `test:animation` |
 | `test:codes` | El registro de códigos de aviso contra `src/soft/`, en las dos direcciones, y contra lo que publica `--schema` | `npm run test:codes` (softsight), también dentro de `test:animation` |
 | `test:determinism` | El pliego del dron dos veces en la misma máquina, y contra el `renderHash` fijado en `artifacts/agent/render-hashes.json` | `npm run test:determinism` (softsight), y en CI sobre `ubuntu-latest` y `macos-latest` |
 | `check` | Tipos, pruebas y build del editor | `npm run check` (editor) |
@@ -144,7 +145,7 @@ puertas; las cinco restantes solo las cierra una ejecución local con los dos
 repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 88
+Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 89
 comprobaciones de softsight en verde**. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.

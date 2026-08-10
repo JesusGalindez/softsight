@@ -59,6 +59,7 @@ const GATES = [
   "staging-spec.test.mjs", // 1,0 s
   "sample-surface.test.mjs", // 0,8 s — eran 50,4 antes de Ω6.2 y Ω6.3
   "bvh-loader.test.mjs", // 0,8 s
+  "text-plan.test.mjs", // 0,8 s
   "parity-mode.test.mjs", // 0,4 s
   "animation-contract.test.mjs", // 0,3 s
   "skin-binding.test.mjs", // 0,3 s

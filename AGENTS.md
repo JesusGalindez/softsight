@@ -85,7 +85,7 @@ dan el mismo número. `npm run test:animation` las corre todas menos `test:deter
 
 Cinco de ellas leen el fixture certificado del editor, que vive en un repositorio privado.
 Sin él se declaran «no ejecutada» con su motivo y salen 0; `SOFTSIGHT_FIXTURES` cambia la
-ruta. En CI eso significa que el verde cubre tipos, determinismo y 12 de 17 puertas.
+ruta. En CI eso significa que el verde cubre tipos, determinismo y 14 de 19 puertas.
 
 ## Banderas del CLI
 
