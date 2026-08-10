@@ -141,12 +141,12 @@ tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
 alcance: cinco puertas —`animation-contract`, `glb-loader`, `sample-surface`,
 `glb-writer` y `bridge`— leen el fixture certificado del editor, que es un
 repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su
-motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y 8 de 13
-puertas; las cinco restantes solo las cierra una ejecución local con los dos
-repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
+motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **15 de
+las 20 puertas, con 92 de las 99 comprobaciones**; las cinco restantes solo las
+cierra una ejecución local con los dos repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-09: **ambas puertas en `accepted`; las 99
+Estado hoy, verificado el 2026-08-10: **ambas puertas en `accepted`; las 99
 comprobaciones de softsight en verde**. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
@@ -266,11 +266,12 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     de los dos fixtures dan **cero píxeles de diferencia**. `contractVersion`
     sube a 3 porque se mueven los `renderHash`. De paso destapó que la prueba de profundidad
     del rasterizador del editor compara `clipZ` sin dividir por w — arreglo del
-    plan del motor, no de este. **A4 medido el 2026-08-05 y abierto**: con la
-    tolerancia implementada como dilatación de un píxel, las bandas llegan a
-    cinco, así que la divergencia es real y no del medidor. Un fixture de solo
-    caras planas separa dos causas: las aristas curvas casi tangentes, y algo
-    propio de la vista superior que no es recorte ni rotación.
+    plan del motor, no de este. **A5 hecho el 2026-08-05**: el dron entra en la
+    puerta y pasa, y los tres fixtures corren en seis segundos contra los treinta
+    de presupuesto. **E2 hecha el 2026-08-10**: `screenAudit.ts` audita lo que se
+    ve —fuera de cuadro, entrada a ciegas, oclusión prolongada— proyectando la
+    caja de cada pieza con la cámara del pliego, sin rasterizar; puerta
+    `test:screen`. Queda E1, la paridad de encuadre, que necesita a los dos.
 14. **Geometría compleja declarativa** (hecha). El agente ya no está limitado a
     colocar primitivas: perfiles con nombre —círculo, superelipse, Gielis y NACA—,
     `loft` de secciones, `sweep` de un perfil por un recorrido, cuatro
@@ -281,11 +282,12 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     comprobaciones, ejemplar en `artifacts/agent/pieza-geometria.json`.
 15. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
-16. **Plan Ω — el coste por turno del agente** (en curso). Ver
-    [`plan-omega.md`](plan-omega.md). No añade funcionalidad: ataca lo que hace
-    caro operar el banco —16,5 KB por turno, 10.000 tokens de descubrimiento,
-    0,10 s de arranque por llamada y 47,3 s de suite— y el hueco de que nada de
-    esto lo ejecutaba una máquina. **Ω4 hecha el 2026-08-09**: CI en tres
+16. **Plan Ω — el coste por turno del agente** (hecho, salvo Ω6.4, que vive en el
+    editor). Ver [`plan-omega.md`](plan-omega.md), que lleva la tabla de antes y
+    ahora. No añadió funcionalidad: atacaba lo que hacía caro operar el banco
+    —16,5 KB por turno, 10.000 tokens de descubrimiento, 0,10 s de arranque por
+    llamada y 47,3 s de suite— y el hueco de que nada de esto lo ejecutaba una
+    máquina. **Ω4 hecha el 2026-08-09**: CI en tres
     trabajos, `npm run verify` como orden única, y el pliego del dron fijado en
     `artifacts/agent/render-hashes.json` (`46228b7c`, contrato 3, **el mismo en
     `ubuntu-latest` y en `macos-latest`**: el determinismo deja de ser política y

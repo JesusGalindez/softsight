@@ -38,11 +38,17 @@ por semilla, el reparto de la suite en paralelo, y Ω6.4.
 
 ---
 
-## 0. Lo medido
+## 0. Lo medido — **la foto del antes**
 
-Todo lo que sigue son medidas de esta máquina —4 núcleos, Node fijado por `.nvmrc`—,
-tomadas el 2026-08-09 con el modelo del dron (296 piezas, 37.950 triángulos) y la caché
-del CLI caliente. Ningún número de este documento es una estimación.
+> Esta sección **no es el estado**: es el punto de partida, y se deja tal cual porque sin
+> él las medidas de después no significan nada. El estado está arriba. Cada número de aquí
+> que se movió aparece corregido en la fase que lo movió.
+
+Todo lo que sigue son medidas de esta máquina —un i5-5350U de **dos núcleos físicos y
+cuatro lógicos**, cosa que este documento daba por cuatro reales y que Ω7 corrigió
+midiendo; Node fijado por `.nvmrc`—, tomadas el 2026-08-09 con el modelo del dron (296
+piezas, 37.950 triángulos) y la caché del CLI caliente. Ningún número de este documento es
+una estimación.
 
 | Medida | Valor | Cómo se sacó |
 |---|---|---|
@@ -123,7 +129,7 @@ ninguna máquina.
 | **H3** | Proceso por llamada | 0,10 s fijos; el puente lanza un `bridge.mjs` por petición |
 | **H4** | **Nada de esto lo ejecuta una máquina** | no existe `.github/`; las 71 comprobaciones corren cuando alguien se acuerda |
 | **H5** | No hay entrada para un agente frío | no hay `AGENTS.md` en el repo; la orientación son 5.391 líneas en 12 documentos |
-| **H6** | La suite es serial en una máquina de 4 núcleos | 47,3 s encadenados con `&&`, sin tiempos por puerta |
+| **H6** | La suite es serial | 47,3 s encadenados con `&&`, sin tiempos por puerta |
 
 H4 es el más caro de los seis y el más barato de arreglar. Un proyecto cuyo argumento
 central es «esto es determinista y se verifica con números» y que no ejecuta esos
