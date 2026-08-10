@@ -164,15 +164,30 @@ export interface RenderOptions {
    * Vive en la propia imagen, no en una capa del navegador: el render headless
    * lo lleva dentro, así que video y pliego muestran lo mismo.
    */
-  title?: {
-    text: string;
-    /** Esquina superior izquierda en píxeles de pantalla. */
-    originX: number;
-    originY: number;
-    /** Píxeles de pantalla por píxel de fuente (5×7). */
-    scale: number;
-    color?: readonly [number, number, number];
-  };
+  title?: SdfTitle;
+  /**
+   * Varios títulos en el mismo frame: una plantilla de cartel (kicker + hero +
+   * pie) los declara como lista. Alternativa de compatibilidad a `title` — si
+   * vienen ambos, se dibujan los dos.
+   */
+  titles?: readonly SdfTitle[];
+}
+
+/** Texto SDF quemado en el framebuffer: esquina superior izquierda en píxeles. */
+export interface SdfTitle {
+  text: string;
+  originX: number;
+  originY: number;
+  /** Píxeles de pantalla por píxel de fuente (5×7). */
+  scale: number;
+  color?: readonly [number, number, number];
+}
+
+/** Unión de los títulos de `options` (compatibilidad `title` + lista `titles`). */
+function listTitles(options: RenderOptions): readonly SdfTitle[] {
+  if (!options.title) return options.titles ?? [];
+  if (!options.titles) return [options.title];
+  return [options.title, ...options.titles];
 }
 
 export interface FrameStats extends RasterStats {
@@ -407,17 +422,17 @@ export class SoftwareRenderer {
       stats.postprocessMilliseconds = performance.now() - postprocessStart;
     }
 
-    if (options.title) {
+    for (const run of listTitles(options)) {
       drawSDFText(
         framebuffer.color,
         framebuffer.width,
         framebuffer.height,
-        options.title.originX,
-        options.title.originY,
+        run.originX,
+        run.originY,
         {
-          text: options.title.text,
-          scale: options.title.scale,
-          color: options.title.color ?? [236, 239, 245],
+          text: run.text,
+          scale: run.scale,
+          color: run.color ?? [236, 239, 245],
         },
         framebuffer.rowOffset,
       );

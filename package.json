@@ -22,7 +22,8 @@
     "filmstrip": "npm run build:agent3d --silent && node tools/filmstrip.mjs",
     "agent3d": "vite build --config vite.node.config.ts --logLevel error 1>&2 && node tools/agent3d.mjs",
     "preview": "vite preview --host 127.0.0.1",
-    "test:text": "npm run build:agent3d && node tools/text.test.mjs"
+    "test:text": "npm run build:agent3d && node tools/text.test.mjs",
+    "test:text-plan": "npm run build:agent3d && node tools/text-plan.test.mjs"
   },
   "engines": {
     "node": ">=24.13.0 <25"

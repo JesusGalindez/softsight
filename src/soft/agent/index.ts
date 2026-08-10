@@ -49,6 +49,19 @@ import type { Camera, SceneNode } from "../renderer";
 import { SoftwareRenderer } from "../renderer";
 
 export { SoftwareRenderer };
+/** Texto SDF y planes de cartel → títulos quemados en el framebuffer. */
+export type { SdfTitle } from "../renderer";
+export {
+  buildSdfTitles,
+  fitSdfScale,
+  measureSdfText,
+  normalizeSdfCopy,
+  placeSdfOrigin,
+  resolveSdfColor,
+  DEFAULT_INK_RGB,
+  DEFAULT_ROLE_COLORS,
+} from "../text-plan";
+export type { SdfAnchorSide, SdfTextPlan } from "../text-plan";
 export {
   renderContactSheet,
   computeSceneAabb,
