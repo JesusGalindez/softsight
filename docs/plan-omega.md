@@ -17,6 +17,27 @@ reparto de territorios entre procesos vive en [`plan-convergencia.md`](plan-conv
 
 ---
 
+## Estado, 2026-08-10
+
+Las siete fases hechas salvo Ω6.4, que vive en el editor. Lo que se movió de verdad:
+
+| Medida | Antes | Ahora |
+|---|---|---|
+| Informe por turno (dron, con pliego) | 16.493 B | **1.108 B** con `--summary` |
+| Descubrir el contrato | 46.226 B de una vez | **12.321 B** el parche, **940** la muestra |
+| Llamada del puente | 0,454 s por proceso | **0,143 s** residente |
+| Contrato de topología (CPU) | 0,46 s sobre la consulta | **0,02 s** con la caché caliente |
+| `sample-surface` | 50,4 s de pared, 26,2 de CPU | **0,8 s** de pared, 0,88 de CPU |
+| Suite entera | 61 s, 13 puertas | **34,5 s, 18 puertas y 88 comprobaciones** |
+| Quién ejecuta la verificación | nadie | CI en cada empujón, en dos sistemas |
+
+Y ningún número se movió: `renderHash.sheet` del dron sigue en `46228b7c`, igual en
+`ubuntu-latest` y en `macos-latest`. Cuatro cosas de este plan **no se hicieron y se dice
+por qué** en su sección: la caché del modelo en memoria del residente, la caché de muestras
+por semilla, el reparto de la suite en paralelo, y Ω6.4.
+
+---
+
 ## 0. Lo medido
 
 Todo lo que sigue son medidas de esta máquina —4 núcleos, Node fijado por `.nvmrc`—,
@@ -645,20 +666,21 @@ tamaño: es por lo que desbloquea a lo siguiente.
 
 Ninguna fase se cierra por revisión visual. Igual que las anteriores.
 
-| Fase | Puerta | Qué compara |
-|---|---|---|
-| Ω1.1 | `test:summary` | cada clave del resumen `deepEqual` a la del informe completo; resumen del dron < 2.000 B |
-| Ω1.2 | `test:summary` | proyección de rutas válidas; ruta inexistente rechazada con sugerencia |
-| Ω1.3 | `test:codes` | todo código emitido en `src/` está en la tabla, y al revés |
-| Ω1.4 | `test:schema` | la concatenación de partes es `deepEqual` al `--schema` completo |
-| Ω2.1 | `test:bridge` (extendida) | CLI, puente por proceso y puente residente, byte a byte; 20 peticiones iguales dan 20 respuestas iguales |
-| Ω2.2 | `test:model-cache` (extendida) | el LRU expulsa por techo y la invalidación manda sobre la caché |
-| Ω3 | `test:mcp` | cada herramienta contra el CLI directo |
-| Ω4 | el propio CI | dos ejecuciones dan el mismo `renderHash`; y coincide con el fijado en el repositorio |
-| Ω5 | `test:agents-md` | el fichero commiteado es igual al generado |
-| Ω6.1 | `test:incremental` | informe incremental `deepEqual` al completo sobre el mismo par |
-| Ω6.2–4 | contadores de `__softBench` | los contadores deterministas **no se mueven**; solo el tiempo |
-| Ω7 | la propia suite | mismo conjunto de comprobaciones, recuento impreso, < 20 s |
+| Fase | Puerta | Qué compara | Estado |
+|---|---|---|---|
+| Ω1.1 | `test:summary` | cada clave del resumen `deepEqual` a la del informe completo; resumen del dron < 2.000 B | hecha |
+| Ω1.2 | `test:summary` | proyección de rutas válidas; ruta inexistente rechazada con sugerencia | hecha |
+| Ω1.3 | `test:codes` | todo código emitido en `src/` está en la tabla, y al revés | hecha |
+| Ω1.4 | `test:summary` | la unión de las partes es `deepEqual` al `--schema` completo | hecha |
+| Ω2.1 | `test:bridge` (extendida) | CLI, puente por proceso y puente residente, byte a byte; 20 peticiones iguales dan 20 respuestas iguales | hecha |
+| Ω2.2 | `test:model-cache` (extendida) | el LRU expulsa por techo y la invalidación manda sobre la caché | hecha |
+| Ω3 | `test:mcp` | cada herramienta contra el CLI directo | hecha |
+| Ω4 | el propio CI | dos ejecuciones dan el mismo `renderHash`; y coincide con el fijado en el repositorio | hecha, y **coincide en `ubuntu-latest` y `macos-latest`** |
+| Ω5 | `test:agents-md` | el fichero commiteado es igual al generado, y cabe en 120 líneas | hecha |
+| Ω6.1 | `test:incremental` | el informe con caché de auditoría fría, caliente y sin caché es `deepEqual` | hecha, con otro diseño |
+| Ω6.2–3 | el `renderHash` y las huellas de muestreo | **no se mueven**; solo el tiempo | hechas |
+| Ω6.4 | — | vive en el editor, no en este repositorio | fuera de alcance |
+| Ω7 | la propia suite | mismo conjunto de comprobaciones, recuento impreso | hecha; el < 20 s no lo dio el paralelismo sino Ω6 |
 
 ---
 
