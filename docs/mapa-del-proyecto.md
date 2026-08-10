@@ -299,9 +299,20 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     puerta `test:geometry` deja de excusar dos códigos y exige cero avisos de
     `certeza` sobre el ejemplar. Queda anotado en
     [`plan-geometria.md`](plan-geometria.md) §9.
-16. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
+16. **Pesos declarados por fórmula** (plan escrito el 2026-08-10, sin empezar).
+    Ver [`plan-pesos.md`](plan-pesos.md). Es el desbloqueo grande que sigue al
+    atado rígido de E4 —piel suave, mallas continuas— y el plan existe para que
+    no cruce la línea que E4 trazó: el agente declara la región y la curva, la
+    herramienta evalúa una función determinista, y nadie adivina a qué hueso va
+    un vértice. Su paso 0 es una medida que todavía no está tomada —cuánto se
+    abre un codo declarado como dos piezas rígidas—, y de ella depende que el
+    resto valga la pena. Lo que ya no hay que construir es el instrumento:
+    `applySkin` mezcla cuatro influencias y está certificado contra el evaluador
+    del editor, así que softsight **ya sabe verificar los pesos que no sabe
+    escribir**.
+17. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
-17. **Plan Ω — el coste por turno del agente** (hecho, salvo Ω6.4, que vive en el
+18. **Plan Ω — el coste por turno del agente** (hecho, salvo Ω6.4, que vive en el
     editor). Ver [`plan-omega.md`](plan-omega.md), que lleva la tabla de antes y
     ahora. No añadió funcionalidad: atacaba lo que hacía caro operar el banco
     —16,5 KB por turno, 10.000 tokens de descubrimiento, 0,10 s de arranque por
@@ -348,7 +359,8 @@ banco de verificación. La línea queda donde estaba, y conviene no cruzarla: en
 cuanto la herramienta decida por su cuenta a qué hueso va un vértice, deja de
 poder afirmar que el resultado es exacto, y con ello se va el valor de todo lo
 demás. Lo que falte de pesos suaves lo trae quien los tenga, por `JOINTS_0` y
-`WEIGHTS_0`.
+`WEIGHTS_0` —o lo declara el agente, si algún día se hace
+[`plan-pesos.md`](plan-pesos.md), que existe para dejar esta línea donde está—.
 
 Riesgo declarado: D era el mayor cuello de botella, porque el editor dependía
 del CLI por proceso. El puente lo cierra: el editor habla con un proceso local

@@ -73,7 +73,8 @@ extensiones inventadas.
 ### 2.4 Pesos suaves — es otro plan
 
 Quitar el atado rígido es el desbloqueo grande, pero toca una línea que el
-repositorio trazó a propósito y merece su propio documento. Queda anotado en §8.
+repositorio trazó a propósito y merece su propio documento. Ya lo tiene:
+[`plan-pesos.md`](plan-pesos.md), escrito el 2026-08-10 y sin empezar.
 
 ---
 
@@ -299,13 +300,11 @@ La puerta nueva —o el bloque nuevo en `test:animation`— comprueba lo de §7.
 
 ## 8. Anotado, sin fase asignada
 
-- **Pesos declarados por fórmula.** Es el desbloqueo grande —piel suave, piezas
-  orgánicas— y **no cruza la línea del repositorio si se hace bien**: que la
-  herramienta *adivine* a qué hueso va un vértice rompe la exactitud; que el agente
-  *declare* una caída alrededor de una articulación, con su radio y su curva, es una
-  función determinista cuyos invariantes son comprobables —que los pesos sumen uno,
-  que ningún vértice quede huérfano, que no haya salto entre piezas—. Merece su
-  propio plan, y esa distinción es su primer párrafo.
+- ~~**Pesos declarados por fórmula**~~ — **tiene plan** desde el 2026-08-10:
+  [`plan-pesos.md`](plan-pesos.md), escrito y sin empezar. La distinción que lo hace
+  posible es su §2, y es la que estaba anotada aquí: que la herramienta *adivine* a
+  qué hueso va un vértice rompe la exactitud; que el agente *declare* la región y la
+  curva es una función determinista cuyos invariantes son comprobables.
 - **Muelles y ruido determinista.** El editor ya tiene `wiggle.ts` —ruido puro en
   `(semilla, tiempo)`— e interpolación `spring` en forma cerrada. Si el mismo
   movimiento se quiere describir en el documento certificado, la fuente es esa y
