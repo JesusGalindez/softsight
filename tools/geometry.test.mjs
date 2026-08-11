@@ -1602,6 +1602,44 @@ const PALA = { primitive: "box", parameters: [0.1, 0.4, 1.2] };
   );
 }
 
+// 44 bis. Los parámetros de una primitiva: faltar vale, sobrar no.
+//
+//     Lo destapó la cláusula de volumen del bloque siguiente: escribí un cilindro
+//     con un tercer número creyendo que pedía 64 lados, y el volumen no cuadraba
+//     porque ese número no lo lee nadie. Un campo que se ignora en silencio es el
+//     modo de fallo que el resto del esquema persigue.
+{
+  const conCilindro = (parameters) => ({
+    objects: [{ geometry: { primitive: "cylinder", parameters } }],
+  });
+  assert.throws(
+    () => resolveScene(conCilindro([0.5, 2, 64])),
+    /la primitiva cylinder lleva 2 parámetros —radio, alto— y se han escrito 3/,
+    "un parámetro de más en un cilindro",
+  );
+  assert.throws(
+    () => resolveScene({ objects: [{ geometry: { primitive: "sphere", parameters: [1, 32] } }] }),
+    /la primitiva sphere lleva 1 parámetro —radio— y se han escrito 2/,
+    "y en una esfera, que solo lleva uno",
+  );
+
+  // Faltar sigue valiendo: lo que no se escribe toma su valor por defecto, que es
+  // una omisión declarada y no una errata. Y con los justos, nada cambia.
+  const exactos = auditMesh(meshOf(conCilindro([0.5, 2])));
+  const porDefecto = auditMesh(meshOf(conCilindro([0.5])));
+  assert.ok(exactos.signedVolume > 0 && porDefecto.signedVolume > 0);
+  // La holgura es relativa porque `signedVolume` viene redondeado a seis decimales:
+  // exigir 1e-6 absoluto sería exigir por debajo de lo que el informe publica.
+  assert.ok(
+    Math.abs(exactos.signedVolume / porDefecto.signedVolume - 2) < 1e-5,
+    `el alto por defecto es 1, así que pedir 2 tiene que desplazar el doble, y da ${exactos.signedVolume / porDefecto.signedVolume}`,
+  );
+
+  console.log(
+    "geometria: ok (parámetros de más rechazados en cylinder y sphere; faltar sigue valiendo)",
+  );
+}
+
 // 45. El volumen esperado por pieza: `budget.volumes`.
 //
 //     Es la única cláusula del presupuesto que mira **una pieza** y no el conjunto,

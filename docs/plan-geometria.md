@@ -775,8 +775,14 @@ recordarán:
   pasa, y con `tolerance: 0.001` no.
 
   El caso de uso apareció al escribir la puerta: declaré el prisma de **64** lados y
-  la cláusula me corrigió con el número real —`createCylinder` usa 32 desde el
-  documento y el tercer parámetro se ignora—. Es exactamente para lo que sirve.
+  la cláusula me corrigió con el número real. Es exactamente para lo que sirve, y de
+  paso destapó lo de abajo.
+- ~~**Un parámetro de más en una primitiva se ignoraba en silencio**~~ — **hecho** el
+  2026-08-11. `{ "primitive": "cylinder", "parameters": [0.5, 2, 64] }` se tragaba
+  el 64 sin decir nada, y quien lo escribía creía estar pidiendo 64 lados. Ahora se
+  rechaza diciendo cuántos lleva la primitiva y cómo se llaman. **Faltar sigue
+  valiendo**: lo que no se escribe toma su valor por defecto, que es una omisión
+  declarada y no una errata.
 - **Presupuesto de triángulos por defecto en los generadores nuevos.** Un `loft` de
   128×32 son ocho mil triángulos por pieza, y `PRESUPUESTO_TRIANGULOS` ya existe
   para decirlo. Las resoluciones por defecto se dejan modestas —24 estaciones, 32

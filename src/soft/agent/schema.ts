@@ -39,7 +39,9 @@ const GEOMETRY_PRIMITIVE: ObjectSchema = {
     type: "number[]",
     description:
       "box: [ancho, alto, profundo]; sphere: [radio]; torus: [mayor, menor]; " +
-      "plane: [lado, subdivisiones]; cylinder: [radio, alto]; cone: [radio, alto].",
+      "plane: [lado, subdivisiones]; cylinder: [radio, alto]; cone: [radio, alto]. " +
+      "Faltar vale —lo que no se escribe toma su valor por defecto—, sobrar no: un número de más " +
+      "se rechaza en vez de ignorarse. La resolución de la malla no se declara aquí.",
   },
 };
 

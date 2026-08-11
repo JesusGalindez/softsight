@@ -60,6 +60,8 @@ export interface PrimitiveSpec {
   /**
    * box: [ancho, alto, profundo]; sphere: [radio]; torus: [mayor, menor];
    * plane: [lado, subdivisiones]; cylinder: [radio, alto]; cone: [radio, alto].
+   *
+   * Faltar vale y sobrar no: ver `PRIMITIVE_PARAMETERS`.
    */
   parameters?: number[];
 }
@@ -516,8 +518,38 @@ export function polygonOf(
   return polygon;
 }
 
+/**
+ * Cuántos números lleva cada primitiva, y cómo se llaman.
+ *
+ * Está aquí para poder **rechazar los que sobran**. Hasta ahora un tercer número
+ * en un cilindro se ignoraba en silencio, y eso es el modo de fallo que el resto
+ * del esquema persigue: quien lo escribió creía estar pidiendo 64 lados y se
+ * llevaba 32 sin que nada se lo dijera. Lo destapó una cláusula de
+ * `budget.volumes` al no cuadrar el volumen.
+ *
+ * Faltar sí vale: los que no se escriben toman su valor por defecto, que es una
+ * omisión declarada y no una errata.
+ */
+const PRIMITIVE_PARAMETERS: Record<PrimitiveSpec["primitive"], readonly string[]> = {
+  box: ["ancho", "alto", "profundo"],
+  sphere: ["radio"],
+  torus: ["radio mayor", "radio menor"],
+  plane: ["lado", "subdivisiones"],
+  cylinder: ["radio", "alto"],
+  cone: ["radio", "alto"],
+};
+
 function buildPrimitive(spec: PrimitiveSpec): Mesh {
   const p = spec.parameters ?? [];
+  const expected = PRIMITIVE_PARAMETERS[spec.primitive];
+  if (expected !== undefined && p.length > expected.length) {
+    throw new Error(
+      `la primitiva ${spec.primitive} lleva ${expected.length} ` +
+        `parámetro${expected.length === 1 ? "" : "s"} —${expected.join(", ")}— y se han escrito ` +
+        `${p.length}: los de más se ignorarían en silencio. La resolución de la malla no se ` +
+        "declara aquí.",
+    );
+  }
   switch (spec.primitive) {
     case "box":
       return createBox(p[0] ?? 1, p[1] ?? p[0] ?? 1, p[2] ?? p[0] ?? 1);
