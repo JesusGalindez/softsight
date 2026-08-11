@@ -713,13 +713,25 @@ recordarán:
   normal cero. No afecta ni a la topología ni a la imagen, pero obliga a filtrar
   huérfanos en cualquier comprobación de coherencia de normales —lo hace el bloque
   31 de la puerta, con su comentario—.
-- **Un recorrido opcional en `loft`**, que reutilice la curva del paso 3. El paso
-  se hizo sin el campo `stations` que traía §5: interpolar linealmente entre dos
-  secciones declaradas no añade forma —los anillos intermedios caen sobre la
-  superficie que ya describen las dos secciones—, e interpolar suavemente exige
-  una curva que pase por ellas, que es exactamente la maquinaria de `sweep`.
-  Escribirla dos veces serían dos fuentes para el mismo dato. Cuando `sweep` esté,
-  `loft` puede aceptar esa curva sin duplicar nada.
+- ~~**Un recorrido opcional en `loft`**~~ — **hecho** el 2026-08-11, y salió como
+  decía esta nota: sin duplicar nada. `loft` acepta el mismo `path` que un barrido;
+  con él las secciones se reparten uniformemente por índice a lo largo de la curva
+  y cada estación lleva el perfil **interpolado entre las dos que la rodean**,
+  orientado con el triedro del recorrido. Sin `path` no cambia nada.
+
+  Lo que evitó el segundo generador de recorridos fue sacar el cuerpo de
+  `createSweep` a un `sweepMesh` con **el perfil por estación**: enhebrar anillos,
+  orientarlos, cerrar el bucle y tapar los extremos es el mismo trabajo lleve el
+  perfil constante o no. `createSweep` queda en dos líneas sobre él.
+
+  Lo cierran dos caminos independientes: **un loft de dos secciones iguales por una
+  curva ≡ barrer ese perfil por la misma curva**, con las mismas 956 caras y
+  **2,2e-16** de diferencia máxima, el epsilon del doble. Y para que eso no lo
+  cumpla también un loft que ignorase las secciones, afilar la segunda baja el
+  volumen de 1,1043 a 0,5058. Por documento, un recorrido recto da el mismo volumen
+  que apilar —0,993865—, que es justo lo que esta nota predecía.
+
+  `at` y `path` juntos se rechazan: con recorrido la posición la pone la curva.
 - **NURBS**, cuando exista un consumidor que pague la precisión de CAD (§2.3).
 - **Declarar la unión entre piezas**, si el ejemplar del paso 7 demuestra que el
   ensamblaje por solape dispara `INTERPENETRACION` (§6.2).
