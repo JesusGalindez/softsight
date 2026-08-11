@@ -730,6 +730,10 @@ Presupuesto (cada bandera es una cláusula; incumplirla es un aviso y salida 1)
   --max-degenerate <n>    triángulos de área nula sumados
   --max-symmetry-error <x>  error de simetría en X, en fracción del radio (0.02 = 2 %)
 
+  Una escena declarativa lleva las mismas cláusulas en budget, y una más que no
+  cabe en una bandera porque es una lista: budget.volumes, cuánto tiene que
+  desplazar cada pieza. Ver --schema scene.
+
 Otras
   --parity                render de comparación: sin suavizado, sin sombras, sin
                           rótulo y sobre negro. Sirve para enfrentar el pliego

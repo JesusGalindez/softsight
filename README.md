@@ -429,7 +429,22 @@ npm run agent3d -- --model artifacts/export/drone.glb --inspect-only \
 Cada bandera es una cláusula; incumplirla es un aviso con código propio y salida 1, así
 que el agente sabe si su cambio cumple sin interpretar el JSON. Hay `--max-triangles`,
 `--max-parts`, `--require-watertight`, `--max-boundary-edges`, `--max-degenerate` y
-`--max-symmetry-error`; una escena declarativa lleva los mismos campos en `budget`. Las
+`--max-symmetry-error`; una escena declarativa lleva los mismos campos en `budget`, y uno
+más que no cabe en una bandera porque es una lista:
+
+```json
+{ "budget": { "volumes": [{ "part": "pala-*", "volume": 0.002 }] } }
+```
+
+`budget.volumes` es la única cláusula **por pieza**: dice cuánto tiene que desplazar cada
+una, y se exige a todas las que encajan con el patrón —una línea cubre las cuatro copias
+de un `repeat`—. Sirve para afirmar lo que el generador ya sabe: un cilindro de radio `r`
+y alto `h` con `n` lados desplaza `½·n·r²·sin(2π/n)·h`, y la puerta lo comprueba contra la
+malla de verdad, que es donde se ve si un deformador se comió el volumen o si una escala
+se aplicó dos veces. La tolerancia es del 1 % por defecto, y no puede ser cero: el volumen
+sale de sumar un determinante por triángulo sobre posiciones en `Float32`. Una cláusula
+que no encaja con ninguna pieza **incumple igual**, porque un contrato que no se aplica a
+nada se cumpliría siempre y una errata en el nombre lo desactivaría en silencio. Las
 cláusulas de topología auditan las 296 piezas —1,2 s frente a 0,16 s— y solo se pagan si
 se piden.
 

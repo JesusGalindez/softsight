@@ -161,6 +161,11 @@ export const WARNING_CODES = {
     severity: "certeza",
     cause: "alguna pieza pasa de budget.symmetryError",
   },
+  PRESUPUESTO_VOLUMEN: {
+    severity: "certeza",
+    cause:
+      "una pieza desplaza otra cosa de lo declarado en budget.volumes, o la cláusula no encaja con ninguna pieza",
+  },
 
   // Geometría declarativa: geometryAudit.ts, antes de generar la malla.
   PERFIL_AUTOINTERSECADO: {

@@ -26,6 +26,7 @@ import { parseGlb, type MeshoptDecoderLike } from "./glbLoader";
 import { auditMesh, type MeshAudit } from "./inspect";
 import {
   dedupeNames,
+  matchesName,
   needsAudit,
   parseWhere,
   selectParts,
@@ -314,6 +315,38 @@ export interface Budget {
   symmetryError?: number;
   /** Exige que todas las mallas estén cerradas. */
   watertight?: boolean;
+  /**
+   * Cuánto tiene que desplazar cada pieza, declarado por el agente.
+   *
+   * Es la única cláusula **por pieza**: las demás miran el conjunto. Sirve para
+   * afirmar lo que el generador ya sabe —un cilindro de radio r y alto h desplaza
+   * `π·r²·h`— y que la puerta lo compruebe contra la malla de verdad, que es donde
+   * se ve si un deformador se comió el volumen o si una escala se aplicó dos veces.
+   */
+  volumes?: VolumeClause[];
+}
+
+/**
+ * «Esta pieza debe desplazar tanto».
+ *
+ * `part` es un patrón con la sintaxis de `--select`, y la cláusula se exige a
+ * **cada** pieza que encaje: con `rotor-*` se dice de una vez lo que las cuatro
+ * copias de un `repeat` tienen que medir. Una cláusula que no encaja con ninguna
+ * pieza **incumple igual**, porque un contrato que no se aplica a nada solo puede
+ * ser una errata en el nombre.
+ */
+export interface VolumeClause {
+  part: string;
+  /** Volumen firmado esperado, en unidades del documento al cubo. */
+  volume: number;
+  /**
+   * Desviación admitida, en fracción del volumen declarado. 0,01 por defecto.
+   *
+   * No es cero porque no puede serlo: las posiciones viven en `Float32` y el
+   * volumen sale de sumar un determinante por triángulo, así que la igualdad
+   * exacta no sobrevive ni a la aritmética. El valor usado va dentro del aviso.
+   */
+  tolerance?: number;
 }
 
 export interface WarningsDelta {
@@ -541,6 +574,39 @@ function checkBudget(
       });
     }
   }
+  for (const [index, clause] of (budget.volumes ?? []).entries()) {
+    const where = `budget.volumes[${index}]`;
+    if (!(clause.tolerance === undefined || clause.tolerance >= 0)) {
+      throw new Error(`${where}: la tolerancia es una fracción no negativa, no ${clause.tolerance}`);
+    }
+    const tolerance = clause.tolerance ?? 0.01;
+    const matched = audits.filter((audit) => matchesName(audit.name, clause.part));
+    if (matched.length === 0) {
+      warnings.push({
+        code: "PRESUPUESTO_VOLUMEN",
+        part: null,
+        message:
+          `${where} declara el volumen de '${clause.part}' y no hay ninguna pieza que encaje. ` +
+          "Un contrato que no se aplica a nada se cumple siempre, así que se cuenta como incumplido: " +
+          "casi siempre es el nombre.",
+      });
+      continue;
+    }
+    const admitted = Math.abs(clause.volume) * tolerance;
+    for (const audit of matched) {
+      const off = audit.signedVolume - clause.volume;
+      if (Math.abs(off) <= admitted) continue;
+      warnings.push({
+        code: "PRESUPUESTO_VOLUMEN",
+        part: audit.name,
+        message:
+          `${audit.name} desplaza ${audit.signedVolume} y se declararon ${clause.volume} ` +
+          `±${(tolerance * 100).toFixed(2)} %: se sale por ${Math.abs(off).toPrecision(3)}, ` +
+          `un ${((Math.abs(off) / Math.abs(clause.volume || 1)) * 100).toFixed(1)} %.`,
+      });
+    }
+  }
+
   if (budget.symmetryError !== undefined) {
     const worst = audits
       .filter((audit) => audit.symmetryErrorX !== null)
@@ -1122,7 +1188,8 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
       budget.watertight === true ||
       budget.boundaryEdges !== undefined ||
       budget.degenerateTriangles !== undefined ||
-      budget.symmetryError !== undefined;
+      budget.symmetryError !== undefined ||
+      (budget.volumes?.length ?? 0) > 0;
     const contractAudits: ObjectReport[] = needsFullAudit
       ? model.parts.map((part) => ({ name: part.name, ...audit(part.mesh) }))
       : [];

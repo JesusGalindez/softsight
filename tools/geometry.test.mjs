@@ -1602,6 +1602,82 @@ const PALA = { primitive: "box", parameters: [0.1, 0.4, 1.2] };
   );
 }
 
+// 45. El volumen esperado por pieza: `budget.volumes`.
+//
+//     Es la única cláusula del presupuesto que mira **una pieza** y no el conjunto,
+//     y sirve para que el agente afirme lo que su generador ya sabe. Los valores
+//     esperados no se inventan aquí: son las mismas fórmulas que esta puerta ya usa
+//     —el cilindro es un prisma regular de n lados, no un cilindro ideal—.
+{
+  const avisos = (spec) =>
+    reviewScene(spec, { inspectOnly: true }).review.warnings.filter(
+      (aviso) => aviso.code === "PRESUPUESTO_VOLUMEN",
+    );
+  const lados = 32; // los que pone `createCylinder` desde el documento
+  const radio = 0.5;
+  const alto = 2;
+  const prisma = regularArea(lados, radio) * alto;
+  const conVolumenes = (volumes) => ({
+    objects: [
+      { name: "poste", geometry: { primitive: "cylinder", parameters: [radio, alto] }, position: [0, 1, 0] },
+      { name: "caja", geometry: { primitive: "box", parameters: [1, 1, 1] }, position: [2, 0.5, 0] },
+    ],
+    budget: { volumes },
+  });
+
+  assert.deepEqual(
+    avisos(conVolumenes([{ part: "poste", volume: prisma }, { part: "caja", volume: 1 }])),
+    [],
+    "declarando el volumen exacto no puede saltar nada",
+  );
+
+  // El cilindro ideal se aparta del prisma de 32 lados un 0,64 %, así que pasa con
+  // la tolerancia por defecto y no con una estrecha. Eso es lo que significa el 1 %
+  // por defecto, dicho con un número en vez de con un adjetivo.
+  const ideal = Math.PI * radio * radio * alto;
+  assert.deepEqual(avisos(conVolumenes([{ part: "poste", volume: ideal }])), []);
+  const estricto = avisos(conVolumenes([{ part: "poste", volume: ideal, tolerance: 0.001 }]));
+  assert.equal(estricto.length, 1);
+  assert.match(estricto[0].message, /±0\.10 %/);
+
+  // Un patrón vale para las copias de un `repeat`: una cláusula, cuatro piezas.
+  const conPalas = {
+    objects: [
+      {
+        name: "pala",
+        geometry: { primitive: "box", parameters: [0.4, 0.05, 0.1] },
+        position: [0.5, 0, 0],
+        repeat: { radial: { count: 4, axis: "y" } },
+      },
+    ],
+    budget: { volumes: [{ part: "pala-*", volume: 0.4 * 0.05 * 0.1 }] },
+  };
+  assert.deepEqual(avisos(conPalas), [], "las cuatro copias miden lo mismo y lo declarado es eso");
+  const palasMal = avisos({
+    ...conPalas,
+    budget: { volumes: [{ part: "pala-*", volume: 0.001 }] },
+  });
+  assert.equal(palasMal.length, 4, "una cláusula con patrón se exige a cada pieza que encaja");
+  assert.deepEqual(palasMal.map((aviso) => aviso.part), ["pala-1", "pala-2", "pala-3", "pala-4"]);
+
+  // Y una cláusula que no encaja con nada incumple: si se cumpliera en silencio, una
+  // errata en el nombre desactivaría el contrato sin decirlo.
+  const errata = avisos(conVolumenes([{ part: "postte", volume: prisma }]));
+  assert.equal(errata.length, 1);
+  assert.equal(errata[0].part, null);
+  assert.match(errata[0].message, /no hay ninguna pieza que encaje/);
+
+  assert.throws(
+    () => avisos(conVolumenes([{ part: "poste", volume: prisma, tolerance: -0.1 }])),
+    /la tolerancia es una fracción no negativa/,
+  );
+
+  console.log(
+    `geometria: ok (budget.volumes: el prisma de ${lados} lados a ${prisma.toFixed(6)} pasa, ` +
+      `el cilindro ideal pasa al 1 % y falla al 0,1 %, y un patrón cubre las 4 palas)`,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // El ejemplar versionado.
 // ---------------------------------------------------------------------------

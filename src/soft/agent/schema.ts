@@ -275,6 +275,27 @@ const OBJECT_FIELDS: ObjectSchema = {
   shininess: { type: "number", description: "Exponente especular; 48 por defecto." },
 };
 
+const VOLUME_CLAUSE_FIELDS: ObjectSchema = {
+  part: {
+    type: "string",
+    required: true,
+    description:
+      "Patrón de pieza, como --select: `rotor-*`. La cláusula se exige a cada pieza que encaje, y " +
+      "una que no encaje con ninguna incumple igual.",
+  },
+  volume: {
+    type: "number",
+    required: true,
+    description: "Volumen firmado esperado, en unidades del documento al cubo.",
+  },
+  tolerance: {
+    type: "number",
+    description:
+      "Desviación admitida, en fracción del volumen declarado; 0,01 por defecto. No puede ser 0: " +
+      "el volumen sale de sumar un determinante por triángulo sobre posiciones en Float32.",
+  },
+};
+
 const BUDGET_FIELDS: ObjectSchema = {
   triangles: { type: "number", description: "Triángulos como máximo." },
   parts: { type: "number", description: "Piezas como máximo." },
@@ -282,6 +303,14 @@ const BUDGET_FIELDS: ObjectSchema = {
   degenerateTriangles: { type: "number", description: "Triángulos de área nula, como máximo." },
   symmetryError: { type: "number", description: "Error de simetría en X, en fracción del radio." },
   watertight: { type: "boolean", description: "Exige que todas las mallas estén cerradas." },
+  volumes: {
+    type: "object[]",
+    description:
+      "Cuánto tiene que desplazar cada pieza. Es la única cláusula por pieza: las demás miran el " +
+      "conjunto. Sirve para afirmar lo que el generador ya sabe —un cilindro de radio r y alto h " +
+      "desplaza π·r²·h— y que la puerta lo compruebe contra la malla de verdad.",
+    fields: VOLUME_CLAUSE_FIELDS,
+  },
 };
 
 const JOINT_FIELDS: ObjectSchema = {

@@ -760,9 +760,23 @@ recordarán:
   ensamblaje por solape dispara `INTERPENETRACION` (§6.2).
 - **Centrar la malla generada** y llevar el desplazamiento en la matriz, si el
   descarte por frustum llega a medirse como cuello de botella (§6.4).
-- **Volumen esperado por pieza en `budget`**, para que el agente afirme «esta pieza
-  debe desplazar tanto» y la puerta lo compruebe. Es barato; falta el caso de uso
-  que lo pida.
+- ~~**Volumen esperado por pieza en `budget`**~~ — **hecho** el 2026-08-11.
+  `budget.volumes` es una lista de `{ part, volume, tolerance? }`, la única cláusula
+  del presupuesto que mira **una pieza** y no el conjunto. El patrón es el de
+  `--select`, así que una línea cubre las cuatro copias de un `repeat`, y una
+  cláusula que no encaja con ninguna pieza **incumple igual**: un contrato que no se
+  aplica a nada se cumpliría siempre, y una errata en el nombre lo desactivaría en
+  silencio.
+
+  La tolerancia es del 1 % por defecto y no puede ser cero, porque el volumen sale
+  de sumar un determinante por triángulo sobre posiciones en `Float32`. Ese 1 % está
+  medido, no elegido a ojo: el cilindro ideal `π·r²·h` se aparta del prisma de 32
+  lados que genera el documento un **0,64 %**, así que declarar la fórmula del libro
+  pasa, y con `tolerance: 0.001` no.
+
+  El caso de uso apareció al escribir la puerta: declaré el prisma de **64** lados y
+  la cláusula me corrigió con el número real —`createCylinder` usa 32 desde el
+  documento y el tercer parámetro se ignora—. Es exactamente para lo que sirve.
 - **Presupuesto de triángulos por defecto en los generadores nuevos.** Un `loft` de
   128×32 son ocho mil triángulos por pieza, y `PRESUPUESTO_TRIANGULOS` ya existe
   para decirlo. Las resoluciones por defecto se dejan modestas —24 estaciones, 32
