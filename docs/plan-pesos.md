@@ -248,7 +248,7 @@ sale 0,5 y 0,5 por los dos caminos.
 
 Entra en `test:bind`, que ahora afirma las dos mitades: **sin banda la costura se
 abre exactamente la cuerda medida en el paso 0**, y con banda no se abre. Más los
-268 vértices sumando 1 y los 132 de la costura repartiendo mitad y mitad. Cinco
+264 vértices sumando 1 y los 132 de la costura repartiendo mitad y mitad. Cinco
 rechazos con su mensaje.
 
 Un intento que no entró, por si a alguien le tienta: escribir las dos influencias
@@ -295,7 +295,7 @@ la única forma de comprobar que lo caza.*
 ### Paso 4 — El cierre cruzado — hecho el 2026-08-10, y sale a favor
 
 **Los cuatro hashes coinciden.** Un GLB con pesos declarados por softsight —el
-codo con banda, 268 vértices— evaluado por `evaluatePose` y por Three.js con su
+codo con banda, 264 vértices— evaluado por `evaluatePose` y por Three.js con su
 `GLTFLoader`, en los fotogramas 0, 10, 20 y 30: **la misma huella SHA-256 de las
 posiciones deformadas, bit a bit**. Es el mismo cierre que hizo E1 con el
 esqueleto y E2 con el BVH, y significa que softsight escribe pesos suaves que el

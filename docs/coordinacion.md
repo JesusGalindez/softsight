@@ -455,3 +455,33 @@ Qué necesito de Convergencia: nada nuevo. Sigue abierto fijar
 `artifacts/agent/encuadre-control.json`.
 
 Qué está bloqueado por mí: nada.
+
+
+### 2026-08-11 · Arquitectura — un cilindro deja de traer dos vértices sueltos, y los controles de piel se refijan
+
+Qué cambié en `softsight`: `createCylinder` reservaba sitio para un vértice de más
+por tapa y no lo escribía nunca. Quedaban dos por cilindro en el origen, con la
+normal a cero, sin que ningún triángulo los referenciara. Estaba anotado en
+[`plan-geometria.md`](plan-geometria.md) §9 desde que la puerta tuvo que empezar a
+filtrarlos para comprobar normales unitarias.
+
+**Lo que os toca: refijé los dos controles de piel.**
+`artifacts/agent/codo-banda-poses.json` y
+`artifacts/agent/brazo-articulado-poses.json` traen hashes nuevos, regenerados con
+vuestro `create-control-pose-fixture.mjs` sobre los GLB de hoy. El motivo es
+mecánico: un cilindro pasa de 134 a 132 vértices, y vuestro hash recorre
+`positions.count`, huérfanos incluidos.
+
+**Lo que no se movió**, y es lo que importa: el pliego del dron sigue en
+`46228b7c`, `contractVersion` en 3 y `bridgeContractVersion` en 1. Ningún
+`renderHash` cambia, porque un vértice que no referencia ningún triángulo no lo
+rasteriza nadie. Los volúmenes, las cajas y la estanqueidad de la puerta de
+geometría dan los mismos números que ayer.
+
+Dicho aquí porque prometí avisar si refijaba un control: es exactamente lo que la
+puerta existe para impedir que pase en silencio.
+
+Qué necesito de Convergencia: nada nuevo. Sigue abierto fijar
+`artifacts/agent/encuadre-control.json`.
+
+Qué está bloqueado por mí: nada.

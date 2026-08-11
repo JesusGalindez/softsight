@@ -5,34 +5,34 @@
   "meshes": [
     {
       "name": "piel_1",
-      "vertices": 134
+      "vertices": 132
     },
     {
       "name": "piel_2",
-      "vertices": 134
+      "vertices": 132
     },
     {
       "name": "piel_3",
-      "vertices": 134
+      "vertices": 132
     }
   ],
   "clips": {
     "saludar": [
       {
         "frame": 0,
-        "positionsHash": "sha256:e3f62d2b873a04d751b6cc3d36b0e8b2da96069696fa3db4b989834f6d374166"
+        "positionsHash": "sha256:39c04949a20b8138e4cd63843b73c4888a7c7d4fe627d6bd5f79bae2f9022ab8"
       },
       {
         "frame": 10,
-        "positionsHash": "sha256:9dec1dfe3c7d703024654252e174b0b41d06a31f622dab70ebde71e19febe0fe"
+        "positionsHash": "sha256:d263fd6d763e38be0f53f77e8bbe942eb892f15c3e7a2eafeeb3df1303e2edbb"
       },
       {
         "frame": 20,
-        "positionsHash": "sha256:7d87770a65c4993a96c973de38a66f25111eea34835f35db358a1c533ec0cdc9"
+        "positionsHash": "sha256:319924e0a49024db5051b39e04ccb8997770451df76e35aa795a17c4d04d1237"
       },
       {
         "frame": 30,
-        "positionsHash": "sha256:0268445df7c90c4afb164c81f1068fe6fbf8f696e1eb61cc9509b71132bd20ed"
+        "positionsHash": "sha256:c86f0b87c16385c64d2d2dbaddc1fc6b60bc3ae24a37fe0146a6c2fa6d75188e"
       }
     ]
   }

@@ -313,9 +313,14 @@ export function createCylinder(
   const sideVertices = (segments + 1) * 2;
   // Cada tapa: su corona de vértices más el centro. La de radio cero se omite,
   // porque un cono no tiene tapa arriba y sus triángulos serían degenerados.
+  //
+  // El `+ 1` es el centro y nada más. Fueron `+ 2` durante mucho tiempo, y esa
+  // holgura dejaba un vértice por tapa sin escribir ni referenciar: quedaba en el
+  // origen con la normal a cero, invisible en la imagen pero contado por cualquier
+  // recuento de vértices y colado en cualquier comprobación de normales unitarias.
   const hasBottom = radiusBottom > 0;
   const hasTop = radiusTop > 0;
-  const capVertices = (hasBottom ? segments + 2 : 0) + (hasTop ? segments + 2 : 0);
+  const capVertices = (hasBottom ? segments + 1 : 0) + (hasTop ? segments + 1 : 0);
   const vertexCount = sideVertices + capVertices;
 
   const positions = new Float32Array(vertexCount * 3);

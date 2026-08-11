@@ -347,7 +347,7 @@ un recorrido recto debe salir estanco, sin aristas de borde.
 
 **Medido:** la torsión conserva el volumen firmado **exacto** —0,998862 con 30°, 120° y
 −270°, el mismo número que sin torcer—, que es la prueba que más vale del paso. El
-afinado multiplica el volumen por (1+k+k²)/3 con dos `k`. El doblado deja los 134
+afinado multiplica el volumen por (1+k+k²)/3 con dos `k`. El doblado deja los 132
 vértices dentro de la corona **[1,128, 1,928]**, la que dicta el radio de doblado, exacto
 y por vértice. La ida y vuelta de torsión se desvía 3,0e-8 y la de ondulación 1,8e-24
 —ver §9—, y el parámetro neutro sí es la identidad bit a bit en los tres.
@@ -633,7 +633,7 @@ Nada de esto se cerró mirando el render. Cada fila es un bloque de
 | `sweep` con tapas | `boundaryEdges` 0 | 0; sin tapas, 2·puntos |
 | `twist` | volumen **invariante** | 0,998862 con 30°, 120° y −270° |
 | `taper` rampa 1 a `k` | factor `(1+k+k²)/3` | cuadra con dos `k` |
-| `bend` | eje sobre un arco | 134 vértices en la corona [1,128, 1,928] |
+| `bend` | eje sobre un arco | 132 vértices en la corona [1,128, 1,928] |
 | `twist`, `wave` | ida y vuelta | 3,0e-8 y 1,8e-24 — ver §9 |
 | Parámetro neutro | identidad | bit a bit en los tres |
 | `repeat` radial `n` | ángulos exactos `2πi/n` | matrices a 1e-15, y una sola malla compartida |
@@ -709,10 +709,25 @@ recordarán:
   bits. Medido: 3,0e-8 en la torsión. Lo que sí sale bit a bit es el parámetro
   neutro. Si algún día hiciera falta exactitud ahí, el cambio es el tipo de dato,
   no la aritmética.
-- **`createCylinder` deja dos vértices que no referencia ningún triángulo**, con
-  normal cero. No afecta ni a la topología ni a la imagen, pero obliga a filtrar
-  huérfanos en cualquier comprobación de coherencia de normales —lo hace el bloque
-  31 de la puerta, con su comentario—.
+- ~~**`createCylinder` deja dos vértices que no referencia ningún triángulo**~~ —
+  **hecho** el 2026-08-11. Era una holgura de reserva: cada tapa pedía sitio para
+  `segments + 2` vértices y solo escribe `segments + 1` —su corona y el centro—, así
+  que sobraba uno por tapa. Quedaban en el origen con la normal a cero. El bloque 31
+  de la puerta cambia su excusa por la afirmación contraria: **ningún vértice sin
+  triángulo**, que es lo que impide que vuelvan.
+
+  Los vértices por cilindro pasan de 134 a 132, así que **se movieron los hashes de
+  las poses de control** de los dos ejemplares de piel. No es un `renderHash` —los
+  huérfanos no los rasteriza nadie, y el pliego del dron sigue en `46228b7c`—, pero
+  Three.js sí los contaba, y los controles se refijaron con el editor y se avisó en
+  `coordinacion.md`.
+- **El cono deja uno más, y es de otra clase.** Con `radiusTop = 0` el anillo de
+  arriba entero cae en el ápice, y el último de sus vértices —el duplicado que cierra
+  la costura— no lo referencia ningún triángulo, porque los triángulos del costado
+  se emiten con el par del anillo contrario. A diferencia de los de las tapas, este
+  tiene posición y normal buenas. Quitarlo obliga a partir en dos la emisión del
+  anillo lateral y a renumerar todos los índices, y lo que se gana es un vértice de
+  99. Espera a que alguien lo pague.
 - ~~**Un recorrido opcional en `loft`**~~ — **hecho** el 2026-08-11, y salió como
   decía esta nota: sin duplicar nada. `loft` acepta el mismo `path` que un barrido;
   con él las secciones se reparten uniformemente por índice a lo largo de la curva

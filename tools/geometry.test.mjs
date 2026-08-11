@@ -1179,19 +1179,21 @@ console.log("geometria: ok (taper multiplica el volumen por (1+k+k²)/3, dos k)"
   ];
   const mesh = deformed(CILINDRO, cadena);
   assert.equal(mesh.faceNormals, undefined, "la caché de normales de cara hay que borrarla");
-  // Solo los vértices que usa algún triángulo: `createCylinder` deja dos sueltos
-  // que no referencia nadie, y su normal es cero desde antes de deformar. Es
-  // desperdicio suyo, no del deformador, y no se toca aquí.
+  // **Todos** los vértices, sin filtrar. Aquí hubo una excusa: `createCylinder`
+  // dejaba dos sueltos que no referenciaba nadie, con la normal a cero, y la
+  // comprobación los saltaba. Ya no los deja, así que la excusa se cambia por la
+  // afirmación —ningún vértice sin triángulo—, que es la que impide que vuelvan.
   const usados = new Set(mesh.indices);
+  const sueltos = [];
   let maximo = 0;
   for (let vertex = 0; vertex < mesh.positions.length / 3; vertex += 1) {
     const offset = vertex * 3;
-    if (usados.has(vertex)) {
-      const longitud = Math.hypot(mesh.normals[offset], mesh.normals[offset + 1], mesh.normals[offset + 2]);
-      assert.ok(Math.abs(longitud - 1) < 1e-6, `la normal del vértice ${vertex} no es unitaria: ${longitud}`);
-    }
+    if (!usados.has(vertex)) sueltos.push(vertex);
+    const longitud = Math.hypot(mesh.normals[offset], mesh.normals[offset + 1], mesh.normals[offset + 2]);
+    assert.ok(Math.abs(longitud - 1) < 1e-6, `la normal del vértice ${vertex} no es unitaria: ${longitud}`);
     maximo = Math.max(maximo, Math.hypot(mesh.positions[offset], mesh.positions[offset + 1], mesh.positions[offset + 2]));
   }
+  assert.deepEqual(sueltos, [], "un cilindro no puede dejar vértices que no use ningún triángulo");
   assert.ok(
     Math.abs(mesh.boundingRadius - maximo) < 1e-6,
     `el radio envolvente quedó viejo: ${mesh.boundingRadius} frente a ${maximo}`,
