@@ -79,11 +79,25 @@ export interface SkinBindingRule {
   /** Nombre del nodo del esqueleto. Debe existir. */
   joint: string;
   /**
-   * Reparto con otro hueso alrededor de la articulación. Sin esto el atado es
-   * rígido —peso 1 sobre `joint`—, que para una pieza rígida de verdad no es una
-   * simplificación sino la respuesta exacta.
+   * Reparto con otro hueso alrededor de la articulación, o **una lista** si la
+   * pieza tiene costura por más de un sitio: el antebrazo de un brazo de tres la
+   * tiene en el codo y en la muñeca, y con una sola banda solo podía soldar una.
+   *
+   * Sin esto el atado es rígido —peso 1 sobre `joint`—, que para una pieza rígida
+   * de verdad no es una simplificación sino la respuesta exacta.
+   *
+   * **Tres como mucho**: glTF escribe cuatro influencias por vértice y una es
+   * siempre `joint`. Y pueden solaparse —un hombro reparte hacia tres huesos a la
+   * vez—; lo que no puede es que entre todas se lleven más de lo que hay, y eso se
+   * comprueba vértice a vértice.
    */
-  blend?: BlendSpec;
+  blend?: BlendSpec | BlendSpec[];
+}
+
+/** Las bandas de una regla, siempre como lista. */
+function blendsOf(rule: SkinBindingRule): BlendSpec[] {
+  if (rule.blend === undefined) return [];
+  return Array.isArray(rule.blend) ? rule.blend : [rule.blend];
 }
 
 /**
@@ -174,6 +188,9 @@ interface ResolvedBlend {
   what: string;
 }
 
+/** Cuántas influencias por vértice escribe glTF en un juego de `JOINTS_0`. */
+const INFLUENCES = 4;
+
 /**
  * Los pesos de una pieza: qué hueso mueve cada vértice y cuánto.
  *
@@ -204,33 +221,48 @@ interface ResolvedBlend {
 function weightsFor(
   positions: Float32Array,
   joint: number,
-  blend: ResolvedBlend | null,
+  blends: readonly ResolvedBlend[],
+  part: string,
 ): { joints: Uint16Array; weights: Float32Array } {
   const vertexCount = positions.length / 3;
-  const joints = new Uint16Array(vertexCount * 4);
-  const weights = new Float32Array(vertexCount * 4);
+  const joints = new Uint16Array(vertexCount * INFLUENCES);
+  const weights = new Float32Array(vertexCount * INFLUENCES);
 
-  if (blend === null) {
+  if (blends.length === 0) {
     for (let vertex = 0; vertex < vertexCount; vertex += 1) {
-      joints[vertex * 4] = joint;
-      weights[vertex * 4] = 1;
+      joints[vertex * INFLUENCES] = joint;
+      weights[vertex * INFLUENCES] = 1;
     }
     return { joints, weights };
   }
 
-  const [ox, oy, oz] = blend.origin;
-  const [ax, ay, az] = blend.axis;
   for (let vertex = 0; vertex < vertexCount; vertex += 1) {
-    const t =
-      ((positions[vertex * 3] - ox) * ax +
-        (positions[vertex * 3 + 1] - oy) * ay +
-        (positions[vertex * 3 + 2] - oz) * az) /
-      blend.axisLengthSquared;
-    const share = evaluateVariation(blend.band, t, blend.what);
-    joints[vertex * 4] = joint;
-    weights[vertex * 4] = 1 - share;
-    joints[vertex * 4 + 1] = blend.other;
-    weights[vertex * 4 + 1] = share;
+    let taken = 0;
+    for (const [index, blend] of blends.entries()) {
+      const t =
+        ((positions[vertex * 3] - blend.origin[0]) * blend.axis[0] +
+          (positions[vertex * 3 + 1] - blend.origin[1]) * blend.axis[1] +
+          (positions[vertex * 3 + 2] - blend.origin[2]) * blend.axis[2]) /
+        blend.axisLengthSquared;
+      const share = evaluateVariation(blend.band, t, blend.what);
+      taken += share;
+      joints[vertex * INFLUENCES + index + 1] = blend.other;
+      weights[vertex * INFLUENCES + index + 1] = share;
+    }
+    // Solaparse está permitido —un hombro reparte hacia tres huesos a la vez—;
+    // llevarse más de lo que hay, no. Sale aquí y no en un aviso porque el
+    // resultado no sería «peor»: sería un peso negativo, que ningún reproductor
+    // sabe interpretar. Y sale con el vértice, que es por donde se mira la banda
+    // que sobra.
+    if (taken > 1 + 1e-6) {
+      throw new Error(
+        `vínculo: las bandas de '${part}' se llevan ${taken.toFixed(3)} del vértice ${vertex}, ` +
+          "más de lo que hay. Solaparse vale; pasarse de 1 dejaría al hueso de la regla con peso " +
+          "negativo. Estrecha alguna banda o quita la que sobra.",
+      );
+    }
+    joints[vertex * INFLUENCES] = joint;
+    weights[vertex * INFLUENCES] = 1 - taken;
   }
   return { joints, weights };
 }
@@ -356,8 +388,8 @@ export function bindModelToSkeleton(model: Model, skeleton: SkeletonSource, bind
   // El hueso de la regla y el de la banda se comprueban juntos: los dos tienen que
   // existir, y un `with` inventado falla igual de pronto que un `joint` inventado.
   const unknown = binding.bindings.flatMap((rule) =>
-    [rule.joint, rule.blend?.with].filter(
-      (name): name is string => name !== undefined && !indexByName.has(name),
+    [rule.joint, ...blendsOf(rule).map((blend) => blend.with)].filter(
+      (name) => !indexByName.has(name),
     ),
   );
   if (unknown.length > 0) {
@@ -412,45 +444,69 @@ export function bindModelToSkeleton(model: Model, skeleton: SkeletonSource, bind
 
   // Las bandas se resuelven una vez por regla, con la pose de reposo ya calculada:
   // el segmento sobre el que se mide no depende del vértice.
-  const blendByRule = new Map<SkinBindingRule, ResolvedBlend>();
+  const blendByRule = new Map<SkinBindingRule, ResolvedBlend[]>();
   for (const rule of binding.bindings) {
-    const blend = rule.blend;
-    if (!blend) continue;
-    const what = `vínculo: la banda de '${rule.part}'`;
-    if (blend.with === rule.joint) {
-      throw new Error(`${what} reparte '${rule.joint}' consigo mismo; \`with\` tiene que ser otro hueso`);
-    }
-    if (!(blend.from < blend.to)) {
+    const declared = blendsOf(rule);
+    if (declared.length === 0) continue;
+    // Tres como mucho: la cuarta influencia de glTF ya se la lleva `joint`.
+    if (declared.length > INFLUENCES - 1) {
       throw new Error(
-        `${what} va de ${blend.from} a ${blend.to}: \`from\` tiene que ser menor que \`to\`, ` +
-          "porque es donde el reparto empieza y donde acaba",
+        `vínculo: '${rule.part}' declara ${declared.length} bandas y caben ${INFLUENCES - 1}; ` +
+          `glTF escribe ${INFLUENCES} influencias por vértice y una es siempre '${rule.joint}'`,
       );
     }
-    const other = indexByName.get(blend.with)!;
-    const own = indexByName.get(rule.joint)!;
-    const from: [number, number, number] = [worlds[own][3], worlds[own][7], worlds[own][11]];
-    const to: [number, number, number] = [worlds[other][3], worlds[other][7], worlds[other][11]];
-    const axis: [number, number, number] = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
-    const axisLengthSquared = axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2];
-    if (axisLengthSquared === 0) {
-      throw new Error(
-        `${what}: '${rule.joint}' y '${blend.with}' ocupan el mismo sitio en reposo, ` +
-          "así que no hay segmento sobre el que medir el reparto",
-      );
+    const towards = new Set<string>();
+    const resolvedBlends: ResolvedBlend[] = [];
+    for (const blend of declared) {
+      const what =
+        declared.length === 1
+          ? `vínculo: la banda de '${rule.part}'`
+          : `vínculo: la banda de '${rule.part}' hacia '${blend.with}'`;
+      if (blend.with === rule.joint) {
+        throw new Error(`${what} reparte '${rule.joint}' consigo mismo; \`with\` tiene que ser otro hueso`);
+      }
+      // Dos bandas hacia el mismo hueso se sumarían sin que nadie lo haya pedido,
+      // y la segunda pisaría el hueco de la primera al escribir las influencias.
+      if (towards.has(blend.with)) {
+        throw new Error(
+          `${what}: '${rule.part}' ya reparte hacia '${blend.with}'; una banda por hueso, ` +
+            "y si quieres más ancho, ensancha la que hay",
+        );
+      }
+      towards.add(blend.with);
+      if (!(blend.from < blend.to)) {
+        throw new Error(
+          `${what} va de ${blend.from} a ${blend.to}: \`from\` tiene que ser menor que \`to\`, ` +
+            "porque es donde el reparto empieza y donde acaba",
+        );
+      }
+      const other = indexByName.get(blend.with)!;
+      const own = indexByName.get(rule.joint)!;
+      const from: [number, number, number] = [worlds[own][3], worlds[own][7], worlds[own][11]];
+      const to: [number, number, number] = [worlds[other][3], worlds[other][7], worlds[other][11]];
+      const axis: [number, number, number] = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+      const axisLengthSquared = axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2];
+      if (axisLengthSquared === 0) {
+        throw new Error(
+          `${what}: '${rule.joint}' y '${blend.with}' ocupan el mismo sitio en reposo, ` +
+            "así que no hay segmento sobre el que medir el reparto",
+        );
+      }
+      const band: VariationSpec = {
+        at: [
+          [blend.from, 0],
+          [blend.to, 1],
+        ],
+        ...(blend.ease !== undefined ? { ease: blend.ease } : {}),
+      };
+      // Una evaluación de prueba para que un `ease` inventado falle aquí, con la
+      // regla delante, y no en el primer vértice de una malla que ya se estaba
+      // escribiendo. El vocabulario de curvas lo dice `evaluateVariation` y nadie
+      // más: comprobarlo con una lista propia serían dos fuentes del mismo dato.
+      evaluateVariation(band, (blend.from + blend.to) / 2, what);
+      resolvedBlends.push({ other, origin: from, axis, axisLengthSquared, band, what });
     }
-    const band: VariationSpec = {
-      at: [
-        [blend.from, 0],
-        [blend.to, 1],
-      ],
-      ...(blend.ease !== undefined ? { ease: blend.ease } : {}),
-    };
-    // Una evaluación de prueba para que un `ease` inventado falle aquí, con la
-    // regla delante, y no en el primer vértice de una malla que ya se estaba
-    // escribiendo. El vocabulario de curvas lo dice `evaluateVariation` y nadie
-    // más: comprobarlo con una lista propia serían dos fuentes del mismo dato.
-    evaluateVariation(band, (blend.from + blend.to) / 2, what);
-    blendByRule.set(rule, { other, origin: from, axis, axisLengthSquared, band, what });
+    blendByRule.set(rule, resolvedBlends);
   }
 
   // Los vértices van a espacio de modelo, que es donde vive la pose de reposo del
@@ -499,7 +555,8 @@ export function bindModelToSkeleton(model: Model, skeleton: SkeletonSource, bind
     const { joints: jointIndices, weights: jointWeights } = weightsFor(
       positions,
       joint,
-      blendByRule.get(rule) ?? null,
+      blendByRule.get(rule) ?? [],
+      part.name,
     );
 
     return {

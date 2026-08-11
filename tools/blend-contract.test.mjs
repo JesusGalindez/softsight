@@ -9,15 +9,20 @@
  * Sin esto, el reparto suave sería una animación bonita que nadie puede afirmar.
  * Con esto, softsight escribe pesos que el reproductor del mundo real reproduce.
  *
+ * Se certifican **dos ejemplares**, y no por acumular: el codo enseña una banda y
+ * el brazo articulado enseña **dos bandas en la misma regla**, que es lo que le
+ * hace falta a una pieza con costura por los dos extremos. Un solo ejemplar de una
+ * sola forma enseñaría una plantilla, que es el mismo motivo por el que el plan de
+ * historias versionó dos guiones distintos.
+ *
  * ## De dónde sale el control, y por qué está aquí
  *
- * `artifacts/agent/codo-banda-poses.json` lo produce el **editor**, con Three.js
- * y su `GLTFLoader`, así:
+ * Los `-poses.json` los produce el **editor**, con Three.js y su `GLTFLoader`, así:
  *
  * ```
- * node tools/agent3d.mjs --scene artifacts/agent/codo-banda.json --inspect-only --export codo-banda.glb
- * node scripts/create-control-pose-fixture.mjs --model codo-banda.glb \
- *   --out .../artifacts/agent/codo-banda-poses.json --fps 30 --frames 0,10,20,30
+ * node tools/agent3d.mjs --scene artifacts/agent/<ejemplar>.json --inspect-only --export <ejemplar>.glb
+ * node scripts/create-control-pose-fixture.mjs --model <ejemplar>.glb \
+ *   --out .../artifacts/agent/<ejemplar>-poses.json --fps 30 --frames 0,10,20,30
  * ```
  *
  * Es un **valor de control**, con el mismo papel que `render-hashes.json`: no es
@@ -40,7 +45,6 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -63,68 +67,91 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
 
-const spec = JSON.parse(
-  await readFile(resolve(projectRoot, "artifacts/agent/codo-banda.json"), "utf8"),
-);
-const control = JSON.parse(
-  await readFile(resolve(projectRoot, "artifacts/agent/codo-banda-poses.json"), "utf8"),
-);
+/** Los dos ejemplares, con cuántas reglas de cada uno tienen que traer banda. */
+const EJEMPLARES = [
+  { nombre: "codo-banda", bandas: 2, piezas: 2 },
+  { nombre: "brazo-articulado", bandas: 3, piezas: 3 },
+];
 
-// La escena versionada declara banda por los dos lados: si alguien se la quita,
-// esta puerta pasaría a certificar un atado rígido sin decirlo.
-assert.equal(
-  spec.bindings.filter((rule) => rule.blend !== undefined).length,
-  2,
-  "la escena de la puerta tiene que traer las dos bandas, o esto no prueba nada",
-);
-
-// El GLB se reconstruye aquí y no se lee de un fichero: lo que se certifica es lo
-// que produce el código de hoy, no una copia que alguien dejó al lado.
-const rig = resolveRig(spec.skeleton, spec.clips);
-const bound = bindModelToSkeleton(modelFromScene(spec, "codo-banda"), rig.skeleton, {
-  schemaVersion: 1,
-  bindings: spec.bindings,
-});
-const glb = serializeSkinnedGlb(bound.scene);
-
-// Las mallas y sus vértices, antes que los hashes: si el GLB trajera otra cosa,
-// los hashes también fallarían, pero dirían menos.
-assert.deepEqual(
-  bound.scene.meshes[0].primitives.map((primitive) => primitive.positions.length / 3),
-  control.meshes.map((mesh) => mesh.vertices),
-  "el GLB de hoy no tiene los vértices que tenía cuando se fijó el control",
-);
-
-const inspection = await inspectGlbAnimation(glb, control);
-assert.deepEqual(inspection.errors, [], "el GLB con pesos declarados no se lee limpio");
-assert.equal(inspection.skinning.status, "accepted");
-
-const esperados = Object.entries(control.clips).flatMap(([clipName, poses]) =>
-  poses.map((pose) => ({ clipName, frame: pose.frame, positionsHash: pose.positionsHash })),
-);
-assert.equal(esperados.length, 4, "el control fija cuatro fotogramas: reposo, dos tramos y el doblado");
-
-// La comparación, hash a hash y con el fotograma en el mensaje: «cuatro poses no
-// coinciden» no dice si se movió el reposo —el atado— o solo el doblado —el
-// reparto—, y son dos fallos distintos.
-for (const [index, esperado] of esperados.entries()) {
-  const propio = inspection.controlPoses[index];
-  assert.equal(propio.clipName, esperado.clipName);
-  assert.equal(propio.frame, esperado.frame);
-  assert.equal(
-    propio.positionsHash,
-    esperado.positionsHash,
-    `el fotograma ${esperado.frame} de '${esperado.clipName}' deforma distinto que en Three.js`,
+const certificados = [];
+for (const ejemplar of EJEMPLARES) {
+  const spec = JSON.parse(
+    await readFile(resolve(projectRoot, `artifacts/agent/${ejemplar.nombre}.json`), "utf8"),
   );
+  const control = JSON.parse(
+    await readFile(resolve(projectRoot, `artifacts/agent/${ejemplar.nombre}-poses.json`), "utf8"),
+  );
+
+  // Si alguien le quita las bandas a la escena, esta puerta pasaría a certificar
+  // un atado rígido sin decirlo.
+  assert.equal(
+    spec.bindings.filter((rule) => rule.blend !== undefined).length,
+    ejemplar.bandas,
+    `${ejemplar.nombre} tiene que traer ${ejemplar.bandas} reglas con banda, o esto no prueba nada`,
+  );
+
+  // El GLB se reconstruye aquí y no se lee de un fichero: lo que se certifica es lo
+  // que produce el código de hoy, no una copia que alguien dejó al lado.
+  const rig = resolveRig(spec.skeleton, spec.clips);
+  const bound = bindModelToSkeleton(modelFromScene(spec, ejemplar.nombre), rig.skeleton, {
+    schemaVersion: 1,
+    bindings: spec.bindings,
+  });
+  const glb = serializeSkinnedGlb(bound.scene);
+
+  // Las mallas y sus vértices, antes que los hashes: si el GLB trajera otra cosa,
+  // los hashes también fallarían, pero dirían menos.
+  assert.deepEqual(
+    bound.scene.meshes[0].primitives.map((primitive) => primitive.positions.length / 3),
+    control.meshes.map((mesh) => mesh.vertices),
+    `${ejemplar.nombre} no tiene los vértices que tenía cuando se fijó el control`,
+  );
+
+  const inspection = await inspectGlbAnimation(glb, control);
+  assert.deepEqual(inspection.errors, [], `${ejemplar.nombre} con pesos declarados no se lee limpio`);
+  assert.equal(inspection.skinning.status, "accepted");
+
+  const esperados = Object.entries(control.clips).flatMap(([clipName, poses]) =>
+    poses.map((pose) => ({ clipName, frame: pose.frame, positionsHash: pose.positionsHash })),
+  );
+  assert.equal(esperados.length, 4, "el control fija cuatro fotogramas: reposo, dos tramos y el final");
+
+  // La comparación, hash a hash y con el fotograma en el mensaje: «cuatro poses no
+  // coinciden» no dice si se movió el reposo —el atado— o solo el doblado —el
+  // reparto—, y son dos fallos distintos.
+  for (const [index, esperado] of esperados.entries()) {
+    const propio = inspection.controlPoses[index];
+    assert.equal(propio.clipName, esperado.clipName);
+    assert.equal(propio.frame, esperado.frame);
+    assert.equal(
+      propio.positionsHash,
+      esperado.positionsHash,
+      `${ejemplar.nombre}: el fotograma ${esperado.frame} de '${esperado.clipName}' deforma distinto que en Three.js`,
+    );
+  }
+
+  // Y que el control es de este GLB y no de otro parecido: sin esto, una escena
+  // cambiada con el control viejo pasaría mientras los hashes no se movieran.
+  assert.equal(
+    control.model,
+    `${ejemplar.nombre}.glb`,
+    "el control dice ser de otro modelo; regenerarlo es lo que esta puerta vigila",
+  );
+
+  // El ejemplar, con lo mismo que se le exige al de geometría: cero defectos.
+  const { warnings } = reviewScene(spec, { inspectOnly: true }).review;
+  const todos = [...warnings, ...withSeverity(auditSkin(bound, rig.skeleton))];
+  const defectos = todos.filter((aviso) => aviso.severity === "certeza");
+  assert.deepEqual(
+    defectos,
+    [],
+    `${ejemplar.nombre} trae defectos: ${defectos.map((aviso) => `${aviso.code} en ${aviso.part}`).join(", ")}`,
+  );
+
+  certificados.push({ ...ejemplar, spec, glb, poses: esperados.length });
 }
 
-// Y que el control es de este GLB y no de otro parecido: sin esto, una escena
-// cambiada con el control viejo pasaría mientras los hashes no se movieran.
-assert.equal(
-  control.model,
-  "codo-banda.glb",
-  "el control dice ser de otro modelo; regenerarlo es lo que esta puerta vigila",
-);
+const { spec, glb } = certificados[0];
 
 // --- Los tres caminos dicen lo mismo -------------------------------------------
 //
@@ -180,22 +207,6 @@ try {
   rmSync(trabajo, { recursive: true, force: true });
 }
 
-// --- El ejemplar --------------------------------------------------------------
-//
-// La escena no es solo el fixture de esta puerta: es **lo primero que copia un
-// agente** que quiere una piel que no se abra, así que se le exige lo mismo que al
-// ejemplar de geometría —cero avisos de `certeza`—. Un ejemplar con defectos
-// enseñaría justo lo que el banco rechaza.
-
-const { warnings } = reviewScene(spec, { inspectOnly: true }).review;
-const todos = [...warnings, ...withSeverity(auditSkin(bound, rig.skeleton))];
-const defectos = todos.filter((aviso) => aviso.severity === "certeza");
-assert.deepEqual(
-  defectos,
-  [],
-  `el ejemplar trae defectos: ${defectos.map((aviso) => `${aviso.code} en ${aviso.part}`).join(", ")}`,
-);
-
 /** El puente, por su entrada de verdad: JSON por stdin y JSON por stdout. */
 async function runBridge(request) {
   const bridge = spawn(process.execPath, [resolve(here, "bridge.mjs")], {
@@ -209,9 +220,8 @@ async function runBridge(request) {
 }
 
 console.log(
-  `blend contract: ok (${esperados.length} poses de control del codo con banda, ` +
-    `${control.meshes.reduce((total, mesh) => total + mesh.vertices, 0)} vértices, ` +
-    `hashes idénticos a Three.js; GLB sha256:${createHash("sha256").update(new Uint8Array(glb)).digest("hex").slice(0, 8)}; ` +
-    `ejemplar sin un defecto: ${todos.length} avisos entre la escena y la piel; ` +
+  `blend contract: ok (${certificados.length} ejemplares sin un defecto y con sus ` +
+    `${certificados.reduce((total, entry) => total + entry.poses, 0)} poses idénticas a Three.js ` +
+    `—${certificados.map((entry) => `${entry.nombre} ${entry.piezas} piezas`).join(", ")}—; ` +
     `API == CLI == puente byte a byte)`,
 );

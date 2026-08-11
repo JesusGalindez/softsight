@@ -325,6 +325,12 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     puerta comprueba que los tres primeros dan **el mismo GLB byte a byte**. El
     informe publica `mode` y `blendedParts`, que antes eran el literal `"rigid"`.
     `contractVersion` sigue en 3 y `bridgeContractVersion` en 1: todo es aditivo.
+    Una regla admite **una banda o una lista** —tres como mucho, porque la cuarta
+    influencia de glTF se la lleva siempre su hueso—, con lo que una pieza con
+    costura por los dos extremos suelda las dos: el ejemplar
+    `artifacts/agent/brazo-articulado.json` pasa de abrirse 9,6e-2 y 4,5e-2 a
+    7,0e-8 y cero. Solapar bandas vale; que entre todas se lleven más de 1 es un
+    error del atado, porque dejaría al hueso de la regla en negativo.
 17. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
    toca hasta que haya un consumidor que lo pague.
 18. **Plan Ω — el coste por turno del agente** (hecho, salvo Ω6.4, que vive en el

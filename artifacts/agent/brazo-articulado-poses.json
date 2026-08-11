@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "model": "brazo-articulado.glb",
+  "fps": 30,
+  "meshes": [
+    {
+      "name": "piel_1",
+      "vertices": 134
+    },
+    {
+      "name": "piel_2",
+      "vertices": 134
+    },
+    {
+      "name": "piel_3",
+      "vertices": 134
+    }
+  ],
+  "clips": {
+    "saludar": [
+      {
+        "frame": 0,
+        "positionsHash": "sha256:e3f62d2b873a04d751b6cc3d36b0e8b2da96069696fa3db4b989834f6d374166"
+      },
+      {
+        "frame": 10,
+        "positionsHash": "sha256:9dec1dfe3c7d703024654252e174b0b41d06a31f622dab70ebde71e19febe0fe"
+      },
+      {
+        "frame": 20,
+        "positionsHash": "sha256:7d87770a65c4993a96c973de38a66f25111eea34835f35db358a1c533ec0cdc9"
+      },
+      {
+        "frame": 30,
+        "positionsHash": "sha256:0268445df7c90c4afb164c81f1068fe6fbf8f696e1eb61cc9509b71132bd20ed"
+      }
+    ]
+  }
+}

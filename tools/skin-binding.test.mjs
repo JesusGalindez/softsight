@@ -393,6 +393,64 @@ assertThrows(
   "una banda con una curva que no existe",
 );
 
+// Y lo que hay que rechazar de una **lista** de bandas.
+assertThrows(
+  conBandaMala([
+    { with: "hombro", from: 0, to: 1 },
+    { with: "hombro", from: 2, to: 3 },
+  ]),
+  /ya reparte hacia 'hombro'/,
+  "dos bandas de la misma regla hacia el mismo hueso",
+);
+assertThrows(
+  conBandaMala([
+    { with: "hombro", from: 0, to: 1 },
+    { with: "codo", from: 0, to: 1 },
+    { with: "hombro", from: 0, to: 1 },
+    { with: "codo", from: 0, to: 1 },
+  ]),
+  /declara 4 bandas y caben 3/,
+  "más bandas de las que caben en las cuatro influencias de glTF",
+);
+
+// El solape: dos bandas anchas hacia dos huesos distintos se llevan más de lo que
+// hay, y el hueso de la regla se quedaría con peso negativo. Solaparse vale;
+// pasarse, no.
+{
+  const trenza = {
+    ...CODO,
+    skeleton: {
+      joints: [
+        { name: "hombro", offset: [0, 0, 0] },
+        { name: "codo", parent: "hombro", offset: [0, 0.4, 0] },
+        { name: "muneca", parent: "codo", offset: [0, 0.75, 0] },
+      ],
+    },
+  };
+  assertThrows(
+    () =>
+      bindModelToSkeleton(
+        modelFromScene({ ...trenza, bindings: RIGIDO }, "codo"),
+        resolveRig(trenza.skeleton, trenza.clips).skeleton,
+        {
+          schemaVersion: 1,
+          bindings: [
+            {
+              part: "*",
+              joint: "codo",
+              blend: [
+                { with: "hombro", from: -5, to: 5 },
+                { with: "muneca", from: -5, to: 5 },
+              ],
+            },
+          ],
+        },
+      ),
+    /se llevan .* del vértice .*, más de lo que hay/,
+    "dos bandas que entre las dos se llevan más de 1",
+  );
+}
+
 console.log(
   `skin binding: ok (2 piezas exactas, ${drone.parts.length} del dron sin deformar; ` +
     `la costura del codo pasa de ${sinBanda.toFixed(6)} a ${conBanda.toExponential(1)} con banda ` +

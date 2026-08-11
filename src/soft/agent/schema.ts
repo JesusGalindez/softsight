@@ -310,9 +310,12 @@ const BINDING_FIELDS: ObjectSchema = {
   part: { type: "string", required: true, description: "Patrón de pieza, como --select: `rotor-*`." },
   joint: { type: "string", required: true, description: "Hueso al que se ata. Debe existir." },
   blend: {
-    type: "object",
+    type: "object|object[]",
     description:
-      "Reparto del peso con otro hueso alrededor de la articulación. Sin esto el atado es rígido, " +
+      "Reparto del peso con otro hueso alrededor de la articulación, o una lista si la pieza tiene " +
+      "costura por más de un sitio —el antebrazo la tiene en el codo y en la muñeca—. Tres como " +
+      "mucho: glTF escribe cuatro influencias por vértice y una es siempre `joint`. Pueden " +
+      "solaparse, pero entre todas no pueden llevarse más de 1. Sin esto el atado es rígido, " +
       "peso 1 sobre `joint`, que para una pieza rígida de verdad es la respuesta exacta.",
     fields: BLEND_FIELDS,
   },
@@ -737,9 +740,14 @@ export function validate(value: unknown, schema: ObjectSchema, path = ""): strin
       continue;
     }
     if (definition.fields !== undefined) {
-      const children = definition.type === "object[]" ? (record[field] as unknown[]) : [record[field]];
+      // Por el valor y no por el tipo declarado: un campo que admite las dos
+      // formas —`object|object[]`, como la banda de un vínculo— llega unas veces
+      // suelto y otras en lista, y decidir por la cadena del tipo le daría la
+      // ruta equivocada a la mitad de los errores.
+      const isList = Array.isArray(record[field]);
+      const children = isList ? (record[field] as unknown[]) : [record[field]];
       children.forEach((child, index) => {
-        const childPath = definition.type === "object[]" ? `${here}[${index}]` : here;
+        const childPath = isList ? `${here}[${index}]` : here;
         errors.push(...validate(child, definition.fields as ObjectSchema, childPath));
       });
     }

@@ -1,0 +1,74 @@
+{
+  "objects": [
+    {
+      "name": "brazo",
+      "geometry": { "primitive": "cylinder", "parameters": [0.075, 0.4] },
+      "position": [0, 0.2, 0],
+      "color": [0.4, 0.48, 0.62]
+    },
+    {
+      "name": "antebrazo",
+      "geometry": { "primitive": "cylinder", "parameters": [0.075, 0.35] },
+      "position": [0, 0.575, 0],
+      "color": [0.62, 0.48, 0.4]
+    },
+    {
+      "name": "mano",
+      "geometry": { "primitive": "cylinder", "parameters": [0.075, 0.15] },
+      "position": [0, 0.825, 0],
+      "color": [0.55, 0.55, 0.45]
+    }
+  ],
+  "skeleton": {
+    "joints": [
+      { "name": "hombro", "offset": [0, 0, 0] },
+      { "name": "codo", "parent": "hombro", "offset": [0, 0.4, 0] },
+      { "name": "muneca", "parent": "codo", "offset": [0, 0.35, 0] }
+    ]
+  },
+  "bindings": [
+    {
+      "part": "antebrazo",
+      "joint": "codo",
+      "blend": [
+        { "with": "hombro", "from": -0.15, "to": 0.15, "ease": "smooth" },
+        { "with": "muneca", "from": 0.85, "to": 1.15, "ease": "smooth" }
+      ]
+    },
+    {
+      "part": "brazo",
+      "joint": "hombro",
+      "blend": { "with": "codo", "from": 0.85, "to": 1.15, "ease": "smooth" }
+    },
+    {
+      "part": "mano",
+      "joint": "muneca",
+      "blend": { "with": "codo", "from": -0.15, "to": 0.15, "ease": "smooth" }
+    }
+  ],
+  "clips": [
+    {
+      "name": "saludar",
+      "fps": 30,
+      "tracks": [
+        {
+          "joint": "codo",
+          "property": "rotation",
+          "keys": [
+            { "frame": 0, "value": [0, 0, 0] },
+            { "frame": 30, "value": [0, 0, 80] }
+          ]
+        },
+        {
+          "joint": "muneca",
+          "property": "rotation",
+          "keys": [
+            { "frame": 0, "value": [0, 0, 0] },
+            { "frame": 15, "value": [0, 0, -35] },
+            { "frame": 30, "value": [0, 0, 25] }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -419,3 +419,39 @@ Qué necesito de Convergencia: nada nuevo. Sigue abierto fijar
 `artifacts/agent/encuadre-control.json`.
 
 Qué está bloqueado por mí: nada.
+
+
+### 2026-08-10 · Arquitectura — una regla admite varias bandas, y el brazo entero suelda
+
+Qué cambié en `softsight`: `blend` acepta ahora **una banda o una lista**. Salió
+del ejemplar del plan de pesos: una pieza con costura por los dos extremos —el
+antebrazo de un brazo de tres— solo podía soldar una.
+
+**Aditivo por los dos lados**: la forma suelta que os conté ayer sigue valiendo
+igual, y `--schema scene` publica el campo con el tipo `object|object[]`. Si algo
+de allí lee `rule.blend` dando por hecho que es un objeto, **ahora puede ser una
+lista**; eso es lo único que hay que mirar.
+
+Las reglas del reparto, por si las consumís:
+
+- **Tres bandas por regla como mucho.** glTF escribe cuatro influencias por
+  vértice y una es siempre el hueso de la regla.
+- **Solaparse vale; pasarse, no.** Un hombro reparte hacia tres huesos a la vez y
+  es legítimo. Lo que no puede es que entre todas se lleven más de 1, porque el
+  hueso de la regla se quedaría en negativo: eso es error del atado, con la pieza,
+  el vértice y el total en el mensaje.
+- **Una banda por hueso.** Dos hacia el mismo se sumarían sin que nadie lo pida.
+
+**Un ejemplar nuevo y su control**: `artifacts/agent/brazo-articulado.json` —tres
+piezas, dos costuras— con `artifacts/agent/brazo-articulado-poses.json`, producido
+con vuestro `create-control-pose-fixture.mjs` igual que el del codo. Sus dos
+costuras pasan de abrirse 9,6e-2 y 4,5e-2 a **7,0e-8 y cero exacto**, y los cuatro
+hashes coinciden con Three.js. La puerta certifica ahora los dos ejemplares.
+
+`contractVersion` sigue en 3, `bridgeContractVersion` en 1, el pliego del dron en
+`46228b7c`, y el atado rígido byte a byte igual que siempre.
+
+Qué necesito de Convergencia: nada nuevo. Sigue abierto fijar
+`artifacts/agent/encuadre-control.json`.
+
+Qué está bloqueado por mí: nada.

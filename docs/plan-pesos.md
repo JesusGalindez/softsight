@@ -1,7 +1,8 @@
 # Plan: los pesos se declaran, no se adivinan
 
-Estado: **cerrado** (2026-08-10). Los seis pasos hechos; lo que queda está en §9,
-que son ideas con su caso pero sin fase. El paso que podía
+Estado: **cerrado** (2026-08-10). Los seis pasos hechos, y una de las ideas de §9
+—más de una banda por regla— también, porque el paso 5 le encontró el caso. Lo que
+queda ahí son ideas sin caso todavía. El paso que podía
 matar el plan salió a favor: los pesos declarados deforman en Three.js exactamente
 igual que aquí. Nace de la nota que
 [`plan-movimiento.md`](plan-movimiento.md) §8 dejó anotada y que §2.4 del mismo
@@ -391,9 +392,10 @@ la cuarta vía y la que se estaba quedando atrás:
   vértice compartido cae dentro de una banda** —dos influencias con peso no nulo—,
   que es la pregunta que se quería hacer. Cualquier filtro futuro que se plantee
   por pieza tiene el mismo agujero.
-- **Una regla lleva una banda, así que una pieza intermedia solo suelda un
-  extremo** (paso 5). Es lo que impide hoy declarar un brazo de tres piezas
-  entero. Ver §9.
+- ~~**Una regla lleva una banda**~~ — dejó de ser cierto el mismo día: `blend`
+  acepta una lista, y un brazo de tres piezas se declara entero. Lo que sigue en
+  pie es el techo: **tres bandas por regla**, porque la cuarta influencia de glTF
+  se la lleva siempre el hueso de la regla.
 - **Hay un suelo de ruido de 3,0e-8, y no lo pone el reparto** (paso 2). La
   costura del codo ya lo trae en reposo, porque las dos tapas se generan por
   caminos distintos y `Float32` no los redondea igual. Nada de lo que venga
@@ -423,6 +425,8 @@ la cuarta vía y la que se estaba quedando atrás:
 | Dos piezas con la misma costura | `COSTURA_ROTA` | salta con bandas descentradas, callado con el atado rígido |
 | Pesos declarados | evaluador certificado contra `evaluatePose` | **4/4 hashes idénticos**, fotogramas 0, 10, 20 y 30 |
 | API, CLI y puente | el GLB de cada uno | **byte a byte**, comprobado sobre el ejemplar |
+| Dos bandas en una regla | las dos costuras del brazo de tres | 9,6e-2 y 4,5e-2 sin ellas; **7,0e-8 y 0** con ellas |
+| Bandas que se pasan de 1 | el atado | error con la pieza, el vértice y el total |
 | El dron entero | `render-hashes.json` | `46228b7c`, sin mover |
 
 ---
@@ -447,14 +451,22 @@ sería justo el tipo de cosa que este banco existe para no producir.
 
 ## 9. Anotado, sin fase asignada
 
-- **Más de una banda por regla, y bandas sobre más de dos huesos.** Ya hay un caso
-  que lo pide, y salió del paso 5: una pieza intermedia —el antebrazo de un brazo
-  de tres— tiene costura por los dos extremos y solo puede soldar una. Un hombro
-  real, además, reparte entre tres huesos. Cuatro influencias caben en el formato;
-  lo que falta es una forma de declararlo que no se convierta en un lenguaje de
-  expresiones. La más obvia —`blend` como lista— es también la que más fácil hace
-  escribir dos bandas que se solapan, así que antes hay que decidir qué pasa
-  entonces.
+- ~~**Más de una banda por regla**~~ — **hecho** el 2026-08-10, en cuanto el paso 5
+  enseñó el caso: una pieza intermedia tiene costura por los dos extremos y con una
+  sola banda solo podía soldar una. `blend` acepta ahora una banda **o una lista**,
+  con tres como mucho —glTF escribe cuatro influencias y una es siempre `joint`—.
+
+  Y la pregunta que esta nota dejaba abierta —qué pasa si dos bandas se solapan—
+  tiene respuesta: **solaparse vale y pasarse no**. Un hombro reparte hacia tres
+  huesos a la vez y eso es legítimo; lo que no puede es que entre todas se lleven
+  más de 1, porque entonces el hueso de la regla se queda con peso negativo y no
+  hay reproductor que sepa qué hacer con eso. Se comprueba vértice a vértice y sale
+  como error del atado, con la pieza, el vértice y el total.
+
+  El ejemplar que lo enseña es `artifacts/agent/brazo-articulado.json`: tres piezas,
+  dos costuras, y el antebrazo con las dos bandas. Sin ellas se abre 9,64e-2 en el
+  codo y 4,51e-2 en la muñeca; con ellas, **7,0e-8 y cero exacto**. Certificado
+  contra Three.js, 4/4 hashes.
 - **Pesos traídos por mapa.** Un fichero aparte con un peso por vértice, para
   quien los tenga calculados fuera. Hoy esa vía ya existe cruda por
   `JOINTS_0`/`WEIGHTS_0`; lo que no hay es una forma declarada de referenciarla.
