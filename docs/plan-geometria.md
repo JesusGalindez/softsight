@@ -732,6 +732,29 @@ recordarán:
   que apilar —0,993865—, que es justo lo que esta nota predecía.
 
   `at` y `path` juntos se rechazan: con recorrido la posición la pone la curva.
+- **`APOYO_INESTABLE`: medido el 2026-08-11, y no entra.** La idea viene de fuera
+  —el artículo de WorldClaw (arXiv 2608.05248) lista *floating, excessive
+  penetration y unstable support* como lo que su agente corrige mirando renders, y
+  las dos primeras ya las medimos—. La medida propuesta era, sobre cajas: qué
+  fracción de la huella de una pieza descansa sobre suelo u otra pieza, y si su
+  centro cae dentro del apoyo.
+
+  El resultado con una holgura sana —1 mm sobre un dron de 4,5— es **silencio
+  absoluto**: de las 296 piezas del dron solo 6 se apoyan en algo y **ninguna**
+  dispara a ningún umbral; en el ejemplar, el muñeco y el brazo articulado, las
+  piezas apoyadas cubren el 100 %. Cero falsos positivos.
+
+  Y no entra justamente por eso: **cero ruido, pero también cero señal**. No hay en
+  el repositorio un solo modelo donde diría algo. Es un aviso para escenas montadas
+  por gravedad —cosas repartidas sobre un terreno—, no para un ensamblaje mecánico,
+  donde el contacto es soldadura y apoyarse poco no significa nada. Espera a que
+  exista ese consumidor.
+
+  Lo que sí conviene guardar es **de qué depende su ruido**, que no es obvio: de la
+  holgura y de nada más. A 1 cm sobre el mismo dron, las piezas «apoyadas» pasan de
+  6 a 37 y **11 disparan por debajo del 5 %** —y son los largueros de los brazos,
+  que no se apoyan en nada: solo pasan a la misma altura—. A 5 cm son 105. Quien lo
+  implemente algún día tiene que fijar la holgura antes que el umbral.
 - **NURBS**, cuando exista un consumidor que pague la precisión de CAD (§2.3).
 - **Declarar la unión entre piezas**, si el ejemplar del paso 7 demuestra que el
   ensamblaje por solape dispara `INTERPENETRACION` (§6.2).
