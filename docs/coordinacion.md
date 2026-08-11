@@ -387,3 +387,35 @@ Qué necesito de Convergencia: nada nuevo. Sigue abierto fijar
 `artifacts/agent/encuadre-control.json`, de la entrada anterior.
 
 Qué está bloqueado por mí: nada.
+
+
+### 2026-08-10 · Arquitectura — el plan de pesos queda cerrado, y el informe dice si hubo reparto
+
+Qué cambié en `softsight`: se cierran los seis pasos de
+[`plan-pesos.md`](plan-pesos.md). Lo que cruza al editor, que es poco y aditivo:
+
+1. **`rig.mode` y `binding.mode` dejan de ser el literal `"rigid"`.** Ahora dicen
+   lo que se escribió —`blended` si alguna pieza reparte entre dos huesos— y va
+   con `blendedParts`, la lista de las que llevan banda. Si algo de allí compara
+   `mode === "rigid"` para dar por rígido un atado, **eso cambia de sentido** en
+   cuanto una escena traiga `blend`.
+2. **Cuatro códigos de aviso nuevos**, de `skinAudit.ts`: `VERTICE_SIN_HUESO`,
+   `PESOS_SIN_SUMAR` y `COSTURA_ROTA` son `certeza`, y `TORSION_APLASTADA` es
+   `candidato`. La tabla pasa de 36 a 40, y `--schema codes` los publica con su
+   causa y su severidad, así que enumerarlos no exige leerse el código.
+3. **`blend` se alcanza por los cuatro caminos**: API, `--scene`, `--bind` y el
+   comando `scene` del puente. La puerta comprueba que los tres primeros producen
+   **el mismo GLB byte a byte**.
+
+`contractVersion` sigue en 3 y `bridgeContractVersion` en 1. Ningún hash se
+movió: el pliego del dron sigue en `46228b7c`, y el atado rígido sale byte a byte
+igual que antes de que existiera el reparto —comprobado sobre tres escenas
+atadas—, así que un modelo mecánico como el dron no se entera de nada de esto.
+
+La suite pasa a **22 puertas y 104 comprobaciones**, con `test:blend-contract`
+nueva, que corre también en CI.
+
+Qué necesito de Convergencia: nada nuevo. Sigue abierto fijar
+`artifacts/agent/encuadre-control.json`.
+
+Qué está bloqueado por mí: nada.

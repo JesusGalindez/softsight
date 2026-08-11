@@ -280,6 +280,10 @@ assert.deepEqual(
   "y el mismo codo rígido tampoco: dos piezas que comparten costura sin banda son el atado rígido de siempre",
 );
 
+// El informe no tiene que deducir del GLB si hubo reparto: el atado lo dice.
+assert.deepEqual(atado(CON_BANDA).blendedParts.slice().sort(), ["antebrazo", "brazo"]);
+assert.deepEqual(atado(RIGIDO).blendedParts, []);
+
 const roto = (cambiar) => {
   const base = atado(CON_BANDA);
   const primitives = base.scene.meshes[0].primitives.map((primitive) => ({

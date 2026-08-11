@@ -502,6 +502,9 @@ async function reviewModelFile(options, outputPath) {
     );
     const document = JSON.parse(await readFile(resolve(bindPath), "utf8"));
     binding = bindModelToSkeleton(model, skeleton, document);
+    // Los mismos invariantes que en la escena declarativa: el defecto no depende
+    // de por dónde entró el vínculo, así que el aviso tampoco.
+    review.warnings.push(...withSeverity(auditSkin(binding, skeleton)));
   }
 
   let exported = null;
@@ -544,9 +547,12 @@ async function reviewModelFile(options, outputPath) {
             boundParts: binding.bound.length,
             unusedJoints: binding.unusedJoints,
             clips: binding.scene.animations?.length ?? 0,
-            // Atado rígido: un hueso por vértice. Decirlo en el informe evita que
-            // alguien lo confunda con pesos calculados, que aquí no se calculan.
-            mode: "rigid",
+            // Qué se escribió, no qué se suele escribir: `rigid` es un hueso por
+            // vértice y `blended` dice que alguna pieza reparte entre dos. En los
+            // dos casos los pesos los declara quien llama; aquí no se calcula
+            // ninguno, y `blendedParts` dice exactamente cuáles llevan banda.
+            mode: binding.blendedParts.length > 0 ? "blended" : "rigid",
+            blendedParts: binding.blendedParts,
           },
         }
       : {}),
@@ -629,9 +635,14 @@ Atar una malla a un esqueleto (solo --model)
   --bind <ruta.json>      vínculo declarado: { schemaVersion:1, bindings:[
                           { part:"rotor-*", joint:"Brazo" } ] }. Gana la primera
                           regla que encaja; una pieza sin regla es un error, no
-                          se ata a la raíz por si acaso. Atado RÍGIDO: un hueso
-                          por vértice, peso 1. Aquí no se calculan pesos, se
-                          aplican los que declaras. Exige --export .glb
+                          se ata a la raíz por si acaso. Sin más, el atado es
+                          RÍGIDO: un hueso por vértice, peso 1. Una regla puede
+                          añadir blend:{ with:"Hombro", from:0.85, to:1.15,
+                          ease:"smooth" } para repartir con otro hueso a lo largo
+                          del segmento que los une en reposo —0 en el hueso de la
+                          regla, 1 en el otro, y fuera de [0,1] cuando la costura
+                          cae ahí—. Aquí no se calculan pesos, se aplican los que
+                          declaras. Exige --export .glb
 
 Esqueleto y clips declarados en la escena (solo --scene)
   La escena admite skeleton (huesos por nombre, con padre y offset),
@@ -1145,6 +1156,7 @@ async function main(argv) {
   // siendo rígido y el vínculo lo declara él; aquí no se calcula ningún peso.
   let rig = null;
   let riggedScene = null;
+  let riggedBlendedParts = [];
   let animationAudit = null;
   if (spec.skeleton) {
     if (!Array.isArray(spec.bindings) || spec.bindings.length === 0) {
@@ -1157,6 +1169,7 @@ async function main(argv) {
       bindings: spec.bindings,
     });
     riggedScene = bound.scene;
+    riggedBlendedParts = bound.blendedParts;
 
     // Los invariantes de la piel: se miden sobre los pesos ya escritos, así que
     // no dependen de por dónde entró el vínculo. Van a `warnings` y no a un
@@ -1228,7 +1241,16 @@ async function main(argv) {
     {
       contractVersion: REPORT_CONTRACT_VERSION,
       ...review,
-      ...(rig ? { rig: { joints: rig.skeleton.nodes.length, clips: rig.clips, mode: "rigid" } } : {}),
+      ...(rig
+      ? {
+          rig: {
+            joints: rig.skeleton.nodes.length,
+            clips: rig.clips,
+            mode: riggedBlendedParts.length > 0 ? "blended" : "rigid",
+            blendedParts: riggedBlendedParts,
+          },
+        }
+      : {}),
       ...(animationAudit ? { animationAudit } : {}),
       edits,
       file: sheet ? outputPath : null,

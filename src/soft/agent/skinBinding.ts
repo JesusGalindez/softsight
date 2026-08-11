@@ -241,6 +241,12 @@ export interface BindResult {
   bound: Array<{ part: string; joint: string }>;
   /** Huesos del esqueleto que no recibieron ninguna pieza. No es un error. */
   unusedJoints: string[];
+  /**
+   * Piezas cuya regla declaró banda. El informe lo publica para que nadie tenga
+   * que deducir del GLB si el atado fue rígido: una pieza que aparece aquí
+   * reparte su peso entre dos huesos, y una que no, pesa 1 sobre el suyo.
+   */
+  blendedParts: string[];
 }
 
 /** Compone la matriz de un nodo glTF en fila-mayor, la convención del núcleo. */
@@ -537,6 +543,9 @@ export function bindModelToSkeleton(model: Model, skeleton: SkeletonSource, bind
       roots: [...roots, meshNode],
     },
     bound: resolved.map((entry) => ({ part: entry.part.name, joint: entry.jointName })),
+    blendedParts: resolved
+      .filter((entry) => blendByRule.has(entry.rule))
+      .map((entry) => entry.part.name),
     unusedJoints: skeletonNodes
       .map((node, index) => (used.has(index) ? null : node.name ?? `nodo${index}`))
       .filter((name): name is string => name !== null),

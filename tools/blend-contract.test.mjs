@@ -37,10 +37,17 @@
  */
 
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { dirname, resolve } from "node:path";
+import { spawn } from "node:child_process";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 import { inspectGlbAnimation } from "../dist-node/agent3d.mjs";
 import {
@@ -119,6 +126,60 @@ assert.equal(
   "el control dice ser de otro modelo; regenerarlo es lo que esta puerta vigila",
 );
 
+// --- Los tres caminos dicen lo mismo -------------------------------------------
+//
+// API, CLI y puente sobre la misma escena tienen que producir **el mismo GLB byte
+// a byte**: los dos últimos son envoltorios y no deben decidir nada. Es la misma
+// comprobación que cerró E3 con el BVH, y aquí importa más, porque un reparto que
+// se resolviera distinto por una vía se vería igual de bien en la imagen.
+
+const trabajo = mkdtempSync(join(tmpdir(), "softsight-blend-"));
+try {
+  const porCli = join(trabajo, "cli.glb");
+  await execFileAsync(
+    process.execPath,
+    [
+      resolve(here, "agent3d.mjs"),
+      "--scene",
+      resolve(projectRoot, "artifacts/agent/codo-banda.json"),
+      "--inspect-only",
+      "--export",
+      porCli,
+    ],
+    { cwd: projectRoot, maxBuffer: 32 * 1024 * 1024 },
+  );
+  assert.ok(
+    Buffer.from(glb).equals(readFileSync(porCli)),
+    "el GLB del CLI no coincide byte a byte con el de la API",
+  );
+
+  const respuesta = await runBridge({
+    bridgeContractVersion: 1,
+    command: "scene",
+    files: {
+      scene: {
+        name: "codo-banda.json",
+        data: readFileSync(resolve(projectRoot, "artifacts/agent/codo-banda.json")).toString("base64"),
+      },
+    },
+    options: { inspectOnly: true },
+  });
+  assert.equal(respuesta.exitCode, 0, "el ejemplar no puede salir con defectos por el puente");
+  const artefacto = respuesta.artifacts.find((entry) => entry.name.endsWith(".glb"));
+  assert.ok(artefacto, "el puente no devolvió el GLB atado");
+  assert.ok(
+    Buffer.from(artefacto.data, "base64").equals(readFileSync(porCli)),
+    "el GLB del puente no coincide byte a byte con el del CLI",
+  );
+
+  // Y el informe dice lo que se escribió, no lo que se suele escribir: con banda,
+  // `mode` es `blended` y dice qué piezas la llevan.
+  assert.equal(respuesta.report.rig.mode, "blended");
+  assert.deepEqual(respuesta.report.rig.blendedParts.slice().sort(), ["antebrazo", "brazo"]);
+} finally {
+  rmSync(trabajo, { recursive: true, force: true });
+}
+
 // --- El ejemplar --------------------------------------------------------------
 //
 // La escena no es solo el fixture de esta puerta: es **lo primero que copia un
@@ -135,9 +196,22 @@ assert.deepEqual(
   `el ejemplar trae defectos: ${defectos.map((aviso) => `${aviso.code} en ${aviso.part}`).join(", ")}`,
 );
 
+/** El puente, por su entrada de verdad: JSON por stdin y JSON por stdout. */
+async function runBridge(request) {
+  const bridge = spawn(process.execPath, [resolve(here, "bridge.mjs")], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  bridge.stdin.end(JSON.stringify(request));
+  const chunks = [];
+  for await (const chunk of bridge.stdout) chunks.push(chunk);
+  await new Promise((done) => bridge.on("close", done));
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
 console.log(
   `blend contract: ok (${esperados.length} poses de control del codo con banda, ` +
     `${control.meshes.reduce((total, mesh) => total + mesh.vertices, 0)} vértices, ` +
     `hashes idénticos a Three.js; GLB sha256:${createHash("sha256").update(new Uint8Array(glb)).digest("hex").slice(0, 8)}; ` +
-    `ejemplar sin un defecto: ${todos.length} avisos entre la escena y la piel)`,
+    `ejemplar sin un defecto: ${todos.length} avisos entre la escena y la piel; ` +
+    `API == CLI == puente byte a byte)`,
 );

@@ -1,6 +1,7 @@
 # Plan: los pesos se declaran, no se adivinan
 
-Estado: **pasos 0 a 5 hechos; queda el 6** (2026-08-10). El paso que podía
+Estado: **cerrado** (2026-08-10). Los seis pasos hechos; lo que queda está en §9,
+que son ideas con su caso pero sin fase. El paso que podía
 matar el plan salió a favor: los pesos declarados deforman en Three.js exactamente
 igual que aquí. Nace de la nota que
 [`plan-movimiento.md`](plan-movimiento.md) §8 dejó anotada y que §2.4 del mismo
@@ -342,15 +343,30 @@ limpio: una regla lleva **una** banda, así que la pieza del medio suelda el cod
 la muñeca, pero no las dos. Está anotado en §9, que era donde ya vivía la idea de
 repartir entre más de dos huesos; ahora tiene un caso concreto que la pide.
 
-### Paso 6 — Que se alcance por los tres caminos
+### Paso 6 — Que se alcance por los tres caminos — hecho el 2026-08-10
 
-`--bind` con `blend`, `bindings` de la escena con `blend`, y el comando `scene`
-del puente. La puerta comprueba que **API, CLI y puente producen el mismo GLB
-byte a byte**, que es lo que ya hace E3: los dos últimos son envoltorios y no
-deben decidir nada. `--schema patch|scene` publica el campo nuevo, así que el
-descubrimiento no exige leerse el repositorio.
+**API, CLI y puente producen el mismo GLB byte a byte** sobre el ejemplar, y la
+puerta lo comprueba. Es lo que ya hacía E3 con el BVH, y aquí importa más: un
+reparto resuelto distinto por una vía se vería igual de bien en la imagen.
 
+El campo se publica por `--schema scene` desde el paso 2, así que el
+descubrimiento no exige leerse el repositorio, y `--help` lo cuenta en `--bind`.
 `bridgeContractVersion` sigue en 1: añadir un campo opcional no rompe a nadie.
+
+Tres huecos que este paso encontró en la ruta `--model --skeleton --bind`, que es
+la cuarta vía y la que se estaba quedando atrás:
+
+1. **No auditaba la piel.** El defecto no depende de por dónde entró el vínculo,
+   así que el aviso tampoco: `auditSkin` se llama ahora también ahí. Comprobado
+   con una banda descentrada a propósito, que saca `COSTURA_ROTA` y salida 1.
+2. **`binding.mode` decía siempre `"rigid"`.** Con banda era mentira. Ahora sale
+   de lo que se escribió —`blended` si alguna pieza reparte— y `blendedParts` dice
+   cuáles, así que nadie tiene que deducirlo del GLB. Lo mismo en `rig.mode` de la
+   ruta de escena, que tenía el literal igual de fijo.
+3. **`--help` no mencionaba `blend`.** Un campo que solo se descubre leyendo el
+   esquema es medio campo.
+
+*Cerrado. Con esto el plan queda cerrado entero salvo lo anotado en §9.*
 
 ---
 
@@ -406,7 +422,7 @@ descubrimiento no exige leerse el repositorio.
 | Codo a 90° | separación entre piezas | 0,106066 en el paso 0, **6,7e-8 con banda** |
 | Dos piezas con la misma costura | `COSTURA_ROTA` | salta con bandas descentradas, callado con el atado rígido |
 | Pesos declarados | evaluador certificado contra `evaluatePose` | **4/4 hashes idénticos**, fotogramas 0, 10, 20 y 30 |
-| API, CLI y puente | el GLB de cada uno | **byte a byte** |
+| API, CLI y puente | el GLB de cada uno | **byte a byte**, comprobado sobre el ejemplar |
 | El dron entero | `render-hashes.json` | `46228b7c`, sin mover |
 
 ---
