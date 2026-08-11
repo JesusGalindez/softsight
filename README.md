@@ -102,6 +102,17 @@ volumen, misma caja y los mismos triángulos. `sweep` barre un perfil por un rec
     "radius": { "at": [[0, 0.02], [1, 0.013]] } } }
 ```
 
+Y las dos cosas se combinan: un `loft` acepta el mismo `path` que un barrido, y entonces
+la curva pone la posición —las secciones se reparten por índice y cada estación lleva el
+perfil interpolado entre las dos que la rodean—. **Un loft de dos secciones iguales por
+una curva es exactamente barrer ese perfil por ella**: las mismas caras y 2,2e-16 de
+diferencia, que es el epsilon del doble.
+
+```json
+{ "geometry": { "loft": [{ "profile": "boca" }, { "profile": "cuello" }, { "profile": "punta" }],
+    "path": { "through": [[0,0,0], [0.4,0.7,0.1], [1.1,1,0.5]] }, "stations": 32 } }
+```
+
 `deform` es una lista **ordenada** —torcer y luego doblar no es doblar y luego torcer— y
 se aplica a cualquier geometría. `repeat` produce copias: radial a ángulos exactos, o
 espejo.

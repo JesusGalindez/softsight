@@ -280,12 +280,16 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     fija—; la del editor, comparar sus cajas contra las nuestras, sigue allí.
 14. **Geometría compleja declarativa** (hecha). El agente ya no está limitado a
     colocar primitivas: perfiles con nombre —círculo, superelipse, Gielis y NACA—,
-    `loft` de secciones, `sweep` de un perfil por un recorrido, cuatro
-    deformadores en cadena y `repeat` radial y espejo. Todo con su número exacto:
+    `loft` de secciones **con recorrido opcional**, `sweep` de un perfil por un
+    recorrido, cuatro deformadores en cadena y `repeat` radial y espejo. Todo con su número exacto:
     dos secciones iguales dan lo mismo que una extrusión, un barrido cerrado da lo
     mismo que el toro, y la torsión conserva el volumen firmado. Plan cerrado en
-    [`plan-geometria.md`](plan-geometria.md), puerta `test:geometry` con 43
-    comprobaciones, ejemplar en `artifacts/agent/pieza-geometria.json`.
+    [`plan-geometria.md`](plan-geometria.md), puerta `test:geometry` con 46
+    comprobaciones, ejemplar en `artifacts/agent/pieza-geometria.json`. El
+    recorrido del `loft` llegó el 2026-08-11 desde la §9 de su plan y sin
+    maquinaria nueva: `createSweep` se abrió a llevar **el perfil por estación**,
+    así que un loft de dos secciones iguales por una curva da la misma malla que
+    barrer ese perfil por ella —2,2e-16, el epsilon del doble—.
 15. **El informe separa defecto de observación** (hecho el 2026-08-10). Cada aviso
     publica su `severity` —tomada de `warningCodes.ts` en el sitio donde se emite,
     no escrita a mano— y el código de salida cuenta **certezas**, no avisos. Lo que

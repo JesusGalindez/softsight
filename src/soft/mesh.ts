@@ -834,7 +834,25 @@ export interface LoftSection {
  */
 export function createLoft(
   sections: readonly LoftSection[],
-  options: { samples?: number; caps?: "both" | "none" | "start" | "end" } = {},
+  options: {
+    samples?: number;
+    caps?: "both" | "none" | "start" | "end";
+    /**
+     * Recorrido por el que van las secciones, el mismo que produce `sweepStations`.
+     *
+     * Sin él las secciones se apilan donde dice su `position`, que es lo que hacía
+     * el loft desde el principio y sigue haciendo. Con él, **la posición la pone la
+     * curva**: las secciones se reparten uniformemente por índice a lo largo del
+     * recorrido y cada estación lleva el perfil interpolado entre las dos que la
+     * rodean, orientado con el triedro de la curva.
+     *
+     * Que la curva la traiga quien llama, ya resuelta, es lo que evita el segundo
+     * generador de recorridos: el loft no sabe qué es una Catmull-Rom.
+     */
+    path?: SweepPath;
+    /** Si el recorrido se cierra sobre sí mismo; solo con `path`. */
+    closed?: boolean;
+  } = {},
 ): Mesh {
   if (sections.length < 2) throw new Error("un loft necesita al menos dos secciones");
 
@@ -843,17 +861,20 @@ export function createLoft(
     options.samples ?? Math.max(...sections.map((section) => section.polygon.length / 2));
   if (samples < 3) throw new Error(`samples debe ser al menos 3, no ${samples}`);
 
-  // El sentido del recorrido se normaliza igual que se normaliza el del polígono:
-  // una lista escrita de arriba abajo produciría el sólido del revés, y ordenarla
-  // cuesta menos que explicarle al agente en qué orden tenía que escribirla.
+  // Con recorrido, quien ordena es la curva: las secciones van en el orden escrito
+  // porque ese es el orden en el que se recorre. Sin él se normaliza por altura,
+  // igual que se normaliza el sentido de un polígono: una lista escrita de arriba
+  // abajo produciría el sólido del revés, y ordenarla cuesta menos que explicarle
+  // al agente en qué orden tenía que escribirla.
   const ordered =
+    options.path !== undefined ||
     sections[sections.length - 1].position[1] >= sections[0].position[1]
       ? [...sections]
       : [...sections].reverse();
 
   const rings: number[][] = [];
   for (const [index, section] of ordered.entries()) {
-    if (index > 0) {
+    if (index > 0 && options.path === undefined) {
       const previous = ordered[index - 1].position;
       const here = section.position;
       if (here[0] === previous[0] && here[1] === previous[1] && here[2] === previous[2]) {
@@ -881,6 +902,31 @@ export function createLoft(
       ring.push(cos * x - sin * z, sin * x + cos * z);
     }
     rings.push(ring);
+  }
+
+  // Con recorrido, el loft **es** un barrido cuyo perfil cambia: las secciones se
+  // reparten por índice a lo largo de la curva y cada estación interpola las dos
+  // que la rodean. Sobre un recorrido recto los anillos intermedios caen sobre la
+  // misma superficie que ya describían las secciones, así que la forma no cambia;
+  // lo que la curva añade es que los anillos la sigan.
+  if (options.path !== undefined) {
+    const stations = options.path.stations;
+    const last = rings.length - 1;
+    const profileOf = (ring: number): readonly number[] => {
+      const u = stations.length === 1 ? 0 : ring / (stations.length - 1);
+      const position = u * last;
+      const lower = Math.min(Math.floor(position), last - 1);
+      const t = position - lower;
+      if (t === 0) return rings[lower];
+      const from = rings[lower];
+      const to = rings[lower + 1];
+      const blended: number[] = [];
+      for (let index = 0; index < from.length; index += 1) {
+        blended.push(from[index] + (to[index] - from[index]) * t);
+      }
+      return blended;
+    };
+    return sweepMesh(profileOf, samples, stations, { closed: options.closed, caps });
   }
 
   const ringCount = rings.length;
@@ -1253,16 +1299,38 @@ export function createSweep(
 ): Mesh {
   const points = polygon.length / 2;
   if (points < 3) throw new Error("un barrido necesita un perfil de al menos tres puntos");
+  const oriented = signedArea(polygon) < 0 ? flipPolygonKeepingStart(polygon) : [...polygon];
+  return sweepMesh(() => oriented, points, stations, options);
+}
+
+/**
+ * El barrido, con **el perfil por estación**.
+ *
+ * Un barrido lleva el mismo perfil a lo largo del recorrido y un loft con
+ * recorrido lleva uno que va cambiando, pero enhebrar los anillos, orientarlos con
+ * el triedro de la estación, cerrar el bucle y tapar los extremos es el mismo
+ * trabajo. Escribirlo dos veces serían dos fuentes del mismo dato, y la segunda se
+ * quedaría atrás en el primer arreglo —el residuo del recorrido cerrado, por
+ * ejemplo, se arregló una vez—.
+ *
+ * `profileOf` devuelve el perfil de cada estación **ya orientado** y con el mismo
+ * número de puntos: quien lo llama es el que sabe si interpola o repite.
+ */
+function sweepMesh(
+  profileOf: (ring: number) => readonly number[],
+  points: number,
+  stations: readonly SweepStation[],
+  options: { closed?: boolean; caps?: "both" | "none" | "start" | "end" } = {},
+): Mesh {
   if (stations.length < 2) throw new Error("un barrido necesita al menos dos estaciones");
 
   const closed = options.closed ?? false;
   // Un recorrido cerrado no tiene extremos que tapar, así que `caps` no se aplica.
   const caps = closed ? "none" : options.caps ?? "both";
-  const oriented = signedArea(polygon) < 0 ? flipPolygonKeepingStart(polygon) : [...polygon];
   const capStart = caps === "both" || caps === "start";
   const capEnd = caps === "both" || caps === "end";
-  const startTriangles = capStart ? earClip(oriented) : [];
-  const endTriangles = capEnd ? earClip(oriented) : [];
+  const startTriangles = capStart ? earClip(profileOf(0)) : [];
+  const endTriangles = capEnd ? earClip(profileOf(stations.length - 1)) : [];
 
   const ringCount = stations.length;
   const capVertices = (capStart ? points : 0) + (capEnd ? points : 0);
@@ -1271,11 +1339,13 @@ export function createSweep(
   const uvs = new Float32Array(vertexCount * 2);
   const indices: number[] = [];
 
-  const place = (station: SweepStation, point: number): [number, number, number] => {
+  const place = (ring: number, point: number): [number, number, number] => {
+    const station = stations[ring];
+    const profile = profileOf(ring);
     const cos = Math.cos(station.twist);
     const sin = Math.sin(station.twist);
-    const x = oriented[point * 2] * station.radius;
-    const z = oriented[point * 2 + 1] * station.radius;
+    const x = profile[point * 2] * station.radius;
+    const z = profile[point * 2 + 1] * station.radius;
     const alongNormal = cos * x - sin * z;
     const alongBinormal = sin * x + cos * z;
     return [
@@ -1288,7 +1358,7 @@ export function createSweep(
   let vertex = 0;
   for (let ring = 0; ring < ringCount; ring += 1) {
     for (let point = 0; point < points; point += 1) {
-      const world = place(stations[ring], point);
+      const world = place(ring, point);
       positions[vertex * 3 + 0] = world[0];
       positions[vertex * 3 + 1] = world[1];
       positions[vertex * 3 + 2] = world[2];
@@ -1318,7 +1388,7 @@ export function createSweep(
     if (triangles.length === 0) continue;
     const base = vertex;
     for (let point = 0; point < points; point += 1) {
-      const world = place(stations[ring], point);
+      const world = place(ring, point);
       positions[vertex * 3 + 0] = world[0];
       positions[vertex * 3 + 1] = world[1];
       positions[vertex * 3 + 2] = world[2];

@@ -123,6 +123,17 @@ export interface LoftSpec {
   samples?: number;
   /** Qué extremos se tapan; `both` por defecto. */
   caps?: "both" | "none" | "start" | "end";
+  /**
+   * Recorrido por el que van las secciones, el mismo que declara un barrido.
+   *
+   * Sin él, cada sección se coloca donde dice su `at` y los anillos salen
+   * horizontales. Con él **la posición la pone la curva** —las secciones se
+   * reparten uniformemente por índice— y `at` sobra, así que declararlo es un
+   * error: serían dos sitios diciendo dónde va la misma sección.
+   */
+  path?: PathSpec;
+  /** Estaciones a lo largo del recorrido; 24 por defecto. Solo con `path`. */
+  stations?: number;
 }
 
 export interface PathSpec {
@@ -400,19 +411,40 @@ function buildLoftSections(
   spec: LoftSpec,
   profiles: ReadonlyMap<string, number[]> | undefined,
 ): LoftSection[] {
+  const alongPath = spec.path !== undefined;
   return spec.loft.map((section, index) => {
+    if (alongPath) {
+      if (section.at !== undefined) {
+        throw new Error(
+          `la sección ${index} del loft declara \`at\` y el loft declara \`path\`: con recorrido la ` +
+            "posición la pone la curva, así que sobra uno de los dos",
+        );
+      }
+      // Con recorrido la posición no se usa, pero el orden sí: es el de la lista.
+      return {
+        position: [0, index, 0] as const,
+        polygon: polygonOf(section.profile, profiles),
+        scale: sectionScale(section),
+        twist: (section.twist ?? 0) * DEGREES_TO_RADIANS,
+      };
+    }
     if (section.at === undefined || section.at.length !== 3) {
       throw new Error(`la sección ${index} del loft necesita \`at\` con tres números`);
     }
-    const scale = section.scale ?? 1;
     return {
       position: [section.at[0], section.at[1], section.at[2]] as const,
       polygon: polygonOf(section.profile, profiles),
-      scale: (typeof scale === "number" ? [scale, scale] : scale) as readonly [number, number],
+      scale: sectionScale(section),
       // Los grados son cosa del documento; el generador trabaja en radianes.
       twist: (section.twist ?? 0) * DEGREES_TO_RADIANS,
     };
   });
+}
+
+/** La escala de una sección, siempre como par. */
+function sectionScale(section: LoftSectionSpec): readonly [number, number] {
+  const scale = section.scale ?? 1;
+  return (typeof scale === "number" ? [scale, scale] : scale) as readonly [number, number];
 }
 
 const PROFILE_GENERATORS = ["circle", "superellipse", "gielis", "naca"] as const;
@@ -602,6 +634,18 @@ export function resolveObject(
           ? createLoft(buildLoftSections(geometry, profiles), {
               samples: geometry.samples,
               caps: geometry.caps,
+              // El recorrido se resuelve con la misma maquinaria que el barrido:
+              // el loft no sabe qué es una Catmull-Rom, y no tiene por qué.
+              ...(geometry.path !== undefined
+                ? {
+                    path: resolveSweepPath({
+                      sweep: [],
+                      path: geometry.path,
+                      stations: geometry.stations,
+                    }),
+                    closed: geometry.path.closed,
+                  }
+                : {}),
             })
           : isSweep(geometry)
             ? createSweep(

@@ -34,6 +34,7 @@ import {
   createNacaProfile,
   createSuperellipseProfile,
   evaluateVariation,
+  createSweep,
   modelFromScene,
   resolveScene,
   reviewScene,
@@ -361,6 +362,58 @@ console.log("geometria: ok (tronco h·A·(1+k+k²)/3, tres k distintos)");
   );
 }
 
+// 10 bis. El loft por un recorrido **es** un barrido cuando las secciones no
+//     cambian, y por eso se comprueba contra él: con dos secciones iguales, la
+//     misma curva y las mismas estaciones, los dos caminos tienen que dar la misma
+//     malla. Si el loft con recorrido tuviera su propia maquinaria de recorridos
+//     —que es lo que este paso evitó—, aquí se vería.
+{
+  const perfil = createCircleProfile(0.3, 24);
+  const through = [
+    [0, 0, 0],
+    [1, 0.5, 0],
+    [2, 0, 0.8],
+    [3, 1, 0.8],
+  ];
+  const path = sweepStations(through, { stations: 20 });
+  const barrido = createSweep(perfil, path.stations, { caps: "both" });
+  const loft = createLoft(
+    [
+      { position: [0, 0, 0], polygon: perfil },
+      { position: [0, 1, 0], polygon: perfil },
+    ],
+    { samples: 24, path, caps: "both" },
+  );
+
+  assert.equal(loft.positions.length, barrido.positions.length);
+  assert.deepEqual(Array.from(loft.indices), Array.from(barrido.indices));
+  let peor = 0;
+  for (let index = 0; index < barrido.positions.length; index += 1) {
+    peor = Math.max(peor, Math.abs(loft.positions[index] - barrido.positions[index]));
+  }
+  assert.ok(peor < 1e-12, `loft y barrido se separan ${peor}`);
+
+  // Y con secciones distintas la forma sí cambia, que es para lo que sirve: sin
+  // esto, la comprobación de arriba pasaría con un loft que ignorase las secciones.
+  const afilado = createLoft(
+    [
+      { position: [0, 0, 0], polygon: perfil },
+      { position: [0, 1, 0], polygon: createCircleProfile(0.1, 24) },
+    ],
+    { samples: 24, path, caps: "both" },
+  );
+  assert.ok(
+    auditMesh(afilado).signedVolume < auditMesh(loft).signedVolume * 0.6,
+    "un loft que se afila tiene que desplazar bastante menos que el de radio constante",
+  );
+
+  console.log(
+    `geometria: ok (loft por recorrido ≡ barrido a ${peor.toExponential(1)} con las mismas ` +
+      `${barrido.indices.length / 3} caras, y afilarlo baja el volumen de ` +
+      `${auditMesh(loft).signedVolume.toFixed(4)} a ${auditMesh(afilado).signedVolume.toFixed(4)})`,
+  );
+}
+
 // 11. Tapas: lo que se deja abierto se cuenta, y no se cierra por iniciativa propia.
 {
   const samples = 12;
@@ -535,11 +588,74 @@ console.log("geometria: ok (tronco h·A·(1+k+k²)/3, tres k distintos)");
       ]),
       /no hay ningún perfil llamado "ala"/,
     ],
+    // Con recorrido, la posición la pone la curva: declarar `at` además serían dos
+    // sitios diciendo dónde va la misma sección, y el segundo no se usaría.
+    [
+      conLoft(
+        [
+          { at: [0, 0, 0], profile: square(1) },
+          { profile: square(1) },
+        ],
+        { path: { through: [[0, 0, 0], [0, 1, 0]] } },
+      ),
+      /declara `at` y el loft declara `path`/,
+    ],
+    // Y sin recorrido sigue haciendo falta.
+    [
+      conLoft([{ profile: square(1) }, { profile: square(1) }]),
+      /la sección 0 del loft necesita `at`/,
+    ],
   ];
   for (const [scene, expected] of casos) {
     assert.throws(() => resolveScene(scene), expected, `no se rechazó por su motivo: ${expected}`);
   }
   console.log(`geometria: ok (${casos.length} loft mal escritos rechazados por su motivo)`);
+}
+
+// 15 bis. El recorrido del loft, por documento: el mismo camino que recorre un
+//     agente. Con la curva recta tiene que dar lo mismo que apilar las secciones,
+//     que es lo que decía la nota que abrió este trabajo —los anillos intermedios
+//     caen sobre la superficie que ya describen las dos secciones—, y con la curva
+//     doblada, no.
+{
+  const perfil = createCircleProfile(0.4, 24);
+  const porDocumento = (geometry) => auditMesh(meshOf({ objects: [{ geometry }] }));
+
+  const apilado = porDocumento({
+    loft: [
+      { at: [0, 0, 0], profile: perfil },
+      { at: [0, 2, 0], profile: perfil },
+    ],
+    samples: 24,
+  });
+  const recto = porDocumento({
+    loft: [{ profile: perfil }, { profile: perfil }],
+    path: { through: [[0, 0, 0], [0, 2, 0]], kind: "polyline" },
+    stations: 8,
+    samples: 24,
+  });
+  assert.ok(
+    Math.abs(recto.signedVolume - apilado.signedVolume) < 1e-6,
+    `por un recorrido recto el loft cambia de volumen: ${recto.signedVolume} contra ${apilado.signedVolume}`,
+  );
+  assert.equal(recto.watertight, true);
+
+  const doblado = porDocumento({
+    loft: [{ profile: perfil }, { profile: perfil }],
+    path: { through: [[0, 0, 0], [0, 1, 0], [1, 2, 0]] },
+    stations: 24,
+    samples: 24,
+  });
+  assert.equal(doblado.watertight, true);
+  assert.ok(
+    doblado.boundingRadius > recto.boundingRadius,
+    "doblado el recorrido, la pieza tiene que ocupar más caja que recta",
+  );
+
+  console.log(
+    `geometria: ok (loft por recorrido recto ≡ apilado, ${recto.signedVolume.toFixed(6)}; ` +
+      "y doblado sigue estanco)",
+  );
 }
 
 // 16. La API pública y el documento hacen lo mismo. `createLoft` se exporta, así

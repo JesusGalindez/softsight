@@ -81,7 +81,12 @@ const PROFILE_FIELDS: ObjectSchema = {
 };
 
 const LOFT_SECTION_FIELDS: ObjectSchema = {
-  at: { type: "number[3]", required: true, description: "Dónde se coloca la sección." },
+  at: {
+    type: "number[3]",
+    description:
+      "Dónde se coloca la sección. Obligatorio sin `path`, y prohibido con él: con recorrido la " +
+      "posición la pone la curva.",
+  },
   profile: {
     type: "number[]|string",
     required: true,
@@ -93,6 +98,19 @@ const LOFT_SECTION_FIELDS: ObjectSchema = {
     type: "number",
     description: "Grados alrededor de Y, sobre el origen local del polígono; 0 por defecto.",
   },
+};
+
+const PATH_FIELDS: ObjectSchema = {
+  through: {
+    type: "object[]",
+    required: true,
+    description: "Puntos de tres números por los que pasa el recorrido; al menos dos.",
+  },
+  kind: {
+    type: '"catmull-rom"|"polyline"',
+    description: "catmull-rom por defecto, centrípeta; polyline une los puntos con rectas.",
+  },
+  closed: { type: "boolean", description: "Si el recorrido se cierra sobre sí mismo." },
 };
 
 const GEOMETRY_LOFT: ObjectSchema = {
@@ -110,19 +128,18 @@ const GEOMETRY_LOFT: ObjectSchema = {
       "Puntos por sección tras remuestrear por longitud de arco; el mayor de las secciones por defecto.",
   },
   caps: { type: '"both"|"none"|"start"|"end"', description: "Qué extremos se tapan; both por defecto." },
-};
-
-const PATH_FIELDS: ObjectSchema = {
-  through: {
-    type: "object[]",
-    required: true,
-    description: "Puntos de tres números por los que pasa el recorrido; al menos dos.",
+  path: {
+    type: "object",
+    description:
+      "Recorrido por el que van las secciones, el mismo que declara un barrido. Con él las " +
+      "secciones se reparten uniformemente por índice a lo largo de la curva y cada estación lleva " +
+      "el perfil interpolado entre las dos que la rodean; sin él se apilan donde dice su `at`.",
+    fields: PATH_FIELDS,
   },
-  kind: {
-    type: '"catmull-rom"|"polyline"',
-    description: "catmull-rom por defecto, centrípeta; polyline une los puntos con rectas.",
+  stations: {
+    type: "number",
+    description: "Estaciones a lo largo del recorrido; 24 por defecto. Solo con `path`.",
   },
-  closed: { type: "boolean", description: "Si el recorrido se cierra sobre sí mismo." },
 };
 
 const GEOMETRY_SWEEP: ObjectSchema = {
