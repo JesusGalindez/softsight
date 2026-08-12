@@ -145,15 +145,15 @@ tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
 alcance: cinco puertas —`animation-contract`, `glb-loader`, `sample-surface`,
 `glb-writer` y `bridge`— leen el fixture certificado del editor, que es un
 repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su
-motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **22 de
-las 27 puertas**; las cinco restantes solo las cierra una ejecución local con los
+motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **23 de
+las 28 puertas**; las cinco restantes solo las cierra una ejecución local con los
 dos repositorios al lado. `resources` corre en CI —su malla la genera el propio
 repositorio— pero **solo el escalón de 100k**: el de 5M pide `SOFTSIGHT_HEAVY=1` y
 sin él se declara «no ejecutada» con su motivo, D22. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 141
-comprobaciones de softsight en verde**, 27 puertas. El número ya no se lleva a mano: lo
+Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 143
+comprobaciones de softsight en verde**, 28 puertas. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
 
@@ -338,14 +338,21 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     `artifacts/agent/brazo-articulado.json` pasa de abrirse 9,6e-2 y 4,5e-2 a
     7,0e-8 y cero. Solapar bandas vale; que entre todas se lleven más de 1 es un
     error del atado, porque dejaría al hueso de la regla en negativo.
-17. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
-   toca hasta que haya un consumidor que lo pague. **Ya lo hay, desde el
-   2026-08-12**: D32 del contrato con VideoMesh exige que la conversión entre la
-   convención canónica de matrices y la de glTF ocurra **exactamente una vez**, en
-   el adaptador de frontera. Dos parsers son dos sitios donde podría ocurrir, y
-   dos transposiciones sin dueño se cancelan o se duplican sin que nada salte. No
-   bloquea `cube-v1`, que no exporta glTF; bloquea la primera exportación de
-   producción.
+17. **B-R2 — la mitad que pagaba D32, hecha; el resto sigue aparcado.** D32 exige
+   que la conversión entre la convención canónica de matrices y la de glTF ocurra
+   **exactamente una vez**, en el adaptador de frontera. **No eran dos sitios:
+   eran tres**, y uno en las dos direcciones —`glbLoader.ts`, `animation.ts` y
+   `skinBinding.ts`, este último con la ida y la vuelta—. Las cuatro copias viven
+   ahora en `agent/gltfFrame.ts`, junto con la lectura del contenedor GLB, y
+   `test:gltf-frame` comprueba dos cosas: que las dos rutas den la misma matriz
+   para el mismo nodo, y que `column * 4 + row` no aparezca en `src/` fuera de ese
+   fichero. Lo segundo es lo que impide que la deuda vuelva: dos transposiciones
+   se cancelan y la geometría sale bien colocada por casualidad, así que ningún
+   hash la delata.
+   **Lo que sigue aparcado es lo otro**: unificar el árbol de nodos de los dos
+   lectores, que existen por motivos distintos —uno aplana para rasterizar, el
+   otro conserva la jerarquía para evaluar poses— y cuya fusión arriesga las 296
+   piezas del dron sin que nadie la pida.
 18. **Plan Ω — el coste por turno del agente** (hecho, salvo Ω6.4, que vive en el
     editor). Ver [`plan-omega.md`](plan-omega.md), que lleva la tabla de antes y
     ahora. No añadió funcionalidad: atacaba lo que hacía caro operar el banco

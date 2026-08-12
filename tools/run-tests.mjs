@@ -72,7 +72,8 @@ const GATES = [
   "skin-binding.test.mjs", // 0,3 s
   "blend-contract.test.mjs", // 0,2 s — compara contra el control certificado, sin ejecutar nada del editor
   "warning-codes.test.mjs", // 0,3 s
-  "glb-loader.test.mjs", // 0,2 s
+  "glb-loader.test.mjs",
+  "gltf-frame.test.mjs", // 0,2 s — la conversión de convenciones existe en un solo sitio (D32) // 0,2 s
   "geometry.test.mjs", // 0,2 s
   "text.test.mjs", // 0,2 s
   "agents-md.mjs --check", // 0,2 s — no acaba en .test.mjs porque también regenera

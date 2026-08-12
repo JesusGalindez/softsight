@@ -976,9 +976,24 @@ dentro del dominio, ni en varios cargadores, ni en el núcleo.
 **dos parsers de GLB**, anotados como deuda estructural aparcada en el mapa §5
 punto 17 —«no se toca hasta que haya un consumidor que lo pague»—. Dos parsers
 son dos sitios donde la conversión podría ocurrir, que es exactamente el fallo
-que esta decisión previene. **D32 es ese consumidor.** Unificarlos deja de ser
-deuda opcional; no bloquea `cube-v1`, que no exporta glTF, pero sí bloquea la
-primera exportación de producción.
+que esta decisión previene. **D32 es ese consumidor.**
+
+**Pagado el 2026-08-12, y no eran dos sitios: eran tres.** `glbLoader.ts`,
+`animation.ts` y `skinBinding.ts` —este último en las dos direcciones, porque
+también escribe glTF—. Las cuatro copias están ahora en `agent/gltfFrame.ts`, con
+la lectura del contenedor GLB al lado, y la ida y la vuelta **juntas a
+propósito**: es lo que la decisión quiere decir con «la regla es semántica y no
+“el cargador transpone y el exportador transpone”».
+
+La puerta `test:gltf-frame` comprueba que las dos rutas dan la misma matriz para
+el mismo nodo, y que `column * 4 + row` no aparece en `src/` fuera de ese fichero.
+Lo segundo es lo que impide que la deuda vuelva: **dos transposiciones se
+cancelan**, la geometría sale bien colocada por casualidad y ningún hash lo
+delata. `46228b7c` no se movió, que es justo lo que no bastaba como prueba.
+
+Sigue aparcado unificar el árbol de nodos de los dos lectores, que es otra cosa:
+existen por motivos distintos y su fusión arriesga las 296 piezas del dron sin
+que nadie la pida.
 **Prueba:** fixture `transform-gltf-v1` con traslación, rotación, escala uniforme
 y una composición no trivial: ida y vuelta canónico → glTF → canónico, más un
 punto conocido a su punto transformado conocido.

@@ -16,6 +16,7 @@
 
 import { identity, mat4, multiply, type Mat4 } from "../math";
 import { computeNormals, type Mesh } from "../mesh";
+import { readGlbChunks, writeMatrixFromGltf, writeMatrixFromGltfTrs } from "./gltfFrame";
 import type { ModelPart } from "./model";
 
 interface GltfAccessor {
@@ -200,53 +201,24 @@ function readAccessor(
 }
 
 /**
- * Matriz local de un nodo. glTF guarda `matrix` en orden por columnas y este
- * motor trabaja por filas, así que hay que transponer; y el cuaternión viene en
- * orden (x, y, z, w), no (w, x, y, z).
+ * Matriz local de un nodo, en la convención del motor.
+ *
+ * La conversión vive en `gltfFrame.ts` y no aquí: es la frontera con glTF, y D32
+ * exige que ocurra **exactamente una vez** en todo el repositorio. Este fichero y
+ * `animation.ts` la hacían por separado, con el mismo resultado y sin nada que lo
+ * garantizase.
  */
 function nodeLocalMatrix(node: GltfNode, out: Mat4): Mat4 {
   if (node.matrix) {
-    const m = node.matrix;
-    for (let row = 0; row < 4; row += 1) {
-      for (let column = 0; column < 4; column += 1) {
-        out[row * 4 + column] = m[column * 4 + row];
-      }
-    }
+    writeMatrixFromGltf(node.matrix, out);
     return out;
   }
-
-  const [tx, ty, tz] = node.translation ?? [0, 0, 0];
-  const [qx, qy, qz, qw] = node.rotation ?? [0, 0, 0, 1];
-  const [sx, sy, sz] = node.scale ?? [1, 1, 1];
-
-  // Rotación desde cuaternión unitario, expandida para no pasar por senos y
-  // cosenos: cada término sale de productos de las componentes.
-  const x2 = qx + qx;
-  const y2 = qy + qy;
-  const z2 = qz + qz;
-  const xx = qx * x2;
-  const xy = qx * y2;
-  const xz = qx * z2;
-  const yy = qy * y2;
-  const yz = qy * z2;
-  const zz = qz * z2;
-  const wx = qw * x2;
-  const wy = qw * y2;
-  const wz = qw * z2;
-
-  identity(out);
-  out[0] = (1 - (yy + zz)) * sx;
-  out[1] = (xy - wz) * sy;
-  out[2] = (xz + wy) * sz;
-  out[3] = tx;
-  out[4] = (xy + wz) * sx;
-  out[5] = (1 - (xx + zz)) * sy;
-  out[6] = (yz - wx) * sz;
-  out[7] = ty;
-  out[8] = (xz - wy) * sx;
-  out[9] = (yz + wx) * sy;
-  out[10] = (1 - (xx + yy)) * sz;
-  out[11] = tz;
+  writeMatrixFromGltfTrs(
+    node.translation ?? [0, 0, 0],
+    node.rotation ?? [0, 0, 0, 1],
+    node.scale ?? [1, 1, 1],
+    out,
+  );
   return out;
 }
 
@@ -301,31 +273,9 @@ export interface GlbLoadResult {
 }
 
 export function parseGlb(buffer: ArrayBuffer, decoder?: MeshoptDecoderLike): GlbLoadResult {
-  const header = new DataView(buffer);
-  if (header.byteLength < 20 || header.getUint32(0, true) !== 0x46546c67) {
-    throw new Error("no es un GLB: falta la firma 'glTF'");
-  }
-  const version = header.getUint32(4, true);
-  if (version !== 2) throw new Error(`versión de glTF ${version} no soportada (se espera 2)`);
-
-  let offset = 12;
-  let document: GltfDocument | null = null;
-  let binary: Uint8Array | null = null;
-
-  while (offset + 8 <= header.byteLength) {
-    const chunkLength = header.getUint32(offset, true);
-    const chunkType = header.getUint32(offset + 4, true);
-    const start = offset + 8;
-    if (chunkType === 0x4e4f534a) {
-      document = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, start, chunkLength)));
-    } else if (chunkType === 0x004e4942) {
-      binary = new Uint8Array(buffer, start, chunkLength);
-    }
-    // Los bloques van alineados a 4 bytes.
-    offset = start + chunkLength + ((4 - (chunkLength % 4)) % 4);
-  }
-
-  if (!document) throw new Error("GLB sin bloque JSON");
+  const chunks = readGlbChunks(buffer);
+  const document = chunks.document as GltfDocument;
+  const binary = chunks.binary;
   const notes: string[] = [];
 
   // Las extensiones *requeridas* no se pueden ignorar por definición: si el GLB

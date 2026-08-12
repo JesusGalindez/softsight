@@ -1,4 +1,5 @@
 import type { MeshoptDecoderLike } from "./glbLoader";
+import { readGlbChunks, writeMatrixFromGltf, writeMatrixFromGltfTrs } from "./gltfFrame";
 
 type NumericArray = Float64Array;
 type Mat4 = number[];
@@ -1370,23 +1371,12 @@ function normalizeComponent(value: number, componentType: number): number {
  * piezas de modelo.
  */
 export function parseGlbAnimation(buffer: ArrayBuffer, decoder?: MeshoptDecoderLike): ParsedGlb {
-  const header = new DataView(buffer);
-  if (header.byteLength < 20 || header.getUint32(0, true) !== 0x46546c67) {
-    throw new Error("no es un GLB: falta la firma 'glTF'");
-  }
-  if (header.getUint32(4, true) !== 2) throw new Error("versión de glTF no soportada (se espera 2)");
-  let offset = 12;
-  let document: GltfDocument | null = null;
-  let binary: Uint8Array | null = null;
-  while (offset + 8 <= header.byteLength) {
-    const length = header.getUint32(offset, true);
-    const type = header.getUint32(offset + 4, true);
-    const start = offset + 8;
-    if (type === 0x4e4f534a) document = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, start, length)));
-    if (type === 0x004e4942) binary = new Uint8Array(buffer, start, length);
-    offset = start + length + ((4 - (length % 4)) % 4);
-  }
-  if (!document) throw new Error("GLB sin bloque JSON");
+  // El contenedor lo lee `gltfFrame.ts`; lo que sigue son las condiciones que
+  // **este** consumidor pone, que no son las del rasterizador: aquí una segunda
+  // escena o un búfer externo hacen imposible evaluar una pose, y allí no.
+  const chunks = readGlbChunks(buffer);
+  const document = chunks.document as GltfDocument;
+  const binary = chunks.binary;
   const sceneCount = document.scenes?.length ?? 0;
   if (sceneCount > 1) {
     throw new Error(`el GLB tiene ${sceneCount} escenas; el contrato solo evalúa la activa (${document.scene ?? 0})`);
@@ -1465,23 +1455,17 @@ function transformPoint(matrix: Mat4, point: number[]): number[] {
   ];
 }
 
+// Las dos conversiones de convención viven en `gltfFrame.ts`, con el resto del
+// repositorio: eran las mismas cuentas que `glbLoader.ts` hacía por su cuenta, y
+// dos copias de una transposición es el riesgo R13 del contrato.
 function matrixFromColumnMajor(values: NumericArray | number[]): Mat4 {
   const matrix = new Array<number>(16).fill(0);
-  for (let row = 0; row < 4; row += 1) for (let column = 0; column < 4; column += 1) matrix[row * 4 + column] = values[column * 4 + row] ?? 0;
+  writeMatrixFromGltf(values, matrix);
   return matrix;
 }
 
 function quaternionMatrix(translation: number[], rotation: number[], scale: number[]): Mat4 {
-  const [x, y, z, w] = rotation;
-  const x2 = x + x; const y2 = y + y; const z2 = z + z;
-  const xx = x * x2; const xy = x * y2; const xz = x * z2;
-  const yy = y * y2; const yz = y * z2; const zz = z * z2;
-  const wx = w * x2; const wy = w * y2; const wz = w * z2;
-  const [sx, sy, sz] = scale;
-  return [
-    (1 - (yy + zz)) * sx, (xy - wz) * sy, (xz + wy) * sz, translation[0],
-    (xy + wz) * sx, (1 - (xx + zz)) * sy, (yz - wx) * sz, translation[1],
-    (xz - wy) * sx, (yz + wx) * sy, (1 - (xx + yy)) * sz, translation[2],
-    0, 0, 0, 1,
-  ];
+  const matrix = new Array<number>(16).fill(0);
+  writeMatrixFromGltfTrs(translation, rotation, scale, matrix);
+  return matrix;
 }

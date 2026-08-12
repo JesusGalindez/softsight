@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "build:agent3d": "vite build --config vite.node.config.ts",
     "test:animation": "node tools/run-tests.mjs",
+    "test:gltf-frame": "npm run build:agent3d && node tools/gltf-frame.test.mjs",
     "test:glb-writer": "npm run build:agent3d && node tools/glb-writer.test.mjs",
     "test:bvh": "npm run build:agent3d && node tools/bvh-loader.test.mjs",
     "test:bind": "npm run build:agent3d && node tools/skin-binding.test.mjs",

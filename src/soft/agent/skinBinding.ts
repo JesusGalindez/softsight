@@ -30,6 +30,7 @@
 import { invertAffine, mat4, multiply, normalMatrix, transformDirection, transformPoint } from "../math";
 import type { Mat4 } from "../math";
 import { readAccessorValues } from "./animation";
+import { writeMatrixFromGltf, writeMatrixFromGltfTrs, writeMatrixToGltf } from "./gltfFrame";
 import type { ParsedGlb } from "./animation";
 import type {
   SkinnedGlbAnimation,
@@ -281,7 +282,13 @@ export interface BindResult {
   blendedParts: string[];
 }
 
-/** Compone la matriz de un nodo glTF en fila-mayor, la convención del núcleo. */
+/**
+ * Compone la matriz de un nodo glTF en la convención del núcleo.
+ *
+ * La conversión la hace `gltfFrame.ts`, que es donde D32 exige que ocurra: este
+ * fichero la tenía escrita otra vez, y una transposición duplicada es el riesgo
+ * R13 —dos que se cancelan dejan la geometría bien colocada por casualidad—.
+ */
 function localMatrixOf(node: {
   matrix?: number[];
   translation?: number[];
@@ -290,47 +297,18 @@ function localMatrixOf(node: {
 }): Mat4 {
   const out = mat4();
   if (node.matrix) {
-    // glTF la guarda por columnas; aquí todo va por filas.
-    for (let row = 0; row < 4; row += 1) {
-      for (let column = 0; column < 4; column += 1) out[row * 4 + column] = node.matrix[column * 4 + row];
-    }
+    writeMatrixFromGltf(node.matrix, out);
     return out;
   }
-  const [tx, ty, tz] = node.translation ?? [0, 0, 0];
-  const [qx, qy, qz, qw] = node.rotation ?? [0, 0, 0, 1];
-  const [sx, sy, sz] = node.scale ?? [1, 1, 1];
-
-  const x2 = qx + qx;
-  const y2 = qy + qy;
-  const z2 = qz + qz;
-  const xx = qx * x2;
-  const xy = qx * y2;
-  const xz = qx * z2;
-  const yy = qy * y2;
-  const yz = qy * z2;
-  const zz = qz * z2;
-  const wx = qw * x2;
-  const wy = qw * y2;
-  const wz = qw * z2;
-
-  out[0] = (1 - (yy + zz)) * sx;
-  out[1] = (xy - wz) * sy;
-  out[2] = (xz + wy) * sz;
-  out[3] = tx;
-  out[4] = (xy + wz) * sx;
-  out[5] = (1 - (xx + zz)) * sy;
-  out[6] = (yz - wx) * sz;
-  out[7] = ty;
-  out[8] = (xz - wy) * sx;
-  out[9] = (yz + wx) * sy;
-  out[10] = (1 - (xx + yy)) * sz;
-  out[11] = tz;
-  out[12] = 0;
-  out[13] = 0;
-  out[14] = 0;
-  out[15] = 1;
+  writeMatrixFromGltfTrs(
+    node.translation ?? [0, 0, 0],
+    node.rotation ?? [0, 0, 0, 1],
+    node.scale ?? [1, 1, 1],
+    out,
+  );
   return out;
 }
+
 
 /** Matrices de mundo de la pose de reposo, con la jerarquía ya acumulada. */
 export function restWorldMatrices(skeleton: SkeletonSource): Mat4[] {
@@ -354,11 +332,9 @@ export function restWorldMatrices(skeleton: SkeletonSource): Mat4[] {
   return worlds;
 }
 
-/** Fila-mayor a columna-mayor, que es como glTF guarda las matrices. */
+/** Fila-mayor a columna-mayor, la vuelta de la frontera; también en `gltfFrame.ts`. */
 function toColumnMajor(matrix: Mat4, out: Float32Array, offset: number): void {
-  for (let column = 0; column < 4; column += 1) {
-    for (let row = 0; row < 4; row += 1) out[offset + column * 4 + row] = matrix[row * 4 + column];
-  }
+  writeMatrixToGltf(matrix, out, offset);
 }
 
 /**
