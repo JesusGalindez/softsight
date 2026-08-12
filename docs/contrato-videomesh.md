@@ -71,8 +71,8 @@ Califica como bloqueo solo lo que haga `cube-v1` imposible, ambiguo o inseguro.
 No califican: formatos futuros, LOD, MechanicalGraph, códecs EXR nuevos,
 ejecución en la nube.
 
-Tres rondas añadieron 34 decisiones y once principios. La cuarta debe producir la
-primera IMPLEMENTADA, no la número treinta y cinco.
+Tres rondas añadieron 34 decisiones y once principios. La cuarta debía producir la
+primera IMPLEMENTADA, no la número treinta y cinco: la trajo D25.
 
 ### 1.7 Lo que no se hace
 
@@ -90,14 +90,16 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-08-12, cerrada la tercera ronda:
 
 ```text
-ACORDADAS       34   D1–D34
+ACORDADAS       33   D1–D24, D26–D34
 PROPUESTAS       0
-IMPLEMENTADAS    0
+IMPLEMENTADAS    1   D25
 ```
 
-**El único movimiento admisible ahora es de ACORDADA a IMPLEMENTADA.** La
-candidata más barata es D30: ya es el comportamiento del código y solo le falta
-el fixture que falle si deja de serlo.
+**El único movimiento admisible ahora es de ACORDADA a IMPLEMENTADA.** La primera
+la trajo D25 el 2026-08-12: la puerta de recursos existe y falla si `auditMesh`
+vuelve a las estructuras que tenía. La siguiente candidata más barata es D30: ya
+es el comportamiento del código y solo le falta el fixture que falle si deja de
+serlo.
 
 ---
 
@@ -443,7 +445,7 @@ consume en producción. La lógica vive en `tests/contracts/parity/`.
 ### D24 — El árbol de triángulos se llama `boundsTree.ts`
 Tipo `TriangleBoundsTree`. `bvhLoader.ts` ya existe y es Biovision Hierarchy.
 
-### D25 — `auditMesh` antes que cualquier árbol
+### D25 — `auditMesh` antes que cualquier árbol — IMPLEMENTADA (2026-08-12)
 Medir el techo actual, perfilar, reescribir las estructuras calientes, puerta de
 recursos, y solo entonces el árbol. La puerta mide tiempo, RSS máximo, heap,
 buffers externos y caché: «terminó» no es una medida. Se registra también
@@ -453,10 +455,38 @@ la medida sea reproducible.
 Orden, no negociable: **línea base → perfil → cambio → medida.** No reescribir y
 esperar.
 
-Motivo: `mesh.ts` ya es de arrays tipados; quien no escala es `auditMesh`, con un
-`Map` de clave de texto por vértice (`inspect.ts:69`) y otro de aristas
-(`inspect.ts:118`).
-**Prueba:** puerta de alto poligonaje sobre el fixture de 5M.
+Motivo: `mesh.ts` ya es de arrays tipados; quien no escalaba era `auditMesh`, con
+un `Map` de clave de texto por vértice y otro de aristas.
+
+**Prueba:** `tools/resources.test.mjs`, puerta de recursos con la malla generada
+por `tools/scaleMesh.mjs` —un toro determinista, sin fixture en git, D22—. El
+escalón de 5M pide `SOFTSIGHT_HEAVY=1` y sin él la puerta se declara NOT_RUN con
+su motivo, nunca verde. Falla si el consumo se dispara: techos de 0,5 s de CPU y
+140 MiB de RSS en 100k, 3 s y 640 MiB en 5M.
+
+**Recorrido, en el orden que la decisión fija.** Entorno: `darwin/x64`, Node
+v24.13.0, Intel i5-5350U (2 físicos / 4 lógicos), 8 GiB de RAM, heap viejo por
+defecto 2240 MiB, 1 worker.
+
+```text
+5M triángulos      línea base   sin el Map de     sin ninguno
+                   (dos Map)    soldadura
+CPU                11,41 s      8,69 s            0,93 s
+RSS máximo         888,7 MiB    731,7 MiB         314,8 MiB
+heap de V8         460,4 MiB    461,5 MiB         6,2 MiB
+heap mínimo para   entre 384    entre 384         64 MiB o menos
+que no reviente    y 416 MiB    y 416 MiB
+```
+
+Respuesta a la pregunta que era una suposición: **5M pasaba**, con 889 MiB de RSS,
+y moría por debajo de ~400 MiB de heap viejo abortando en `OrderedHashMap`, que es
+la representación de `Map` en V8. Hoy pasa con 64 MiB de heap: lo que queda vive
+en arrays tipados y el límite ya no es el heap sino la RAM de los buffers.
+
+Las estructuras que lo sustituyen: tabla de dispersión abierta en dos
+`Int32Array` para la soldadura, y agrupación por conteo y prefijos —la forma de
+`buildPositionGrid`— para las aristas. `edgeKey` desaparece: la nueva estructura
+indexa por vértice y no empaqueta nada.
 
 ### D26 — El contrato está en DRAFT
 `0.x` mientras `contractMaturity = DRAFT`. Promoción a `1.0` cuando **dos
@@ -696,8 +726,9 @@ R13 doble transposición entre los dos parsers
 **SoftSight**, en orden:
 
 ```text
-S1  línea base de auditMesh, medida y publicada
-S2  perfil de weldPositions y edgeUse
+S1  línea base de auditMesh, medida y publicada    HECHO 2026-08-12
+S2  perfil de weldPositions y edgeUse              HECHO — las dos reescritas,
+                                                   D25 IMPLEMENTADA
 S3  fixture unknown-field-v1 → D30 pasa a IMPLEMENTADA
 S4  esqueleto de esquema e ingesta de R0-A
 S5  generador local de cube-v1
@@ -724,7 +755,18 @@ V10 arnés de paridad
 4  se desbloquea el trabajo dependiente del contrato
 ```
 
-**Lo primero que este intercambio debe producir que no sea un documento** es un
-número: el techo actual de `auditMesh` sobre 1M triángulos —RSS máximo, tiempo,
-bytes de la estructura de aristas y de la de soldadura— y el mismo número después
-de quitar los `Map`. Con su entorno declarado para que sea reproducible.
+**Lo primero que este intercambio debía producir que no fuera un documento** era
+un número: el techo de `auditMesh` sobre 1M triángulos y el mismo número después
+de quitar los `Map`. Está, con el entorno declarado en D25:
+
+```text
+1M triángulos    con los dos Map    sin ninguno
+CPU              2,26 s             0,24 s
+RSS máximo       408,8 MiB          110,6 MiB
+soldadura        500.000 entradas,  dos Int32Array
+                 76,4 MiB de heap   (8 B/vértice)
+aristas          1.500.000 entradas, conteo y prefijos
+                 160,5 MiB de heap   (~75 MiB en 5M)
+```
+
+El escalón de 5M y el límite de heap, en D25.

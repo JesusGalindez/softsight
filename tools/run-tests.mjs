@@ -56,6 +56,7 @@ const GATES = [
   "summary.test.mjs", // 4,3 s — renderiza el dron entero para medir el recorte
   "rig-spec.test.mjs", // 1,3 s
   "framing.test.mjs", // 4,1 s — renderiza cuatro fixtures para reproducir sus cajas
+  "resources.test.mjs", // 1,4 s con el escalón de 100k; el de 5M pide SOFTSIGHT_HEAVY=1
   "screen-audit.test.mjs", // 1,2 s
   "story-spec.test.mjs", // 1,1 s
   "staging-spec.test.mjs", // 1,0 s

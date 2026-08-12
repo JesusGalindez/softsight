@@ -3559,6 +3559,13 @@ orden de recorrido es contrato—.
 **Reescribir `weldPositions` y `edgeUse` sin `Map` va antes que el BVH en el
 §72**, y su gate es medir el techo actual, no elegir el objetivo.
 
+> **Cerrado el 2026-08-12.** Las dos están reescritas y la puerta existe
+> (`test:resources`). Esto es el diagnóstico, no el estado: las dos referencias a
+> `inspect.ts:69` y `:118` son de la versión con `Map` y ya no señalan a nada. Los
+> números y el recorrido están en D25 de
+> [`contrato-videomesh.md`](contrato-videomesh.md); el estado, en el §5 punto 19
+> del mapa.
+
 **c) Colisión de nombre en el §21.**
 `bvh.ts` ya existe con otro significado: `src/soft/agent/bvhLoader.ts` es
 Biovision Hierarchy —captura de movimiento— con puerta `test:bvh` y fixture

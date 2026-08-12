@@ -50,12 +50,97 @@ export interface MeshAudit {
   inverted: boolean;
 }
 
-function edgeKey(a: number, b: number): number {
-  // Clave de arista sin orientación: el par ordenado en un solo entero. Soporta
-  // hasta 2²⁶ vértices, de sobra para cualquier malla que este motor rasterice.
-  const low = a < b ? a : b;
-  const high = a < b ? b : a;
-  return low * 67108864 + high;
+/**
+ * Aristas de borde y aristas no manifold, contadas sin `Map`.
+ *
+ * Antes esto era un `Map<number,number>` con la arista empaquetada en un entero
+ * como clave. La clave aguantaba —2²⁶ vértices—; la tabla no: sobre un toro de 5M
+ * triángulos son 7,5M entradas y ~385 MiB de heap, y es la estructura que mata la
+ * auditoría por debajo de ~400 MiB de heap viejo. Aquí son tres `Int32Array` y
+ * unos 75 MiB para la misma malla.
+ *
+ * La forma es la de `buildPositionGrid` (más abajo), por el mismo motivo: agrupar
+ * por conteo y prefijos da un recorrido que no depende del orden de inserción de
+ * ninguna clave. Cada arista se guarda una vez en el cubo de su vértice **menor**,
+ * así que las aristas repetidas caen juntas y contar usos es contar tramos
+ * iguales dentro de un cubo.
+ *
+ * `skipped` marca los triángulos degenerados, que ya decidió el recorrido
+ * principal: sin él habría que repetir aquí el criterio de área nula, y dos copias
+ * del mismo criterio acaban discrepando.
+ */
+function countEdgeUses(
+  indices: Uint32Array,
+  map: Int32Array,
+  skipped: Uint8Array,
+  vertexCount: number,
+): { boundaryEdges: number; nonManifoldEdges: number } {
+  const triangleCount = indices.length / 3;
+  const start = new Int32Array(vertexCount + 1);
+
+  for (let triangle = 0; triangle < triangleCount; triangle += 1) {
+    if (skipped[triangle] === 1) continue;
+    const w0 = map[indices[triangle * 3]];
+    const w1 = map[indices[triangle * 3 + 1]];
+    const w2 = map[indices[triangle * 3 + 2]];
+    // Arista colapsada: sus dos extremos son el mismo vértice soldado, y ya se
+    // contó como degenerada.
+    if (w0 !== w1) start[(w0 < w1 ? w0 : w1) + 1] += 1;
+    if (w1 !== w2) start[(w1 < w2 ? w1 : w2) + 1] += 1;
+    if (w2 !== w0) start[(w2 < w0 ? w2 : w0) + 1] += 1;
+  }
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) start[vertex + 1] += start[vertex];
+
+  const cursor = Int32Array.from(start.subarray(0, vertexCount));
+  const items = new Int32Array(start[vertexCount]);
+  for (let triangle = 0; triangle < triangleCount; triangle += 1) {
+    if (skipped[triangle] === 1) continue;
+    const w0 = map[indices[triangle * 3]];
+    const w1 = map[indices[triangle * 3 + 1]];
+    const w2 = map[indices[triangle * 3 + 2]];
+    if (w0 !== w1) {
+      const low = w0 < w1 ? w0 : w1;
+      items[cursor[low]] = w0 < w1 ? w1 : w0;
+      cursor[low] += 1;
+    }
+    if (w1 !== w2) {
+      const low = w1 < w2 ? w1 : w2;
+      items[cursor[low]] = w1 < w2 ? w2 : w1;
+      cursor[low] += 1;
+    }
+    if (w2 !== w0) {
+      const low = w2 < w0 ? w2 : w0;
+      items[cursor[low]] = w2 < w0 ? w0 : w2;
+      cursor[low] += 1;
+    }
+  }
+
+  let boundaryEdges = 0;
+  let nonManifoldEdges = 0;
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const from = start[vertex];
+    const to = start[vertex + 1];
+    // Inserción, porque un cubo es el grado del vértice: seis vecinos en una malla
+    // regular. Un ordenador general costaría más en la llamada que en el trabajo.
+    for (let slot = from + 1; slot < to; slot += 1) {
+      const value = items[slot];
+      let hole = slot - 1;
+      while (hole >= from && items[hole] > value) {
+        items[hole + 1] = items[hole];
+        hole -= 1;
+      }
+      items[hole + 1] = value;
+    }
+    for (let slot = from; slot < to; ) {
+      let uses = 1;
+      while (slot + uses < to && items[slot + uses] === items[slot]) uses += 1;
+      if (uses === 1) boundaryEdges += 1;
+      else if (uses > 2) nonManifoldEdges += 1;
+      slot += uses;
+    }
+  }
+
+  return { boundaryEdges, nonManifoldEdges };
 }
 
 /**
@@ -63,27 +148,66 @@ function edgeKey(a: number, b: number): number {
  * no sobre índices: un cubo con vértices partidos por cara tiene 24 vértices y
  * *parece* tener 24 aristas de borde cuando en realidad está cerrado. Sin este
  * paso, cualquier malla con UVs o normales duras se reporta como agujereada.
+ *
+ * Tabla de dispersión abierta en arrays tipados, sin `Map` y sin claves de texto,
+ * por lo mismo que `buildPositionGrid` (más abajo): un `Map<string,number>` cuesta
+ * una cadena y una entrada de tabla asociativa **por vértice**. Medido sobre un
+ * toro de 5M triángulos —2,5M vértices— el índice de texto pesaba 446 MiB de
+ * heap, más de tres veces la malla entera (134 MiB), y con el heap viejo por
+ * debajo de ~400 MiB la auditoría moría en `OrderedHashMap`. La tabla de aquí son
+ * dos `Int32Array`: 8 bytes por vértice, sin objetos que recorrer al recolectar.
+ *
+ * El resultado es el mismo número: se sigue soldando por posición cuantizada, y
+ * cada grupo sigue apuntando a su **primer** vértice en orden de índice, que es
+ * lo que hace determinista todo lo que cuelga de `map`.
  */
 function weldPositions(positions: Float32Array): { map: Int32Array; unique: number } {
   const vertexCount = positions.length / 3;
   const map = new Int32Array(vertexCount);
-  const lookup = new Map<string, number>();
   let unique = 0;
+
+  // Factor de carga máximo 0,5: con sondeo lineal, por encima de ahí las cadenas
+  // de colisión crecen de golpe y el coste deja de ser constante. Potencia de dos
+  // para que el módulo sea una máscara.
+  let capacity = 8;
+  while (capacity < vertexCount * 2) capacity *= 2;
+  const mask = capacity - 1;
+  const slots = new Int32Array(capacity).fill(-1);
 
   for (let vertex = 0; vertex < vertexCount; vertex += 1) {
     const offset = vertex * 3;
     // Cuantizar a 1e-5 antes de comparar: dos vértices que deberían coincidir
     // rara vez coinciden bit a bit tras pasar por una matriz.
-    const key = `${Math.round(positions[offset] * 1e5)},${Math.round(
-      positions[offset + 1] * 1e5,
-    )},${Math.round(positions[offset + 2] * 1e5)}`;
-    const existing = lookup.get(key);
-    if (existing === undefined) {
-      lookup.set(key, vertex);
-      map[vertex] = vertex;
-      unique += 1;
-    } else {
-      map[vertex] = existing;
+    const qx = Math.round(positions[offset] * 1e5);
+    const qy = Math.round(positions[offset + 1] * 1e5);
+    const qz = Math.round(positions[offset + 2] * 1e5);
+
+    // Mezcla multiplicativa de los tres ejes. `Math.imul` trunca a 32 bits, así
+    // que una coordenada enorme puede colisionar; la comparación de después es
+    // exacta, de modo que una colisión cuesta un sondeo y nunca una soldadura
+    // equivocada.
+    let hash = Math.imul(qx | 0, 0x9e3779b1);
+    hash = Math.imul(hash ^ (qy | 0), 0x85ebca6b);
+    hash = Math.imul(hash ^ (qz | 0), 0xc2b2ae35);
+    hash ^= hash >>> 15;
+
+    for (let slot = hash & mask; ; slot = (slot + 1) & mask) {
+      const candidate = slots[slot];
+      if (candidate === -1) {
+        slots[slot] = vertex;
+        map[vertex] = vertex;
+        unique += 1;
+        break;
+      }
+      const other = candidate * 3;
+      if (
+        Math.round(positions[other] * 1e5) === qx &&
+        Math.round(positions[other + 1] * 1e5) === qy &&
+        Math.round(positions[other + 2] * 1e5) === qz
+      ) {
+        map[vertex] = candidate;
+        break;
+      }
     }
   }
 
@@ -115,7 +239,13 @@ export function auditMesh(mesh: Mesh): MeshAudit {
   }
 
   const { map, unique } = weldPositions(positions);
-  const edgeUse = new Map<number, number>();
+  /**
+   * Qué triángulos no participan en la topología, para que el recuento de aristas
+   * pueda recorrer los índices una segunda vez sin volver a decidirlo. Un byte por
+   * triángulo es lo que cuesta no duplicar el criterio de degeneración en dos
+   * sitios, que es la clase de duplicado que acaba divergiendo.
+   */
+  const skipped = new Uint8Array(triangleCount);
   let degenerateTriangles = 0;
   let flippedFaces = 0;
   /**
@@ -160,6 +290,7 @@ export function auditMesh(mesh: Mesh): MeshAudit {
       // que aporta su única arista real dos veces y la deja con tres usos. Eso
       // reportaba 64 aristas «no manifold» en una esfera perfectamente cerrada.
       degenerateTriangles += 1;
+      skipped[triangle] = 1;
       continue;
     }
 
@@ -171,26 +302,9 @@ export function auditMesh(mesh: Mesh): MeshAudit {
       if (faceX * averageX + faceY * averageY + faceZ * averageZ < 0) flippedFaces += 1;
     }
 
-    const w0 = map[i0];
-    const w1 = map[i1];
-    const w2 = map[i2];
-    for (const [from, to] of [
-      [w0, w1],
-      [w1, w2],
-      [w2, w0],
-    ] as const) {
-      if (from === to) continue; // arista colapsada: ya contada como degenerada
-      const key = edgeKey(from, to);
-      edgeUse.set(key, (edgeUse.get(key) ?? 0) + 1);
-    }
   }
 
-  let boundaryEdges = 0;
-  let nonManifoldEdges = 0;
-  for (const uses of edgeUse.values()) {
-    if (uses === 1) boundaryEdges += 1;
-    else if (uses > 2) nonManifoldEdges += 1;
-  }
+  const { boundaryEdges, nonManifoldEdges } = countEdgeUses(indices, map, skipped, vertexCount);
 
   return {
     vertices: vertexCount,

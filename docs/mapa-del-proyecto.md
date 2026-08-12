@@ -145,13 +145,15 @@ tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
 alcance: cinco puertas —`animation-contract`, `glb-loader`, `sample-surface`,
 `glb-writer` y `bridge`— leen el fixture certificado del editor, que es un
 repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su
-motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **17 de
-las 22 puertas, con 97 de las 104 comprobaciones**; las cinco restantes solo las
-cierra una ejecución local con los dos repositorios al lado. La ruta se resuelve en `tools/fixtures.mjs` y
+motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **18 de
+las 23 puertas**; las cinco restantes solo las cierra una ejecución local con los
+dos repositorios al lado. `resources` corre en CI —su malla la genera el propio
+repositorio— pero **solo el escalón de 100k**: el de 5M pide `SOFTSIGHT_HEAVY=1` y
+sin él se declara «no ejecutada» con su motivo, D22. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-10: **ambas puertas en `accepted`; las 104
-comprobaciones de softsight en verde**. El número ya no se lleva a mano: lo
+Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 113
+comprobaciones de softsight en verde**, 23 puertas. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
 
@@ -383,15 +385,15 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     de 50,4 s a 0,8 s, la suite de 61 s a 34,5, y el contrato de topología de
     0,46 s de CPU a 0,02 gracias a una caché de auditoría con clave en la huella
     de la malla. Ningún hash se movió: el pliego del dron sigue en `46228b7c`.
-19. **Reconstrucción y certificación de producción** (sin empezar; el registro de
-    decisiones abierto). El orden de trabajo está en
+19. **Reconstrucción y certificación de producción** (empezada por el único sitio
+    que no depende del contrato). El orden de trabajo está en
     [`plan-reconstruccion.md`](plan-reconstruccion.md) y **las decisiones de la
     frontera en [`contrato-videomesh.md`](contrato-videomesh.md)**, que es lo que
     rige. **Ronda de diseño cerrada el 2026-08-12 tras tres vueltas: 34 decisiones
-    acordadas, 12 principios, ninguna en PROPUESTA y ninguna implementada**,
-    porque ninguna tiene todavía una prueba que falle sin ella. El registro queda
+    acordadas, 12 principios, ninguna en PROPUESTA y una implementada —D25—**; el
+    resto sigue sin una prueba que falle sin ella. El registro queda
     congelado —solo se admiten decisiones que bloqueen `cube-v1`— y el único
-    movimiento admisible es de acordada a implementada. La primera es D30: ya es
+    movimiento admisible es de acordada a implementada. La siguiente es D30: ya es
     el comportamiento del código, solo le falta el fixture. Una tercera mitad
     entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
     certifica lo que salga, sin convertirse en un motor de fotogrametría. Las
@@ -404,12 +406,19 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     consuma el contrato público, porque doblan las 19.565 líneas de `src/soft/`;
     y en qué idioma van los códigos nuevos, porque la tabla de `warningCodes.ts`
     es una y la comparan las dos direcciones de `test:codes`. De lo ya contrastado,
-    lo que cambia el orden de trabajo es que el techo de tamaño no está donde el
-    plan creía: `mesh.ts` ya es de arrays tipados, y quien no escala es
-    `auditMesh` —`Map` con clave de texto por vértice en `inspect.ts:69` y otro
-    de aristas en `inspect.ts:118`—, así que reescribirlo sin `Map` va antes que
-    cualquier árbol de triángulos. Ese árbol, además, **no se llama `bvh.ts`**:
-    ese nombre ya es de la captura de movimiento.
+    lo que cambió el orden de trabajo es que el techo de tamaño no estaba donde el
+    plan creía: `mesh.ts` ya es de arrays tipados, y quien no escalaba era
+    `auditMesh`, con un `Map` de clave de texto por vértice y otro de aristas.
+    **Eso es D25, y está hecho** en el orden que la decisión fija —línea base,
+    perfil, cambio, medida—: la soldadura es una tabla de dispersión abierta en
+    dos `Int32Array` y las aristas se cuentan agrupando por conteo y prefijos,
+    como `buildPositionGrid`. Sobre 5M triángulos, **de 11,41 s de CPU y 889 MiB
+    de RSS a 0,93 s y 315 MiB**, y de morir por debajo de ~400 MiB de heap viejo
+    a pasar con 64. La malla de prueba la genera `tools/scaleMesh.mjs` —toro
+    determinista, cero bytes en git— y la puerta es `test:resources`, que declara
+    NOT_RUN el escalón de 5M sin `SOFTSIGHT_HEAVY=1`. Ningún hash se movió: el
+    pliego del dron sigue en `46228b7c`. El árbol de triángulos, que va después,
+    **no se llama `bvh.ts`**: ese nombre ya es de la captura de movimiento.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un
