@@ -99,6 +99,24 @@ export const PACKAGE_CODE_TABLE = {
     status: "PROPUESTO",
     decision: "D7 nombra la comprobación, sin número",
   },
+  "SS-PKG-020": {
+    reason: "CONTRACT_VERSION_UNSUPPORTED",
+    cause: "el paquete declara una versión de contrato que este binario no sabe leer",
+    status: "PROPUESTO",
+    decision: "D16 nombra el motivo, sin número",
+  },
+  "SS-PKG-021": {
+    reason: "CONTRACT_SCHEMA_MISMATCH",
+    cause: "el hash de esquema declarado no está en el registro de versiones aceptadas",
+    status: "PROPUESTO",
+    decision: "D16 nombra el motivo, sin número",
+  },
+  "SS-PKG-022": {
+    reason: "ARTIFACT_FORMAT_UNSUPPORTED",
+    cause: "el artifact viene en un formato que este binario no lee, como un PLY binario",
+    status: "PROPUESTO",
+    decision: "D5 y D13 nombran el caso, sin número",
+  },
 } as const satisfies Record<string, PackageCodeEntry>;
 
 export type PackageCode = keyof typeof PACKAGE_CODE_TABLE;

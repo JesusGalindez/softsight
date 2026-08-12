@@ -152,7 +152,7 @@ repositorio— pero **solo el escalón de 100k**: el de 5M pide `SOFTSIGHT_HEAVY
 sin él se declara «no ejecutada» con su motivo, D22. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 135
+Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 137
 comprobaciones de softsight en verde**, 26 puertas. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
@@ -428,7 +428,11 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     `raycast`, `nearestPoint` y `queryAabb` juzgados contra la fuerza bruta y
     deterministas byte a byte —5M triángulos en 2,56 s de CPU y 85,6 MiB de
     árbol—. Es la estructura, no la métrica: la cobertura sigue bloqueada por D34.
-    Lo siguiente es de los dos, R0-B, y espera al `cube-v1` de VideoMesh. Una tercera mitad
+    **Diez decisiones implementadas** —D3, D6, D7, D13, D14, D16, D17, D21, D24,
+    D25—, incluida la que descubrió que `JSON.parse` convierte `1e999` en
+    `Infinity` sin que nadie escriba la palabra: un número no finito se rechaza
+    ahora en todo el repositorio. Lo siguiente es de los dos, R0-B, y espera al
+    `cube-v1` de VideoMesh. Una tercera mitad
     entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
     certifica lo que salga, sin convertirse en un motor de fotogrametría. Las
     secciones 0–83 las escribió el agente de VideoMesh; las 84–86 son la respuesta

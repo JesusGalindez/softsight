@@ -1,0 +1,43 @@
+{
+  "$comment": "Generado por tools/contracts.mjs. El hash es el del fichero publicado, y es lo que un paquete puede declarar en contractSchemaSha256 para que su lectura se acepte o se rechace.",
+  "contractVersions": [
+    "0.1"
+  ],
+  "schemas": [
+    {
+      "name": "patch",
+      "sha256": "e677c59c5048a4cc7edfdac660708cb8b7a4bc32278a2d9ffca5cc6f8681d444",
+      "bytes": 33541
+    },
+    {
+      "name": "reconstruction-package",
+      "sha256": "3997aa2863ff35d9d52a022a71fbcd990e7ba9c544c301e9ff15c80947fdc186",
+      "bytes": 15809
+    },
+    {
+      "name": "reconstruction-report",
+      "sha256": "f0b0d4e48692e60bd7f81d828ed4da40a74c4fbe21f27f71a027a18568621bf8",
+      "bytes": 10722
+    },
+    {
+      "name": "sample-reference",
+      "sha256": "29bc83e9e7766b448dd0d4ea7f2255cb94f3e8bdfda41a9d845edece47958c28",
+      "bytes": 975
+    },
+    {
+      "name": "scene",
+      "sha256": "1d0c38a2e0cd2e5a0da8c58339f81ad9b525023295515a0cdd86c9ad93da55f6",
+      "bytes": 41124
+    },
+    {
+      "name": "staging",
+      "sha256": "f80ae9d4d378fa1de4838f7c8988a334d487b5b3bc34a6833cf4fa080485bff1",
+      "bytes": 4305
+    },
+    {
+      "name": "story",
+      "sha256": "f90771f3d20e29de293ab76fbc042958110f67e811f97e034163a6de6d9ddde0",
+      "bytes": 1951
+    }
+  ]
+}

@@ -68,6 +68,18 @@ export function packageReader(root) {
  * diagnóstico» es como se acaba midiendo geometría que no es la que el paquete
  * declara.
  */
+/** Hashes de esquema aceptados, del registro generado (D16). */
+function schemaHashes() {
+  try {
+    const registry = JSON.parse(readFileSync(resolve(projectRoot, "contracts/registry.json"), "utf8"));
+    return registry.schemas.map((entry) => entry.sha256);
+  } catch {
+    // Sin registro no se comprueba nada, y se dice: callar aquí convertiría un
+    // fichero que falta en una comprobación que parece hecha.
+    return undefined;
+  }
+}
+
 export function inspectPackage(manifestPath) {
   const raw = readFileSync(manifestPath);
   const root = realpathSync(dirname(manifestPath));
@@ -86,12 +98,27 @@ export function inspectPackage(manifestPath) {
     };
   }
 
-  const ingest = ingestPackage(manifest, packageReader(root));
+  const ingest = ingestPackage(manifest, packageReader(root), { schemaHashes: schemaHashes() });
 
   const meshes = [];
   for (const artifact of ingest.artifacts) {
     if (artifact.type !== "TRIANGLE_MESH") continue;
-    const { mesh } = parsePlyAscii(readFileSync(artifact.realPath, "utf8"));
+    let mesh = null;
+    try {
+      mesh = parsePlyAscii(readFileSync(artifact.realPath, "utf8")).mesh;
+    } catch (error) {
+      // Un formato que no sabemos leer no es un paquete inválido ni una malla
+      // mala: es trabajo que no se puede hacer. Se marca UNSUPPORTED y el código
+      // de salida lo distingue de «el contrato no lo leo».
+      const unsupported = String(error.message).startsWith("PLY_FORMAT_UNSUPPORTED");
+      ingest.issues.push({
+        code: unsupported ? "SS-PKG-022" : "SS-PKG-013",
+        reason: unsupported ? "ARTIFACT_FORMAT_UNSUPPORTED" : "ARTIFACT_UNREADABLE",
+        message: `artifact ${artifact.id}: ${error.message}`,
+      });
+      ingest.execution = unsupported ? "UNSUPPORTED" : "ERROR";
+      continue;
+    }
     if (mesh === null) continue;
     meshes.push({
       artifactId: artifact.id,
@@ -119,6 +146,9 @@ export function inspectPackage(manifestPath) {
 
 /** La proyección de D13, con los dos ejes decidiendo juntos. */
 export function exitCodeForReport(report) {
+  if (report.execution === "UNSUPPORTED") {
+    return report.warnings.some((entry) => entry.reason === "ARTIFACT_FORMAT_UNSUPPORTED") ? 22 : 21;
+  }
   if (report.execution !== "COMPLETE") return 20;
   if (report.certification === "PASS") return 0;
   if (report.certification === "FAIL") return 1;

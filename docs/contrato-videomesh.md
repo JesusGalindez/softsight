@@ -90,9 +90,9 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-08-12, cerrada la tercera ronda:
 
 ```text
-ACORDADAS       27   D1, D2, D4, D5, D8–D13, D15–D20, D22, D23, D26–D34
+ACORDADAS       24   D1, D2, D4, D5, D8–D12, D15, D18–D20, D22, D23, D26–D34
 PROPUESTAS       0
-IMPLEMENTADAS    7   D3, D6, D7, D14, D21, D24, D25
+IMPLEMENTADAS   10   D3, D6, D7, D13, D14, D16, D17, D21, D24, D25
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -306,7 +306,7 @@ Bloque `versions`, bloque `models`, lista `capabilities`. El consumidor comprueb
 el bloque, no un campo.
 **Prueba:** sin escribir.
 
-### D13 — Códigos de salida nuevos, solo en subcomandos nuevos
+### D13 — Códigos de salida nuevos, solo en subcomandos nuevos — IMPLEMENTADA (2026-08-12)
 ```text
 comandos existentes   0/1/2 sin tocar
 reconstruction/production
@@ -317,7 +317,21 @@ reconstruction/production
 ```
 El código de salida es una **proyección para shell y CI**. La autoridad semántica
 es el JSON: `execution` y `certification`.
-**Prueba:** sin escribir.
+**Prueba:** `test:reconstruction`, con los seis desenlaces que hoy existen:
+
+```text
+0   cube-v1 entero                         COMPLETE   PASS
+1   malla declarada sin superficie         COMPLETE   FAIL
+11  falta evidencia requerida              COMPLETE   INCONCLUSIVE
+20  paquete sin sellar, hash que no cuadra ERROR      INCONCLUSIVE
+21  contractVersion que no leemos          UNSUPPORTED
+22  PLY binario                            UNSUPPORTED
+```
+
+**21 y 22 son cosas distintas y por eso son dos códigos**: uno dice «este contrato
+no lo leo» y el otro «este fichero no lo leo». Quien automatiza reacciona
+distinto —actualizar el consumidor, o convertir el artifact— y un código único las
+mezclaría. Los comandos existentes siguen con 0/1/2 sin tocar.
 
 ### D14 — Un documento, una versión en la raíz — IMPLEMENTADA (2026-08-12)
 Informe de reconstrucción y de producción son **documentos distintos**.
@@ -363,7 +377,7 @@ puerta roja si el commiteado y el generado divergen, o si sobra un esquema que y
 no se publica. `unknown-field-v1` está; `unknown-capability-v1` y
 `unsealed-package-v1` piden capabilities y sellado, que no existen.
 
-### D16 — El hash del esquema se comprueba
+### D16 — El hash del esquema se comprueba — IMPLEMENTADA (2026-08-12)
 Hash desconocido:
 ```text
 execution: ERROR   reason: CONTRACT_SCHEMA_MISMATCH
@@ -379,9 +393,18 @@ este fichero              qué versiones de esquema se aceptan (decisión)
 contracts/*.schema.json   el contrato legible por máquina
 registro generado         la búsqueda de compatibilidad por hash
 ```
-**Prueba:** sin escribir.
+**Prueba:** `contracts/registry.json`, generado por `tools/contracts.mjs` del
+propio artefacto y comprobado por `test:contracts` contra los ficheros: mismos
+esquemas, mismo hash, mismo tamaño. En la ingesta, un `contractSchemaSha256` que
+no esté registrado da `UNSUPPORTED` con `CONTRACT_SCHEMA_MISMATCH` y nunca un
+aviso, y una `contractVersion` fuera de las aceptadas para antes de mirar el
+contenido.
 
-### D17 — NaN, infinitos y redondeo
+El campo es **opcional mientras el contrato esté en DRAFT**: sin él no se
+comprueba nada y se dice. Callar sobre un registro que falta convertiría un
+fichero ausente en una comprobación que parece hecha.
+
+### D17 — NaN, infinitos y redondeo — IMPLEMENTADA (2026-08-12)
 ```text
 en Python   json.dumps(..., allow_nan=False), que lanza en vez de emitir inválido
 en EXR      +INF como profundidad inválida sigue siendo correcto
@@ -394,8 +417,20 @@ Un `null` desnudo es ambiguo. Para métricas de QA:
 { "meanError": { "value": null, "status": "UNDEFINED", "reason": "EMPTY_SAMPLE_SET" } }
 ```
 VideoMesh lo rechaza **en origen**; no se confía en que Node lo rechace después.
-**Prueba:** `test_json_rejects_non_finite_numbers`, con NaN, +Infinity y
--Infinity, antes de producir paquete.
+**Prueba:** `test_json_rejects_non_finite_numbers` en VideoMesh, y de este lado
+`package-integrity-v1` con el caso que lo hace necesario.
+
+**El agujero, medido el 2026-08-12.** «JSON no tiene NaN» es cierto y no basta:
+
+```text
+JSON.parse('{"bytes": 1e999}')  →  Infinity
+```
+
+Nadie escribe la palabra y el infinito entra igual. El validador aceptaba eso como
+`number` —una focal infinita, una matriz con un infinito dentro— y ahora un número
+no finito se rechaza **en todo el repositorio**, no solo en el paquete, con su
+propio mensaje: «es Infinity y tiene que ser un número finito», que dice qué
+buscar en vez de mandar a mirar el tipo.
 
 ### D18 — R0 termina con `cube-v1` pasando
 ```bash

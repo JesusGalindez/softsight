@@ -749,10 +749,19 @@ function typeMatches(value: unknown, type: string): boolean {
       if (value === expected.slice(1, -1)) return true;
       continue;
     }
-    if (expected === "number" && typeof value === "number") return true;
+    // Finito, no solo «de tipo número». `JSON.parse` produce `Infinity` a partir de
+    // `1e999` sin quejarse, así que un manifest o una escena pueden traer un no
+    // finito sin que nadie haya escrito la palabra: una posición infinita, una
+    // focal infinita, una matriz con un infinito dentro. D17 pone la carga en
+    // quien escribe, y por eso mismo no se confía en que la haya cumplido.
+    if (expected === "number" && typeof value === "number" && Number.isFinite(value)) return true;
     if (expected === "string" && typeof value === "string") return true;
     if (expected === "boolean" && typeof value === "boolean") return true;
-    if (expected === "number[]" && Array.isArray(value) && value.every((entry) => typeof entry === "number")) {
+    if (
+      expected === "number[]" &&
+      Array.isArray(value) &&
+      value.every((entry) => typeof entry === "number" && Number.isFinite(entry))
+    ) {
       return true;
     }
     if (expected === "string[]" && Array.isArray(value) && value.every((entry) => typeof entry === "string")) {
@@ -768,7 +777,9 @@ function typeMatches(value: unknown, type: string): boolean {
         Array.isArray(value) &&
         value.every(
           (entry) =>
-            Array.isArray(entry) && entry.length === arity && entry.every((n) => typeof n === "number"),
+            Array.isArray(entry) &&
+            entry.length === arity &&
+            entry.every((n) => typeof n === "number" && Number.isFinite(n)),
         )
       ) {
         return true;
@@ -781,7 +792,7 @@ function typeMatches(value: unknown, type: string): boolean {
       if (
         Array.isArray(value) &&
         value.length === arity &&
-        value.every((entry) => typeof entry === "number")
+        value.every((entry) => typeof entry === "number" && Number.isFinite(entry))
       ) {
         return true;
       }
@@ -914,7 +925,8 @@ export function validate(value: unknown, schema: ObjectSchema, path = ""): strin
     }
     if (!typeMatches(record[field], definition.type)) {
       errors.push(
-        pointListError(record[field], definition.type, here) ??
+        nonFiniteError(record[field], here) ??
+          pointListError(record[field], definition.type, here) ??
           literalError(record[field], definition.type, here) ??
           `${here} debe ser ${definition.type}`,
       );
@@ -991,6 +1003,24 @@ export function validate(value: unknown, schema: ObjectSchema, path = ""): strin
   }
 
   return errors;
+}
+
+/**
+ * Un no finito se dice por su nombre.
+ *
+ * «debe ser number» sobre un `Infinity` manda a mirar el tipo, que es correcto:
+ * lo que falla es el valor. Y el valor casi nunca lo escribió una persona —sale
+ * de una división por cero aguas arriba, o de un `1e999` que `JSON.parse`
+ * convierte en infinito—, así que el mensaje tiene que decir qué buscar.
+ */
+function nonFiniteError(value: unknown, path: string): string | null {
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    return `${path} es ${Number.isNaN(value) ? "NaN" : value > 0 ? "Infinity" : "-Infinity"} y tiene que ser un número finito`;
+  }
+  if (!Array.isArray(value)) return null;
+  const index = value.findIndex((entry) => typeof entry === "number" && !Number.isFinite(entry));
+  if (index < 0) return null;
+  return `${path}[${index}] es ${Number.isNaN(value[index]) ? "NaN" : value[index] > 0 ? "Infinity" : "-Infinity"} y tiene que ser un número finito`;
 }
 
 /**

@@ -30,6 +30,25 @@ export interface ArtifactStat {
   sha256: string;
 }
 
+/**
+ * Qué versiones de contrato sabe leer este binario.
+ *
+ * La decisión de qué se acepta es del contrato (D16); esto es su reflejo en
+ * código, y por eso es una lista y no una comparación con la última: en DRAFT una
+ * versión puede admitir más de una, y aceptar «cualquier 0.x» sería no comprobar
+ * nada.
+ */
+export const SUPPORTED_CONTRACT_VERSIONS = ["0.1"] as const;
+
+export interface IngestOptions {
+  /**
+   * Hashes de esquema registrados como compatibles. Se pasan desde fuera porque
+   * salen de `contracts/`, que es un directorio, y aquí no hay IO. Sin registro no
+   * se comprueba el hash: no tenerlo es no saber, y no saber no es rechazar.
+   */
+  schemaHashes?: readonly string[];
+}
+
 export interface PackageReader {
   /** Raíz del paquete, ya canónica: sin enlaces y sin `..`. */
   root: string;
@@ -73,6 +92,9 @@ export const PACKAGE_CODES = {
   SYMLINK_ESCAPE: "SS-PKG-003",
   MISSING_ARTIFACT: "SS-PKG-004",
   SCHEMA_INVALID: "SS-PKG-010",
+  CONTRACT_UNSUPPORTED: "SS-PKG-020",
+  SCHEMA_HASH_UNKNOWN: "SS-PKG-021",
+  FORMAT_UNSUPPORTED: "SS-PKG-022",
   NOT_SEALED: "SS-PKG-011",
   SIZE_MISMATCH: "SS-PKG-012",
   HASH_MISMATCH: "SS-PKG-013",
@@ -123,7 +145,11 @@ function insideRoot(realPath: string, root: string): boolean {
   return realPath === root || realPath.startsWith(root.endsWith("/") ? root : `${root}/`);
 }
 
-export function ingestPackage(manifest: unknown, reader: PackageReader): IngestResult {
+export function ingestPackage(
+  manifest: unknown,
+  reader: PackageReader,
+  options: IngestOptions = {},
+): IngestResult {
   const issues: IngestIssue[] = [];
   const empty: IngestResult = { execution: "ERROR", issues, packageId: null, artifacts: [] };
 
@@ -139,9 +165,39 @@ export function ingestPackage(manifest: unknown, reader: PackageReader): IngestR
 
   const document = manifest as {
     packageId: string;
+    contractVersion: string;
+    contractSchemaSha256?: string;
     state: string;
     artifacts: Array<{ id: string; type: string; path: string; bytes: number; sha256: string }>;
   };
+
+  // El contrato antes que el contenido: un paquete de una versión que no sabemos
+  // leer no es un paquete inválido, es uno que no nos toca juzgar. La diferencia
+  // la ve quien automatiza —21 y no 20— y evita que un productor «arregle» un
+  // paquete correcto para una versión futura.
+  if (!SUPPORTED_CONTRACT_VERSIONS.includes(document.contractVersion as "0.1")) {
+    issues.push(
+      issue(
+        PACKAGE_CODES.CONTRACT_UNSUPPORTED,
+        `contractVersion ${JSON.stringify(document.contractVersion)}; este binario lee ${SUPPORTED_CONTRACT_VERSIONS.join(", ")}`,
+      ),
+    );
+    return { ...empty, execution: "UNSUPPORTED", packageId: document.packageId };
+  }
+
+  if (document.contractSchemaSha256 !== undefined && options.schemaHashes !== undefined) {
+    if (!options.schemaHashes.includes(document.contractSchemaSha256)) {
+      // Nunca aviso y continuar (D16): si el esquema con el que se escribió no es
+      // ninguno de los que conocemos, lo que viene detrás no se puede interpretar.
+      issues.push(
+        issue(
+          PACKAGE_CODES.SCHEMA_HASH_UNKNOWN,
+          `el hash de esquema ${document.contractSchemaSha256.slice(0, 16)}… no está registrado`,
+        ),
+      );
+      return { ...empty, execution: "UNSUPPORTED", packageId: document.packageId };
+    }
+  }
 
   if (document.state !== "SEALED") {
     // Un paquete a medio escribir puede tener todos los hashes correctos y aun
@@ -224,6 +280,9 @@ export function ingestPackage(manifest: unknown, reader: PackageReader): IngestR
  */
 export function exitCodeFor(result: IngestResult): number {
   if (result.execution === "COMPLETE") return 0;
-  if (result.execution === "UNSUPPORTED") return 21;
-  return 20;
+  if (result.execution !== "UNSUPPORTED") return 20;
+  // 21 y 22 son cosas distintas: una es «este contrato no lo leo» y la otra «este
+  // fichero no lo leo». Quien automatiza reacciona distinto —actualizar el
+  // consumidor, o convertir el artifact— y un único código las mezclaría.
+  return result.issues.some((entry) => entry.reason === "ARTIFACT_FORMAT_UNSUPPORTED") ? 22 : 21;
 }

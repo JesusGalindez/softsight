@@ -31,7 +31,10 @@
     "contractVersion": "0.1",
     "packageId": "pkg-0001",
     "state": "SEALED",
-    "producer": { "name": "videomesh", "version": "0.1.0" },
+    "producer": {
+      "name": "videomesh",
+      "version": "0.1.0"
+    },
     "artifacts": [
       {
         "id": "mesh",
@@ -42,8 +45,13 @@
         "purelyReconstructed": true
       }
     ],
-    "scale": { "status": "RELATIVE", "source": "NONE" },
-    "frameGraph": { "transforms": [] }
+    "scale": {
+      "status": "RELATIVE",
+      "source": "NONE"
+    },
+    "frameGraph": {
+      "transforms": []
+    }
   },
   "cases": [
     {
@@ -55,35 +63,45 @@
     },
     {
       "name": "ruta absoluta",
-      "artifactPatch": { "path": "/etc/passwd" },
+      "artifactPatch": {
+        "path": "/etc/passwd"
+      },
       "execution": "ERROR",
       "exitCode": 20,
       "code": "SS-PKG-002"
     },
     {
       "name": "ruta que sale con ..",
-      "artifactPatch": { "path": "../otro/mesh.ply" },
+      "artifactPatch": {
+        "path": "../otro/mesh.ply"
+      },
       "execution": "ERROR",
       "exitCode": 20,
       "code": "SS-PKG-001"
     },
     {
       "name": "ruta legal cuyo enlace resuelve fuera de la raíz",
-      "artifactPatch": { "path": "enlace.ply" },
+      "artifactPatch": {
+        "path": "enlace.ply"
+      },
       "execution": "ERROR",
       "exitCode": 20,
       "code": "SS-PKG-003"
     },
     {
       "name": "artifact declarado que no está",
-      "artifactPatch": { "path": "ausente.ply" },
+      "artifactPatch": {
+        "path": "ausente.ply"
+      },
       "execution": "ERROR",
       "exitCode": 20,
       "code": "SS-PKG-004"
     },
     {
       "name": "tamaño declarado que no es el del fichero",
-      "artifactPatch": { "bytes": 11 },
+      "artifactPatch": {
+        "bytes": 11
+      },
       "execution": "ERROR",
       "exitCode": 20,
       "code": "SS-PKG-012"
@@ -113,14 +131,58 @@
     },
     {
       "name": "paquete a medio escribir",
-      "override": { "state": "WRITING" },
+      "override": {
+        "state": "WRITING"
+      },
       "execution": "ERROR",
       "exitCode": 20,
       "code": "SS-PKG-011"
     },
     {
       "name": "manifest que no encaja con el esquema",
-      "override": { "packageId": 7 },
+      "override": {
+        "packageId": 7
+      },
+      "execution": "ERROR",
+      "exitCode": 20,
+      "code": "SS-PKG-010"
+    },
+    {
+      "name": "versión de contrato que este binario no lee",
+      "note": [
+        "No es un paquete inválido: es uno que no nos toca juzgar. La diferencia",
+        "la ve quien automatiza —21 y no 20— y evita que un productor «arregle»",
+        "un paquete correcto para una versión futura."
+      ],
+      "override": {
+        "contractVersion": "0.9"
+      },
+      "execution": "UNSUPPORTED",
+      "exitCode": 21,
+      "code": "SS-PKG-020"
+    },
+    {
+      "name": "hash de esquema que no está en el registro",
+      "override": {
+        "contractSchemaSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "schemaHashes": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ],
+      "execution": "UNSUPPORTED",
+      "exitCode": 21,
+      "code": "SS-PKG-021"
+    },
+    {
+      "name": "un infinito que JSON sí sabe traer",
+      "note": [
+        "`1e999` se convierte en Infinity al parsear, sin que nadie escriba la",
+        "palabra. D17 pone la carga en quien escribe el paquete, y por eso mismo",
+        "no se confía en que la haya cumplido."
+      ],
+      "artifactPatch": {
+        "bytes": 1e999
+      },
       "execution": "ERROR",
       "exitCode": 20,
       "code": "SS-PKG-010"

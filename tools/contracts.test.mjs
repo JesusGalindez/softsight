@@ -22,6 +22,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -108,6 +109,30 @@ const OPAQUE = new Set([
   console.log(
     `contratos: ok (additionalProperties: false en ${closed} objetos publicados; ` +
       `${opaque.size} opacos declarados y a propósito)`,
+  );
+}
+
+// 2.5 El registro de hashes de D16: generado del artefacto, no copiado a mano.
+{
+  const registry = JSON.parse(readFileSync(resolve(projectRoot, "contracts/registry.json"), "utf8"));
+  assert.deepEqual(
+    registry.schemas.map((entry) => entry.name).sort(),
+    Object.keys(SCHEMAS).sort(),
+    "el registro no lista los mismos esquemas que se publican",
+  );
+  for (const entry of registry.schemas) {
+    const contenido = readFileSync(resolve(projectRoot, "contracts", `${entry.name}.schema.json`));
+    assert.equal(
+      createHash("sha256").update(contenido).digest("hex"),
+      entry.sha256,
+      `${entry.name}: el hash del registro no es el del fichero`,
+    );
+    assert.equal(contenido.length, entry.bytes, `${entry.name}: el tamaño del registro no es el del fichero`);
+  }
+  assert.ok(registry.contractVersions.length > 0, "el registro no dice qué versiones se aceptan");
+  console.log(
+    `contratos: ok (registro de D16: ${registry.schemas.length} hashes que son los de los ficheros, ` +
+      `versiones aceptadas ${registry.contractVersions.join(", ")})`,
   );
 }
 

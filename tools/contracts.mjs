@@ -18,6 +18,7 @@
  * Necesita `dist-node/agent3d.mjs` construido.
  */
 
+import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -75,13 +76,45 @@ function render(name) {
  * que comprobar el contrato lo reescribiera, y entonces nunca podría estar
  * desactualizado.
  */
+/**
+ * El registro de compatibilidad por hash — D16.
+ *
+ * Se **genera** del artefacto de esquema, nunca se copia a mano: el reparto de
+ * autoridad que fija la decisión es que el contrato dice qué versiones se
+ * aceptan, `contracts/*.schema.json` es el contrato legible por máquina, y este
+ * registro es la búsqueda por hash. Escribir un hash a mano en tres sitios es
+ * tenerlo mal en dos.
+ */
+function renderRegistry(rendered) {
+  const schemas = Object.keys(PUBLISHED)
+    .sort()
+    .map((name) => ({
+      name,
+      sha256: createHash("sha256").update(rendered.get(name)).digest("hex"),
+      bytes: Buffer.byteLength(rendered.get(name)),
+    }));
+  return `${JSON.stringify(
+    {
+      $comment:
+        "Generado por tools/contracts.mjs. El hash es el del fichero publicado, y es lo que un " +
+        "paquete puede declarar en contractSchemaSha256 para que su lectura se acepte o se rechace.",
+      contractVersions: ["0.1"],
+      schemas,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 export function syncContracts({ check }) {
   mkdirSync(CONTRACTS, { recursive: true });
 
   const stale = [];
+  const rendered = new Map();
   for (const name of Object.keys(PUBLISHED)) {
     const target = resolve(CONTRACTS, `${name}.schema.json`);
     const generated = render(name);
+    rendered.set(name, generated);
     let current = null;
     try {
       current = readFileSync(target, "utf8");
@@ -93,6 +126,20 @@ export function syncContracts({ check }) {
     } else if (current !== generated) {
       writeFileSync(target, generated);
     }
+  }
+
+  const registryPath = resolve(CONTRACTS, "registry.json");
+  const registry = renderRegistry(rendered);
+  let currentRegistry = null;
+  try {
+    currentRegistry = readFileSync(registryPath, "utf8");
+  } catch {
+    currentRegistry = null;
+  }
+  if (check) {
+    if (currentRegistry !== registry) stale.push("registry");
+  } else if (currentRegistry !== registry) {
+    writeFileSync(registryPath, registry);
   }
 
   // Un esquema que se deja de publicar tiene que desaparecer del directorio: si se

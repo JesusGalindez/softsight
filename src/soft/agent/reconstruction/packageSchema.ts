@@ -211,6 +211,12 @@ export const RECONSTRUCTION_PACKAGE_SCHEMA: ObjectSchema = {
     required: true,
     description: "Versión del contrato de frontera; 0.x mientras el contrato esté en DRAFT.",
   },
+  contractSchemaSha256: {
+    type: "string",
+    description:
+      "Hash del esquema con el que se escribió el paquete. Opcional mientras el contrato esté en " +
+      "DRAFT; si viene y no está en el registro, el paquete no se interpreta (D16).",
+  },
   packageId: {
     type: "string",
     required: true,

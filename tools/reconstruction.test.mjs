@@ -98,7 +98,9 @@ function documentOf(base, testCase) {
     stat: (path) => cases.files[path] ?? null,
   };
   for (const testCase of cases.cases) {
-    const result = ingestPackage(documentOf(cases.base, testCase), reader);
+    const result = ingestPackage(documentOf(cases.base, testCase), reader, {
+      schemaHashes: testCase.schemaHashes,
+    });
     assert.equal(result.execution, testCase.execution, `${testCase.name}: ${JSON.stringify(result.issues)}`);
     assert.equal(exitCodeFor(result), testCase.exitCode, `${testCase.name}: código de salida`);
     if (testCase.code !== undefined) {
@@ -371,6 +373,45 @@ function sha256Of(path) {
   console.log(
     "reconstrucción: ok (evidencia requerida ausente da INCONCLUSIVE y salida 11; paquete sin sellar " +
       "da ERROR y salida 20, sin medir nada)",
+  );
+
+  // Un PLY que no sabemos leer: ni paquete inválido ni malla mala, sino trabajo
+  // que no se puede hacer. D13 le da su propio código de salida, distinto del de
+  // «este contrato no lo leo», porque quien automatiza reacciona distinto:
+  // convertir el artifact, o actualizar el consumidor.
+  const binario = join(sandbox, "cube-binario");
+  writeCubePackage(binario);
+  const plyBinario =
+    "ply\nformat binary_little_endian 1.0\nelement vertex 1\nproperty float x\nproperty float y\n" +
+    "property float z\nend_header\n\u0000\u0000\u0000\u0000";
+  writeFileSync(join(binario, "mesh.ply"), plyBinario);
+  const manifestBinario = JSON.parse(readFileSync(join(binario, "manifest.json"), "utf8"));
+  const mallaBinaria = manifestBinario.artifacts.find((artifact) => artifact.id === "mesh");
+  mallaBinaria.bytes = Buffer.byteLength(plyBinario);
+  mallaBinaria.sha256 = createHash("sha256").update(plyBinario).digest("hex");
+  writeFileSync(join(binario, "manifest.json"), `${JSON.stringify(manifestBinario, null, 2)}\n`);
+
+  const noLegible = inspectPackage(join(binario, "manifest.json"));
+  assert.equal(noLegible.report.execution, "UNSUPPORTED");
+  assert.equal(noLegible.report.certification, "INCONCLUSIVE");
+  assert.equal(noLegible.exitCode, 22, "formato no soportado tiene su propio código de salida");
+  assert.ok(
+    noLegible.report.warnings.some((entry) => entry.reason === "ARTIFACT_FORMAT_UNSUPPORTED"),
+    "el motivo dice que es el formato, no que el fichero esté roto",
+  );
+
+  // Y una versión de contrato que no leemos: mismo eje, otro código.
+  const futuro = join(sandbox, "cube-futuro");
+  writeCubePackage(futuro);
+  const manifestFuturo = JSON.parse(readFileSync(join(futuro, "manifest.json"), "utf8"));
+  manifestFuturo.contractVersion = "0.9";
+  writeFileSync(join(futuro, "manifest.json"), `${JSON.stringify(manifestFuturo, null, 2)}\n`);
+  const noSoportado = inspectPackage(join(futuro, "manifest.json"));
+  assert.equal(noSoportado.report.execution, "UNSUPPORTED");
+  assert.equal(noSoportado.exitCode, 21);
+  console.log(
+    "reconstrucción: ok (un PLY binario sale UNSUPPORTED con salida 22 y una versión de contrato " +
+      "desconocida con 21: dos cosas distintas, dos códigos)",
   );
 
   // Y el único FAIL de R0: el paquete declara superficie y no la hay. Se hace con
