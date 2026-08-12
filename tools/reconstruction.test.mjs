@@ -45,6 +45,7 @@ import {
   RECONSTRUCTION_REPORT_SCHEMA,
   auditMesh,
   exitCodeFor,
+  projectPoint,
   ingestPackage,
   parsePlyAscii,
   validate,
@@ -397,7 +398,128 @@ function sha256Of(path) {
   rmSync(sandbox, { recursive: true, force: true });
 }
 
-// 6. Lo que sigue fuera, dicho en voz alta.
+// 6. Las convenciones de cámara, contra valores dorados y contra los píxeles.
+{
+  const cases = fixture("camera-projection-v1");
+  const sandbox = realpathSync(mkdtempSync(join(tmpdir(), "softsight-cam-")));
+  const root = join(sandbox, "cube-v1");
+  writeCubePackage(root);
+  const manifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf8"));
+
+  // El fixture guarda las cámaras enteras: si el generador cambia una pose o una
+  // focal, los valores dorados dejan de describir estas imágenes y la puerta lo
+  // dice aquí, en vez de dejar pasar una comparación contra otra cámara.
+  assert.deepEqual(manifest.cameras, cases.cameras, "las cámaras de cube-v1 ya no son las del fixture");
+
+  for (const camera of cases.cameras) {
+    for (const [name, golden] of Object.entries(cases.expected[camera.id])) {
+      const projected = projectPoint(camera, golden.point);
+      assert.ok(
+        Math.abs(projected.x - golden.x) < 1e-6 && Math.abs(projected.y - golden.y) < 1e-6,
+        `${camera.id}/${name}: ${projected.x},${projected.y} contra ${golden.x},${golden.y}`,
+      );
+      assert.ok(Math.abs(projected.depth - golden.depth) < 1e-6, `${camera.id}/${name}: profundidad`);
+      assert.equal(
+        projected.inside,
+        golden.depth > 0 && golden.x >= 0 && golden.y >= 0 && golden.x < camera.width && golden.y < camera.height,
+        `${camera.id}/${name}: dentro o fuera`,
+      );
+    }
+  }
+  console.log(
+    `reconstrucción: ok (proyección: ${cases.cameras.length} cámaras × ` +
+      `${Object.keys(cases.points).length} puntos contra valores dorados, con centro, esquinas, fuera de eje, ` +
+      `borde y un punto detrás de la cámara)`,
+  );
+
+  /**
+   * Y la comprobación que no depende de ninguna fórmula escrita por nosotros: la
+   * caja de los ocho vértices proyectados contra la caja de los píxeles que el
+   * rasterizador pintó. Si las convenciones declaradas no fueran las del motor,
+   * estas dos cajas no se parecerían —y no se parecían: las imágenes salían
+   * ortográficas mientras el manifest declaraba PINHOLE—.
+   */
+  const fondo = [Math.round(0.09 * 255), Math.round(0.1 * 255), Math.round(0.13 * 255)];
+  for (const camera of manifest.cameras) {
+    const artifact = manifest.artifacts.find((entry) => entry.id === camera.imageArtifactId);
+    const image = decodePng(readFileSync(join(root, artifact.path)));
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let y = 0; y < image.height; y += 1) {
+      for (let x = 0; x < image.width; x += 1) {
+        const offset = (y * image.width + x) * 4;
+        const pintado =
+          Math.abs(image.pixels[offset] - fondo[0]) > 2 ||
+          Math.abs(image.pixels[offset + 1] - fondo[1]) > 2 ||
+          Math.abs(image.pixels[offset + 2] - fondo[2]) > 2;
+        if (!pintado) continue;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+
+    let projMinX = Infinity;
+    let projMinY = Infinity;
+    let projMaxX = -Infinity;
+    let projMaxY = -Infinity;
+    for (const x of [-0.5, 0.5]) {
+      for (const y of [-0.5, 0.5]) {
+        for (const z of [-0.5, 0.5]) {
+          const projected = projectPoint(camera, [x, y, z]);
+          projMinX = Math.min(projMinX, projected.x);
+          projMinY = Math.min(projMinY, projected.y);
+          projMaxX = Math.max(projMaxX, projected.x);
+          projMaxY = Math.max(projMaxY, projected.y);
+        }
+      }
+    }
+
+    // Un píxel y medio: la silueta se mide en píxeles enteros y la proyección es
+    // continua, así que el primer píxel encendido es el primero cuyo centro cae
+    // dentro. Más margen que eso dejaría pasar una convención cambiada.
+    for (const [medido, previsto, que] of [
+      [minX, projMinX, "borde izquierdo"],
+      [minY, projMinY, "borde superior"],
+      [maxX, projMaxX, "borde derecho"],
+      [maxY, projMaxY, "borde inferior"],
+    ]) {
+      assert.ok(
+        Math.abs(medido - previsto) <= 1.5,
+        `${camera.id}: el ${que} pintado está en ${medido} y la proyección lo pone en ${previsto.toFixed(1)}`,
+      );
+    }
+  }
+  console.log(
+    "reconstrucción: ok (la silueta que pintó el rasterizador coincide con la caja de los ocho " +
+      "vértices proyectados, en las cuatro cámaras y dentro de un píxel y medio)",
+  );
+
+  // Las tres convenciones son datos, no adorno: cambiar cualquiera mueve el píxel.
+  const [primera] = cases.cameras;
+  const punto = [0.5, 0.5, 0.5];
+  const base = projectPoint(primera, punto);
+  const esquina = projectPoint({ ...primera, pixelCenter: "CORNER" }, punto);
+  assert.ok(
+    Math.abs(esquina.x - (base.x - 0.5)) < 1e-9 && Math.abs(esquina.y - (base.y - 0.5)) < 1e-9,
+    "pixelCenter CORNER debe mover medio píxel",
+  );
+  const abajo = projectPoint({ ...primera, pixelOrigin: "BOTTOM_LEFT" }, punto);
+  assert.ok(Math.abs(abajo.y - (primera.height - base.y)) < 1e-9, "pixelOrigin BOTTOM_LEFT debe reflejar la fila");
+  const visión = projectPoint({ ...primera, cameraAxes: "X_RIGHT_Y_DOWN_Z_FORWARD" }, punto);
+  assert.ok(visión.depth < 0, "con el eje contrario, lo que estaba delante queda detrás");
+  console.log(
+    "reconstrucción: ok (pixelCenter mueve medio píxel, pixelOrigin refleja la fila y cameraAxes " +
+      "invierte la profundidad: las tres deciden, no decoran)",
+  );
+
+  rmSync(sandbox, { recursive: true, force: true });
+}
+
+// 7. Lo que sigue fuera, dicho en voz alta.
 console.log(
   "reconstrucción: no ejecutada — el criterio de certificación de R0 no tiene decisión con número: " +
     "va como pendiente en el envío para que VideoMesh lo confirme. Cobertura y confianza siguen " +

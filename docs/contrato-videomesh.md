@@ -285,7 +285,15 @@ ejes, viajando como **una sola unidad** `CameraImageSpace` con
 `imageArtifactHash`, dimensiones, intrínsecos, distorsión y orientación. Impide
 combinar intrínsecos rectificados con imagen distorsionada, o una máscara del
 frame original con profundidad del rectificado.
-**Prueba:** fixtures analíticos de cámara + fila 4 de D23.
+**Prueba:** `camera-projection-v1` + fila 4 de D23.
+
+**Medio hecha el 2026-08-12.** El CameraSet viaja como una unidad y **declara
+hacia dónde mira**: `cameraAxes` con `X_RIGHT_Y_DOWN_Z_FORWARD` —COLMAP, OpenCV—
+o `X_RIGHT_Y_UP_Z_BACKWARD` —gráficos, y el rasterizador de este repositorio—,
+sin valor por defecto. Confundirlos no da una imagen torcida: da una especular en
+Y con la profundidad invertida, y sobre un objeto simétrico las dos parecen
+correctas. Falta `imageArtifactHash` atado a la imagen, que hoy es
+`imageArtifactId`.
 
 ### D11 — FrameGraph
 CAMERA, RECONSTRUCTION, ASSET_CANONICAL, PRODUCTION, con cada transformación
@@ -555,6 +563,26 @@ SoftSight ↔ expected.json      VideoMesh ↔ expected.json      SoftSight ↔ 
 Los puntos de proyección se eligen para cubrir centro, esquina, fuera de eje y
 cerca del borde: valida intrínsecos, centro de píxel, orientación y álgebra de
 transformaciones a la vez.
+
+**Nuestra mitad, hecha el 2026-08-12.** `camera-projection-v1`: cuatro cámaras
+por seis puntos contra valores dorados, con la fórmula escrita en el propio
+fixture para que el otro lado pueda derivarlos sin leer nuestro código. Dos
+comprobaciones más que no dependen de ninguna fórmula nuestra: la caja de los
+ocho vértices proyectados contra **la silueta que el rasterizador pintó de
+verdad**, y que cambiar cualquiera de las tres convenciones mueva el píxel
+—`pixelCenter` medio, `pixelOrigin` refleja la fila, `cameraAxes` invierte la
+profundidad—.
+
+**Escribirla encontró un error real.** Las imágenes de `cube-v1` salían
+ortográficas mientras el manifest declaraba `PINHOLE` con una focal sacada del
+campo de visión: `frameCameraFromAabb` deja `projection` en `undefined` si la
+vista no lo pide, y el rasterizador cae a la rama ortográfica. Con un cubo
+alineado las cajas coinciden y no se nota; la vista de tres cuartos lo delató por
+treinta píxeles. El CameraSet describía unos píxeles que no eran los suyos, y
+ningún hash lo habría visto nunca.
+
+Falta la columna de VideoMesh y la de `SoftSight ↔ VideoMesh`: las dos esperan a
+su `cube-v1`.
 
 `expected.json` es el oráculo de prueba, **no parte del paquete**: SoftSight no lo
 consume en producción. La lógica vive en `tests/contracts/parity/`.

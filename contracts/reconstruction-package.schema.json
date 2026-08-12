@@ -257,6 +257,23 @@
             ],
             "description": "Modelo de cámara. Uno desconocido es CAMERA_MODEL_UNSUPPORTED, no un aviso."
           },
+          "cameraAxes": {
+            "type": "string",
+            "enum": [
+              "X_RIGHT_Y_DOWN_Z_FORWARD",
+              "X_RIGHT_Y_UP_Z_BACKWARD"
+            ],
+            "description": "Hacia dónde mira la cámara y hacia dónde crece la altura. El primero es el de visión por computador —COLMAP, OpenCV—; el segundo el de gráficos —OpenGL—. Confundirlos no da una imagen torcida: da una especular en Y con la profundidad invertida, que en un objeto simétrico es igual de plausible. Sin valor por defecto, por eso mismo."
+          },
+          "worldFromCamera": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 16,
+            "maxItems": 16,
+            "description": "Pose de la cámara en el mundo: 4×4 homogénea, por filas, traslación en 3, 7 y 11, vectores columna (D32). Solo worldFromCamera; la inversa se calcula, no se declara."
+          },
           "intrinsics": {
             "type": "object",
             "properties": {
@@ -323,6 +340,8 @@
           "pixelOrigin",
           "pixelCenter",
           "model",
+          "cameraAxes",
+          "worldFromCamera",
           "intrinsics"
         ]
       },

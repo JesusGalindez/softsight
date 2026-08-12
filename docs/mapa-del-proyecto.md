@@ -152,7 +152,7 @@ repositorio— pero **solo el escalón de 100k**: el de 5M pide `SOFTSIGHT_HEAVY
 sin él se declara «no ejecutada» con su motivo, D22. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 124
+Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 129
 comprobaciones de softsight en verde**, 25 puertas. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
@@ -420,7 +420,11 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     de veinte objetos que admitían campos desconocidos quedan **dos, los dos a
     propósito** —la tabla de una pista y el `data` de una escena—, y con ellos se
     cerró uno que no era deuda sino error, `anyOf` emitiendo una forma genérica
-    que aceptaba cualquier objeto al lado de las alternativas de verdad. Lo
+    que aceptaba cualquier objeto al lado de las alternativas de verdad. Y las
+    **convenciones de cámara dejaron de ser una afirmación sin puerta**: la
+    proyección de puntos conocidos se comprueba contra valores dorados y contra la
+    silueta que el rasterizador pintó, lo que destapó que las imágenes de
+    `cube-v1` salían ortográficas mientras el manifest declaraba `PINHOLE`. Lo
     siguiente es de los dos, R0-B, y espera al `cube-v1` de VideoMesh. Una tercera mitad
     entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
     certifica lo que salga, sin convertirse en un motor de fotogrametría. Las

@@ -93,7 +93,19 @@ function cubeCorners() {
  */
 function renderView(nodes, aabb, view) {
   const renderer = new SoftwareRenderer(IMAGE_SIZE, IMAGE_SIZE);
-  const camera = frameCameraFromAabb(aabb, { name: view.id, yaw: view.yaw, pitch: view.pitch, shading: "lit" });
+  // `projection` explícito, y no por omisión: sin él `frameCameraFromAabb` lo deja
+  // en `undefined` y el rasterizador cae a la rama ortográfica. El manifest declara
+  // PINHOLE con una focal sacada del campo de visión, así que una imagen
+  // ortográfica lo convertiría en una descripción falsa de sus propios píxeles —y
+  // con un cubo alineado no se nota: solo la vista de tres cuartos delata la
+  // diferencia.
+  const camera = frameCameraFromAabb(aabb, {
+    name: view.id,
+    yaw: view.yaw,
+    pitch: view.pitch,
+    shading: "lit",
+    projection: "perspective",
+  });
   renderer.render(nodes, camera, {
     shadingMode: "lit",
     wireframe: false,
@@ -116,7 +128,45 @@ function renderView(nodes, aabb, view) {
   return {
     png: encodePng(renderer.framebuffer.color, IMAGE_SIZE, IMAGE_SIZE),
     intrinsics: { fx: focal, fy: focal, cx: IMAGE_SIZE / 2, cy: IMAGE_SIZE / 2 },
+    worldFromCamera: poseOf(camera),
   };
+}
+
+/** Vector unitario, o el original si mide cero. */
+function normalize(v) {
+  const length = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / length, v[1] / length, v[2] / length];
+}
+
+function cross(a, b) {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+
+/**
+ * La pose de la cámara del motor, en la forma que fija D32: 4×4 por filas, con la
+ * traslación en 3, 7 y 11, y las tres columnas de rotación siendo los ejes de la
+ * cámara en el mundo.
+ *
+ * Se declara con `cameraAxes: X_RIGHT_Y_UP_Z_BACKWARD` porque **es literalmente
+ * lo que el rasterizador hizo**: mira a −Z y su Y sube. Convertirla aquí a la
+ * convención de fotogrametría sería hacer la conversión dos veces —una al
+ * escribir y otra al leer— sin que nadie pudiera comprobar ninguna. La conversión
+ * tiene su sitio, y es el adaptador que lea COLMAP.
+ */
+function poseOf(camera) {
+  const zAxis = normalize([
+    camera.position[0] - camera.target[0],
+    camera.position[1] - camera.target[1],
+    camera.position[2] - camera.target[2],
+  ]);
+  const xAxis = normalize(cross(camera.up, zAxis));
+  const yAxis = cross(zAxis, xAxis);
+  return [
+    xAxis[0], yAxis[0], zAxis[0], camera.position[0],
+    xAxis[1], yAxis[1], zAxis[1], camera.position[1],
+    xAxis[2], yAxis[2], zAxis[2], camera.position[2],
+    0, 0, 0, 1,
+  ];
 }
 
 /** Construye el paquete entero en memoria: ficheros y manifest, sin tocar disco. */
@@ -154,7 +204,7 @@ export function buildCubePackage() {
 
   const cameras = [];
   for (const view of VIEWS) {
-    const { png, intrinsics } = renderView(nodes, aabb, view);
+    const { png, intrinsics, worldFromCamera } = renderView(nodes, aabb, view);
     const path = `images/${view.id}.png`;
     files.set(path, png);
     artifacts.push({
@@ -172,7 +222,9 @@ export function buildCubePackage() {
       pixelOrigin: "TOP_LEFT",
       pixelCenter: "CENTER",
       model: "PINHOLE",
+      cameraAxes: "X_RIGHT_Y_UP_Z_BACKWARD",
       intrinsics,
+      worldFromCamera,
     });
   }
 

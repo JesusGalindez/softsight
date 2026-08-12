@@ -775,8 +775,14 @@ function typeMatches(value: unknown, type: string): boolean {
       }
       continue;
     }
-    if (expected === "number[3]") {
-      if (Array.isArray(value) && value.length === 3 && value.every((entry) => typeof entry === "number")) {
+    const fixed = FIXED_LIST.exec(expected);
+    if (fixed !== null) {
+      const arity = Number(fixed[1]);
+      if (
+        Array.isArray(value) &&
+        value.length === arity &&
+        value.every((entry) => typeof entry === "number")
+      ) {
         return true;
       }
       continue;
@@ -818,6 +824,9 @@ export function toJsonSchema(schema: ObjectSchema): Record<string, unknown> {
 /** `number[N][]`: una lista de puntos de N números, como `at` o `path.through`. */
 const POINT_LIST = /^number\[(\d+)\]\[\]$/;
 
+/** `number[N]`: una lista de longitud fija —un vector, una matriz de 16—. */
+const FIXED_LIST = /^number\[(\d+)\]$/;
+
 function fieldToJsonSchema(field: FieldSchema): Record<string, unknown> {
   const alternatives = field.type.split("|").map((alternative) => alternative.trim());
   const literals = alternatives.filter((alternative) => alternative.startsWith('"'));
@@ -834,8 +843,9 @@ function fieldToJsonSchema(field: FieldSchema): Record<string, unknown> {
       shapes.push({ type: "array", items: { type: "number" } });
     } else if (alternative === "string[]") {
       shapes.push({ type: "array", items: { type: "string" } });
-    } else if (alternative === "number[3]") {
-      shapes.push({ type: "array", items: { type: "number" }, minItems: 3, maxItems: 3 });
+    } else if (FIXED_LIST.test(alternative)) {
+      const arity = Number(FIXED_LIST.exec(alternative)?.[1] ?? 0);
+      shapes.push({ type: "array", items: { type: "number" }, minItems: arity, maxItems: arity });
     } else if (POINT_LIST.test(alternative)) {
       const arity = Number(POINT_LIST.exec(alternative)?.[1] ?? 0);
       shapes.push({

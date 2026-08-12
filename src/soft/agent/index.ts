@@ -250,6 +250,8 @@ export {
   PROPOSED_PACKAGE_CODES,
 } from "./reconstruction/codes";
 export type { CodeStatus, PackageCode, PackageCodeEntry } from "./reconstruction/codes";
+export { projectPoint } from "./reconstruction/camera";
+export type { PackageCamera, Projection } from "./reconstruction/camera";
 export { parsePlyAscii, serializePlyMesh, serializePlyPoints } from "./reconstruction/ply";
 export {
   CERTIFICATION_POLICY,

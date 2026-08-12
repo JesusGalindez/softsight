@@ -14,7 +14,10 @@
     "contractVersion": "0.1",
     "packageId": "pkg-0001",
     "state": "SEALED",
-    "producer": { "name": "videomesh", "version": "0.1.0" },
+    "producer": {
+      "name": "videomesh",
+      "version": "0.1.0"
+    },
     "artifacts": [
       {
         "id": "mesh",
@@ -25,13 +28,33 @@
         "purelyReconstructed": true
       }
     ],
-    "scale": { "status": "RELATIVE", "source": "NONE" },
+    "scale": {
+      "status": "RELATIVE",
+      "source": "NONE"
+    },
     "frameGraph": {
       "transforms": [
         {
           "from": "RECONSTRUCTION",
           "to": "ASSET_CANONICAL",
-          "matrix": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+          "matrix": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            0,
+            1
+          ],
           "reason": "normalización de marco",
           "producer": "videomesh"
         }
@@ -39,7 +62,10 @@
     }
   },
   "accept": [
-    { "name": "malla puramente reconstruida", "override": {} },
+    {
+      "name": "malla puramente reconstruida",
+      "override": {}
+    },
     {
       "name": "malla mezclada, que se reporta pero no certifica",
       "override": {
@@ -96,8 +122,37 @@
             "pixelOrigin": "TOP_LEFT",
             "pixelCenter": "CENTER",
             "model": "OPENCV",
-            "intrinsics": { "fx": 2811.2, "fy": 2809.9, "cx": 1920.0, "cy": 1080.0 },
-            "distortion": { "k1": 0.12, "k2": -0.08, "p1": 0.001, "p2": 0.002 }
+            "intrinsics": {
+              "fx": 2811.2,
+              "fy": 2809.9,
+              "cx": 1920.0,
+              "cy": 1080.0
+            },
+            "distortion": {
+              "k1": 0.12,
+              "k2": -0.08,
+              "p1": 0.001,
+              "p2": 0.002
+            },
+            "cameraAxes": "X_RIGHT_Y_UP_Z_BACKWARD",
+            "worldFromCamera": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              3,
+              0,
+              0,
+              0,
+              1
+            ]
           }
         ]
       }
@@ -108,7 +163,10 @@
         "scale": {
           "status": "ABSOLUTE",
           "source": "KNOWN_DISTANCE",
-          "uncertainty": { "model": "GAUSSIAN", "value": 0.003 }
+          "uncertainty": {
+            "model": "GAUSSIAN",
+            "value": 0.003
+          }
         }
       }
     }
@@ -191,7 +249,9 @@
     },
     {
       "name": "documento con nombre ambiguo",
-      "override": { "documentType": "reconstruction" },
+      "override": {
+        "documentType": "reconstruction"
+      },
       "expect": "documentType no admite \"reconstruction\"; admitidos: videomesh.reconstruction-package"
     },
     {
@@ -206,8 +266,37 @@
             "pixelOrigin": "TOP_LEFT",
             "pixelCenter": "CENTER",
             "model": "OPENCV",
-            "intrinsics": { "fx": 2811.2, "fy": 2809.9, "cx": 1920.0, "cy": 1080.0 },
-            "distortion": [0.12, -0.08, 0.001, 0.002]
+            "intrinsics": {
+              "fx": 2811.2,
+              "fy": 2809.9,
+              "cx": 1920.0,
+              "cy": 1080.0
+            },
+            "distortion": [
+              0.12,
+              -0.08,
+              0.001,
+              0.002
+            ],
+            "cameraAxes": "X_RIGHT_Y_UP_Z_BACKWARD",
+            "worldFromCamera": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              3,
+              0,
+              0,
+              0,
+              1
+            ]
           }
         ]
       },
@@ -215,7 +304,11 @@
     },
     {
       "name": "escala sin decir de dónde sale",
-      "override": { "scale": { "status": "ABSOLUTE" } },
+      "override": {
+        "scale": {
+          "status": "ABSOLUTE"
+        }
+      },
       "expect": "falta scale.source"
     },
     {
@@ -226,8 +319,119 @@
         "lo que impide que entre por la puerta de atrás antes de tener con qué",
         "calcularla."
       ],
-      "override": { "coverage": 0.96 },
+      "override": {
+        "coverage": 0.96
+      },
       "expect": "coverage no existe"
+    },
+    {
+      "name": "cámara sin pose, que no puede proyectar nada",
+      "note": [
+        "Una cámara sin `worldFromCamera` describe una lente flotando: sirve para",
+        "decir qué píxeles tiene la imagen y para nada más. La fila 4 de D23 —proyectar",
+        "puntos conocidos— es imposible sin ella."
+      ],
+      "override": {
+        "cameras": [
+          {
+            "id": "cam0",
+            "imageArtifactId": "img0",
+            "width": 3840,
+            "height": 2160,
+            "pixelOrigin": "TOP_LEFT",
+            "pixelCenter": "CENTER",
+            "model": "PINHOLE",
+            "cameraAxes": "X_RIGHT_Y_UP_Z_BACKWARD",
+            "intrinsics": {
+              "fx": 2811.2,
+              "fy": 2809.9,
+              "cx": 1920.0,
+              "cy": 1080.0
+            }
+          }
+        ]
+      },
+      "expect": "falta cameras[0].worldFromCamera"
+    },
+    {
+      "name": "cámara sin declarar hacia dónde mira",
+      "note": [
+        "Sin `cameraAxes` el lector tiene que suponer, y las dos suposiciones",
+        "razonables se diferencian en una imagen especular con la profundidad",
+        "invertida: en un objeto simétrico las dos parecen correctas."
+      ],
+      "override": {
+        "cameras": [
+          {
+            "id": "cam0",
+            "imageArtifactId": "img0",
+            "width": 3840,
+            "height": 2160,
+            "pixelOrigin": "TOP_LEFT",
+            "pixelCenter": "CENTER",
+            "model": "PINHOLE",
+            "worldFromCamera": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              3,
+              0,
+              0,
+              0,
+              1
+            ],
+            "intrinsics": {
+              "fx": 2811.2,
+              "fy": 2809.9,
+              "cx": 1920.0,
+              "cy": 1080.0
+            }
+          }
+        ]
+      },
+      "expect": "falta cameras[0].cameraAxes"
+    },
+    {
+      "name": "pose que no es una matriz de 4×4",
+      "override": {
+        "cameras": [
+          {
+            "id": "cam0",
+            "imageArtifactId": "img0",
+            "width": 3840,
+            "height": 2160,
+            "pixelOrigin": "TOP_LEFT",
+            "pixelCenter": "CENTER",
+            "model": "PINHOLE",
+            "cameraAxes": "X_RIGHT_Y_UP_Z_BACKWARD",
+            "worldFromCamera": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0
+            ],
+            "intrinsics": {
+              "fx": 2811.2,
+              "fy": 2809.9,
+              "cx": 1920.0,
+              "cy": 1080.0
+            }
+          }
+        ]
+      },
+      "expect": "cameras[0].worldFromCamera debe ser number[16]"
     }
   ]
 }

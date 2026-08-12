@@ -93,7 +93,7 @@ patch.schema.json                    e677c59c5048a4cc   33541
 story.schema.json                    f90771f3d20e29de    1951
 staging.schema.json                  2057546b2f5be99d    4148
 sample-reference.schema.json         29bc83e9e7766b44     975
-reconstruction-package.schema.json   b321f0fb966f2f91   14541
+reconstruction-package.schema.json   1a0f241746504f78   15555
 reconstruction-report.schema.json    f0b0d4e48692e60b   10722
 ```
 
@@ -171,6 +171,42 @@ objetos que admitían campos desconocidos quedan dos, y los dos son datos libres
 propósito.
 
 **Regeneradlos.** Los hashes de §2 son los de después del arreglo.
+
+---
+
+## 3.5 Las convenciones de cámara, y un error que encontramos en las nuestras
+
+`camera-projection-v1` publica nuestra mitad de la fila 4 de D23: cuatro cámaras
+por seis puntos —centro, dos esquinas, fuera de eje, cerca del borde, y uno
+detrás de la cámara— con el píxel esperado y **la fórmula escrita en el propio
+fixture**, para que podáis derivar los mismos números sin leer nuestro código.
+
+El CameraSet gana dos campos requeridos, y los dos hacen falta para que la fila 4
+sea posible:
+
+```text
+worldFromCamera   4×4 por filas, traslación en 3, 7 y 11 (D32). Solo esta;
+                  la inversa se calcula
+cameraAxes        X_RIGHT_Y_DOWN_Z_FORWARD  (COLMAP, OpenCV)
+                  X_RIGHT_Y_UP_Z_BACKWARD   (gráficos; el nuestro)
+```
+
+**`cameraAxes` no tiene valor por defecto a propósito.** Confundir los dos marcos
+no produce una imagen torcida: produce una especular en Y con la profundidad
+invertida, y sobre un objeto simétrico las dos parecen igual de correctas. Si
+vuestro escritor emite COLMAP puro, es la primera de las dos y no hay conversión
+que hacer en el paquete.
+
+**Y encontramos un error nuestro escribiéndolo**, que es la razón de que os lo
+contemos con detalle: las imágenes de `cube-v1` salían **ortográficas** mientras
+el manifest declaraba `PINHOLE` con una focal sacada del campo de visión. El
+encuadre de un cubo alineado sale igual con las dos proyecciones, así que las
+imágenes parecían correctas y los hashes cuadraban; solo la vista de tres cuartos
+lo delató, por treinta píxeles. Era el manifest describiendo unos píxeles que no
+eran los suyos, y ninguna comprobación de integridad puede ver eso.
+
+Es exactamente el fallo contra el que sirve la fila 4, y por eso conviene que
+vuestra mitad no sea «proyectamos con la misma librería que generó las imágenes».
 
 ---
 

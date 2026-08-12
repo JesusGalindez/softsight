@@ -1,0 +1,431 @@
+{
+  "fixture": "camera-projection-v1",
+  "decision": "D23 fila 4 (proyección de puntos 3D conocidos), D10, D19, D32",
+  "why": [
+    "Hasta este fixture, las convenciones de cámara de `cube-v1` eran una",
+    "afirmación sin puerta: alguien escribió `pixelOrigin: TOP_LEFT` y",
+    "`pixelCenter: CENTER` porque creía que era lo que hacía el rasterizador.",
+    "Un error ahí no se ve —la imagen sale bien y los hashes cuadran—: lo que",
+    "está mal es lo que el manifest dice *sobre* la imagen, y todo lo que se",
+    "construya encima hereda el error.",
+    "",
+    "Escribirlo encontró uno de verdad: las imágenes salían ortográficas mientras",
+    "el manifest declaraba PINHOLE con una focal sacada del campo de visión. Con",
+    "un cubo alineado no se nota; la vista de tres cuartos lo delató.",
+    "",
+    "Esta es **nuestra mitad** de la fila 4 de D23. La comparación con VideoMesh",
+    "espera a que exista su cube-v1; la comparación contra estos valores dorados",
+    "se puede hacer ya, y ellos pueden correrla contra los suyos."
+  ],
+  "formula": [
+    "p_cam = Rᵀ (p − t), con R y t leídos de worldFromCamera (4×4 por filas,",
+    "traslación en 3, 7 y 11, vectores columna — D32).",
+    "",
+    "Con cameraAxes = X_RIGHT_Y_UP_Z_BACKWARD, que es el marco de gráficos:",
+    "  profundidad = −z_cam",
+    "  x_px = fx · (x_cam / profundidad) + cx",
+    "  y_px = fy · (−y_cam / profundidad) + cy",
+    "",
+    "Con X_RIGHT_Y_DOWN_Z_FORWARD —COLMAP, OpenCV— la profundidad es +z_cam y la",
+    "altura no cambia de signo.",
+    "",
+    "pixelCenter = CORNER resta medio píxel a las dos coordenadas.",
+    "pixelOrigin = BOTTOM_LEFT cuenta la fila desde el otro extremo: height − y."
+  ],
+  "points": {
+    "centro": "el origen del mundo, que es el centro del cubo y del encuadre",
+    "esquina superior": "esquina del cubo más cercana a la cámara en las vistas axiales",
+    "esquina inferior opuesta": "la diagonalmente opuesta, para cubrir el otro cuadrante",
+    "fuera de eje": "sin componente en un eje, para que un signo cruzado se vea",
+    "cerca del borde": "esquina que cae cerca del borde de la imagen",
+    "detrás de la cámara": "fuera del frustum: profundidad negativa e `inside` falso"
+  },
+  "cameras": [
+    {
+      "id": "cam-frontal",
+      "imageArtifactId": "img-cam-frontal",
+      "width": 256,
+      "height": 256,
+      "pixelOrigin": "TOP_LEFT",
+      "pixelCenter": "CENTER",
+      "model": "PINHOLE",
+      "cameraAxes": "X_RIGHT_Y_UP_Z_BACKWARD",
+      "intrinsics": {
+        "fx": 351.6771096901917,
+        "fy": 351.6771096901917,
+        "cx": 128,
+        "cy": 128
+      },
+      "worldFromCamera": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+        2.0111125807000425,
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "cam-lateral",
+      "imageArtifactId": "img-cam-lateral",
+      "width": 256,
+      "height": 256,
+      "pixelOrigin": "TOP_LEFT",
+      "pixelCenter": "CENTER",
+      "model": "PINHOLE",
+      "cameraAxes": "X_RIGHT_Y_UP_Z_BACKWARD",
+      "intrinsics": {
+        "fx": 351.6771096901917,
+        "fy": 351.6771096901917,
+        "cx": 128,
+        "cy": 128
+      },
+      "worldFromCamera": [
+        6.123233995736766e-17,
+        0,
+        1,
+        2.0111125807000425,
+        0,
+        1,
+        0,
+        0,
+        -1,
+        0,
+        6.123233995736766e-17,
+        1.23145129233964e-16,
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "cam-cenital",
+      "imageArtifactId": "img-cam-cenital",
+      "width": 256,
+      "height": 256,
+      "pixelOrigin": "TOP_LEFT",
+      "pixelCenter": "CENTER",
+      "model": "PINHOLE",
+      "cameraAxes": "X_RIGHT_Y_UP_Z_BACKWARD",
+      "intrinsics": {
+        "fx": 351.6771096901917,
+        "fy": 351.6771096901917,
+        "cx": 128,
+        "cy": 128
+      },
+      "worldFromCamera": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0.017452406437283595,
+        0.9998476951563912,
+        2.045593431416433,
+        0,
+        -0.9998476951563912,
+        0.017452406437283595,
+        0.035705966162109415,
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "cam-tres-cuartos",
+      "imageArtifactId": "img-cam-tres-cuartos",
+      "width": 256,
+      "height": 256,
+      "pixelOrigin": "TOP_LEFT",
+      "pixelCenter": "CENTER",
+      "model": "PINHOLE",
+      "cameraAxes": "X_RIGHT_Y_UP_Z_BACKWARD",
+      "intrinsics": {
+        "fx": 351.6771096901917,
+        "fy": 351.6771096901917,
+        "cx": 128,
+        "cy": 128
+      },
+      "worldFromCamera": [
+        0.7071067811865475,
+        -0.29883623873011983,
+        0.6408563820557885,
+        2.0025794321291532,
+        0,
+        0.9063077870366498,
+        0.42261826174069944,
+        1.3206182575403056,
+        -0.7071067811865475,
+        -0.29883623873011983,
+        0.6408563820557885,
+        2.0025794321291532,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  ],
+  "expected": {
+    "cam-frontal": {
+      "centro": {
+        "point": [
+          0,
+          0,
+          0
+        ],
+        "x": 128,
+        "y": 128,
+        "depth": 2.011113
+      },
+      "esquina superior": {
+        "point": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "x": 244.363636,
+        "y": 11.636364,
+        "depth": 1.511113
+      },
+      "esquina inferior opuesta": {
+        "point": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "x": 57.975838,
+        "y": 198.024162,
+        "depth": 2.511113
+      },
+      "fuera de eje": {
+        "point": [
+          0.5,
+          -0.5,
+          0
+        ],
+        "x": 215.433472,
+        "y": 215.433472,
+        "depth": 2.011113
+      },
+      "cerca del borde": {
+        "point": [
+          0.5,
+          0.5,
+          -0.5
+        ],
+        "x": 198.024162,
+        "y": 57.975838,
+        "depth": 2.511113
+      },
+      "detrás de la cámara": {
+        "point": [
+          0,
+          0,
+          6
+        ],
+        "x": 128,
+        "y": 128,
+        "depth": -3.988887
+      }
+    },
+    "cam-lateral": {
+      "centro": {
+        "point": [
+          0,
+          0,
+          0
+        ],
+        "x": 128,
+        "y": 128,
+        "depth": 2.011113
+      },
+      "esquina superior": {
+        "point": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "x": 11.636364,
+        "y": 11.636364,
+        "depth": 1.511113
+      },
+      "esquina inferior opuesta": {
+        "point": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "x": 198.024162,
+        "y": 198.024162,
+        "depth": 2.511113
+      },
+      "fuera de eje": {
+        "point": [
+          0.5,
+          -0.5,
+          0
+        ],
+        "x": 128,
+        "y": 244.363636,
+        "depth": 1.511113
+      },
+      "cerca del borde": {
+        "point": [
+          0.5,
+          0.5,
+          -0.5
+        ],
+        "x": 244.363636,
+        "y": 11.636364,
+        "depth": 1.511113
+      },
+      "detrás de la cámara": {
+        "point": [
+          0,
+          0,
+          6
+        ],
+        "x": -921.20166,
+        "y": 128,
+        "depth": 2.011113
+      }
+    },
+    "cam-cenital": {
+      "centro": {
+        "point": [
+          0,
+          0,
+          0
+        ],
+        "x": 128,
+        "y": 128,
+        "depth": 2.045905
+      },
+      "esquina superior": {
+        "point": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "x": 242.384768,
+        "y": 240.371057,
+        "depth": 1.537255
+      },
+      "esquina inferior opuesta": {
+        "point": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "x": 59.166661,
+        "y": 60.378453,
+        "depth": 2.554555
+      },
+      "fuera de eje": {
+        "point": [
+          0.5,
+          -0.5,
+          0
+        ],
+        "x": 197.069275,
+        "y": 129.205425,
+        "depth": 2.545829
+      },
+      "cerca del borde": {
+        "point": [
+          0.5,
+          0.5,
+          -0.5
+        ],
+        "x": 241.100739,
+        "y": 12.942607,
+        "depth": 1.554707
+      },
+      "detrás de la cámara": {
+        "point": [
+          0,
+          0,
+          6
+        ],
+        "x": 128,
+        "y": 1214.828512,
+        "depth": 1.941191
+      }
+    },
+    "cam-tres-cuartos": {
+      "centro": {
+        "point": [
+          0,
+          0,
+          0
+        ],
+        "x": 128,
+        "y": 128,
+        "depth": 3.124849
+      },
+      "esquina superior": {
+        "point": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "x": 128,
+        "y": 104.120746,
+        "depth": 2.272683
+      },
+      "esquina inferior opuesta": {
+        "point": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "x": 128,
+        "y": 141.645911,
+        "depth": 3.977015
+      },
+      "fuera de eje": {
+        "point": [
+          0.5,
+          -0.5,
+          0
+        ],
+        "x": 169.229366,
+        "y": 198.268488,
+        "depth": 3.01573
+      },
+      "cerca del borde": {
+        "point": [
+          0.5,
+          0.5,
+          -0.5
+        ],
+        "x": 213.350906,
+        "y": 73.302327,
+        "depth": 2.91354
+      },
+      "detrás de la cámara": {
+        "point": [
+          0,
+          0,
+          6
+        ],
+        "x": 2199.44498,
+        "y": -747.430477,
+        "depth": -0.720289
+      }
+    }
+  }
+}

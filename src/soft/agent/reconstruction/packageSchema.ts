@@ -109,6 +109,22 @@ const CAMERA_FIELDS: ObjectSchema = {
     required: true,
     description: "Modelo de cámara. Uno desconocido es CAMERA_MODEL_UNSUPPORTED, no un aviso.",
   },
+  cameraAxes: {
+    type: '"X_RIGHT_Y_DOWN_Z_FORWARD"|"X_RIGHT_Y_UP_Z_BACKWARD"',
+    required: true,
+    description:
+      "Hacia dónde mira la cámara y hacia dónde crece la altura. El primero es el de visión por " +
+      "computador —COLMAP, OpenCV—; el segundo el de gráficos —OpenGL—. Confundirlos no da una " +
+      "imagen torcida: da una especular en Y con la profundidad invertida, que en un objeto " +
+      "simétrico es igual de plausible. Sin valor por defecto, por eso mismo.",
+  },
+  worldFromCamera: {
+    type: "number[16]",
+    required: true,
+    description:
+      "Pose de la cámara en el mundo: 4×4 homogénea, por filas, traslación en 3, 7 y 11, " +
+      "vectores columna (D32). Solo worldFromCamera; la inversa se calcula, no se declara.",
+  },
   intrinsics: {
     type: "object",
     required: true,
