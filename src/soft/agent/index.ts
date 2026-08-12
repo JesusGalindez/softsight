@@ -259,6 +259,14 @@ export {
 } from "./reconstruction/codes";
 export type { CodeStatus, PackageCode, PackageCodeEntry } from "./reconstruction/codes";
 export { projectPoint } from "./reconstruction/camera";
+export {
+  parseColmapCameras,
+  parseColmapImages,
+  parseColmapModel,
+  parseColmapPoints,
+  toCameraSet,
+} from "./reconstruction/colmap";
+export type { ColmapCamera, ColmapImage, ColmapModel, ColmapPoint } from "./reconstruction/colmap";
 export type { PackageCamera, Projection } from "./reconstruction/camera";
 export { parsePlyAscii, serializePlyMesh, serializePlyPoints } from "./reconstruction/ply";
 export {

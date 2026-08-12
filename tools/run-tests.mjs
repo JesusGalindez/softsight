@@ -58,6 +58,7 @@ const GATES = [
   "framing.test.mjs", // 4,1 s — renderiza cuatro fixtures para reproducir sus cajas
   "bounds-tree.test.mjs", // 1,6 s — el árbol contra la fuerza bruta; 1M y 5M piden SOFTSIGHT_HEAVY=1
   "reconstruction.test.mjs", // 0,6 s — esquema del paquete de R0-A e ingesta
+  "colmap.test.mjs", // 0,3 s — el adaptador de COLMAP contra las observaciones del propio fichero
   "contracts.test.mjs", // 0,6 s — el generador de contracts/ y el fixture unknown-field-v1
   "resources.test.mjs", // 1,4 s con el escalón de 100k; el de 5M pide SOFTSIGHT_HEAVY=1
   "screen-audit.test.mjs", // 1,2 s

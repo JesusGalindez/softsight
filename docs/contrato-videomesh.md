@@ -90,9 +90,9 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-08-12, cerrada la tercera ronda:
 
 ```text
-ACORDADAS       24   D1, D2, D4, D5, D8–D12, D15, D18–D20, D22, D23, D26–D34
+ACORDADAS       23   D1, D2, D4, D5, D8–D12, D15, D18, D20, D22, D23, D26–D34
 PROPUESTAS       0
-IMPLEMENTADAS   10   D3, D6, D7, D13, D14, D16, D17, D21, D24, D25
+IMPLEMENTADAS   11   D3, D6, D7, D13, D14, D16, D17, D19, D21, D24, D25
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -219,11 +219,44 @@ La última fila es la que sostiene la decisión: un paquete que no se puede leer
 **no es un veredicto sobre la geometría de nadie**. Colapsar los dos ejes
 convertiría un error de transporte en un FAIL de VideoMesh.
 
-### D4 — ColmapAdapter produce los fixtures reales
+### D4 — ColmapAdapter produce los fixtures reales — MEDIO HECHA (2026-08-12)
 Cámaras, `points3D` y convenciones reales. `colmap-small-v1` sigue siendo
 imprescindible: el cubo no ejerce modelos de cámara reales, ni datos en coma
 flotante reales, ni el comportamiento real de la escala.
-**Prueba:** sin escribir.
+**Prueba:** `test:colmap`.
+
+**El adaptador existe**: `colmap.ts` lee `cameras.txt`, `images.txt` y
+`points3D.txt`, convierte los intrínsecos posicionales a campos con nombre,
+invierte la pose de COLMAP —`cameraFromWorld` en cuaternión y traslación— a la
+única que el contrato lleva, `worldFromCamera` (D32), y **no toca el marco**: lo
+declara con `cameraAxes: X_RIGHT_Y_DOWN_Z_FORWARD`. Rotar aquí para «dejarlo en
+nuestro marco» sería una conversión invisible; declararla la hace comprobable con
+un punto y un píxel.
+
+La escala sale `UNKNOWN` con fuente `NONE`, que es lo que una reconstrucción sin
+restricción externa sabe de sí misma.
+
+**Lo que falta para IMPLEMENTADA son los datos.** `colmap-small-v1` es sintético
+—se genera con `npm run colmap-small-v1`— y ejerce **la conversión**, no los
+datos: sin ruido, sin observaciones sin triangular, sin cientos de imágenes. Una
+reconstrucción real va fuera del repositorio con su sha256 en un manifiesto
+(D22), y todavía no existe. La puerta lo dice al terminar en vez de dejar creer
+que D4 está cerrada.
+
+**El juez son las observaciones del propio fichero.** COLMAP guarda dónde cayó
+cada punto 3D en píxeles, así que el camino se cierra sobre sí mismo sin inventar
+valores dorados: 36 observaciones reproyectadas por el CameraSet convertido, con
+un error máximo de 6,1·10⁻⁹ píxeles. Si el cuaternión se leyera como `(x,y,z,w)`,
+si la pose no se invirtiera, si el marco se confundiera o si el orden de los
+parámetros de un modelo estuviera cambiado, no cuadraría —y las cuatro cosas
+producen números plausibles—.
+
+**Un hallazgo del camino:** un cuaternión escrito con cinco decimales **no es
+unitario**, y su matriz de rotación no es ortogonal, así que su traspuesta deja de
+ser su inversa. Como la pose se invierte justo después, el error entra en la
+posición de la cámara: una décima de milésima de píxel al reproyectar, que es
+exactamente el tamaño que se acepta como «redondeo» sin mirarlo. Se normaliza al
+leer.
 
 ### D5 — EXR
 Scanline sin comprimir o ZIP, HALF o FLOAT. PIZ, DWA y B44 se rechazan por
@@ -459,7 +492,7 @@ PBR ni collision. La cobertura depende del árbol de triángulos, la visibilidad
 el muestreo, y llega después.
 **Prueba:** es la prueba.
 
-### D19 — Parámetros de distorsión con nombre, sin vector posicional
+### D19 — Parámetros de distorsión con nombre, sin vector posicional — IMPLEMENTADA (2026-08-12)
 Mejora de VideoMesh sobre nuestra propuesta: **eliminar el vector** en vez de
 documentar su orden. Es P9.
 ```json
@@ -469,7 +502,22 @@ documentar su orden. Es P9.
 ```
 El `ColmapAdapter` convierte el vector nativo. Modelo desconocido:
 `CAMERA_MODEL_UNSUPPORTED`.
-**Prueba:** `distortion-opencv-v1`.
+**Prueba:** `colmap-small-v1` con tres modelos a la vez —`PINHOLE`,
+`SIMPLE_RADIAL` y `OPENCV`—, que es lo que hace falta para que un orden de
+parámetros cambiado no cuele: con un solo modelo, cualquier orden coincide
+consigo mismo.
+
+Tres cosas que la prueba fija:
+
+```text
+SIMPLE_RADIAL     una focal para los dos ejes, no una focal y un cero
+PINHOLE           sin distorsión es ausente, nunca ceros implícitos
+OPENCV_FISHEYE    se declara no soportado, no se aproxima a OPENCV
+```
+
+La tercera es la que importa: aproximar un ojo de pez ignorando los coeficientes
+que sobran da una proyección que se equivoca poco en el centro y mucho en el
+borde, que es justo donde la distorsión decide.
 
 ### D20 — `depthKind` obligatorio
 `OPTICAL_AXIS | RAY_LENGTH`, sin valor por defecto y sin inferirlo por proveedor.

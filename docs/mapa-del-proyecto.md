@@ -145,15 +145,15 @@ tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
 alcance: cinco puertas —`animation-contract`, `glb-loader`, `sample-surface`,
 `glb-writer` y `bridge`— leen el fixture certificado del editor, que es un
 repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su
-motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **21 de
-las 26 puertas**; las cinco restantes solo las cierra una ejecución local con los
+motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **22 de
+las 27 puertas**; las cinco restantes solo las cierra una ejecución local con los
 dos repositorios al lado. `resources` corre en CI —su malla la genera el propio
 repositorio— pero **solo el escalón de 100k**: el de 5M pide `SOFTSIGHT_HEAVY=1` y
 sin él se declara «no ejecutada» con su motivo, D22. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 137
-comprobaciones de softsight en verde**, 26 puertas. El número ya no se lleva a mano: lo
+Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 141
+comprobaciones de softsight en verde**, 27 puertas. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
 
@@ -431,7 +431,11 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     **Diez decisiones implementadas** —D3, D6, D7, D13, D14, D16, D17, D21, D24,
     D25—, incluida la que descubrió que `JSON.parse` convierte `1e999` en
     `Infinity` sin que nadie escriba la palabra: un número no finito se rechaza
-    ahora en todo el repositorio. Lo siguiente es de los dos, R0-B, y espera al
+    ahora en todo el repositorio. Y **el adaptador de COLMAP lee ya sus tres ficheros**, convirtiendo intrínsecos
+    posicionales a campos con nombre y la pose a la única forma del contrato, con
+    el marco declarado y no convertido; lo comprueban las propias observaciones
+    del fichero, 36 reproyecciones con error máximo de 6,1·10⁻⁹ píxeles. Le faltan
+    los datos reales para cerrarse. Lo siguiente es de los dos, R0-B, y espera al
     `cube-v1` de VideoMesh. Una tercera mitad
     entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
     certifica lo que salga, sin convertirse en un motor de fotogrametría. Las
