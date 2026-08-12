@@ -95,6 +95,7 @@ La regla es una fuente por dato. Estas son las fuentes:
 | Contrato de animación | `SOFTSIGHT_ANIMATION_CONTRACT.md` (editor) | el README de softsight apunta aquí |
 | Fixtures certificados | `public/fixtures/` (editor) | se regeneran con los scripts `softsight:*` |
 | Encuadre del pliego (cámaras y cajas) | `views[].camera` y `partScreenBoxes` del informe | el editor los consume y fija el control `artifacts/agent/encuadre-control.json`; la cámara se usa con aspecto 1 sobre un tile cuadrado |
+| Decisiones de la frontera con VideoMesh | [`contrato-videomesh.md`](contrato-videomesh.md) | una decisión que no está ahí no existe; los documentos de intercambio son historial, no contrato |
 | Estado y orden del trabajo | **este fichero** (§5) y `plan-fases-bcd.md` | ningún otro sitio lleva la cuenta |
 
 Los contratos viven en el editor a propósito: **el consumidor pincha la versión
@@ -376,6 +377,31 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     de 50,4 s a 0,8 s, la suite de 61 s a 34,5, y el contrato de topología de
     0,46 s de CPU a 0,02 gracias a una caché de auditoría con clave en la huella
     de la malla. Ningún hash se movió: el pliego del dron sigue en `46228b7c`.
+19. **Reconstrucción y certificación de producción** (sin empezar; el registro de
+    decisiones abierto). El orden de trabajo está en
+    [`plan-reconstruccion.md`](plan-reconstruccion.md) y **las decisiones de la
+    frontera en [`contrato-videomesh.md`](contrato-videomesh.md)**, que es lo que
+    rige: tras dos rondas, 30 acordadas, 4 condicionadas, **ninguna
+    implementada**, porque ninguna tiene todavía una prueba que falle sin ella.
+    El registro se congela ahí —no se admiten decisiones nuevas hasta que pase
+    `cube-v1`— porque dos rondas añadieron 21 y la tercera podría añadir otras
+    veinte. Una tercera mitad entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
+    certifica lo que salga, sin convertirse en un motor de fotogrametría. Las
+    secciones 0–83 las escribió el agente de VideoMesh; las 84–86 son la respuesta
+    de este lado tras contrastarlas contra el código, y mandan donde se
+    contradigan. **No se escribe código hasta cerrar tres cosas**: por dónde viaja
+    el paquete —el puente lleva los ficheros en base64 dentro del JSON, con topes
+    de 256 MB y 120 s, y un paquete de reconstrucción no cabe por ahí—; si
+    `reconstruction/` y `production/` viven aquí o en un tercer repositorio que
+    consuma el contrato público, porque doblan las 19.565 líneas de `src/soft/`;
+    y en qué idioma van los códigos nuevos, porque la tabla de `warningCodes.ts`
+    es una y la comparan las dos direcciones de `test:codes`. De lo ya contrastado,
+    lo que cambia el orden de trabajo es que el techo de tamaño no está donde el
+    plan creía: `mesh.ts` ya es de arrays tipados, y quien no escala es
+    `auditMesh` —`Map` con clave de texto por vértice en `inspect.ts:69` y otro
+    de aristas en `inspect.ts:118`—, así que reescribirlo sin `Map` va antes que
+    cualquier árbol de triángulos. Ese árbol, además, **no se llama `bvh.ts`**:
+    ese nombre ya es de la captura de movimiento.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un
