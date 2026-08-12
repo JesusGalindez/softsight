@@ -337,7 +337,13 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     7,0e-8 y cero. Solapar bandas vale; que entre todas se lleven más de 1 es un
     error del atado, porque dejaría al hueso de la regla en negativo.
 17. **B-R2 — deuda estructural aparcada.** Unificar los dos parsers de GLB. No se
-   toca hasta que haya un consumidor que lo pague.
+   toca hasta que haya un consumidor que lo pague. **Ya lo hay, desde el
+   2026-08-12**: D32 del contrato con VideoMesh exige que la conversión entre la
+   convención canónica de matrices y la de glTF ocurra **exactamente una vez**, en
+   el adaptador de frontera. Dos parsers son dos sitios donde podría ocurrir, y
+   dos transposiciones sin dueño se cancelan o se duplican sin que nada salte. No
+   bloquea `cube-v1`, que no exporta glTF; bloquea la primera exportación de
+   producción.
 18. **Plan Ω — el coste por turno del agente** (hecho, salvo Ω6.4, que vive en el
     editor). Ver [`plan-omega.md`](plan-omega.md), que lleva la tabla de antes y
     ahora. No añadió funcionalidad: atacaba lo que hacía caro operar el banco
@@ -381,11 +387,13 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     decisiones abierto). El orden de trabajo está en
     [`plan-reconstruccion.md`](plan-reconstruccion.md) y **las decisiones de la
     frontera en [`contrato-videomesh.md`](contrato-videomesh.md)**, que es lo que
-    rige: tras dos rondas, 30 acordadas, 4 condicionadas, **ninguna
-    implementada**, porque ninguna tiene todavía una prueba que falle sin ella.
-    El registro se congela ahí —no se admiten decisiones nuevas hasta que pase
-    `cube-v1`— porque dos rondas añadieron 21 y la tercera podría añadir otras
-    veinte. Una tercera mitad entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
+    rige. **Ronda de diseño cerrada el 2026-08-12 tras tres vueltas: 34 decisiones
+    acordadas, 12 principios, ninguna en PROPUESTA y ninguna implementada**,
+    porque ninguna tiene todavía una prueba que falle sin ella. El registro queda
+    congelado —solo se admiten decisiones que bloqueen `cube-v1`— y el único
+    movimiento admisible es de acordada a implementada. La primera es D30: ya es
+    el comportamiento del código, solo le falta el fixture. Una tercera mitad
+    entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
     certifica lo que salga, sin convertirse en un motor de fotogrametría. Las
     secciones 0–83 las escribió el agente de VideoMesh; las 84–86 son la respuesta
     de este lado tras contrastarlas contra el código, y mandan donde se

@@ -10,7 +10,8 @@ han enviado son el historial de cómo se llegó; este fichero es lo que rige.
 [`plan-reconstruccion.md`](plan-reconstruccion.md). El estado del proyecto, en
 [`mapa-del-proyecto.md`](mapa-del-proyecto.md) §5.
 
-Última ronda incorporada: respuesta de VideoMesh del 2026-08-12 (D13–D33, P9–P11).
+**La ronda de diseño está cerrada** desde el 2026-08-12, tras tres rondas. Lo que
+sigue es código y medidas.
 
 ---
 
@@ -30,26 +31,24 @@ REVERTIDA     con fecha y motivo, nunca borrada
 > Una decisión pasa a IMPLEMENTADA cuando existe una prueba que **falla si la
 > decisión se incumple**. No cuando el código está escrito.
 
-**Corolario:** una ACORDADA que lleva semanas sin prueba es deuda y se anota. Un
-registro que solo enseña verdes no es el estado, es una foto favorecedora.
+**Corolario:** una ACORDADA que lleva semanas sin prueba es deuda y se anota.
 
-### 1.3 El ciclo de una decisión
+### 1.3 El ciclo
 
 ```text
 propuesta → decisión → esquema → fixture → prueba del consumidor → IMPLEMENTADA
 ```
 
-Nunca se acuerda un campo que solo exista en la documentación.
-
 ### 1.4 Los envíos se disparan por evento, no por calendario
 
-**SoftSight publica:** esquemas regenerados y su hash al cambiar cualquiera; un
-informe de ejemplo real al cambiar el informe; qué cambió y por qué al mover una
-versión; el nombre de cada puerta nueva y qué compara.
+**SoftSight avisa cuando:** implementa D30, mide la línea base de `auditMesh`,
+pasa R0-A, o cambia cualquier esquema.
 
-**VideoMesh publica:** `cube-v1` al salir de R0; un paquete pequeño que ejerza
-una convención **antes** de cambiarla; `colmap-small-v1` al salir de R2; un
-paquete que use cada modelo de cámara nuevo.
+**VideoMesh avisa cuando:** implementa `allow_nan=False`, genera `cube-v1`,
+congela `expected.json`, o está listo como productor de R0-B.
+
+Regla que evita la mitad de los problemas: **una convención se cambia enviando
+antes un fixture que la ejerce.** No después.
 
 ### 1.5 Desempates
 
@@ -57,29 +56,30 @@ paquete que use cada modelo de cámara nuevo.
 razón todavía: es deuda certificada y ese número no puede sostener una
 certificación.
 
-**Decisiones:** manda la tabla de ownership. Sobre un dato que es de SoftSight
-decide SoftSight; sobre uno de VideoMesh decide VideoMesh; sobre un dato de
-frontera compartida **no hay cambio hasta que los dos digan sí**, y el estado por
-defecto —«no decidido»— bloquea.
+**Decisiones:** manda la tabla de ownership. Sobre un dato de frontera compartida
+no hay cambio hasta que los dos digan sí, y «no decidido» bloquea.
 
-### 1.6 Congelación del registro hasta que pase `cube-v1`
+### 1.6 El registro está congelado hasta que pase `cube-v1`
 
-Dos rondas han añadido **21 decisiones**. Una tercera podría añadir otras veinte,
-y el registro se convertiría en el trabajo en vez de en la herramienta.
+Aceptado por los dos lados.
 
-**Regla, desde ahora:** no se admiten números de decisión nuevos hasta que
-`cube-v1` pase de punta a punta, **salvo los que bloqueen `cube-v1`**. Todo lo
-demás se anota como pendiente sin número y espera.
+> No se admiten números de decisión nuevos hasta que `cube-v1` pase de punta a
+> punta, **salvo los que bloqueen `cube-v1`**. Todo lo demás se anota como
+> PENDIENTE sin número y espera.
 
-Esto no es burocracia al revés: es la única defensa contra gastar en diseñar el
-tiempo que estamos intentando ahorrar.
+Califica como bloqueo solo lo que haga `cube-v1` imposible, ambiguo o inseguro.
+No califican: formatos futuros, LOD, MechanicalGraph, códecs EXR nuevos,
+ejecución en la nube.
+
+Tres rondas añadieron 34 decisiones y once principios. La cuarta debe producir la
+primera IMPLEMENTADA, no la número treinta y cinco.
 
 ### 1.7 Lo que no se hace
 
 ```text
 un tercer repositorio de contratos   todavía no; el hash del esquema basta
 un canal en tiempo real              el intercambio son ficheros
-reuniones de sincronización          las sustituye este registro
+reuniones periódicas                 las sustituye el aviso por evento
 «lo hablamos cuando llegue»          es como se pierde el tiempo
 ```
 
@@ -87,24 +87,21 @@ reuniones de sincronización          las sustituye este registro
 
 ## 2. Estado del registro
 
-Al 2026-08-12, tras la segunda ronda:
+Al 2026-08-12, cerrada la tercera ronda:
 
 ```text
-ACORDADAS       30   D1–D27, D30, D31, D33
-PROPUESTAS       4   D28, D29, D32, D34 — condicionadas, esperan confirmación
+ACORDADAS       34   D1–D34
+PROPUESTAS       0
 IMPLEMENTADAS    0
 ```
 
-**Cero implementadas sigue siendo el dato importante.** Treinta y cuatro
-decisiones y ninguna prueba. La siguiente ronda no debe añadir decisiones: debe
-producir la primera IMPLEMENTADA.
+**El único movimiento admisible ahora es de ACORDADA a IMPLEMENTADA.** La
+candidata más barata es D30: ya es el comportamiento del código y solo le falta
+el fixture que falle si deja de serlo.
 
 ---
 
 ## 3. Principios congelados
-
-P1–P8 los escribió VideoMesh en la primera ronda; P9–P11, en la segunda. No se
-renegocian sin un cambio registrado aquí.
 
 ```text
 P1   VideoMesh reconstruye; SoftSight no. SoftSight mide y certifica;
@@ -118,153 +115,139 @@ P7   handoff V1 = filesystem + rutas + CLI/API
 P8   SoftSight no modifica la evidencia original
 P9   los adaptadores absorben la ambigüedad de cada backend;
      el contrato canónico la elimina
-P10  un paquete sellado es inmutable; cualquier cambio crea una identidad nueva
+P10  un paquete sellado es inmutable; cualquier cambio crea identidad nueva
 P11  la paridad cruzada aplica solo a hechos de frontera compartida;
      lo que tiene dueño no se duplica solo para obtener paridad
+P12  una medida y una prueba que falla tienen más autoridad que más prosa
+     de arquitectura
 ```
 
-**P11 corrige una formulación nuestra.** Escribimos que una decisión se cierra
-cuando «el mismo cálculo hecho por los dos lados da el mismo número», y
-generalizarlo obligaría a VideoMesh a reimplementar la cobertura, que es lo
-contrario de P1. Las tres categorías de VideoMesh son la formulación correcta:
+**P11** corrige una formulación nuestra: generalizar «los dos lados dan el mismo
+número» obligaría a VideoMesh a reimplementar la cobertura, que es lo contrario
+de P1. Tres categorías:
 
 ```text
-A  frontera compartida     paridad cruzada obligatoria
-   recuentos, caja, cámaras, proyección de puntos, hash de esquema,
-   composición de transformaciones
-
-B  propiedad de SoftSight  se valida con fixtures analíticos y valores dorados,
-   non-manifold, bordes,   NO reimplementando el motor dos veces
-   cobertura, confianza,
-   diff, certificación
-
-C  propiedad de VideoMesh  igual, en su lado
-   selección de frames, ranking de candidatos, política de torneo
+A  frontera compartida    paridad cruzada obligatoria
+                          recuentos, caja, cámaras, proyección de puntos,
+                          hash de esquema, composición de transformaciones
+B  de SoftSight           fixtures analíticos y valores dorados;
+                          NO se reimplementa el motor dos veces
+C  de VideoMesh           igual, en su lado
 ```
 
 ---
 
-## 4. Decisiones acordadas
+## 4. Las decisiones
 
-### D1 — Transporte del paquete · ACORDADA
+### D1 — Transporte del paquete
 Filesystem y rutas. VideoMesh escribe el paquete en disco y pasa la ruta del
 manifest. Nada de base64 en el JSON, nada de streaming, y los límites del puente
 no se suben como parche. El puente se queda para el editor y peticiones pequeñas.
 **Prueba:** sin escribir.
 
-### D2 — Códigos de aviso · ACORDADA
-Código legible en español, como los 40 que ya existen, más un **identificador
-neutro y estable** (`SS-RECON-001`). VideoMesh parsea el identificador, nunca el
-mensaje. Espacios: `SS-PKG`, `SS-IO`, `SS-GEO`, `SS-RECON`, `SS-CAM`, `SS-COV`,
-`SS-CONF`, `SS-PROD`, `SS-LOD`, `SS-UV`, `SS-PBR`, `SS-COLL`.
-**Prueba:** `test:codes` extendida a identificadores únicos y estables. Sin escribir.
+### D2 — Códigos de aviso
+Código legible en español, más un **identificador neutro y estable**
+(`SS-RECON-001`). VideoMesh parsea el identificador, nunca el mensaje. Espacios:
+`SS-PKG`, `SS-IO`, `SS-GEO`, `SS-RECON`, `SS-CAM`, `SS-COV`, `SS-CONF`,
+`SS-PROD`, `SS-LOD`, `SS-UV`, `SS-PBR`, `SS-COLL`.
+**Prueba:** `test:codes` extendida a identificadores únicos y estables.
 
-### D3 — Ejecución y certificación son dos ejes · ACORDADA
+### D3 — Ejecución y certificación son dos ejes
 ```text
 ExecutionStatus        COMPLETE | PARTIAL | ERROR | UNSUPPORTED
 CertificationVerdict   PASS | FAIL | INCONCLUSIVE
 ```
-Con motivo aparte: `INSUFFICIENT_EVIDENCE`, `UNCERTAINTY_OVERLAPS_THRESHOLD`,
-`REQUIRED_METRIC_UNAVAILABLE`. Un fallo de la herramienta nunca se presenta como
-veredicto, ni al revés.
+Motivos aparte: `INSUFFICIENT_EVIDENCE`, `UNCERTAINTY_OVERLAPS_THRESHOLD`,
+`REQUIRED_METRIC_UNAVAILABLE`.
 **Prueba:** sin escribir.
 
-### D4 — ColmapAdapter produce los fixtures reales · ACORDADA
-Deja de ser adaptador opcional futuro. Cámaras, `points3D` y convenciones reales.
+### D4 — ColmapAdapter produce los fixtures reales
+Cámaras, `points3D` y convenciones reales. `colmap-small-v1` sigue siendo
+imprescindible: el cubo no ejerce modelos de cámara reales, ni datos en coma
+flotante reales, ni el comportamiento real de la escala.
 **Prueba:** sin escribir.
 
-### D5 — EXR · ACORDADA
-V1 admite scanline sin comprimir o ZIP, HALF o FLOAT. PIZ, DWA y B44 se rechazan
-por código —`EXR_UNSUPPORTED_COMPRESSION`—, nunca en silencio. Cada canal declara
-semántica, espacio, rango, unidad e inválido.
+### D5 — EXR
+Scanline sin comprimir o ZIP, HALF o FLOAT. PIZ, DWA y B44 se rechazan por
+código. Cada canal declara semántica, espacio, rango, unidad e inválido.
 **Prueba:** sin escribir.
 
-### D6 — Sandbox del paquete · ACORDADA
-Cada paquete tiene `PACKAGE_ROOT`; todo artifact resuelve a una ruta canónica
-dentro de ella. Se rechaza `../`, ruta absoluta fuera, escape por symlink,
-symlink anidado y symlink roto. `SS-PKG-001..004`.
-**Prueba:** fixture `invalid-path-v1`. Sin escribir.
+### D6 — Sandbox del paquete
+`PACKAGE_ROOT`; todo artifact resuelve dentro. Se rechaza `../`, ruta absoluta
+fuera, escape por symlink, symlink anidado y symlink roto. `SS-PKG-001..004`.
+**Prueba:** `invalid-path-v1`.
 
-### D7 — Integridad de artifacts · ACORDADA
+### D7 — Integridad de artifacts
 Cada artifact declara `path`, `bytes` y `sha256`. SoftSight valida raíz, tamaño y
-hash **antes** de analizar. El informe publica `appliesTo: { artifactId, sha256 }`
-y, por el refinamiento de la segunda ronda, también los hashes de manifest,
-malla, conjunto de cámaras y esquema. Un informe cacheado no se reutiliza para
-otro hash.
-**Prueba:** fixture `hash-mismatch-v1`. Sin escribir.
+hash **antes** de analizar. El informe publica `packageId`, `manifestSha256` y los
+hashes de los artifacts.
 
-### D8 — `requiredEvidence` por contrato · ACORDADA
+**Del cierre de la tercera ronda:** el manifest **no puede contener su propio
+sha256** sin trucos recursivos. Lo calcula SoftSight después de la publicación y
+lo ata al informe. Y `packageId` es la identidad canónica: **SoftSight nunca
+infiere identidad del nombre del directorio**, que es comodidad humana.
+**Prueba:** `hash-mismatch-v1`.
+
+### D8 — `requiredEvidence` por contrato
 ```text
-falta evidencia que el contrato declara requerida  → INCONCLUSIVE
-falta evidencia que el contrato no usa             → irrelevante
+falta evidencia requerida por el contrato  → INCONCLUSIVE
+falta evidencia que el contrato no usa     → irrelevante
 ```
-Corrige a SoftSight: `TOPOLOGY_ONLY` certifica sin una sola cámara.
-**Prueba:** casos A y B de la batería. Sin escribir.
+**Prueba:** casos A y B.
 
-### D9 — Modelo de escala · ACORDADA
+### D9 — Modelo de escala
 `status` (UNKNOWN | RELATIVE | ABSOLUTE), `source` (NONE | KNOWN_DISTANCE |
-MARKER | CAMERA_PRIOR | EXTERNAL_MEASUREMENT | MANUAL) e **incertidumbre** con su
+MARKER | CAMERA_PRIOR | EXTERNAL_MEASUREMENT | MANUAL) e incertidumbre con su
 modelo y valor. Con `status != ABSOLUTE` se rechazan presupuestos absolutos;
-fallback relativo a la diagonal de la caja. No se reporta precisión física más
-fina de la que la incertidumbre justifica.
-**Prueba:** `unknown-scale-v1`, caso C. Sin escribir.
+fallback relativo a la diagonal. No se reporta precisión más fina de la que la
+incertidumbre justifica.
+**Prueba:** `unknown-scale-v1`, caso C.
 
-### D10 — Convenciones de espacio de imagen · ACORDADA
-`imageSpace` DISTORTED|UNDISTORTED, `pixelOrigin` TOP_LEFT, `pixelCenter`
-INTEGER|HALF_INTEGER, `transformConvention`, handedness y ejes.
+### D10 — Convenciones de espacio de imagen
+`imageSpace`, `pixelOrigin`, `pixelCenter`, `transformConvention`, handedness y
+ejes, viajando como **una sola unidad** `CameraImageSpace` con
+`imageArtifactHash`, dimensiones, intrínsecos, distorsión y orientación. Impide
+combinar intrínsecos rectificados con imagen distorsionada, o una máscara del
+frame original con profundidad del rectificado.
+**Prueba:** fixtures analíticos de cámara + fila 4 de D23.
 
-**Refinamiento de la segunda ronda, aceptado:** todo esto viaja como **una sola
-unidad**, `CameraImageSpace`, con `imageArtifactHash`, `width`, `height`,
-`imageSpace`, `intrinsics`, `distortion`, `pixelOrigin`, `pixelCenter` y
-`orientation`. Impide combinar intrínsecos sin distorsionar con imagen
-distorsionada, o una máscara del frame original con una profundidad del frame
-rectificado.
-**Prueba:** fixtures analíticos de cámara + fila 4 de D23. Sin escribir.
-
-### D11 — FrameGraph · ACORDADA
-CAMERA, RECONSTRUCTION, ASSET_CANONICAL, PRODUCTION, con las transformaciones
-entre ellos guardadas: marco origen, marco destino, matriz, motivo y productor.
-Ninguna transformación se hornea sin registrarla.
+### D11 — FrameGraph
+CAMERA, RECONSTRUCTION, ASSET_CANONICAL, PRODUCTION, con cada transformación
+guardando marco origen, marco destino, matriz, motivo y productor. Ninguna se
+hornea sin registrarla.
 **Prueba:** sin escribir.
 
-### D12 — Versiones y capabilities · ACORDADA
-Bloque `versions` por contrato, bloque `models` por modelo, lista `capabilities`.
-El consumidor comprueba el bloque, no un campo. La semántica de negociación la
-fija D31.
+### D12 — Versiones y capabilities
+Bloque `versions`, bloque `models`, lista `capabilities`. El consumidor comprueba
+el bloque, no un campo.
 **Prueba:** sin escribir.
 
-### D13 — Códigos de salida nuevos, solo en subcomandos nuevos · ACORDADA
+### D13 — Códigos de salida nuevos, solo en subcomandos nuevos
 ```text
 comandos existentes   0/1/2 sin tocar
-
 reconstruction/production
-  0   COMPLETE + PASS
-  1   COMPLETE + FAIL
-  11  COMPLETE + INCONCLUSIVE
-  2   error de datos o de uso (paraguas heredado)
-  20  paquete inválido      21 contrato no soportado
-  22  formato no soportado  23 límite de recursos     24 error interno
+  0 COMPLETE+PASS   1 COMPLETE+FAIL   11 COMPLETE+INCONCLUSIVE
+  2 error de datos o de uso (paraguas heredado)
+  20 paquete inválido  21 contrato no soportado  22 formato no soportado
+  23 límite de recursos  24 error interno
 ```
-**Añadido de VideoMesh, aceptado:** el código de salida es una **proyección para
-shell y CI**. La autoridad semántica completa es el JSON —`execution` y
-`certification`—. No se intenta representar toda combinación con un entero.
+El código de salida es una **proyección para shell y CI**. La autoridad semántica
+es el JSON: `execution` y `certification`.
 **Prueba:** sin escribir.
 
-### D14 — Un documento, una versión en la raíz · ACORDADA
-Opción (a): el informe de reconstrucción y el de producción son **documentos
-distintos**, no un bloque dentro del informe histórico.
-```json
-{ "documentType": "softsight.reconstruction-report", "contractVersion": 1 }
+### D14 — Un documento, una versión en la raíz
+Informe de reconstrucción y de producción son **documentos distintos**.
+`documentType` en todos los documentos canónicos, con la forma
+`<productor>.<tipo>`:
+```text
+videomesh.reconstruction-package   softsight.reconstruction-report
+videomesh.production-package       softsight.production-report
 ```
-`reportVersion` y `contractVersion` no conviven como dos versiones raíz.
-
-**Refinamiento aceptado:** `documentType` en **todos** los documentos canónicos,
-con el prefijo del productor —`videomesh.reconstruction-package`,
-`softsight.reconstruction-report`—, para que no haya ambigüedad cuando existan
-paquete, informe, manifest de producción y los futuros de apariencia y mecánica.
+Nunca nombres ambiguos sueltos —`reconstruction`, `report`—. `reportVersion` y
+`contractVersion` no conviven como dos versiones raíz.
 **Prueba:** sin escribir.
 
-### D15 — Una sola fuente ejecutable; JSON Schema es la frontera pública · ACORDADA
+### D15 — Una sola fuente ejecutable; JSON Schema es la frontera pública
 ```text
 esquema en ejecución de SoftSight   (fuente única, la que valida de verdad)
         ↓ generado
@@ -272,185 +255,296 @@ contracts/*.schema.json             (frontera pública, commiteado)
         ↓ generado
 modelos Pydantic de VideoMesh       (derivados, nunca a mano)
 ```
+La objeción de VideoMesh —una `interface` de TypeScript no expresa required,
+enum, patrón ni `oneOf`— es correcta para una interface pasiva y no aplica:
+SoftSight usa esquemas en ejecución y **ya tiene el generador**, `toJsonSchema()`
+en `src/soft/agent/schema.ts:721`, que emite `additionalProperties: false`.
 
-VideoMesh objetó que una `interface` de TypeScript no expresa required, min/max,
-enum, patrón, longitud, `additionalProperties` ni `oneOf`. **La objeción es
-correcta para una interface pasiva y no aplica aquí**: SoftSight no usa
-interfaces como esquema. Usa esquemas en ejecución —`SCENE_SCHEMA`,
-`PATCH_SCHEMA`, `STORY_SCHEMA`— y **ya tiene el generador**: `toJsonSchema()` en
-`src/soft/agent/schema.ts:721`, que emite `additionalProperties: false`. Es
-exactamente el «schema runtime TypeScript, no una interface pasiva» que VideoMesh
-pone como condición.
+**Condición:** si el esquema en ejecución no sabe expresar algo que la frontera
+necesita, se extiende el esquema; el JSON Schema nunca se escribe a mano.
 
-Aceptamos sus cinco condiciones y su formulación: **la frontera pública entre
-repositorios es el JSON Schema, no el lenguaje interno de SoftSight.**
+**Riesgo asumido:** dos validadores pueden discrepar. Se cierra con fixtures que
+**los dos lados deben rechazar**.
+**Prueba:** `test:contracts --check` con el patrón de `tools/agents-md.mjs
+--check`, más `unknown-field-v1`, `unknown-capability-v1`, `unsealed-package-v1`.
 
-Dos razones para que la generación siga saliendo del esquema en ejecución y no al
-revés: el núcleo no lleva dependencias, y validar JSON Schema en ejecución
-significaría traer un validador o escribirlo; y el consumidor que ya existe
-—el editor— consume `--schema` y lo tiene fijado con su propia puerta.
-
-**Condición nuestra:** si el esquema en ejecución no sabe expresar algo que la
-frontera necesita, **se extiende el esquema**, nunca se escribe el JSON Schema a
-mano. Un JSON Schema escrito a mano sería el segundo original que este contrato
-existe para evitar.
-
-**Riesgo asumido y su cierre:** habrá dos validadores —el nuestro y el Pydantic
-generado— y pueden discrepar. Se cierra con fixtures de conformidad que **los dos
-lados deben rechazar**: `unknown-field-v1`, `unknown-capability-v1`,
-`unsealed-package-v1`. Un documento que un lado acepta y el otro rechaza es un
-fallo de puerta, no una diferencia de criterio.
-**Prueba:** `test:contracts --check`, con el patrón de `tools/agents-md.mjs
---check` —sale 1 si el fichero commiteado no es idéntico al regenerado—, más los
-fixtures de conformidad. Sin escribir.
-
-### D16 — El hash del esquema se comprueba · ACORDADA
-SoftSight lo verifica en la ingesta. Discrepancia:
+### D16 — El hash del esquema se comprueba
+Hash desconocido:
 ```text
-execution: ERROR
-reason:    CONTRACT_SCHEMA_MISMATCH
+execution: ERROR   reason: CONTRACT_SCHEMA_MISMATCH
 ```
-No un aviso: un paquete producido contra otro esquema no es uno degradado, es uno
-que no sabemos leer.
+Nunca aviso y continuar. En DRAFT una versión puede admitir más de un hash si
+están registrados.
 
-**Refinamiento aceptado, con condición:** mientras el contrato esté en DRAFT una
-versión puede admitir más de un hash, **si están registrados explícitamente**. La
-condición es que la lista de hashes admitidos vive **en este fichero**, no en un
-comentario del código. Un hash nunca desconocido se acepta automáticamente.
+**Del cierre de la tercera ronda:** los hashes concretos **se generan** del
+artefacto de esquema soportado, no se copian a mano en tres sitios. Reparto de
+autoridad:
+```text
+este fichero              qué versiones de esquema se aceptan (decisión)
+contracts/*.schema.json   el contrato legible por máquina
+registro generado         la búsqueda de compatibilidad por hash
+```
 **Prueba:** sin escribir.
 
-### D17 — NaN, infinitos y redondeo · ACORDADA
-NaN e Infinity no existen en JSON; el `json` de Python los emite por defecto y
-`JSON.parse` de Node los rechaza. Regla:
+### D17 — NaN, infinitos y redondeo
 ```text
 en Python   json.dumps(..., allow_nan=False), que lanza en vez de emitir inválido
-en EXR      +INF como profundidad inválida sigue siendo correcto (es binario)
+en EXR      +INF como profundidad inválida sigue siendo correcto
 redondeo    el determinismo se consigue en el cálculo, no en la serialización;
             ningún redondeo cosmético antes de evaluar un umbral;
             el informe humano puede presentar 96,7 % sin tocar la métrica
 ```
-**Refinamiento aceptado:** un `null` desnudo es ambiguo. Para métricas de QA:
+Un `null` desnudo es ambiguo. Para métricas de QA:
 ```json
 { "meanError": { "value": null, "status": "UNDEFINED", "reason": "EMPTY_SAMPLE_SET" } }
 ```
-La forma corta —`meanError` más `meanErrorReason`— se admite en campos simples,
-no en métricas que puedan alimentar un umbral.
-**Prueba:** sin escribir.
+VideoMesh lo rechaza **en origen**; no se confía en que Node lo rechace después.
+**Prueba:** `test_json_rejects_non_finite_numbers`, con NaN, +Infinity y
+-Infinity, antes de producir paquete.
 
-### D18 — R0 termina con `cube-v1` pasando · ACORDADA
-R0 no cierra con documentos. Cierra cuando esto funciona:
+### D18 — R0 termina con `cube-v1` pasando
 ```bash
 softsight reconstruction inspect fixtures/cube-v1/reconstruction.json
 ```
 con `execution: COMPLETE` y `certification: PASS`, recorriendo esquema, sandbox,
 hashes, PLY, CameraSet, escala, FrameGraph, auditoría mínima y sobre del informe.
-El antiguo R1.5 se integra en R0. La partición del criterio de salida la fija D34.
+El criterio se parte según D34.
+
+**R0 se queda pequeño a propósito:** sin cobertura, sin confianza, sin LOD, UV,
+PBR ni collision. La cobertura depende del árbol de triángulos, la visibilidad y
+el muestreo, y llega después.
 **Prueba:** es la prueba.
 
-### D19 — Parámetros de distorsión con nombre, sin vector posicional · ACORDADA
-**Mejora de VideoMesh sobre nuestra propuesta.** Proponíamos declarar el orden del
-vector por modelo; ellos proponen **eliminar el vector** del contrato canónico y
-usar parámetros con nombre. Elimina la ambigüedad en vez de documentarla, que es
-P9.
+### D19 — Parámetros de distorsión con nombre, sin vector posicional
+Mejora de VideoMesh sobre nuestra propuesta: **eliminar el vector** en vez de
+documentar su orden. Es P9.
 ```json
 { "model": "OPENCV",
   "intrinsics": { "fx": 2811.2, "fy": 2809.9, "cx": 1920.0, "cy": 1080.0 },
   "distortion": { "k1": 0.12, "k2": -0.08, "p1": 0.001, "p2": 0.002 } }
 ```
-El `ColmapAdapter` convierte el vector nativo a parámetros con nombre. Modelo
-desconocido: `CAMERA_MODEL_UNSUPPORTED`, nunca interpretación automática.
-**Prueba:** fixture `distortion-opencv-v1`. Sin escribir.
+El `ColmapAdapter` convierte el vector nativo. Modelo desconocido:
+`CAMERA_MODEL_UNSUPPORTED`.
+**Prueba:** `distortion-opencv-v1`.
 
-### D20 — `depthKind` obligatorio · ACORDADA
+### D20 — `depthKind` obligatorio
 `OPTICAL_AXIS | RAY_LENGTH`, sin valor por defecto y sin inferirlo por proveedor.
-Confundirlos mete un error que crece con el ángulo respecto al centro de la
-imagen: cero en el centro, máximo en las esquinas. `INVERSE_DEPTH` y `DISPARITY`
-llegarán por capability, nunca reinterpretando depth V1.
-**Prueba:** `depth-optical-axis-v1`, `depth-ray-length-v1`. Sin escribir.
+Confundirlos mete un error que crece con el ángulo respecto al centro: cero en el
+centro, máximo en las esquinas. `INVERSE_DEPTH` y `DISPARITY` llegarán por
+capability, nunca reinterpretando depth V1.
+**Prueba:** `depth-optical-axis-v1`, `depth-ray-length-v1`.
 
-### D21 — Coverage v1 sin provenance, y qué puede certificar · ACORDADA
-Coverage v1 publica `provenanceAware: false`. Cuando exista provenance por
-región, sube `coverageModelVersion` y pasa a `true`. El número nunca cambia de
-significado en silencio.
+### D21 — Coverage v1 sin provenance, y qué puede certificar
+Coverage v1 publica `provenanceAware: false`. Solo puede **certificar** sobre
+superficie puramente reconstruida; sobre malla mezclada se reporta pero no
+certifica el área observada.
 
-**Restricción de VideoMesh, aceptada y necesaria:** una cobertura sin conciencia
-de provenance solo puede **certificar** sobre superficie puramente reconstruida.
-Sobre una malla mezclada se reporta pero no certifica el área observada, y el
-contrato que la exija sale INCONCLUSIVE. Cierra el agujero de que una superficie
-completada por IA se convierta indirectamente en superficie observada.
-
-**Condición nuestra, para que sea aplicable en V1:** la restricción exige saber
-si la malla es pura, y la provenance por triángulo no existe todavía. El manifest
-declara un **booleano a nivel de paquete** —`meshPurelyReconstructed`— que
-VideoMesh sabe hoy sin trabajo extra. Sin ese campo, coverage no certifica.
-**Prueba:** caso de malla mezclada. Sin escribir.
-
-### D22 — Dónde viven los fixtures · ACORDADA
+El manifest declara `meshPurelyReconstructed`, que VideoMesh sabe hoy:
 ```text
-ligeros (< 1 MB, sintéticos o generados)  →  en el repositorio, versionados
-pesados (COLMAP real, high-poly)          →  fuera, por variable de entorno,
-                                             con sha256 en un manifiesto
-                                             versionado que sí está en git
-sin fixture                               →  la puerta se declara NOT_RUN
-                                             con su motivo; nunca PASS
+true    → coverage v1 puede certificar el área observada
+false   → se reporta, no certifica
 ```
-Cinco de las veintidós puertas de SoftSight ya funcionan así.
+**Semántica congelada.** `true` significa: *cada región de superficie deriva
+exclusivamente de evidencia de reconstrucción, y ninguna operación posterior ha
+introducido superficie nueva sin soporte reconstructivo.* **No** significa «la
+malla no se ha tocado nunca».
+
+```text
+mantienen true    recálculo de normales, soldadura de vértices, optimización
+                  de índices, simplificación determinista, conversión de
+                  formato, transformación de coordenadas
+fuerzan false     relleno de agujeros, completado por IA, región modelada a
+                  mano, trasera sintética, extrapolación de superficie,
+                  geometría no observada
+```
+Cuando VideoMesh no pueda demostrar `true`, emite `false`.
+
+Cuando una métrica no pueda certificar, el informe dice por qué:
+```json
+{ "coverage": { "value": 0.96, "certificationEligible": false,
+                "reason": "MESH_NOT_PURELY_RECONSTRUCTED" } }
+```
+
+**Detalle abierto, de una línea, que no bloquea `cube-v1`:** VideoMesh contempla
+que el campo pueda faltar y que faltar signifique «no certifica». Eso choca con
+D30: si el esquema lo declara requerido, faltar es un error de validación en la
+ingesta y nunca se llega a la rama de cobertura. **Posición de SoftSight: campo
+requerido**, valores `true|false`, sin rama de ausencia. Se resuelve al escribir
+el esquema.
+**Prueba:** malla pura, malla mezclada, campo ausente.
+
+### D22 — Dónde viven los fixtures
+```text
+ligeros (< 1 MB, sintéticos)  →  en el repositorio, versionados
+pesados (COLMAP real, 5M)     →  fuera, por variable de entorno, con sha256
+                                 en un manifiesto versionado que sí está en git
+sin fixture                   →  la puerta se declara NOT_RUN con su motivo;
+                                 nunca PASS
+```
 **Prueba:** sin escribir.
 
-### D23 — Puerta de paridad, contra valores dorados · ACORDADA
-Cuatro filas sobre `cube-v1` y `colmap-small-v1`: recuentos, caja tras
-normalizar el marco, cámaras registradas, y proyección de puntos 3D conocidos.
+### D23 — Puerta de paridad, contra valores dorados
+Cuatro filas sobre `cube-v1` y `colmap-small-v1`: recuentos, caja tras normalizar
+el marco, cámaras registradas, y proyección de puntos 3D conocidos.
 
-**Refinamiento de VideoMesh, aceptado y importante:** no basta con
-`SoftSight == VideoMesh`, porque los dos pueden implementar el mismo error. Tres
-comparaciones, y las tres deben pasar:
+No basta `SoftSight == VideoMesh`: los dos pueden implementar el mismo error.
+Tres comparaciones, y las tres deben pasar:
 ```text
-SoftSight  ↔ expected.json
-VideoMesh  ↔ expected.json
-SoftSight  ↔ VideoMesh
+SoftSight ↔ expected.json      VideoMesh ↔ expected.json      SoftSight ↔ VideoMesh
 ```
-Es el mismo patrón que `test:geometry` ya usa contra volúmenes analíticos.
-La lógica vive en `tests/contracts/parity/`, nunca en el runtime de producción.
-La cobertura queda fuera de la paridad por P11.
-**Prueba:** es la prueba. Sin escribir.
+Los puntos de proyección se eligen para cubrir centro, esquina, fuera de eje y
+cerca del borde: valida intrínsecos, centro de píxel, orientación y álgebra de
+transformaciones a la vez.
 
-### D24 — El árbol de triángulos se llama `boundsTree.ts` · ACORDADA
+`expected.json` es el oráculo de prueba, **no parte del paquete**: SoftSight no lo
+consume en producción. La lógica vive en `tests/contracts/parity/`.
+**Prueba:** es la prueba.
+
+### D24 — El árbol de triángulos se llama `boundsTree.ts`
 Tipo `TriangleBoundsTree`. `bvhLoader.ts` ya existe y es Biovision Hierarchy.
-*Corrección de estado:* estaba mal marcada como PROPUESTA. Los dos lados dijeron
-que sí, así que es ACORDADA; que no exista el fichero es lo que le falta para ser
-IMPLEMENTADA. Aplicamos mal nuestra propia regla; VideoMesh tiene razón.
 
-### D25 — `auditMesh` antes que cualquier árbol · ACORDADA
-Orden congelado: medir el techo actual, perfilar, reescribir las estructuras
-calientes, puerta de recursos, y solo entonces el árbol. La puerta mide tiempo,
-RSS máximo, heap, buffers externos y caché: «terminó» no es una medida.
+### D25 — `auditMesh` antes que cualquier árbol
+Medir el techo actual, perfilar, reescribir las estructuras calientes, puerta de
+recursos, y solo entonces el árbol. La puerta mide tiempo, RSS máximo, heap,
+buffers externos y caché: «terminó» no es una medida. Se registra también
+plataforma, arquitectura, versión de Node, CPU, RAM y número de workers, para que
+la medida sea reproducible.
+
+Orden, no negociable: **línea base → perfil → cambio → medida.** No reescribir y
+esperar.
+
 Motivo: `mesh.ts` ya es de arrays tipados; quien no escala es `auditMesh`, con un
 `Map` de clave de texto por vértice (`inspect.ts:69`) y otro de aristas
 (`inspect.ts:118`).
-*Corrección de estado igual que D24.*
+**Prueba:** puerta de alto poligonaje sobre el fixture de 5M.
 
-### D26 — El contrato está en DRAFT · ACORDADA
-Versión `0.x` mientras `contractMaturity = DRAFT`. Promoción a `1.0` cuando **dos
-productores reales distintos** produzcan paquetes válidos: COLMAP y VideoMesh, o
-COLMAP y OpenMVS.
-*Corrección de estado igual que D24.*
+### D26 — El contrato está en DRAFT
+`0.x` mientras `contractMaturity = DRAFT`. Promoción a `1.0` cuando **dos
+productores reales distintos** produzcan paquetes válidos.
 
-### D27 — Un repositorio, con frontera modular estricta · ACORDADA
-Resuelta. `reconstruction/` y `production/` viven dentro de softsight, bajo
-`src/soft/agent/`. **Condición que la hace comprobable:** esos módulos consumen
+**`cube-v1` no promueve el contrato:** es sintético. Sigue en DRAFT después de
+R0-B. La promoción la traen COLMAP y VideoMesh sobre datos reales.
+
+### D27 — Un repositorio, con frontera modular estricta
+`reconstruction/` y `production/` bajo `src/soft/agent/`. Esos módulos consumen
 las APIs públicas o del núcleo, no importan a discreción de todo el repositorio.
-El precedente existe: el editor nunca importa módulos internos y se comunica solo
-por el contrato público.
+Se extrae a un repositorio aparte solo si la cadencia diverge, aparecen
+consumidores independientes, la legibilidad sufre de forma medible o el tamaño
+del paquete se vuelve un problema real.
+**Prueba:** comprobación de importaciones permitidas.
 
-Se extrae a un repositorio aparte solo si la cadencia de publicación diverge,
-aparecen consumidores independientes, la legibilidad sufre de forma medible o el
-tamaño del paquete se vuelve un problema real. No antes.
-**Prueba:** comprobación de importaciones permitidas en `agent/reconstruction/` y
-`agent/production/`. Sin escribir.
+### D28 — NumericDeterminism: dos ejes, no uno
+**Refinamiento de VideoMesh, aceptado y correcto.** Un solo enum colapsaba dos
+propiedades distintas: si la cantidad medida es exacta, y si la implementación
+produce los mismos bits. Una cobertura por muestreo es una **aproximación** de la
+cobertura real y a la vez puede ser **bit a bit reproducible**.
 
-### D30 — Campo desconocido es error · ACORDADA
-`additionalProperties: false` en el esquema del núcleo, y un espacio explícito
-para lo experimental:
+```text
+MeasurementClass    EXACT | DETERMINISTIC_APPROXIMATION | HEURISTIC
+                    | EXTERNAL_MEASUREMENT
+ReproducibilityMode BITWISE_EXACT | QUANTIZED | TOLERANCE
+```
+
+```text
+triangleCount     EXACT                        + BITWISE_EXACT
+coverage          DETERMINISTIC_APPROXIMATION  + BITWISE_EXACT
+surfaceDistance   DETERMINISTIC_APPROXIMATION  + BITWISE_EXACT
+validador externo EXTERNAL_MEASUREMENT
+```
+
+**La carga de la prueba.** `ReproducibilityMode` nace `BITWISE_EXACT`. Moverla a
+`TOLERANCE` exige fixture, ejecución en dos plataformas, diferencia observada,
+número medido, causa caracterizada, tolerancia derivada de la medida y anotación
+aquí. «La coma flotante podría variar» no es justificación.
+
+Ni la cobertura ni la distancia de superficie nacen con tolerancia; las dos
+aspiran a identidad de bits con semilla, estratificación, orden de muestras,
+fronteras de bloque y orden de reducción fijos.
+
+**Las reducciones paralelas — el refinamiento que nos faltaba.** Fijar el orden
+de reducción no basta si la **partición** depende del número de workers: cuatro
+workers dan cuatro trozos y ocho dan ocho, así que los sumandos se agrupan
+distinto y la suma cambia aunque cada ejecución reduzca ordenada.
+
+```text
+los bloques se definen por índices de entrada y un tamaño de bloque fijo,
+nunca por el número de workers
+
+los workers los procesan en cualquier orden
+la reducción final va por índice de bloque ascendente
+```
+
+Nota nuestra: esto no afecta al rasterizado por bandas de `parallel.ts` —cada
+banda escribe píxeles distintos y no hay reducción—, pero sí a toda suma sobre
+muestras. **El tamaño de bloque es parte del contrato** en cuanto un número de
+frontera compartida dependa de una suma; hoy ninguna de las cuatro filas de D23
+lo hace.
+
+**Cómo convive con los tres vocabularios.** Ahora hay tres enums y hay que decir
+a qué se pega cada uno, o se contaminan:
+```text
+WarningSeverity      certeza | candidato          va en AVISOS
+MeasurementClass     EXACT | ...                  va en MÉTRICAS
+ReproducibilityMode  BITWISE_EXACT | ...          va en MÉTRICAS
+```
+Ninguna métrica lleva severidad; ningún aviso lleva clase de medida.
+
+Son **ortogonales**, y el repositorio ya lo demuestra: `PIVOTE_DESCENTRADO` sale
+de una medida exacta —el desplazamiento del centro de la caja— y es `candidato`,
+porque la conclusión supone que la pieza va a rotar, y eso es intención. Métrica
+`EXACT`, aviso `candidato`.
+
+Rechazamos en la primera ronda las «exactness classes» por duplicar
+`WarningSeverity`. Con los dos ejes separados ya no duplican: aquello iba sobre
+avisos y esto va sobre métricas.
+**Prueba:** recuentos exactos en macOS y Linux; cobertura con la misma semilla,
+mismos bloques y misma entrada, comparada bit a bit.
+
+### D29 — Sellado atómico del paquete
+```text
+escribir artifacts → cerrarlos → calcular bytes y sha256 → construir manifest
+con los hashes → state: SEALED → escribir el manifest EL ÚLTIMO → cerrarlo
+→ rename atómico del directorio
+```
+
+**El mismo sistema de ficheros, como contrato y no como recomendación.** El
+directorio temporal y el destino final deben resolver al mismo volumen. VideoMesh
+lo verifica **antes** de empezar una build que pretenda publicación atómica; si
+no puede garantizarlo, falla con `PACKAGE_ATOMIC_PUBLISH_UNAVAILABLE`. Nunca cae
+en silencio a copiar y borrar manteniendo la etiqueta de atómico.
+
+**Qué es un paquete sellado**, las dos condiciones a la vez:
+```text
+existe el manifest en el paquete final     y     manifest.state == "SEALED"
+
+falta el manifest        → PACKAGE_NOT_SEALED
+state != SEALED          → PACKAGE_NOT_SEALED
+```
+
+**`CONSUMED` no es un estado del paquete.** Corrección de VideoMesh sobre su
+propia propuesta, y es correcta: si SoftSight cambiara `manifest.state` a
+`CONSUMED` tras leerlo, estaría modificando el paquete, contra P8 y P10.
+```text
+ciclo del paquete   WRITING → SEALED, y SEALED para siempre
+ciclo del consumo   pertenece al run: PENDING | RUNNING | COMPLETE
+                    | ERROR | UNSUPPORTED, con runId, inputPackageId
+                    e inputManifestSha256
+```
+
+**El destino final no puede existir ya** con un paquete sellado de la misma
+identidad. No se reescribe `turret-recon-0004`: se publica `0005`.
+
+**Alcance de la garantía.** V1 promete **visibilidad atómica** —el consumidor ve
+el estado anterior o el paquete sellado completo—, no durabilidad ante caída.
+`fsync` de ficheros, manifest y directorio, y las semánticas de sistemas de
+ficheros en red, quedan fuera del contrato y **no bloquean `cube-v1`**. El
+informe no debe afirmar durabilidad.
+**Prueba:** paquete sin sellar, sellado, manifest ausente, estado incorrecto,
+destino ya existente, y temporal en otro volumen si se puede probar.
+
+### D30 — Campo desconocido es error
+`additionalProperties: false` en el núcleo, y un espacio explícito para lo
+experimental:
 ```json
 { "extensions": { "org.videomesh.experimental.foo": {} } }
 ```
@@ -461,179 +555,136 @@ extensión opcional desconocida    → se preserva o se ignora, según política
 ```
 **Ya es el comportamiento de SoftSight**: `toJsonSchema` emite
 `additionalProperties: false`, y el commit `7d15332` —«un parámetro de más en una
-primitiva se rechaza en vez de ignorarse»— es exactamente esta decisión, tomada
-antes de que existiera este contrato.
-**Prueba:** fixture `unknown-field-v1`. Sin escribir.
+primitiva se rechaza en vez de ignorarse»— es esta decisión, tomada antes de que
+existiera este contrato. **Le falta solo el fixture que falle si desaparece**, y
+por eso es la primera candidata a IMPLEMENTADA.
+**Prueba:** `unknown-field-v1`.
 
-### D31 — Negociación de capabilities · ACORDADA
-Tres verbos, no uno. El paquete declara `requires` y `provides`; SoftSight publica
-`supports`.
+### D31 — Negociación de capabilities
+El paquete declara `requires` y `provides`; SoftSight publica `supports`.
 ```text
 capability requerida desconocida         → UNSUPPORTED
 capability opcional provista desconocida → continuar si el contrato lo permite
 ```
-Las capabilities sirven para negociar, no para decorar.
-**Prueba:** fixture `unknown-capability-v1`. Sin escribir.
+**Prueba:** `unknown-capability-v1`.
 
-### D33 — Orientación canónica de imagen · ACORDADA
-Toda imagen referenciada por el CameraSet entra al paquete con la **orientación
-horneada en los píxeles**. Las dimensiones de cámara describen la rejilla real, no
-una rotación EXIF pendiente. `sourceOrientation` puede guardarse como provenance,
-pero nada aguas abajo interpreta píxeles a partir de esa metadata.
-**Prueba:** fixture `image-orientation-v1`. Sin escribir.
-
----
-
-## 5. Decisiones propuestas — esperan confirmación de VideoMesh
-
-Las tres primeras son de VideoMesh y las aceptamos **con una condición cada una**.
-Quedan en PROPUESTA hasta que confirmen la condición, porque la versión
-condicionada no es la que ellos propusieron.
-
-### D28 — NumericDeterminism · PROPUESTA
-```text
-EXACT | QUANTIZED | TOLERANCE
-```
-Cada métrica que pueda sostener certificación declara el suyo, y con `TOLERANCE`
-declara también sus tolerancias absoluta y relativa. Las reducciones paralelas
-mantienen orden fijo de bloque y de reducción. Numera el riesgo R9, que estaba
-sin dueño.
-
-**Condición nuestra — la dirección de la carga de la prueba.** El planteamiento
-—«no fingir determinismo absoluto donde la plataforma no lo garantiza»— es
-correcto en general y **no debe debilitar lo que hoy ya es exacto**: el
-`renderHash` del pliego del dron es idéntico en `ubuntu-latest` y en
-`macos-latest`, medido en CI, no supuesto.
-
-```text
-toda métrica nace EXACT
-pasar a TOLERANCE exige una diferencia medida entre plataformas,
-anotada aquí con su número
-```
-
-Sin esa carga, `TOLERANCE` se convierte en el sitio donde se esconden los bugs.
-En concreto **no aceptamos de entrada que coverage sea TOLERANCE**: con semilla
-fija, muestreo fijo y orden de reducción fijo debería ser exacta, y si no lo es
-queremos ver el número antes de conceder la tolerancia.
-
-### D29 — Sellado atómico del paquete · PROPUESTA
-Cierra el TOCTOU que D7 deja abierto: verificar el hash y analizar no son
-atómicos.
-```text
-WRITING → SEALED → CONSUMED
-```
-VideoMesh escribe en un directorio temporal, vuelca y cierra, calcula los hashes,
-escribe el manifest, marca el sellado y **renombra atómicamente** al nombre final.
-SoftSight solo acepta paquetes SEALED. Un paquete sellado no se modifica: cualquier
-cambio es un `packageId` nuevo (P10). Añade `packageId`, y opcionalmente
-`generation`.
-
-**Condiciones nuestras, las dos operativas:**
-
-1. **`rename` solo es atómico dentro del mismo sistema de ficheros.** El
-   directorio temporal tiene que vivir en el mismo volumen que el paquete final.
-   Si no, `rename` cae a copiar y borrar, y la garantía desaparece justo cuando
-   más importa —paquetes de varios GB—. Debe estar escrito en el contrato, no
-   quedar como práctica.
-2. **Qué constituye el sello, exactamente.** Dos cosas a la vez, para que no
-   dependa de una sola: el manifest es **el último fichero escrito** y lleva
-   `state: "SEALED"`, y el renombrado atómico del directorio es lo que confirma.
-   Un directorio en la ruta final sin manifest, o con `state != SEALED`, es
-   `PACKAGE_NOT_SEALED`.
-
-### D32 — Álgebra canónica de transformaciones · PROPUESTA
+### D32 — Álgebra canónica de transformaciones
 ```text
 matriz          4×4 homogénea
-serialización   por filas, 16 números
+serialización   por filas, 16 números, traslación en 3, 7, 11
 matemática      vectores columna
 composición     p_destino = T_destino_desde_origen × p_origen
-nombres         T_asset_from_reconstruction significa literalmente
-                coordenadas en reconstruction → coordenadas en asset
-cámaras         en el paquete canónico solo worldFromCamera;
-                el adapter convierte cameraFromWorld antes de producirlo
+cámaras         en el paquete canónico solo worldFromCamera
 ```
+Coincide con `math.ts`, que guarda por filas con la traslación en 3, 7 y 11.
 
-**Coincide con SoftSight, y no por casualidad:** `math.ts` guarda por filas con
-la traslación en los índices 3, 7 y 11, que es exactamente almacenamiento por
-filas con vectores columna. Nada que convertir.
+**No es la convención de glTF**, que serializa con la suya. No son
+intercambiables.
 
-**Condición nuestra:** hay que escribir en el contrato que **esta convención no
-es la de glTF**. glTF serializa por columnas, con la traslación en 12, 13 y 14.
-La transposición ocurre en el exportador y en el cargador, y tiene su propia
-prueba. Sin decirlo, alguien pasará una matriz del paquete directamente a un GLB
-y saldrá plausible y falsa —el mapa del proyecto ya registra este error exacto
-como causa de fallos que se cancelan entre sí sin que nada salte—.
+**La conversión ocurre exactamente una vez, en el adaptador de frontera glTF.**
+La regla es semántica y no «el cargador transpone y el exportador transpone»:
+una librería de glTF puede normalizar la matriz antes de exponerla, y dos
+transposiciones sin dueño se cancelan o se duplican sin que nada salte. Nunca
+dentro del dominio, ni en varios cargadores, ni en el núcleo.
 
-### D34 — El criterio de salida de R0 se parte en dos · PROPUESTA · SoftSight
-La secuencia R0.0–R0.19 propuesta por VideoMesh termina en la puerta de paridad,
-que necesita que VideoMesh sepa producir `cube-v1` y calcular las cuatro filas.
-Tal como está, **la salida de R0 de SoftSight depende del calendario de
-VideoMesh**, que es la clase de acoplamiento que este contrato existe para
-evitar.
+**Coste que esto tiene en SoftSight, y hay que decirlo:** el repositorio tiene
+**dos parsers de GLB**, anotados como deuda estructural aparcada en el mapa §5
+punto 17 —«no se toca hasta que haya un consumidor que lo pague»—. Dos parsers
+son dos sitios donde la conversión podría ocurrir, que es exactamente el fallo
+que esta decisión previene. **D32 es ese consumidor.** Unificarlos deja de ser
+deuda opcional; no bloquea `cube-v1`, que no exporta glTF, pero sí bloquea la
+primera exportación de producción.
+**Prueba:** fixture `transform-gltf-v1` con traslación, rotación, escala uniforme
+y una composición no trivial: ida y vuelta canónico → glTF → canónico, más un
+punto conocido a su punto transformado conocido.
 
+### D33 — Orientación canónica de imagen
+Toda imagen referenciada por el CameraSet entra con la **orientación horneada en
+los píxeles**. Las dimensiones de cámara describen la rejilla real, no una
+rotación EXIF pendiente. `sourceOrientation` puede guardarse como provenance,
+pero nada aguas abajo interpreta píxeles a partir de esa metadata.
+**Prueba:** `image-orientation-v1`.
+
+### D34 — El criterio de salida de R0, en dos
 ```text
-R0-A  cierra SoftSight solo
-      cube-v1 generado por un script de nuestro repositorio recorre
-      esquema, sandbox, hashes, PLY, CameraSet, escala, FrameGraph,
-      auditoría mínima y sobre del informe, y sale COMPLETE + PASS
+R0-A   cierra SoftSight solo
+       un cube-v1 generado por un script de nuestro repositorio recorre
+       esquema → sandbox → hashes → PLY → CameraSet → escala → FrameGraph
+       → auditoría mínima → sobre del informe, y sale COMPLETE + PASS
 
-R0-B  cierra con los dos
-      el cube-v1 de VideoMesh recorre lo mismo y la puerta de paridad
-      pasa las tres comparaciones de D23
+R0-B   cierra con los dos
+       el cube-v1 de VideoMesh recorre lo mismo y pasan las tres
+       comparaciones de D23
 ```
+**Precisión de VideoMesh, aceptada:** R0-B es obligatorio antes de cualquier fase
+que **dependa del contrato compartido**, no antes de todo R1. El trabajo interno
+que no consume ni cambia la frontera —D25, la reescritura de `auditMesh`— avanza
+en paralelo.
 
-R0-A no espera a nadie y demuestra la mitad nuestra. R0-B es el handoff de
-verdad. Los dos siguen siendo requisito antes de R1; lo único que cambia es que
-un retraso de un lado no congela al otro.
+**Condición de parada:** si R0-B falla por proyección de cámara, transformación
+de matrices, interpretación del esquema o identidad de artifacts, **no se avanza
+nada que dependa del contrato**. Se arregla la frontera primero.
+**Prueba:** es la prueba.
 
 ---
 
-## 6. Riesgos con dueño
-
-Un riesgo sin decisión detrás es una preocupación, no una mitigación.
+## 5. Riesgos con dueño
 
 ```text
-R1  escape de ruta                                D6
-R2  informe obsoleto respecto al artifact         D7 + D29
-R3  falta de evidencia convertida en PASS         D3 + D8
+R1  escape de ruta                             D6
+R2  informe obsoleto respecto al artifact      D7 + D29
+R3  falta de evidencia convertida en PASS      D3 + D8
 R4  error del proveedor leído como fallo
-    de certificación                              D3 + D13
+    de certificación                           D3 + D13
 R5  tolerancia en milímetros sobre escala
-    desconocida                                   D9
-R6  cobertura falsa por convención de cámara      D10 + D19 + D23 + D33
-R7  malla de producción en otro marco             D11 + D32
-R8  confianza tratada como exacta                 P6 + D12 + D28
-R9  no determinismo de coma flotante paralela     D28
-R10 deriva de contrato entre repositorios         D15 + D16
-R11 superficie inferida contada como observada    D21 + P3
-R12 el registro crece más rápido que el código    §1.6
+    desconocida                                D9
+R6  cobertura falsa por convención de cámara   D10 + D19 + D23 + D33
+R7  malla de producción en otro marco          D11 + D32
+R8  confianza tratada como exacta              P6 + D12 + D28
+R9  no determinismo de coma flotante paralela  D28
+R10 deriva de contrato entre repositorios      D15 + D16
+R11 superficie inferida contada como observada D21 + P3
+R12 el registro crece más rápido que el código §1.6 + P12
+R13 doble transposición entre los dos parsers
+    de GLB del repositorio                     D32 + mapa §5.17
 ```
-
-R11 y R12 son nuevos de esta ronda. R12 es de este documento sobre sí mismo.
 
 ---
 
-## 7. Lo siguiente
+## 6. Lo que toca ahora
 
-**De VideoMesh**, en orden de lo que bloquea:
-
-```text
-1  confirmar las condiciones de D28, D29 y D32 — son tres frases, no rediseños
-2  confirmar D34, la partición del criterio de salida de R0
-3  confirmar el booleano meshPurelyReconstructed de D21, que es lo que hace
-   aplicable su propia restricción en V1
-4  poner allow_nan=False hoy, antes del primer paquete
-5  el generador de cube-v1 con su expected.json
-```
-
-**De SoftSight**, sin esperar respuesta, porque no depende de ninguna decisión
-pendiente y es el camino crítico:
+**SoftSight**, en orden:
 
 ```text
-D25  medir el techo de auditMesh y reescribirlo sin Map
+S1  línea base de auditMesh, medida y publicada
+S2  perfil de weldPositions y edgeUse
+S3  fixture unknown-field-v1 → D30 pasa a IMPLEMENTADA
+S4  esqueleto de esquema e ingesta de R0-A
+S5  generador local de cube-v1
+S6  informe mínimo de reconstrucción
 ```
 
-**Y la primera IMPLEMENTADA.** Treinta y cuatro decisiones sin una sola prueba es
-el número que hay que mover en la próxima ronda. La candidata más barata es D30:
-ya es el comportamiento del código; solo le falta el fixture que falle si deja de
-serlo.
+**VideoMesh**, en orden:
+
+```text
+V1  allow_nan=False        V2  prueba de serialización no finita
+V3  generador de cube-v1   V4  expected.json
+V5  escritor con temporal y final en el mismo volumen
+V6  packageId              V7  manifest SEALED
+V8  sha256 por artifact    V9  CameraSet canónico
+V10 arnés de paridad
+```
+
+**Hitos compartidos:**
+
+```text
+1  R0-A PASS               no requiere a VideoMesh
+2  cube-v1 generado        no requiere a SoftSight
+3  R0-B PASS               las tres comparaciones
+4  se desbloquea el trabajo dependiente del contrato
+```
+
+**Lo primero que este intercambio debe producir que no sea un documento** es un
+número: el techo actual de `auditMesh` sobre 1M triángulos —RSS máximo, tiempo,
+bytes de la estructura de aristas y de la de soldadura— y el mismo número después
+de quitar los `Map`. Con su entorno declarado para que sea reproducible.
