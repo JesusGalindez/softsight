@@ -395,8 +395,23 @@ Cuando una métrica no pueda certificar, el informe dice por qué:
 esquema en la ingesta, no una rama de «no certifica». Se descartó el caso de
 ausencia porque chocaba con D30: la misma entrada tenía dos resultados según por
 dónde se mirara.
-**Prueba:** malla pura, malla mezclada, campo ausente —que debe salir por el
-camino de error de esquema, no por el de cobertura—.
+**Prueba**, los cuatro casos, fijados con VideoMesh el 2026-08-12:
+```text
+TRIANGLE_MESH con true    → válido
+TRIANGLE_MESH con false   → válido
+TRIANGLE_MESH sin campo   → inválido, por error de esquema, no por cobertura
+POINT_CLOUD con campo     → inválido
+```
+El cuarto es más estricto de lo que habíamos escrito: en una nube de puntos el
+campo no es que falte, es que **está prohibido**. Sale gratis con la forma
+discriminada —cada alternativa emite `additionalProperties: false` y el literal
+del tipo no deja que un `POINT_CLOUD` case con la forma de malla—.
+
+**Nota de implementación, para cuando se escriba** (no es contrato): un `anyOf`
+sin discriminar da un error pobre —«no coincide con ninguna forma»— y este
+repositorio devuelve errores con sugerencia. El validador debe mirar primero el
+literal del tipo y comprobar solo esa alternativa, o el cuarto caso pasará por el
+motivo correcto con un mensaje inútil.
 
 ### D22 — Dónde viven los fixtures
 ```text
