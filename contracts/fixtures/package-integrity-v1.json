@@ -99,12 +99,17 @@
     },
     {
       "name": "hash mal escrito, en mayúsculas",
+      "note": [
+        "Código propio, aparte del de «no coincide»: un hash que no es un hash lo",
+        "arregla quien escribe el manifest, y uno que no cuadra lo arregla el",
+        "contenido. Quien automatice sobre el identificador quiere distinguirlos."
+      ],
       "artifactPatch": {
         "sha256": "AAAA000000000000000000000000000000000000000000000000000000000000"
       },
       "execution": "ERROR",
       "exitCode": 20,
-      "code": "SS-PKG-013"
+      "code": "SS-PKG-014"
     },
     {
       "name": "paquete a medio escribir",

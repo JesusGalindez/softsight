@@ -25,11 +25,26 @@ SS-PKG-010  el manifest no encaja con el esquema
 SS-PKG-011  el paquete no está sellado
 SS-PKG-012  el tamaño declarado no es el del fichero
 SS-PKG-013  el contenido no coincide con el sha256 declarado
+SS-PKG-014  el sha256 declarado no es un sha256
 ```
 
-Están escritos como **propuestos** en `src/soft/agent/reconstruction/ingest.ts` y
-en D2. **No los grabéis todavía en ninguna prueba vuestra.** Confirmadlos, o
-cambiadlos: si los cambiáis, aquí cuesta una constante.
+El quinto lo separamos del cuarto a propósito: «el hash no cuadra» lo arregla el
+contenido y «el hash no es un hash» lo arregla vuestro escritor de manifests, y
+quien automatice sobre el identificador quiere poder distinguirlos. Si os parece
+ruido, se funden en uno.
+
+El estado vive en la tabla —`src/soft/agent/reconstruction/codes.ts`— y no en un
+comentario: cada entrada dice su motivo canónico, qué decisión la fija y si está
+`FIJADO` o `PROPUESTO`, y `test:codes` comprueba que los cuatro de D6 estén
+fijados y que ningún propuesto se cuele como tal. **No los grabéis todavía en
+ninguna prueba vuestra.** Confirmadlos o cambiadlos: aquí cambiarlos cuesta un
+sitio.
+
+Un detalle que conviene que veáis antes de escribir vuestro parser:
+**`SS-PKG-001` y `SS-PKG-003` comparten motivo** —`ARTIFACT_PATH_ESCAPES_ROOT`—
+porque el resultado es el mismo y la causa no. Un motivo puede repetirse; un
+identificador, nunca. Es justo por lo que el contrato manda parsear el
+identificador.
 
 Los cuatro del sandbox (`SS-PKG-001..004`) sí los fija D6 y están tal cual.
 

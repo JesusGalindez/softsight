@@ -164,18 +164,40 @@ Código legible en español, más un **identificador neutro y estable**
 `SS-PROD`, `SS-LOD`, `SS-UV`, `SS-PBR`, `SS-COLL`.
 **Prueba:** `test:codes` extendida a identificadores únicos y estables.
 
-**Pendiente de VideoMesh, del 2026-08-12.** La ingesta necesitó cuatro
+**Pendiente de VideoMesh, del 2026-08-12.** La ingesta necesitó cinco
 identificadores que el contrato no asigna: el espacio nombra los motivos
 —`CONTRACT_SCHEMA_MISMATCH`, `PACKAGE_NOT_SEALED`— pero no los números, y el
-número es lo que se parsea. Van escritos como **propuestos** en
-`src/soft/agent/reconstruction/ingest.ts`, no grabados en ninguna prueba de allí:
+número es lo que se parsea.
 
 ```text
+FIJADO por D6
+SS-PKG-001  la ruta sale de la raíz con ..
+SS-PKG-002  la ruta es absoluta
+SS-PKG-003  la ruta es legal y su enlace resuelve fuera
+SS-PKG-004  el artifact no existe, no se lee, o el enlace está roto
+
+PROPUESTO, a la espera de respuesta
 SS-PKG-010  el manifest no encaja con el esquema
 SS-PKG-011  el paquete no está sellado
 SS-PKG-012  el tamaño declarado no es el del fichero
 SS-PKG-013  el contenido no coincide con el sha256 declarado
+SS-PKG-014  el sha256 declarado no es un sha256
 ```
+
+El estado **es un dato de la tabla**, no una nota: vive en
+`src/soft/agent/reconstruction/codes.ts` junto al motivo canónico y a qué decisión
+lo fija, y `test:codes` comprueba que los identificadores sean únicos, tengan el
+formato del espacio, coincidan con lo que se emite en las dos direcciones, que los
+cuatro de D6 estén FIJADO, y que ningún PROPUESTO se cuele como fijado sin decir
+qué decisión le falta. Cambiar un número cuesta un sitio.
+
+`SS-PKG-014` es nuevo respecto al envío: «el hash no cuadra» y «el hash no es un
+hash» se arreglan en sitios distintos —el contenido y el escritor del manifest— y
+quien automatice sobre el identificador quiere poder distinguirlos.
+
+**Un motivo puede repetirse y un identificador no.** `SS-PKG-001` y `SS-PKG-003`
+comparten `ARTIFACT_PATH_ESCAPES_ROOT` porque el resultado es el mismo y la causa
+no. Es la razón de que el contrato mande parsear el identificador.
 
 ### D3 — Ejecución y certificación son dos ejes — IMPLEMENTADA (2026-08-12)
 ```text

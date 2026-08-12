@@ -244,6 +244,12 @@ export type { SceneRole } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
 export { RECONSTRUCTION_PACKAGE_SCHEMA } from "./reconstruction/packageSchema";
 export { PACKAGE_CODES, exitCodeFor, ingestPackage } from "./reconstruction/ingest";
+export {
+  PACKAGE_CODE_LIST,
+  PACKAGE_CODE_TABLE,
+  PROPOSED_PACKAGE_CODES,
+} from "./reconstruction/codes";
+export type { CodeStatus, PackageCode, PackageCodeEntry } from "./reconstruction/codes";
 export { parsePlyAscii, serializePlyMesh, serializePlyPoints } from "./reconstruction/ply";
 export {
   CERTIFICATION_POLICY,

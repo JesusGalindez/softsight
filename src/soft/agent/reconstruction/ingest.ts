@@ -18,6 +18,7 @@
  */
 
 import { validate } from "../schema";
+import { PACKAGE_CODE_TABLE, type PackageCode } from "./codes";
 import { RECONSTRUCTION_PACKAGE_SCHEMA } from "./packageSchema";
 
 /** Lo que el sistema de ficheros contesta sobre un artifact ya resuelto. */
@@ -60,13 +61,11 @@ export interface IngestResult {
 }
 
 /**
- * Los códigos de la ingesta.
+ * Los códigos que emite la ingesta, por su nombre en el código.
  *
- * Los cuatro del sandbox son los que fija D6. **Los cuatro siguientes son
- * propuestos**: el contrato nombra sus motivos —`PACKAGE_NOT_SEALED`,
- * `CONTRACT_SCHEMA_MISMATCH`— pero no les asigna número, y el número es lo que
- * el otro lado parsea. Van marcados aquí y en el envío para que VideoMesh los
- * confirme o los cambie antes de que nadie los grabe en una prueba suya.
+ * La tabla —motivo canónico, causa y **estado**— vive en `codes.ts`, que es lo
+ * que se publica y lo que la puerta comprueba. Aquí solo están los nombres, para
+ * que emitir uno que no exista no compile.
  */
 export const PACKAGE_CODES = {
   ESCAPES_ROOT: "SS-PKG-001",
@@ -77,7 +76,19 @@ export const PACKAGE_CODES = {
   NOT_SEALED: "SS-PKG-011",
   SIZE_MISMATCH: "SS-PKG-012",
   HASH_MISMATCH: "SS-PKG-013",
-} as const;
+  HASH_MALFORMED: "SS-PKG-014",
+} as const satisfies Record<string, PackageCode>;
+
+/**
+ * Un problema, con su motivo sacado de la tabla y no escrito al lado.
+ *
+ * Escribir el `reason` en cada sitio de emisión es tener el mismo dato en nueve
+ * sitios: el primero que se corrija dejará a los demás diciendo otra cosa, y el
+ * otro lado parsea precisamente eso.
+ */
+function issue(code: PackageCode, message: string): IngestIssue {
+  return { code, reason: PACKAGE_CODE_TABLE[code].reason, message };
+}
 
 /** Hexadecimal de 64 caracteres en minúscula, que es como se compara sin normalizar. */
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -92,19 +103,17 @@ const SHA256 = /^[0-9a-f]{64}$/;
  */
 function pathIssue(path: string): IngestIssue | null {
   if (path.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(path)) {
-    return {
-      code: PACKAGE_CODES.ABSOLUTE_PATH,
-      reason: "ARTIFACT_PATH_ABSOLUTE",
-      message: `la ruta ${JSON.stringify(path)} es absoluta; los artifacts se declaran relativos a la raíz`,
-    };
+    return issue(
+      PACKAGE_CODES.ABSOLUTE_PATH,
+      `la ruta ${JSON.stringify(path)} es absoluta; los artifacts se declaran relativos a la raíz`,
+    );
   }
   const segments = path.split(/[\\/]/);
   if (segments.includes("..")) {
-    return {
-      code: PACKAGE_CODES.ESCAPES_ROOT,
-      reason: "ARTIFACT_PATH_ESCAPES_ROOT",
-      message: `la ruta ${JSON.stringify(path)} sale de la raíz del paquete con ..`,
-    };
+    return issue(
+      PACKAGE_CODES.ESCAPES_ROOT,
+      `la ruta ${JSON.stringify(path)} sale de la raíz del paquete con ..`,
+    );
   }
   return null;
 }
@@ -123,11 +132,7 @@ export function ingestPackage(manifest: unknown, reader: PackageReader): IngestR
     // Todos de una vez y no el primero: cada vuelta le cuesta un ciclo entero al
     // productor, igual que en el esquema de escena.
     for (const error of schemaErrors) {
-      issues.push({
-        code: PACKAGE_CODES.SCHEMA_INVALID,
-        reason: "CONTRACT_SCHEMA_MISMATCH",
-        message: error,
-      });
+      issues.push(issue(PACKAGE_CODES.SCHEMA_INVALID, error));
     }
     return empty;
   }
@@ -142,11 +147,12 @@ export function ingestPackage(manifest: unknown, reader: PackageReader): IngestR
     // Un paquete a medio escribir puede tener todos los hashes correctos y aun
     // así no ser el paquete: le pueden faltar ficheros que el manifest no declara
     // todavía. No es un aviso, es un rechazo (D29).
-    issues.push({
-      code: PACKAGE_CODES.NOT_SEALED,
-      reason: "PACKAGE_NOT_SEALED",
-      message: `state es ${JSON.stringify(document.state)} y solo se consume SEALED`,
-    });
+    issues.push(
+      issue(
+        PACKAGE_CODES.NOT_SEALED,
+        `state es ${JSON.stringify(document.state)} y solo se consume SEALED`,
+      ),
+    );
     return { ...empty, packageId: document.packageId };
   }
 
@@ -159,48 +165,39 @@ export function ingestPackage(manifest: unknown, reader: PackageReader): IngestR
       continue;
     }
     if (!SHA256.test(artifact.sha256)) {
-      issues.push({
-        code: PACKAGE_CODES.HASH_MISMATCH,
-        reason: "ARTIFACT_HASH_MALFORMED",
-        message: `${where}: sha256 no es hexadecimal de 64 caracteres en minúscula`,
-      });
+      issues.push(
+        issue(
+          PACKAGE_CODES.HASH_MALFORMED,
+          `${where}: sha256 no es hexadecimal de 64 caracteres en minúscula`,
+        ),
+      );
       continue;
     }
 
     const stat = reader.stat(artifact.path);
     if (stat === null) {
-      issues.push({
-        code: PACKAGE_CODES.MISSING_ARTIFACT,
-        reason: "ARTIFACT_MISSING",
-        message: `${where}: ${artifact.path} no existe o no se puede leer`,
-      });
+      issues.push(issue(PACKAGE_CODES.MISSING_ARTIFACT, `${where}: ${artifact.path} no existe o no se puede leer`));
       continue;
     }
     if (!insideRoot(stat.realPath, reader.root)) {
       // Aquí ya no vale mirar el texto: la ruta era legal y el enlace la ha
       // llevado fuera. Es el caso que un sandbox que solo normaliza cadenas deja
       // pasar entero.
-      issues.push({
-        code: PACKAGE_CODES.SYMLINK_ESCAPE,
-        reason: "ARTIFACT_PATH_ESCAPES_ROOT",
-        message: `${where}: ${artifact.path} resuelve fuera de la raíz del paquete`,
-      });
+      issues.push(
+        issue(PACKAGE_CODES.SYMLINK_ESCAPE, `${where}: ${artifact.path} resuelve fuera de la raíz del paquete`),
+      );
       continue;
     }
     if (stat.bytes !== artifact.bytes) {
-      issues.push({
-        code: PACKAGE_CODES.SIZE_MISMATCH,
-        reason: "ARTIFACT_SIZE_MISMATCH",
-        message: `${where}: declara ${artifact.bytes} bytes y tiene ${stat.bytes}`,
-      });
+      issues.push(
+        issue(PACKAGE_CODES.SIZE_MISMATCH, `${where}: declara ${artifact.bytes} bytes y tiene ${stat.bytes}`),
+      );
       continue;
     }
     if (stat.sha256 !== artifact.sha256) {
-      issues.push({
-        code: PACKAGE_CODES.HASH_MISMATCH,
-        reason: "ARTIFACT_HASH_MISMATCH",
-        message: `${where}: el contenido no coincide con el sha256 declarado`,
-      });
+      issues.push(
+        issue(PACKAGE_CODES.HASH_MISMATCH, `${where}: el contenido no coincide con el sha256 declarado`),
+      );
       continue;
     }
 

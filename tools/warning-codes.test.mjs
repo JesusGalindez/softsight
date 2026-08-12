@@ -22,7 +22,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { WARNING_CODES, WARNING_CODE_LIST } from "../dist-node/agent3d.mjs";
+import {
+  PACKAGE_CODES,
+  PACKAGE_CODE_LIST,
+  PACKAGE_CODE_TABLE,
+  PROPOSED_PACKAGE_CODES,
+  WARNING_CODES,
+  WARNING_CODE_LIST,
+} from "../dist-node/agent3d.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const sourceRoot = resolve(here, "../src/soft");
@@ -107,3 +114,66 @@ const { stdout } = await promisify(execFile)(process.execPath, [resolve(here, "a
 });
 assert.deepEqual(JSON.parse(stdout).warningCodes, JSON.parse(JSON.stringify(WARNING_CODE_LIST)));
 console.log("códigos: ok (--schema publica el registro igual que la biblioteca)");
+
+// ---------------------------------------------------------------------------
+// Los identificadores neutros de la frontera — D2, «test:codes extendida a
+// identificadores únicos y estables».
+// ---------------------------------------------------------------------------
+
+// Únicos y con la forma del espacio. El identificador es lo que el otro lado
+// parsea: uno repetido convierte dos causas en una sola rama de su código.
+{
+  const codes = PACKAGE_CODE_LIST.map((entry) => entry.code);
+  assert.equal(new Set(codes).size, codes.length, "hay identificadores repetidos");
+  for (const code of codes) {
+    assert.match(code, /^SS-[A-Z]{2,6}-\d{3}$/, `${code}: fuera del formato del espacio`);
+  }
+  // El motivo canónico sí puede repetirse —dos causas distintas comparten
+  // `ARTIFACT_PATH_ESCAPES_ROOT`, la ruta textual y el enlace— y por eso el
+  // contrato dice que se parsea el identificador y no el motivo.
+  for (const entry of PACKAGE_CODE_LIST) {
+    assert.match(entry.reason, /^[A-Z][A-Z0-9_]+$/, `${entry.code}: motivo fuera de vocabulario`);
+    assert.ok(entry.cause.length > 0 && !entry.cause.endsWith("."), `${entry.code}: causa de una línea`);
+    assert.ok(
+      entry.status === "FIJADO" || entry.status === "PROPUESTO",
+      `${entry.code}: estado fuera del vocabulario`,
+    );
+  }
+  console.log(
+    `códigos: ok (${codes.length} identificadores de frontera, únicos y con formato; ` +
+      `${PROPOSED_PACKAGE_CODES.length} propuestos a la espera de VideoMesh)`,
+  );
+}
+
+// La tabla y lo que se emite coinciden en las dos direcciones, igual que arriba:
+// un identificador que nadie emite es una promesa vacía, y uno emitido que no
+// está en la tabla no se puede publicar.
+{
+  const emittedCodes = new Set(Object.values(PACKAGE_CODES));
+  const tabled = new Set(Object.keys(PACKAGE_CODE_TABLE));
+  assert.deepEqual(
+    [...emittedCodes].filter((code) => !tabled.has(code)),
+    [],
+    "identificadores emitidos que no están en la tabla",
+  );
+  assert.deepEqual(
+    [...tabled].filter((code) => !emittedCodes.has(code)),
+    [],
+    "entradas de la tabla que no emite nadie",
+  );
+
+  // Y los cuatro que fija D6 están fijados, no propuestos: si alguien los mueve a
+  // PROPUESTO, es que ha cambiado una decisión sin tocar el registro.
+  for (const code of ["SS-PKG-001", "SS-PKG-002", "SS-PKG-003", "SS-PKG-004"]) {
+    assert.equal(PACKAGE_CODE_TABLE[code].status, "FIJADO", `${code}: D6 lo fija`);
+    assert.equal(PACKAGE_CODE_TABLE[code].decision, "D6");
+  }
+  // Lo simétrico: ninguno sin decisión que lo fije puede estar como FIJADO.
+  for (const entry of PACKAGE_CODE_LIST) {
+    if (entry.status === "FIJADO") continue;
+    assert.match(entry.decision, /sin número/, `${entry.code}: propuesto sin decir qué le falta`);
+  }
+  console.log(
+    "códigos: ok (tabla y emisión coinciden; los cuatro de D6 fijados y el resto propuesto con su motivo)",
+  );
+}
