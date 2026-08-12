@@ -27,6 +27,7 @@
     "test:worker": "npm run build:agent3d && node tools/worker.test.mjs",
     "test:model-cache": "npm run build:agent3d && node tools/model-cache.test.mjs",
     "test:contracts": "npm run build:agent3d && node tools/contracts.test.mjs",
+    "test:reconstruction": "npm run build:agent3d && node tools/reconstruction.test.mjs",
     "test:resources": "npm run build:agent3d && node tools/resources.test.mjs",
     "test:determinism": "npm run build:agent3d && node tools/render-hashes.mjs",
     "bridge": "node tools/bridge.mjs",

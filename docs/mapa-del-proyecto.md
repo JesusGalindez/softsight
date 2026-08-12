@@ -145,15 +145,15 @@ tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
 alcance: cinco puertas —`animation-contract`, `glb-loader`, `sample-surface`,
 `glb-writer` y `bridge`— leen el fixture certificado del editor, que es un
 repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su
-motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **19 de
-las 24 puertas**; las cinco restantes solo las cierra una ejecución local con los
+motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **20 de
+las 25 puertas**; las cinco restantes solo las cierra una ejecución local con los
 dos repositorios al lado. `resources` corre en CI —su malla la genera el propio
 repositorio— pero **solo el escalón de 100k**: el de 5M pide `SOFTSIGHT_HEAVY=1` y
 sin él se declara «no ejecutada» con su motivo, D22. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 116
-comprobaciones de softsight en verde**, 24 puertas. El número ya no se lleva a mano: lo
+Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 119
+comprobaciones de softsight en verde**, 25 puertas. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
 
@@ -400,7 +400,16 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     `unknown-field-v1`. Con eso D30 tiene probada su primera fila, campo
     desconocido es error; las otras dos hablan de un espacio `extensions` que
     ningún esquema declara, se quedan NOT_RUN con su motivo y **D30 sigue
-    acordada**. Una tercera mitad
+    acordada**. Y el **esqueleto de R0-A está en pie**: el esquema del paquete de
+    reconstrucción vive en `src/soft/agent/reconstruction/`, se publica como sexto
+    contrato, y la ingesta comprueba esquema, sandbox e integridad —sin IO, con el
+    sistema de ficheros inyectado— antes de abrir un solo artifact. Eso cierra
+    **D6** y **D21**; D7 y D29 quedan a medias porque sus otras mitades son el
+    informe y el escritor. D21 obligó a extender el esquema en ejecución con
+    `variants`, formas discriminadas por el literal del tipo: `anyOf` no llegaba
+    porque se aplica al campo y no a los elementos de una lista. Lo que falta para
+    R0-A es leer el PLY, registrar el CameraSet y emitir el informe. Una tercera
+    mitad
     entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
     certifica lo que salga, sin convertirse en un motor de fotogrametría. Las
     secciones 0–83 las escribió el agente de VideoMesh; las 84–86 son la respuesta

@@ -1,0 +1,233 @@
+{
+  "fixture": "reconstruction-package-v1",
+  "decision": "D21 (formas por tipo de artifact), D20 (depthKind), D19 (distorsión con nombre), D14, D30",
+  "why": [
+    "El esqueleto de R0-A: qué acepta y qué rechaza el manifest de un paquete de",
+    "reconstrucción, antes de abrir un solo fichero. Los casos de rechazo se",
+    "comprueban por un trozo del mensaje y no solo por «falló»: D21 pide que el",
+    "cuarto caso —una nube de puntos con la bandera de malla— falle por su motivo",
+    "y no con un «no coincide con ninguna forma», que no le dice al productor qué",
+    "le sobra."
+  ],
+  "base": {
+    "documentType": "videomesh.reconstruction-package",
+    "contractVersion": "0.1",
+    "packageId": "pkg-0001",
+    "state": "SEALED",
+    "producer": { "name": "videomesh", "version": "0.1.0" },
+    "artifacts": [
+      {
+        "id": "mesh",
+        "type": "TRIANGLE_MESH",
+        "path": "mesh.ply",
+        "bytes": 12,
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "purelyReconstructed": true
+      }
+    ],
+    "scale": { "status": "RELATIVE", "source": "NONE" },
+    "frameGraph": {
+      "transforms": [
+        {
+          "from": "RECONSTRUCTION",
+          "to": "ASSET_CANONICAL",
+          "matrix": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+          "reason": "normalización de marco",
+          "producer": "videomesh"
+        }
+      ]
+    }
+  },
+  "accept": [
+    { "name": "malla puramente reconstruida", "override": {} },
+    {
+      "name": "malla mezclada, que se reporta pero no certifica",
+      "override": {
+        "artifacts": [
+          {
+            "id": "mesh",
+            "type": "TRIANGLE_MESH",
+            "path": "mesh.ply",
+            "bytes": 12,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "purelyReconstructed": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "nube de puntos, que no tiene superficie y no lleva la bandera",
+      "override": {
+        "artifacts": [
+          {
+            "id": "sparse",
+            "type": "POINT_CLOUD",
+            "path": "sparse.ply",
+            "bytes": 8,
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+          }
+        ]
+      }
+    },
+    {
+      "name": "mapa de profundidad con su depthKind declarado",
+      "override": {
+        "artifacts": [
+          {
+            "id": "depth",
+            "type": "DEPTH_MAP",
+            "path": "depth.exr",
+            "bytes": 64,
+            "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+            "depthKind": "RAY_LENGTH"
+          }
+        ]
+      }
+    },
+    {
+      "name": "cámara con intrínsecos y distorsión con nombre",
+      "override": {
+        "cameras": [
+          {
+            "id": "cam0",
+            "imageArtifactId": "img0",
+            "width": 3840,
+            "height": 2160,
+            "pixelOrigin": "TOP_LEFT",
+            "pixelCenter": "CENTER",
+            "model": "OPENCV",
+            "intrinsics": { "fx": 2811.2, "fy": 2809.9, "cx": 1920.0, "cy": 1080.0 },
+            "distortion": { "k1": 0.12, "k2": -0.08, "p1": 0.001, "p2": 0.002 }
+          }
+        ]
+      }
+    },
+    {
+      "name": "escala absoluta con su incertidumbre",
+      "override": {
+        "scale": {
+          "status": "ABSOLUTE",
+          "source": "KNOWN_DISTANCE",
+          "uncertainty": { "model": "GAUSSIAN", "value": 0.003 }
+        }
+      }
+    }
+  ],
+  "reject": [
+    {
+      "name": "malla sin la bandera de provenance",
+      "override": {
+        "artifacts": [
+          {
+            "id": "mesh",
+            "type": "TRIANGLE_MESH",
+            "path": "mesh.ply",
+            "bytes": 12,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "expect": "falta artifacts[0].purelyReconstructed"
+    },
+    {
+      "name": "nube de puntos con la bandera de malla, que ahí no significa nada",
+      "override": {
+        "artifacts": [
+          {
+            "id": "sparse",
+            "type": "POINT_CLOUD",
+            "path": "sparse.ply",
+            "bytes": 8,
+            "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+            "purelyReconstructed": true
+          }
+        ]
+      },
+      "expect": "artifacts[0].purelyReconstructed no existe"
+    },
+    {
+      "name": "tipo de artifact desconocido",
+      "override": {
+        "artifacts": [
+          {
+            "id": "mesh",
+            "type": "MESH",
+            "path": "mesh.ply",
+            "bytes": 12,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "expect": "artifacts[0].type no admite \"MESH\"; admitidos: TRIANGLE_MESH, POINT_CLOUD, IMAGE, DEPTH_MAP"
+    },
+    {
+      "name": "artifact sin tipo, que es lo que decide la forma",
+      "override": {
+        "artifacts": [
+          {
+            "id": "mesh",
+            "path": "mesh.ply",
+            "bytes": 12,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "expect": "falta artifacts[0].type"
+    },
+    {
+      "name": "profundidad sin depthKind, que no se infiere del proveedor",
+      "override": {
+        "artifacts": [
+          {
+            "id": "depth",
+            "type": "DEPTH_MAP",
+            "path": "depth.exr",
+            "bytes": 64,
+            "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+          }
+        ]
+      },
+      "expect": "falta artifacts[0].depthKind"
+    },
+    {
+      "name": "documento con nombre ambiguo",
+      "override": { "documentType": "reconstruction" },
+      "expect": "documentType debe ser"
+    },
+    {
+      "name": "distorsión como vector posicional, que es lo que D19 elimina",
+      "override": {
+        "cameras": [
+          {
+            "id": "cam0",
+            "imageArtifactId": "img0",
+            "width": 3840,
+            "height": 2160,
+            "pixelOrigin": "TOP_LEFT",
+            "pixelCenter": "CENTER",
+            "model": "OPENCV",
+            "intrinsics": { "fx": 2811.2, "fy": 2809.9, "cx": 1920.0, "cy": 1080.0 },
+            "distortion": [0.12, -0.08, 0.001, 0.002]
+          }
+        ]
+      },
+      "expect": "cameras[0].distortion debe ser object"
+    },
+    {
+      "name": "escala sin decir de dónde sale",
+      "override": { "scale": { "status": "ABSOLUTE" } },
+      "expect": "falta scale.source"
+    },
+    {
+      "name": "métrica que R0 se prohíbe a sí mismo",
+      "note": [
+        "La cobertura depende del árbol de triángulos y del muestreo, y llega",
+        "después (D18). Hoy es un campo desconocido y se rechaza como tal, que es",
+        "lo que impide que entre por la puerta de atrás antes de tener con qué",
+        "calcularla."
+      ],
+      "override": { "coverage": 0.96 },
+      "expect": "coverage no existe"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "fixture": "package-integrity-v1",
+  "decision": "D6 (sandbox), D7 (integridad), D29 (sellado), D13 (códigos de salida)",
+  "why": [
+    "Reúne los fixtures que el contrato nombra por separado —invalid-path-v1,",
+    "hash-mismatch-v1, unsealed-package-v1— porque los tres preguntan lo mismo:",
+    "qué paquetes entran y cuáles no, antes de abrir un fichero.",
+    "",
+    "El sistema de ficheros va simulado: cada caso declara qué contestaría el",
+    "disco. Así el escape por symlink se prueba sin crear uno, y lo que queda",
+    "bajo prueba es la política —qué se rechaza y con qué código—, que es lo que",
+    "el otro lado tiene que reproducir. La puerta añade aparte un paquete de",
+    "verdad en disco, con su symlink, para que la simulación no sea la única",
+    "prueba."
+  ],
+  "root": "/paquetes/pkg-0001",
+  "files": {
+    "mesh.ply": {
+      "realPath": "/paquetes/pkg-0001/mesh.ply",
+      "bytes": 12,
+      "sha256": "aaaa000000000000000000000000000000000000000000000000000000000000"
+    },
+    "enlace.ply": {
+      "realPath": "/otro/sitio/mesh.ply",
+      "bytes": 12,
+      "sha256": "aaaa000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "base": {
+    "documentType": "videomesh.reconstruction-package",
+    "contractVersion": "0.1",
+    "packageId": "pkg-0001",
+    "state": "SEALED",
+    "producer": { "name": "videomesh", "version": "0.1.0" },
+    "artifacts": [
+      {
+        "id": "mesh",
+        "type": "TRIANGLE_MESH",
+        "path": "mesh.ply",
+        "bytes": 12,
+        "sha256": "aaaa000000000000000000000000000000000000000000000000000000000000",
+        "purelyReconstructed": true
+      }
+    ],
+    "scale": { "status": "RELATIVE", "source": "NONE" },
+    "frameGraph": { "transforms": [] }
+  },
+  "cases": [
+    {
+      "name": "paquete sellado, ruta dentro, tamaño y hash que cuadran",
+      "override": {},
+      "execution": "COMPLETE",
+      "exitCode": 0,
+      "artifacts": 1
+    },
+    {
+      "name": "ruta absoluta",
+      "artifactPatch": { "path": "/etc/passwd" },
+      "execution": "ERROR",
+      "exitCode": 20,
+      "code": "SS-PKG-002"
+    },
+    {
+      "name": "ruta que sale con ..",
+      "artifactPatch": { "path": "../otro/mesh.ply" },
+      "execution": "ERROR",
+      "exitCode": 20,
+      "code": "SS-PKG-001"
+    },
+    {
+      "name": "ruta legal cuyo enlace resuelve fuera de la raíz",
+      "artifactPatch": { "path": "enlace.ply" },
+      "execution": "ERROR",
+      "exitCode": 20,
+      "code": "SS-PKG-003"
+    },
+    {
+      "name": "artifact declarado que no está",
+      "artifactPatch": { "path": "ausente.ply" },
+      "execution": "ERROR",
+      "exitCode": 20,
+      "code": "SS-PKG-004"
+    },
+    {
+      "name": "tamaño declarado que no es el del fichero",
+      "artifactPatch": { "bytes": 11 },
+      "execution": "ERROR",
+      "exitCode": 20,
+      "code": "SS-PKG-012"
+    },
+    {
+      "name": "contenido que no coincide con el hash declarado",
+      "artifactPatch": {
+        "sha256": "bbbb000000000000000000000000000000000000000000000000000000000000"
+      },
+      "execution": "ERROR",
+      "exitCode": 20,
+      "code": "SS-PKG-013"
+    },
+    {
+      "name": "hash mal escrito, en mayúsculas",
+      "artifactPatch": {
+        "sha256": "AAAA000000000000000000000000000000000000000000000000000000000000"
+      },
+      "execution": "ERROR",
+      "exitCode": 20,
+      "code": "SS-PKG-013"
+    },
+    {
+      "name": "paquete a medio escribir",
+      "override": { "state": "WRITING" },
+      "execution": "ERROR",
+      "exitCode": 20,
+      "code": "SS-PKG-011"
+    },
+    {
+      "name": "manifest que no encaja con el esquema",
+      "override": { "packageId": 7 },
+      "execution": "ERROR",
+      "exitCode": 20,
+      "code": "SS-PKG-010"
+    }
+  ]
+}

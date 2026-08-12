@@ -1,0 +1,468 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JesusGalindez/softsight/contracts/reconstruction-package.schema.json",
+  "title": "reconstruction-package",
+  "type": "object",
+  "properties": {
+    "documentType": {
+      "type": "string",
+      "enum": [
+        "videomesh.reconstruction-package"
+      ],
+      "description": "Qué documento es. Nunca un nombre suelto y ambiguo como `reconstruction` (D14)."
+    },
+    "contractVersion": {
+      "type": "string",
+      "description": "Versión del contrato de frontera; 0.x mientras el contrato esté en DRAFT."
+    },
+    "packageId": {
+      "type": "string",
+      "description": "Identidad canónica del paquete. El nombre del directorio es comodidad humana y no se usa para inferirla (D7)."
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "WRITING",
+        "SEALED"
+      ],
+      "description": "Un paquete solo se consume SEALED; cualquier otro estado es PACKAGE_NOT_SEALED (D29)."
+    },
+    "producer": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Nombre del productor."
+        },
+        "version": {
+          "type": "string",
+          "description": "Versión del productor."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "description": "Quién escribió el paquete, para que el informe pueda decirlo."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Identidad del artifact dentro del paquete."
+              },
+              "path": {
+                "type": "string",
+                "description": "Ruta relativa a la raíz del paquete. Absoluta o con `..` se rechaza (D6)."
+              },
+              "bytes": {
+                "type": "number",
+                "description": "Tamaño en bytes, comprobado antes de analizar."
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Hash del contenido en hexadecimal minúscula, 64 caracteres."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "TRIANGLE_MESH"
+                ],
+                "description": "Malla de triángulos."
+              },
+              "purelyReconstructed": {
+                "type": "boolean",
+                "description": "Cada región de superficie deriva solo de evidencia de reconstrucción. Recalcular normales, soldar, simplificar o convertir formato la mantienen; rellenar agujeros, completar por IA o modelar a mano la fuerzan a false. No significa «la malla no se ha tocado nunca»."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "path",
+              "bytes",
+              "sha256",
+              "type",
+              "purelyReconstructed"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Identidad del artifact dentro del paquete."
+              },
+              "path": {
+                "type": "string",
+                "description": "Ruta relativa a la raíz del paquete. Absoluta o con `..` se rechaza (D6)."
+              },
+              "bytes": {
+                "type": "number",
+                "description": "Tamaño en bytes, comprobado antes de analizar."
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Hash del contenido en hexadecimal minúscula, 64 caracteres."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "POINT_CLOUD"
+                ],
+                "description": "Nube de puntos, dispersa o densa."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "path",
+              "bytes",
+              "sha256",
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Identidad del artifact dentro del paquete."
+              },
+              "path": {
+                "type": "string",
+                "description": "Ruta relativa a la raíz del paquete. Absoluta o con `..` se rechaza (D6)."
+              },
+              "bytes": {
+                "type": "number",
+                "description": "Tamaño en bytes, comprobado antes de analizar."
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Hash del contenido en hexadecimal minúscula, 64 caracteres."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "IMAGE"
+                ],
+                "description": "Imagen de entrada, con su orientación ya horneada en los píxeles (D33)."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "path",
+              "bytes",
+              "sha256",
+              "type"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Identidad del artifact dentro del paquete."
+              },
+              "path": {
+                "type": "string",
+                "description": "Ruta relativa a la raíz del paquete. Absoluta o con `..` se rechaza (D6)."
+              },
+              "bytes": {
+                "type": "number",
+                "description": "Tamaño en bytes, comprobado antes de analizar."
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Hash del contenido en hexadecimal minúscula, 64 caracteres."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "DEPTH_MAP"
+                ],
+                "description": "Mapa de profundidad."
+              },
+              "depthKind": {
+                "type": "string",
+                "enum": [
+                  "OPTICAL_AXIS",
+                  "RAY_LENGTH"
+                ],
+                "description": "Sin valor por defecto y sin inferirlo del proveedor: confundirlos mete un error que crece con el ángulo respecto al centro —cero en el centro, máximo en las esquinas—."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "path",
+              "bytes",
+              "sha256",
+              "type",
+              "depthKind"
+            ]
+          }
+        ]
+      },
+      "description": "Ficheros del paquete, cada uno con su forma según el tipo."
+    },
+    "cameras": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identidad de la cámara dentro del CameraSet."
+          },
+          "imageArtifactId": {
+            "type": "string",
+            "description": "Artifact IMAGE al que pertenecen estos intrínsecos; ata píxeles y calibración (D10)."
+          },
+          "width": {
+            "type": "number",
+            "description": "Ancho de la rejilla real, en píxeles."
+          },
+          "height": {
+            "type": "number",
+            "description": "Alto de la rejilla real, en píxeles."
+          },
+          "pixelOrigin": {
+            "type": "string",
+            "enum": [
+              "TOP_LEFT",
+              "BOTTOM_LEFT"
+            ],
+            "description": "Dónde está el píxel (0,0)."
+          },
+          "pixelCenter": {
+            "type": "string",
+            "enum": [
+              "CENTER",
+              "CORNER"
+            ],
+            "description": "Si el centro del píxel (0,0) cae en 0,5 o en 0."
+          },
+          "model": {
+            "type": "string",
+            "enum": [
+              "PINHOLE",
+              "OPENCV"
+            ],
+            "description": "Modelo de cámara. Uno desconocido es CAMERA_MODEL_UNSUPPORTED, no un aviso."
+          },
+          "intrinsics": {
+            "type": "object",
+            "properties": {
+              "fx": {
+                "type": "number",
+                "description": "Focal en x."
+              },
+              "fy": {
+                "type": "number",
+                "description": "Focal en y."
+              },
+              "cx": {
+                "type": "number",
+                "description": "Punto principal en x."
+              },
+              "cy": {
+                "type": "number",
+                "description": "Punto principal en y."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "fx",
+              "fy",
+              "cx",
+              "cy"
+            ],
+            "description": "Distancia focal y punto principal, en píxeles."
+          },
+          "distortion": {
+            "type": "object",
+            "properties": {
+              "k1": {
+                "type": "number",
+                "description": "Radial de primer orden."
+              },
+              "k2": {
+                "type": "number",
+                "description": "Radial de segundo orden."
+              },
+              "k3": {
+                "type": "number",
+                "description": "Radial de tercer orden."
+              },
+              "p1": {
+                "type": "number",
+                "description": "Tangencial en x."
+              },
+              "p2": {
+                "type": "number",
+                "description": "Tangencial en y."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Coeficientes con nombre; ausente es sin distorsión, no ceros implícitos."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "imageArtifactId",
+          "width",
+          "height",
+          "pixelOrigin",
+          "pixelCenter",
+          "model",
+          "intrinsics"
+        ]
+      },
+      "description": "CameraSet canónico. Ausente es un paquete sin cámaras registradas, no un error."
+    },
+    "scale": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "UNKNOWN",
+            "RELATIVE",
+            "ABSOLUTE"
+          ],
+          "description": "Con status != ABSOLUTE, un presupuesto en unidades absolutas se rechaza."
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "KNOWN_DISTANCE",
+            "MARKER",
+            "CAMERA_PRIOR",
+            "EXTERNAL_MEASUREMENT",
+            "MANUAL"
+          ],
+          "description": "De dónde sale la escala."
+        },
+        "uncertainty": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string",
+              "enum": [
+                "NONE",
+                "GAUSSIAN",
+                "INTERVAL"
+              ],
+              "description": "Qué modelo describe el valor."
+            },
+            "value": {
+              "type": "number",
+              "description": "Magnitud en la unidad de la escala."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "value"
+          ],
+          "description": "Incertidumbre declarada; sin ella no se reporta precisión que nadie justifica."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "source"
+      ],
+      "description": "Modelo de escala."
+    },
+    "frameGraph": {
+      "type": "object",
+      "properties": {
+        "transforms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "enum": [
+                  "CAMERA",
+                  "RECONSTRUCTION",
+                  "ASSET_CANONICAL",
+                  "PRODUCTION"
+                ],
+                "description": "Marco de origen."
+              },
+              "to": {
+                "type": "string",
+                "enum": [
+                  "CAMERA",
+                  "RECONSTRUCTION",
+                  "ASSET_CANONICAL",
+                  "PRODUCTION"
+                ],
+                "description": "Marco de destino."
+              },
+              "matrix": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "Dieciséis números, fila a fila, aplicados como columna a la derecha."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Por qué existe esta transformación."
+              },
+              "producer": {
+                "type": "string",
+                "description": "Quién la produjo."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to",
+              "matrix",
+              "reason",
+              "producer"
+            ]
+          },
+          "description": "Cada arista del grafo, con su matriz y su motivo."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "transforms"
+      ],
+      "description": "Transformaciones entre marcos, todas registradas."
+    },
+    "requiredEvidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Identidades de artifact que el contrato exige para certificar. Faltar una da INCONCLUSIVE; faltar evidencia que nadie usa es irrelevante (D8)."
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "documentType",
+    "contractVersion",
+    "packageId",
+    "state",
+    "producer",
+    "artifacts",
+    "scale",
+    "frameGraph"
+  ]
+}

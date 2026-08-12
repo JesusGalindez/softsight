@@ -242,6 +242,15 @@ export {
 } from "./schema";
 export type { SceneRole } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
+export { RECONSTRUCTION_PACKAGE_SCHEMA } from "./reconstruction/packageSchema";
+export { PACKAGE_CODES, exitCodeFor, ingestPackage } from "./reconstruction/ingest";
+export type {
+  ArtifactStat,
+  ExecutionStatus,
+  IngestIssue,
+  IngestResult,
+  PackageReader,
+} from "./reconstruction/ingest";
 export type {
   SceneSpec,
   ObjectSpec,

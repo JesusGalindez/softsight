@@ -23,6 +23,27 @@ export interface FieldSchema {
   fields?: Record<string, FieldSchema>;
   /** Formas alternativas admitidas; vale con que encaje una. */
   anyOf?: Array<Record<string, FieldSchema>>;
+  /**
+   * Formas discriminadas por el valor de un campo, para listas heterogéneas.
+   *
+   * `anyOf` no llega aquí: se aplica al campo entero y no a cada elemento de una
+   * lista, que es por lo que los generadores de perfil y las deformaciones van
+   * planos y opcionales. Una lista de artifacts de reconstrucción sí necesita
+   * formas distintas por elemento —una malla declara `purelyReconstructed` y una
+   * nube de puntos lo tiene prohibido, D21— y la única alternativa sin esto sería
+   * un esquema laxo que acepta los dos campos en los dos sitios.
+   *
+   * El discriminante es explícito y no adivinado: qué campo manda se declara, y
+   * el validador **mira ese literal antes que la forma**. Un `anyOf` sin
+   * discriminar diría «no coincide con ninguna forma», que no le dice al agente
+   * ni cuál intentaba escribir ni qué le sobra.
+   */
+  variants?: {
+    /** Campo que decide la forma; su tipo son literales y es obligatorio. */
+    on: string;
+    /** Forma por cada valor del discriminante, incluido el propio campo. */
+    forms: Record<string, Record<string, FieldSchema>>;
+  };
 }
 
 export type ObjectSchema = Record<string, FieldSchema>;
@@ -690,6 +711,9 @@ function typeMatches(value: unknown, type: string): boolean {
     if (expected === "number[]" && Array.isArray(value) && value.every((entry) => typeof entry === "number")) {
       return true;
     }
+    if (expected === "string[]" && Array.isArray(value) && value.every((entry) => typeof entry === "string")) {
+      return true;
+    }
     if (expected === "number[3]") {
       if (Array.isArray(value) && value.length === 3 && value.every((entry) => typeof entry === "number")) {
         return true;
@@ -744,6 +768,8 @@ function fieldToJsonSchema(field: FieldSchema): Record<string, unknown> {
       shapes.push({ type: alternative });
     } else if (alternative === "number[]") {
       shapes.push({ type: "array", items: { type: "number" } });
+    } else if (alternative === "string[]") {
+      shapes.push({ type: "array", items: { type: "string" } });
     } else if (alternative === "number[3]") {
       shapes.push({ type: "array", items: { type: "number" }, minItems: 3, maxItems: 3 });
     } else if (alternative === "object") {
@@ -759,6 +785,26 @@ function fieldToJsonSchema(field: FieldSchema): Record<string, unknown> {
   // `anyOf` del esquema son formas alternativas del mismo campo —una geometría es
   // primitiva, o cruda, o extrusión—, así que entran como alternativas más.
   for (const alternative of field.anyOf ?? []) shapes.push(toJsonSchema(alternative));
+
+  if (field.variants !== undefined) {
+    // Las variantes sustituyen a la forma genérica en vez de sumarse: dejar
+    // `{ type: "object" }` al lado abriría una alternativa que acepta cualquier
+    // cosa, y el otro lado validaría contra ella en lugar de contra la variante.
+    const { on, forms } = field.variants;
+    const discriminated = Object.entries(forms).map(([literal, form]) => {
+      const shape = toJsonSchema(form) as { properties: Record<string, unknown> };
+      // El enum de un solo valor es lo que hace que un validador de JSON Schema
+      // elija la misma alternativa que elige `validate`, en vez de probarlas
+      // todas y quedarse con la que menos se queja.
+      shape.properties[on] = { ...(shape.properties[on] as object), enum: [literal] };
+      return shape;
+    });
+    const variant = discriminated.length === 1 ? discriminated[0] : { anyOf: discriminated };
+    return {
+      ...(field.type === "object[]" ? { type: "array", items: variant } : variant),
+      description: field.description,
+    };
+  }
 
   const shape = shapes.length === 1 ? shapes[0] : { anyOf: shapes };
   return { ...shape, description: field.description };
@@ -797,6 +843,34 @@ export function validate(value: unknown, schema: ObjectSchema, path = ""): strin
       children.forEach((child, index) => {
         const childPath = isList ? `${here}[${index}]` : here;
         errors.push(...validate(child, definition.fields as ObjectSchema, childPath));
+      });
+    }
+    if (definition.variants !== undefined) {
+      const { on, forms } = definition.variants;
+      const isList = Array.isArray(record[field]);
+      const children = isList ? (record[field] as unknown[]) : [record[field]];
+      children.forEach((child, index) => {
+        const childPath = isList ? `${here}[${index}]` : here;
+        if (typeof child !== "object" || child === null || Array.isArray(child)) {
+          errors.push(`${childPath} debe ser un objeto`);
+          return;
+        }
+        // El literal primero y la forma después: si el discriminante no encaja,
+        // comprobar la forma solo produciría ruido sobre campos que pertenecen a
+        // otra alternativa.
+        const kind = (child as Record<string, unknown>)[on];
+        if (kind === undefined) {
+          errors.push(`falta ${childPath}.${on} (${Object.keys(forms).join("|")})`);
+          return;
+        }
+        const form = typeof kind === "string" ? forms[kind] : undefined;
+        if (form === undefined) {
+          errors.push(
+            `${childPath}.${on} no admite ${JSON.stringify(kind)}; admitidos: ${Object.keys(forms).join(", ")}`,
+          );
+          return;
+        }
+        errors.push(...validate(child, form, childPath));
       });
     }
     if (definition.anyOf !== undefined) {

@@ -90,16 +90,21 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-08-12, cerrada la tercera ronda:
 
 ```text
-ACORDADAS       33   D1–D24, D26–D34
+ACORDADAS       31   D1–D5, D7–D20, D22–D24, D26–D34
 PROPUESTAS       0
-IMPLEMENTADAS    1   D25
+IMPLEMENTADAS    3   D6, D21, D25
 ```
 
 **El único movimiento admisible ahora es de ACORDADA a IMPLEMENTADA.** La primera
 la trajo D25 el 2026-08-12: la puerta de recursos existe y falla si `auditMesh`
 vuelve a las estructuras que tenía.
 
-D30 era la siguiente candidata y **se quedó a un tercio**: su fixture existe y su
+S4 trajo las otras dos el 2026-08-12: **D6**, con el sandbox probado sobre un
+paquete real y sobre uno simulado, y **D21**, cuyos cuatro casos exigieron
+extender el esquema en ejecución con formas discriminadas por el literal del
+tipo. D7 y D29 se quedaron a medias, cada una con su mitad anotada.
+
+D30 era la primera candidata y **se quedó a un tercio**: su fixture existe y su
 primera fila está probada, pero las otras dos hablan de un espacio `extensions`
 que ningún esquema declara. La puerta las deja NOT_RUN con su motivo y la decisión
 sigue ACORDADA. Es la regla funcionando, no un fallo: la prueba no falla si se
@@ -158,6 +163,19 @@ Código legible en español, más un **identificador neutro y estable**
 `SS-PROD`, `SS-LOD`, `SS-UV`, `SS-PBR`, `SS-COLL`.
 **Prueba:** `test:codes` extendida a identificadores únicos y estables.
 
+**Pendiente de VideoMesh, del 2026-08-12.** La ingesta necesitó cuatro
+identificadores que el contrato no asigna: el espacio nombra los motivos
+—`CONTRACT_SCHEMA_MISMATCH`, `PACKAGE_NOT_SEALED`— pero no los números, y el
+número es lo que se parsea. Van escritos como **propuestos** en
+`src/soft/agent/reconstruction/ingest.ts`, no grabados en ninguna prueba de allí:
+
+```text
+SS-PKG-010  el manifest no encaja con el esquema
+SS-PKG-011  el paquete no está sellado
+SS-PKG-012  el tamaño declarado no es el del fichero
+SS-PKG-013  el contenido no coincide con el sha256 declarado
+```
+
 ### D3 — Ejecución y certificación son dos ejes
 ```text
 ExecutionStatus        COMPLETE | PARTIAL | ERROR | UNSUPPORTED
@@ -178,15 +196,32 @@ Scanline sin comprimir o ZIP, HALF o FLOAT. PIZ, DWA y B44 se rechazan por
 código. Cada canal declara semántica, espacio, rango, unidad e inválido.
 **Prueba:** sin escribir.
 
-### D6 — Sandbox del paquete
+### D6 — Sandbox del paquete — IMPLEMENTADA (2026-08-12)
 `PACKAGE_ROOT`; todo artifact resuelve dentro. Se rechaza `../`, ruta absoluta
 fuera, escape por symlink, symlink anidado y symlink roto. `SS-PKG-001..004`.
-**Prueba:** `invalid-path-v1`.
+**Prueba:** `package-integrity-v1` —que absorbe `invalid-path-v1`— con puerta
+`test:reconstruction`, y los cinco casos además contra un paquete de verdad en
+disco.
+
+El escape por symlink se prueba con un enlace a un fichero **de contenido
+idéntico**: mismo tamaño y mismo hash, y lo único que lo distingue es dónde vive.
+Un sandbox que solo normaliza cadenas lo deja pasar entero.
+
+La ruta se juzga por lo que dice antes de tocar el disco —absoluta o con `..` se
+rechaza aunque apunte dentro—, y solo después por dónde resuelve. Una regla que
+depende de a dónde apunte hoy cambia de resultado mañana.
 
 ### D7 — Integridad de artifacts
 Cada artifact declara `path`, `bytes` y `sha256`. SoftSight valida raíz, tamaño y
 hash **antes** de analizar. El informe publica `packageId`, `manifestSha256` y los
 hashes de los artifacts.
+
+**Medio hecha el 2026-08-12.** La validación previa está: raíz, tamaño y hash se
+comprueban antes de abrir nada, con `package-integrity-v1` cubriendo también
+`hash-mismatch-v1` —tamaño que no cuadra, hash que no cuadra, y hash mal escrito
+en mayúsculas—. Lo que falta para IMPLEMENTADA es la otra mitad de la decisión:
+que el informe publique `packageId`, `manifestSha256` y los hashes, y el informe
+es S6. `packageId` ya sale del manifest y nunca del nombre del directorio.
 
 **Del cierre de la tercera ronda:** el manifest **no puede contener su propio
 sha256** sin trucos recursivos. Lo calcula SoftSight después de la publicación y
@@ -275,8 +310,9 @@ necesita, se extiende el esquema; el JSON Schema nunca se escribe a mano.
 --check`, más `unknown-field-v1`, `unknown-capability-v1`, `unsealed-package-v1`.
 
 **Hecho el 2026-08-12, la mitad:** `tools/contracts.mjs` genera
-`contracts/*.schema.json` de los cinco esquemas que hoy son frontera —escena,
-parche, guion, puesta en escena y referencia de muestreo— y `--check` pone la
+`contracts/*.schema.json` de los seis esquemas que hoy son frontera —escena,
+parche, guion, puesta en escena, referencia de muestreo y el paquete de
+reconstrucción— y `--check` pone la
 puerta roja si el commiteado y el generado divergen, o si sobra un esquema que ya
 no se publica. `unknown-field-v1` está; `unknown-capability-v1` y
 `unsealed-package-v1` piden capabilities y sellado, que no existen.
@@ -347,7 +383,7 @@ centro, máximo en las esquinas. `INVERSE_DEPTH` y `DISPARITY` llegarán por
 capability, nunca reinterpretando depth V1.
 **Prueba:** `depth-optical-axis-v1`, `depth-ray-length-v1`.
 
-### D21 — Coverage v1 sin provenance, y qué puede certificar
+### D21 — Coverage v1 sin provenance, y qué puede certificar — IMPLEMENTADA (2026-08-12)
 Coverage v1 publica `provenanceAware: false`. Solo puede **certificar** sobre
 superficie puramente reconstruida; sobre malla mezclada se reporta pero no
 certifica el área observada.
@@ -425,6 +461,25 @@ sin discriminar da un error pobre —«no coincide con ninguna forma»— y este
 repositorio devuelve errores con sugerencia. El validador debe mirar primero el
 literal del tipo y comprobar solo esa alternativa, o el cuarto caso pasará por el
 motivo correcto con un mensaje inútil.
+
+**Escrito el 2026-08-12, y la nota resultó ser el trabajo.** Aquí falló la
+comprobación de D15: `anyOf` **no llegaba**. Se aplica al campo entero y no a cada
+elemento de una lista —el propio `schema.ts` ya lo decía en dos comentarios, por
+lo que los generadores de perfil y las deformaciones van planos—, y los artifacts
+son una lista heterogénea. Se disparó la condición de D15 y se extendió el esquema
+en ejecución con `variants`: discriminante **declarado**, no adivinado, y el
+literal se mira antes que la forma. Los cuatro casos pasan con su mensaje:
+
+```text
+TRIANGLE_MESH con true    → válido
+TRIANGLE_MESH con false   → válido
+TRIANGLE_MESH sin campo   → «falta artifacts[0].purelyReconstructed»
+POINT_CLOUD con campo     → «artifacts[0].purelyReconstructed no existe»
+```
+
+Y un quinto que sale gratis y hacía falta: un tipo que no existe dice cuáles hay
+—«artifacts[0].type no admite "MESH"; admitidos: TRIANGLE_MESH, POINT_CLOUD,
+IMAGE, DEPTH_MAP»— en vez de un fallo de forma.
 
 ### D22 — Dónde viven los fixtures
 ```text
@@ -623,6 +678,12 @@ informe no debe afirmar durabilidad.
 **Prueba:** paquete sin sellar, sellado, manifest ausente, estado incorrecto,
 destino ya existente, y temporal en otro volumen si se puede probar.
 
+**Medio hecha el 2026-08-12, por el lado del consumidor.** `package-integrity-v1`
+prueba las dos condiciones de sellado que SoftSight puede comprobar: sellado entra,
+`WRITING` se rechaza con `PACKAGE_NOT_SEALED`. El resto —rename atómico, mismo
+volumen, destino que ya existe— lo garantiza quien escribe, y su prueba es de
+VideoMesh.
+
 ### D30 — Campo desconocido es error
 `additionalProperties: false` en el núcleo, y un espacio explícito para lo
 experimental:
@@ -767,7 +828,9 @@ S3  fixture unknown-field-v1                        HECHO — la fila 1 de D30
                                                    extensiones, NOT_RUN sin
                                                    `extensions`. D30 sigue
                                                    ACORDADA
-S4  esqueleto de esquema e ingesta de R0-A
+S4  esqueleto de esquema e ingesta de R0-A       HECHO — esquema del paquete,
+                                                sandbox e integridad. D6 y D21
+                                                pasan a IMPLEMENTADAS
 S5  generador local de cube-v1
 S6  informe mínimo de reconstrucción
 ```
