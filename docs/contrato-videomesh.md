@@ -339,11 +339,37 @@ Coverage v1 publica `provenanceAware: false`. Solo puede **certificar** sobre
 superficie puramente reconstruida; sobre malla mezclada se reporta pero no
 certifica el área observada.
 
-El manifest declara `meshPurelyReconstructed`, que VideoMesh sabe hoy:
+La bandera **cuelga del artifact, no del paquete**. Corrección de VideoMesh sobre
+nuestra propuesta, y es la correcta: un paquete lleva `sparse.ply`, `dense.ply`,
+`mesh_raw.ply` y `mesh_refined.ply`, y una malla reparada y su cruda tienen
+provenance distinta. Una bandera global sería falsa en cuanto el paquete lleve
+las dos.
+
 ```text
-true    → coverage v1 puede certificar el área observada
+purelyReconstructed, requerida en cada artifact TRIANGLE_MESH
+
+true    → coverage v1 puede certificar el área observada de ESA malla
 false   → se reporta, no certifica
 ```
+
+VideoMesh admite implementarla de forma temporal en el artifact de auditoría
+mientras R0 garantice una sola malla. **No lo hacemos:** la lista de artifacts ya
+existe por D7 —cada uno declara `path`, `bytes` y `sha256`—, así que añadir un
+campo a la entrada de la malla cuesta lo mismo hoy que colgarla del paquete, y
+una implementación provisional que no coincide con la semántica es exactamente
+como empieza la deriva. Va atada al artifact desde el primer commit.
+
+Encaja además con D7 sin maquinaria nueva: el informe ya declara `appliesTo:
+{ artifactId, sha256 }`, así que la comprobación de certificación es leer la
+bandera del artifact sobre el que corrió la auditoría.
+
+**Es el primer caso real que exige formas discriminadas por tipo de artifact**
+—requerida en `TRIANGLE_MESH`, ausente en una nube de puntos, que no tiene
+superficie—, que es justo lo que VideoMesh temía que el esquema en ejecución no
+supiera expresar (D15). Comprobado: sí sabe. `FieldSchema` admite `anyOf` con
+formas alternativas del mismo campo y `toJsonSchema` las traduce
+(`schema.ts:762`), y el literal del tipo discrimina. La condición de D15
+—extender el esquema si no llega— no se dispara.
 **Semántica congelada.** `true` significa: *cada región de superficie deriva
 exclusivamente de evidencia de reconstrucción, y ninguna operación posterior ha
 introducido superficie nueva sin soporte reconstructivo.* **No** significa «la
@@ -365,13 +391,12 @@ Cuando una métrica no pueda certificar, el informe dice por qué:
                 "reason": "MESH_NOT_PURELY_RECONSTRUCTED" } }
 ```
 
-**Detalle abierto, de una línea, que no bloquea `cube-v1`:** VideoMesh contempla
-que el campo pueda faltar y que faltar signifique «no certifica». Eso choca con
-D30: si el esquema lo declara requerido, faltar es un error de validación en la
-ingesta y nunca se llega a la rama de cobertura. **Posición de SoftSight: campo
-requerido**, valores `true|false`, sin rama de ausencia. Se resuelve al escribir
-el esquema.
-**Prueba:** malla pura, malla mezclada, campo ausente.
+**Cerrado el 2026-08-12.** El campo es **requerido**; faltar es un error de
+esquema en la ingesta, no una rama de «no certifica». Se descartó el caso de
+ausencia porque chocaba con D30: la misma entrada tenía dos resultados según por
+dónde se mirara.
+**Prueba:** malla pura, malla mezclada, campo ausente —que debe salir por el
+camino de error de esquema, no por el de cobertura—.
 
 ### D22 — Dónde viven los fixtures
 ```text
