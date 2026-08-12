@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 import {
   PATCH_SCHEMA,
   RECONSTRUCTION_PACKAGE_SCHEMA,
+  RECONSTRUCTION_REPORT_SCHEMA,
   SAMPLE_REFERENCE_SCHEMA,
   SCENE_SCHEMA,
   STAGING_SCHEMA,
@@ -48,6 +49,7 @@ export const PUBLISHED = {
   staging: STAGING_SCHEMA,
   "sample-reference": SAMPLE_REFERENCE_SCHEMA,
   "reconstruction-package": RECONSTRUCTION_PACKAGE_SCHEMA,
+  "reconstruction-report": RECONSTRUCTION_REPORT_SCHEMA,
 };
 
 /** El documento tal y como se commitea: con salto final, para que `diff` no chille. */

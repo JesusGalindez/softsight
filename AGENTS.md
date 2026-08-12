@@ -71,6 +71,7 @@ abierta—; tratarlos igual lleva a «arreglar» piezas que estaban bien.
 | `npm run bridge` | `node tools/bridge.mjs` |
 | `npm run cube-v1` | `npm run build:agent3d && node tools/cubeV1.mjs` |
 | `npm run filmstrip` | `npm run build:agent3d --silent && node tools/filmstrip.mjs` |
+| `npm run reconstruction` | `npm run build:agent3d && node tools/reconstruction.mjs` |
 | `npm run worker` | `node tools/workerServer.mjs` |
 <!-- /generado: comandos -->
 

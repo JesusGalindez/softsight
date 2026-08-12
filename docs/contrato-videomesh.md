@@ -90,9 +90,10 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-08-12, cerrada la tercera ronda:
 
 ```text
-ACORDADAS       31   D1–D5, D7–D20, D22–D24, D26–D34
+ACORDADAS       28   D1, D2, D4, D5, D8–D13, D15–D20, D22–D24, D26–D34
 PROPUESTAS       0
-IMPLEMENTADAS    3   D6, D21, D25
+IMPLEMENTADAS    6   D3, D6, D7, D14, D21, D25
+PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
 **El único movimiento admisible ahora es de ACORDADA a IMPLEMENTADA.** La primera
@@ -176,14 +177,25 @@ SS-PKG-012  el tamaño declarado no es el del fichero
 SS-PKG-013  el contenido no coincide con el sha256 declarado
 ```
 
-### D3 — Ejecución y certificación son dos ejes
+### D3 — Ejecución y certificación son dos ejes — IMPLEMENTADA (2026-08-12)
 ```text
 ExecutionStatus        COMPLETE | PARTIAL | ERROR | UNSUPPORTED
 CertificationVerdict   PASS | FAIL | INCONCLUSIVE
 ```
 Motivos aparte: `INSUFFICIENT_EVIDENCE`, `UNCERTAINTY_OVERLAPS_THRESHOLD`,
 `REQUIRED_METRIC_UNAVAILABLE`.
-**Prueba:** sin escribir.
+**Prueba:** `test:reconstruction`, con los dos ejes moviéndose por separado:
+
+```text
+paquete íntegro, malla sana        COMPLETE   PASS
+paquete íntegro, malla sin caras   COMPLETE   FAIL
+falta evidencia requerida          COMPLETE   INCONCLUSIVE
+paquete sin sellar                 ERROR      INCONCLUSIVE
+```
+
+La última fila es la que sostiene la decisión: un paquete que no se puede leer
+**no es un veredicto sobre la geometría de nadie**. Colapsar los dos ejes
+convertiría un error de transporte en un FAIL de VideoMesh.
 
 ### D4 — ColmapAdapter produce los fixtures reales
 Cámaras, `points3D` y convenciones reales. `colmap-small-v1` sigue siendo
@@ -211,17 +223,18 @@ La ruta se juzga por lo que dice antes de tocar el disco —absoluta o con `..` 
 rechaza aunque apunte dentro—, y solo después por dónde resuelve. Una regla que
 depende de a dónde apunte hoy cambia de resultado mañana.
 
-### D7 — Integridad de artifacts
+### D7 — Integridad de artifacts — IMPLEMENTADA (2026-08-12)
 Cada artifact declara `path`, `bytes` y `sha256`. SoftSight valida raíz, tamaño y
 hash **antes** de analizar. El informe publica `packageId`, `manifestSha256` y los
 hashes de los artifacts.
 
-**Medio hecha el 2026-08-12.** La validación previa está: raíz, tamaño y hash se
-comprueban antes de abrir nada, con `package-integrity-v1` cubriendo también
-`hash-mismatch-v1` —tamaño que no cuadra, hash que no cuadra, y hash mal escrito
-en mayúsculas—. Lo que falta para IMPLEMENTADA es la otra mitad de la decisión:
-que el informe publique `packageId`, `manifestSha256` y los hashes, y el informe
-es S6. `packageId` ya sale del manifest y nunca del nombre del directorio.
+**Cerrada el 2026-08-12, las dos mitades.** La validación previa —raíz, tamaño y
+hash antes de abrir nada— con `package-integrity-v1`, que cubre también
+`hash-mismatch-v1`. Y la publicación: el informe lleva `packageId`,
+`inputManifestSha256` y el sha256 de cada artifact medido, con cada medida atada
+a su `appliesTo { artifactId, sha256 }`. El hash del manifest lo calcula quien lo
+lee, porque el manifest no puede contener el suyo. `packageId` sale del manifest
+y nunca del nombre del directorio.
 
 **Del cierre de la tercera ronda:** el manifest **no puede contener su propio
 sha256** sin trucos recursivos. Lo calcula SoftSight después de la publicación y
@@ -276,7 +289,7 @@ El código de salida es una **proyección para shell y CI**. La autoridad semán
 es el JSON: `execution` y `certification`.
 **Prueba:** sin escribir.
 
-### D14 — Un documento, una versión en la raíz
+### D14 — Un documento, una versión en la raíz — IMPLEMENTADA (2026-08-12)
 Informe de reconstrucción y de producción son **documentos distintos**.
 `documentType` en todos los documentos canónicos, con la forma
 `<productor>.<tipo>`:
@@ -286,7 +299,10 @@ videomesh.production-package       softsight.production-report
 ```
 Nunca nombres ambiguos sueltos —`reconstruction`, `report`—. `reportVersion` y
 `contractVersion` no conviven como dos versiones raíz.
-**Prueba:** sin escribir.
+**Prueba:** `reconstruction-package-v1` rechaza `documentType: "reconstruction"`,
+y el informe declara el suyo y valida contra `contracts/reconstruction-report.schema.json`.
+La versión del documento vive dentro de `versions`, no en la raíz al lado de
+`contractVersion`.
 
 ### D15 — Una sola fuente ejecutable; JSON Schema es la frontera pública
 ```text
@@ -849,7 +865,8 @@ S5  generador local de cube-v1                   HECHO — `npm run cube-v1`:
                                                 malla, nube, cuatro imágenes
                                                 renderizadas y su CameraSet,
                                                 sellado con rename
-S6  informe mínimo de reconstrucción
+S6  informe mínimo de reconstrucción             HECHO — R0-A cierra:
+                                                COMPLETE + PASS con salida 0
 ```
 
 **VideoMesh**, en orden:
@@ -871,6 +888,32 @@ V10 arnés de paridad
 3  R0-B PASS               las tres comparaciones
 4  se desbloquea el trabajo dependiente del contrato
 ```
+
+### PENDIENTE sin número — qué certifica R0
+
+Se aplica ya, porque D18 exige que `cube-v1` salga `COMPLETE + PASS` y sin
+criterio no hay veredicto. Va aquí como pendiente según §1.6, en el código que lo
+aplica (`CERTIFICATION_POLICY`, `report.ts`) y en el envío 01, para que VideoMesh
+lo confirme o lo cambie.
+
+```text
+PASS           el paquete está íntegro, la evidencia requerida está,
+               y toda malla declarada se lee y tiene superficie
+INCONCLUSIVE   falta evidencia que el contrato pide, o no había nada que medir
+FAIL           lo que se midió contradice lo que el paquete declara
+```
+
+**La calidad geométrica no decide el veredicto.** Una malla reconstruida con
+agujeros es lo normal, no un fallo del paquete: se reporta y quien fije un umbral
+lo hará en producción, que es otro documento. Certificar aquí «cerrada o FAIL»
+haría fallar a casi toda reconstrucción real y empujaría a rellenar agujeros para
+pasar la puerta —que es exactamente lo que `purelyReconstructed` existe para poder
+distinguir—.
+
+El informe publica qué criterio aplicó en `certificationPolicy`, para que un PASS
+de hoy y uno de mañana se puedan comparar.
+
+---
 
 **Lo primero que este intercambio debía producir que no fuera un documento** era
 un número: el techo de `auditMesh` sobre 1M triángulos y el mismo número después

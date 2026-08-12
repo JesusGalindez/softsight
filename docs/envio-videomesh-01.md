@@ -33,7 +33,30 @@ cambiadlos: si los cambiáis, aquí cuesta una constante.
 
 Los cuatro del sandbox (`SS-PKG-001..004`) sí los fija D6 y están tal cual.
 
-### 1.2 Un campo del paquete que puede que os falte
+### 1.2 Qué certifica R0, que no está en ninguna decisión
+
+D18 exige que `cube-v1` salga `COMPLETE + PASS`, y sin criterio no hay veredicto.
+Está aplicado y publicado en cada informe como `certificationPolicy`, y anotado
+como **pendiente sin número** según §1.6:
+
+```text
+PASS           el paquete está íntegro, la evidencia requerida está,
+               y toda malla declarada se lee y tiene superficie
+INCONCLUSIVE   falta evidencia que el contrato pide, o no había nada que medir
+FAIL           lo que se midió contradice lo que el paquete declara
+```
+
+**La calidad geométrica no decide el veredicto**, y esto es lo que más nos
+interesa que discutáis: una malla reconstruida con agujeros es lo normal. Se
+reporta —`boundaryEdges`, `nonManifoldEdges`— y el umbral lo pondrá producción,
+que es otro documento. Si certificáramos «cerrada o FAIL», casi toda
+reconstrucción real fallaría y el incentivo sería rellenar agujeros para pasar la
+puerta, que es justo lo que `purelyReconstructed` existe para poder distinguir.
+
+Lo único que sí es FAIL hoy: que la malla contradiga al manifest. Un
+`TRIANGLE_MESH` con cero triángulos es eso.
+
+### 1.3 Un campo del paquete que puede que os falte
 
 `producer { name, version }` es **requerido** en el manifest. No sale de ninguna
 decisión: lo puse porque el informe tiene que poder decir quién escribió el
@@ -56,9 +79,11 @@ story.schema.json                    f90771f3d20e29de    1951
 staging.schema.json                  2057546b2f5be99d    4148
 sample-reference.schema.json         29bc83e9e7766b44     975
 reconstruction-package.schema.json   b321f0fb966f2f91   14541
+reconstruction-report.schema.json    c06c089e5e9c9011   10261
 ```
 
-El sexto es el vuestro: `videomesh.reconstruction-package`. Es el **esqueleto de
+Los dos últimos son los de esta frontera: el paquete que escribís y el informe
+que os devolvemos. El sexto, `videomesh.reconstruction-package`. Es el **esqueleto de
 R0-A**, no el contrato entero — identidad, sellado, artifacts, CameraSet, escala,
 FrameGraph y `requiredEvidence`. Sin cobertura ni confianza: R0 se las prohíbe, y
 el esquema las rechaza como campo desconocido.
@@ -143,10 +168,18 @@ de 5M solo corre con `SOFTSIGHT_HEAVY=1`.
 ## 5. Dónde estamos, y qué esperamos de vosotros
 
 ```text
-SoftSight   S1 S2 S3 S4 hechos      S5 cube-v1 local, en marcha
-                                    S6 informe mínimo
+SoftSight   S1..S6 hechos           R0-A CERRADO
 VideoMesh   V1..V10                 sin noticias por este canal
 ```
+
+**R0-A pasa.** `cube-v1` recorre esquema, sandbox, hashes, PLY, CameraSet,
+escala, FrameGraph, auditoría y sobre del informe, y sale `COMPLETE + PASS` con
+código 0. El informe valida contra su propio esquema publicado y es **idéntico
+byte a byte entre dos ejecuciones**: no lleva reloj, y el `runId` sale del hash
+del manifest. Si vuestro informe lleva marca de tiempo, no se podrá comparar bit
+a bit, que es lo que D28 pide de la frontera.
+
+Seis decisiones implementadas: **D3, D6, D7, D14, D21, D25**.
 
 Lo que desbloquea lo siguiente, por orden de lo que nos frena:
 

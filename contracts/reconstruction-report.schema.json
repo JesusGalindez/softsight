@@ -1,0 +1,362 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JesusGalindez/softsight/contracts/reconstruction-report.schema.json",
+  "title": "reconstruction-report",
+  "type": "object",
+  "properties": {
+    "documentType": {
+      "type": "string",
+      "enum": [
+        "softsight.reconstruction-report"
+      ],
+      "description": "Qué documento es. El informe de producción es otro distinto (D14)."
+    },
+    "contractVersion": {
+      "type": "string",
+      "description": "Versión del contrato del paquete que se evaluó."
+    },
+    "execution": {
+      "type": "string",
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "ERROR",
+        "UNSUPPORTED"
+      ],
+      "description": "Si el trabajo se pudo hacer. No dice nada sobre la geometría."
+    },
+    "certification": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "INCONCLUSIVE"
+      ],
+      "description": "Si lo medido cumple. Un eje aparte de la ejecución."
+    },
+    "certificationReason": {
+      "type": "string",
+      "description": "Motivo canónico cuando no es PASS; ausente cuando lo es."
+    },
+    "certificationPolicy": {
+      "type": "string",
+      "description": "Qué criterio se aplicó, para que un PASS de hoy y uno de mañana se puedan comparar."
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Determinista: sale del manifest, no de un reloj."
+        },
+        "inputPackageId": {
+          "type": "string",
+          "description": "Identidad del paquete consumido."
+        },
+        "inputManifestSha256": {
+          "type": "string",
+          "description": "Hash del manifest evaluado."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "COMPLETE",
+            "ERROR",
+            "UNSUPPORTED"
+          ],
+          "description": "Estado del consumo."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "inputManifestSha256",
+        "status"
+      ],
+      "description": "El consumo, que pertenece al run y nunca al paquete: leerlo no lo modifica (D29)."
+    },
+    "versions": {
+      "type": "object",
+      "properties": {
+        "softsight": {
+          "type": "string",
+          "description": "Versión del evaluador."
+        },
+        "report": {
+          "type": "string",
+          "description": "Versión del documento."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "softsight",
+        "report"
+      ],
+      "description": "Bloque de versiones; el consumidor comprueba el bloque, no un campo (D12)."
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Identidad del artifact."
+              },
+              "type": {
+                "type": "string",
+                "description": "Tipo declarado en el paquete."
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Hash comprobado, no copiado."
+              },
+              "bytes": {
+                "type": "number",
+                "description": "Tamaño comprobado."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "type",
+              "sha256",
+              "bytes"
+            ]
+          },
+          "description": "Artifacts admitidos y medidos."
+        },
+        "requiredEvidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Lo que el paquete declaró como imprescindible."
+        },
+        "missingEvidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "De lo anterior, lo que no llegó. Con algo aquí, el veredicto es INCONCLUSIVE (D8)."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "artifacts",
+        "requiredEvidence",
+        "missingEvidence"
+      ],
+      "description": "A qué apunta este informe, con hash por artifact (P5)."
+    },
+    "measurements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "appliesTo": {
+            "type": "object",
+            "properties": {
+              "artifactId": {
+                "type": "string",
+                "description": "Artifact medido."
+              },
+              "sha256": {
+                "type": "string",
+                "description": "Su hash, el comprobado en la ingesta."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "artifactId",
+              "sha256"
+            ],
+            "description": "Sobre qué corrió la medida."
+          },
+          "purelyReconstructed": {
+            "type": "boolean",
+            "description": "Provenance de esa malla, copiada de su artifact (D21)."
+          },
+          "vertices": {
+            "type": "number",
+            "description": "Vértices del fichero, sin soldar."
+          },
+          "triangles": {
+            "type": "number",
+            "description": "Triángulos del fichero."
+          },
+          "degenerateTriangles": {
+            "type": "number",
+            "description": "De área nula."
+          },
+          "duplicatePositions": {
+            "type": "number",
+            "description": "Vértices que la soldadura junta."
+          },
+          "boundaryEdges": {
+            "type": "number",
+            "description": "Aristas con un solo triángulo."
+          },
+          "nonManifoldEdges": {
+            "type": "number",
+            "description": "Aristas con tres o más."
+          },
+          "watertight": {
+            "type": "boolean",
+            "description": "Cerrada tras soldar."
+          },
+          "signedVolume": {
+            "type": "number",
+            "description": "Volumen firmado; negativo es del revés."
+          },
+          "boundingBoxMin": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Esquina mínima de la caja."
+          },
+          "boundingBoxMax": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Esquina máxima."
+          },
+          "measurementClass": {
+            "type": "string",
+            "enum": [
+              "EXACT",
+              "DETERMINISTIC_APPROXIMATION",
+              "EXTERNAL_MEASUREMENT"
+            ],
+            "description": "Qué clase de medida es (D28). Recuentos y caja son exactos."
+          },
+          "reproducibility": {
+            "type": "string",
+            "enum": [
+              "BITWISE_EXACT",
+              "QUANTIZED",
+              "TOLERANCE"
+            ],
+            "description": "Con qué reproducibilidad. Nace BITWISE_EXACT y moverla exige medida."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "appliesTo",
+          "purelyReconstructed",
+          "vertices",
+          "triangles",
+          "degenerateTriangles",
+          "duplicatePositions",
+          "boundaryEdges",
+          "nonManifoldEdges",
+          "watertight",
+          "signedVolume",
+          "boundingBoxMin",
+          "boundingBoxMax",
+          "measurementClass",
+          "reproducibility"
+        ]
+      },
+      "description": "Una entrada por malla medida, cada una atada a su artifact."
+    },
+    "scale": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "UNKNOWN",
+            "RELATIVE",
+            "ABSOLUTE"
+          ],
+          "description": "Estado de la escala."
+        },
+        "source": {
+          "type": "string",
+          "description": "De dónde sale."
+        },
+        "uncertainty": {
+          "type": "object",
+          "description": "Incertidumbre, si la hay."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "source"
+      ],
+      "description": "La escala declarada por el paquete, copiada tal cual: con status != ABSOLUTE, nada absoluto se certifica."
+    },
+    "cameras": {
+      "type": "object",
+      "properties": {
+        "declared": {
+          "type": "number",
+          "description": "Cámaras del CameraSet."
+        },
+        "withImage": {
+          "type": "number",
+          "description": "De ellas, las que resuelven su imagen."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "declared",
+        "withImage"
+      ],
+      "description": "Cuántas cámaras declaró el paquete y cuántas apuntan a una imagen que existe."
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Identificador neutro; esto es lo que se parsea."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Motivo canónico."
+          },
+          "message": {
+            "type": "string",
+            "description": "Texto para humanos; nunca se parsea."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "reason",
+          "message"
+        ]
+      },
+      "description": "Lo que impidió consumir el paquete, con identificador estable (D2)."
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "documentType",
+    "contractVersion",
+    "execution",
+    "certification",
+    "certificationPolicy",
+    "run",
+    "versions",
+    "evidence",
+    "measurements",
+    "scale",
+    "cameras",
+    "warnings"
+  ]
+}

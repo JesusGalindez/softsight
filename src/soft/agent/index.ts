@@ -245,6 +245,16 @@ export type { FieldSchema, ObjectSchema } from "./schema";
 export { RECONSTRUCTION_PACKAGE_SCHEMA } from "./reconstruction/packageSchema";
 export { PACKAGE_CODES, exitCodeFor, ingestPackage } from "./reconstruction/ingest";
 export { parsePlyAscii, serializePlyMesh, serializePlyPoints } from "./reconstruction/ply";
+export {
+  CERTIFICATION_POLICY,
+  RECONSTRUCTION_REPORT_SCHEMA,
+  buildReconstructionReport,
+} from "./reconstruction/report";
+export type {
+  CertificationVerdict,
+  MeshMeasurement,
+  ReconstructionReport,
+} from "./reconstruction/report";
 export type { PlyMesh, PlyPoints } from "./reconstruction/ply";
 export type {
   ArtifactStat,

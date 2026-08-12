@@ -83,7 +83,8 @@ interface PlyElement {
 }
 
 /**
- * Lee un PLY ASCII con posiciones y, si las hay, caras trianguladas.
+ * Lee un PLY ASCII con posiciones y, si el fichero declara el elemento, caras
+ * trianguladas.
  *
  * Las caras de más de tres lados se abanican desde su primer vértice, que es la
  * triangulación que no inventa vértices ni cambia el borde. Un polígono cóncavo
@@ -136,6 +137,11 @@ export function parsePlyAscii(text: string): { mesh: PlyMesh | null; points: Ply
   let row = 0;
   let positions: Float32Array = new Float32Array(0);
   const faces: number[] = [];
+  // Declarar `element face 0` no es lo mismo que no declararlo: el primero dice
+  // «esto es una malla y no tiene superficie», que es un paquete que se contradice
+  // a sí mismo, y el segundo dice «esto es una nube de puntos». Distinguirlos es lo
+  // que permite que el informe conteste FAIL en vez de encogerse de hombros.
+  let declaresFaces = false;
   for (const element of elements) {
     if (element.name === "vertex") {
       const names = element.properties.map((property) => property.name);
@@ -151,6 +157,7 @@ export function parsePlyAscii(text: string): { mesh: PlyMesh | null; points: Ply
       continue;
     }
     if (element.name === "face") {
+      declaresFaces = true;
       for (let index = 0; index < element.count; index += 1, row += 1) {
         const parts = values[row].split(/\s+/).map(Number);
         const sides = parts[0];
@@ -164,7 +171,7 @@ export function parsePlyAscii(text: string): { mesh: PlyMesh | null; points: Ply
   }
 
   return {
-    mesh: faces.length > 0 ? { positions, indices: Uint32Array.from(faces) } : null,
+    mesh: declaresFaces ? { positions, indices: Uint32Array.from(faces) } : null,
     points: { positions },
   };
 }

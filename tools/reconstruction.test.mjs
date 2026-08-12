@@ -1,7 +1,7 @@
 /**
- * Puerta del esqueleto de R0-A: esquema del paquete e ingesta.
+ * Puerta de R0-A: del manifest al informe.
  *
- * Cinco bloques, en el orden en que un paquete los atraviesa:
+ * Seis bloques, en el orden en que un paquete los atraviesa:
  *
  *   1. La forma del manifest, con los cuatro casos de D21 y los de D19, D20 y
  *      D14. Cada rechazo se comprueba **por su motivo**, no por «falló»: la
@@ -15,10 +15,12 @@
  *   4. `cube-v1` entero: se genera, se comprueba que dos generaciones dan los
  *      mismos hashes, entra por la ingesta, su malla se lee del PLY y se audita,
  *      y sus cuatro imágenes se miran para que no sean un lienzo vacío.
- *   5. Lo que R0 se prohíbe: cobertura y confianza no entran por el esquema.
- *
- * Lo que **no** hay todavía, y la puerta lo dice al terminar: el sobre del
- * informe. R0-A no está cerrado.
+ *   5. El recorrido entero de D34: `cube-v1` sale COMPLETE + PASS con salida 0,
+ *      su informe valida contra el esquema publicado y es idéntico byte a byte
+ *      entre dos ejecuciones. Con los tres desenlaces que no son PASS: evidencia
+ *      requerida ausente, paquete sin sellar, y malla declarada sin superficie.
+ *   6. Lo que sigue fuera: el criterio de certificación no tiene número, y
+ *      cobertura y confianza siguen bloqueadas por D34.
  */
 
 import assert from "node:assert/strict";
@@ -40,6 +42,7 @@ import { fileURLToPath } from "node:url";
 import {
   PACKAGE_CODES,
   RECONSTRUCTION_PACKAGE_SCHEMA,
+  RECONSTRUCTION_REPORT_SCHEMA,
   auditMesh,
   exitCodeFor,
   ingestPackage,
@@ -48,6 +51,7 @@ import {
 } from "../dist-node/agent3d.mjs";
 import { decodePng } from "./agent3d.mjs";
 import { writeCubePackage } from "./cubeV1.mjs";
+import { inspectPackage } from "./reconstruction.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
@@ -297,9 +301,105 @@ function sha256Of(path) {
   rmSync(sandbox, { recursive: true, force: true });
 }
 
-// 5. Lo que R0-A todavía no tiene, dicho en voz alta.
+// 5. R0-A entero: del manifest al informe, con su código de salida.
+{
+  const sandbox = realpathSync(mkdtempSync(join(tmpdir(), "softsight-r0a-")));
+  const root = join(sandbox, "cube-v1");
+  writeCubePackage(root);
+  const manifestPath = join(root, "manifest.json");
+
+  const { report, exitCode } = inspectPackage(manifestPath);
+  assert.equal(report.execution, "COMPLETE");
+  assert.equal(report.certification, "PASS");
+  assert.equal(exitCode, 0, "R0-A: cube-v1 sale COMPLETE + PASS con salida 0");
+  assert.equal(report.certificationReason, undefined, "un PASS no lleva motivo; tampoco null");
+
+  // El informe apunta a lo que evaluó, que es P5 y la mitad que le faltaba a D7.
+  assert.equal(report.run.inputPackageId, "cube-v1");
+  assert.equal(
+    report.run.inputManifestSha256,
+    createHash("sha256").update(readFileSync(manifestPath)).digest("hex"),
+  );
+  assert.equal(report.evidence.artifacts.length, 6);
+  assert.equal(report.measurements[0].appliesTo.artifactId, "mesh");
+  assert.equal(report.measurements[0].appliesTo.sha256, report.evidence.artifacts[0].sha256);
+  assert.equal(report.measurements[0].purelyReconstructed, true);
+  assert.equal(report.measurements[0].watertight, true);
+  assert.equal(report.measurements[0].signedVolume, 1);
+  assert.equal(report.cameras.declared, 4);
+  assert.equal(report.cameras.withImage, 4, "cada cámara resuelve su imagen");
+
+  // El informe cumple su propio contrato publicado. Si no, VideoMesh derivaría un
+  // modelo de un esquema que el productor no respeta.
+  assert.deepEqual(validate(report, RECONSTRUCTION_REPORT_SCHEMA), []);
+
+  // Determinista byte a byte: sin reloj y con runId derivado del manifest. Es lo
+  // que permite comparar dos ejecuciones del mismo trabajo, y lo que D28 pide.
+  assert.equal(JSON.stringify(report), JSON.stringify(inspectPackage(manifestPath).report));
+
+  console.log(
+    `reconstrucción: ok (R0-A: cube-v1 recorre esquema, sandbox, hashes, PLY, CameraSet, escala y ` +
+      `FrameGraph, y sale COMPLETE + PASS con salida 0, informe válido contra su esquema y determinista)`,
+  );
+
+  /** Reescribe el manifest del paquete y vuelve a inspeccionarlo. */
+  const conManifest = (cambios) => {
+    const manifest = { ...JSON.parse(readFileSync(manifestPath, "utf8")), ...cambios };
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    return inspectPackage(manifestPath);
+  };
+
+  // Falta evidencia que el contrato pide: no se puede concluir, y no es un fallo
+  // de la geometría de nadie (D8, P2).
+  const sinEvidencia = conManifest({ requiredEvidence: ["mesh", "depth-frontal"] });
+  assert.equal(sinEvidencia.report.execution, "COMPLETE");
+  assert.equal(sinEvidencia.report.certification, "INCONCLUSIVE");
+  assert.equal(sinEvidencia.report.certificationReason, "INSUFFICIENT_EVIDENCE");
+  assert.deepEqual(sinEvidencia.report.evidence.missingEvidence, ["depth-frontal"]);
+  assert.equal(sinEvidencia.exitCode, 11);
+
+  // Un paquete a medio escribir no se consume: el trabajo no se hizo, así que el
+  // veredicto no habla de la malla.
+  const sinSellar = conManifest({ state: "WRITING", requiredEvidence: ["mesh"] });
+  assert.equal(sinSellar.report.execution, "ERROR");
+  assert.equal(sinSellar.report.certification, "INCONCLUSIVE");
+  assert.equal(sinSellar.report.certificationReason, "PACKAGE_NOT_CONSUMABLE");
+  assert.equal(sinSellar.report.measurements.length, 0, "no se mide lo que no se admitió");
+  assert.equal(sinSellar.exitCode, 20);
+
+  console.log(
+    "reconstrucción: ok (evidencia requerida ausente da INCONCLUSIVE y salida 11; paquete sin sellar " +
+      "da ERROR y salida 20, sin medir nada)",
+  );
+
+  // Y el único FAIL de R0: el paquete declara superficie y no la hay. Se hace con
+  // un PLY sin caras, que es una malla legal y vacía.
+  const vacio = join(sandbox, "cube-vacio");
+  writeCubePackage(vacio);
+  const plyVacio = "ply\nformat ascii 1.0\nelement vertex 0\nproperty float x\nproperty float y\nproperty float z\nelement face 0\nproperty list uchar int vertex_index\nend_header\n";
+  writeFileSync(join(vacio, "mesh.ply"), plyVacio);
+  const manifestVacio = JSON.parse(readFileSync(join(vacio, "manifest.json"), "utf8"));
+  const malla = manifestVacio.artifacts.find((artifact) => artifact.id === "mesh");
+  malla.bytes = Buffer.byteLength(plyVacio);
+  malla.sha256 = createHash("sha256").update(plyVacio).digest("hex");
+  writeFileSync(join(vacio, "manifest.json"), `${JSON.stringify(manifestVacio, null, 2)}\n`);
+
+  const roto = inspectPackage(join(vacio, "manifest.json"));
+  assert.equal(roto.report.execution, "COMPLETE", "el paquete es íntegro: el problema es lo que dice");
+  assert.equal(roto.report.certification, "FAIL");
+  assert.equal(roto.report.certificationReason, "MESH_DECLARED_WITHOUT_SURFACE");
+  assert.equal(roto.exitCode, 1);
+  console.log(
+    "reconstrucción: ok (una malla declarada sin un solo triángulo es FAIL con salida 1, y la " +
+      "ejecución sigue siendo COMPLETE: el paquete está bien, lo que declara no)",
+  );
+
+  rmSync(sandbox, { recursive: true, force: true });
+}
+
+// 6. Lo que sigue fuera, dicho en voz alta.
 console.log(
-  "reconstrucción: no ejecutada — R0-A no está cerrado: el paquete entra y su malla se audita, " +
-    "pero falta el sobre del informe con packageId, manifestSha256 y los hashes (S6). " +
-    "Cobertura y confianza siguen fuera del esquema por D34",
+  "reconstrucción: no ejecutada — el criterio de certificación de R0 no tiene decisión con número: " +
+    "va como pendiente en el envío para que VideoMesh lo confirme. Cobertura y confianza siguen " +
+    "fuera del esquema por D34, y R0-B espera a su cube-v1 y a expected.json",
 );
