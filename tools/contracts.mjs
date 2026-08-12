@@ -69,46 +69,60 @@ function render(name) {
   )}\n`;
 }
 
-const check = process.argv.includes("--check");
-mkdirSync(CONTRACTS, { recursive: true });
+/**
+ * Escribe o comprueba, según se pida. Va en una función y no al cargar el módulo
+ * porque la puerta lo importa para leer `PUBLISHED`: un efecto al importar haría
+ * que comprobar el contrato lo reescribiera, y entonces nunca podría estar
+ * desactualizado.
+ */
+export function syncContracts({ check }) {
+  mkdirSync(CONTRACTS, { recursive: true });
 
-const stale = [];
-for (const name of Object.keys(PUBLISHED)) {
-  const target = resolve(CONTRACTS, `${name}.schema.json`);
-  const generated = render(name);
-  let current = null;
-  try {
-    current = readFileSync(target, "utf8");
-  } catch {
-    current = null;
+  const stale = [];
+  for (const name of Object.keys(PUBLISHED)) {
+    const target = resolve(CONTRACTS, `${name}.schema.json`);
+    const generated = render(name);
+    let current = null;
+    try {
+      current = readFileSync(target, "utf8");
+    } catch {
+      current = null;
+    }
+    if (check) {
+      if (current !== generated) stale.push(name);
+    } else if (current !== generated) {
+      writeFileSync(target, generated);
+    }
   }
-  if (check) {
-    if (current !== generated) stale.push(name);
-  } else if (current !== generated) {
-    writeFileSync(target, generated);
-  }
+
+  // Un esquema que se deja de publicar tiene que desaparecer del directorio: si se
+  // queda, otro repositorio sigue leyendo una frontera que ya no existe.
+  const extra = readdirSync(CONTRACTS)
+    .filter((file) => file.endsWith(".schema.json"))
+    .map((file) => file.replace(".schema.json", ""))
+    .filter((name) => PUBLISHED[name] === undefined);
+
+  return { stale, extra };
 }
 
-// Un esquema que se deja de publicar tiene que desaparecer del directorio: si se
-// queda, otro repositorio sigue leyendo una frontera que ya no existe.
-const extra = readdirSync(CONTRACTS)
-  .filter((file) => file.endsWith(".schema.json"))
-  .map((file) => file.replace(".schema.json", ""))
-  .filter((name) => PUBLISHED[name] === undefined);
-
-if (check) {
-  if (stale.length > 0 || extra.length > 0) {
-    process.stderr.write(
-      `contracts: no está al día — ${[...stale, ...extra.map((name) => `${name} sobra`)].join(", ")}; ` +
-        "regenéralo con `node tools/contracts.mjs`.\n",
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const check = process.argv.includes("--check");
+  const { stale, extra } = syncContracts({ check });
+  const total = Object.keys(PUBLISHED).length;
+  if (check) {
+    if (stale.length > 0 || extra.length > 0) {
+      process.stderr.write(
+        `contracts: no está al día — ${[...stale, ...extra.map((name) => `${name} sobra`)].join(", ")}; ` +
+          "regenéralo con `node tools/contracts.mjs`.\n",
+      );
+      process.exit(1);
+    }
+    console.log(`contratos: ok (${total} esquemas publicados al día)`);
+  } else {
+    console.log(
+      `contratos: reescritos (${total} esquemas en contracts/)${
+        extra.length > 0 ? `; sobran ${extra.join(", ")}` : ""
+      }`,
     );
-    process.exit(1);
   }
-  console.log(`contratos: ok (${Object.keys(PUBLISHED).length} esquemas publicados al día)`);
-} else {
-  console.log(
-    `contratos: reescritos (${Object.keys(PUBLISHED).length} esquemas en contracts/)${
-      extra.length > 0 ? `; sobran ${extra.join(", ")}` : ""
-    }`,
-  );
 }

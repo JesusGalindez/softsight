@@ -416,8 +416,12 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     que valida contra su esquema publicado y es idéntico byte a byte entre dos
     ejecuciones —sin reloj, con el `runId` derivado del manifest—. Con eso son
     **seis decisiones implementadas: D3, D6, D7, D14, D21 y D25**, y queda un
-    pendiente sin número que ya se aplica: qué certifica R0. Lo siguiente es de
-    los dos, R0-B, y espera al `cube-v1` de VideoMesh. Una tercera mitad
+    pendiente sin número que ya se aplica: qué certifica R0. La frontera publicada dejó además de tener agujeros:
+    de veinte objetos que admitían campos desconocidos quedan **dos, los dos a
+    propósito** —la tabla de una pista y el `data` de una escena—, y con ellos se
+    cerró uno que no era deuda sino error, `anyOf` emitiendo una forma genérica
+    que aceptaba cualquier objeto al lado de las alternativas de verdad. Lo
+    siguiente es de los dos, R0-B, y espera al `cube-v1` de VideoMesh. Una tercera mitad
     entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
     certifica lo que salga, sin convertirse en un motor de fotogrametría. Las
     secciones 0–83 las escribió el agente de VideoMesh; las 84–86 son la respuesta

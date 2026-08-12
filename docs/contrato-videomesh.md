@@ -742,17 +742,38 @@ no es IMPLEMENTADA.
 
 Dos hallazgos del camino, que son deuda de esta decisión y no de otra:
 
-1. **Veinte objetos de la frontera no cierran la puerta.** Un campo declarado
-   `object` sin `fields` no lo recorre `validate` ni lo cierra `toJsonSchema`.
-   Dos de ellos son datos libres a propósito —la tabla de una pista de animación
-   y el `data` de una escena, que lo dice en su descripción—; los otros dieciocho
-   tienen la forma escrita en la prosa y no en el esquema: las cuatro
-   deformaciones, los puntos de un recorrido, la geometría cruda y las tablas de
-   `radius` y `twist`. Ahí dentro una errata pasa. La lista está enumerada en la
-   puerta, así que **uno nuevo la pone roja**.
+1. **Veinte objetos de la frontera no cerraban la puerta.** Un campo declarado
+   `object` sin `fields` no lo recorría `validate` ni lo cerraba `toJsonSchema`.
+   **Cerrados el 2026-08-12, dieciocho de veinte** (ver abajo); los dos que
+   quedan son datos libres a propósito y están enumerados en la puerta, así que
+   uno nuevo la pone roja.
 2. **La sugerencia tiene alcance dos**, por diseño: `duration` contra
    `durationFrames` no sugiere, enumera. Traer una sugerencia de más lejos manda
    al agente a otro campo.
+
+**Los dieciocho, cerrados.** Uno de ellos no era deuda sino un agujero en la
+frontera publicada: un campo con `anyOf` emitía **además** la forma genérica
+`{ type: "object" }`, así que el JSON Schema de `geometry` aceptaba cualquier
+objeto y las seis alternativas no pintaban nada. Un validador del otro lado
+casaba contra la genérica.
+
+```text
+antes                                       ahora
+geometry.anyOf[0] = cualquier objeto        solo las seis formas reales
+deform.twist/taper/bend/wave = object       { axis, degrees|scale|… } declarado
+path.through = object[]                     number[3][], con qué punto falla
+radius / twist / degrees / amplitude        number|object con la tabla declarada
+```
+
+Las tablas de variación no se podían declarar mientras `validate` aplicaba la
+forma del objeto también al número —admiten las dos cosas—, así que ahora recorre
+`fields` **solo sobre lo que es objeto**. Con eso `at` y `ease` quedan cerrados y
+lo que sigue comprobando `evaluateVariation` es lo que un esquema no ve: que los
+pares vengan en orden, sin repetir, y **cuál** rompe el orden.
+
+Dos mensajes mejoraron de paso, y los dos son la misma idea que la nota de D21:
+una unión de literales dice ahora `axis no admite "w"; admitidos: x, y, z` en vez
+de `axis debe ser "x"|"y"|"z"`, y una lista de puntos dice cuál punto falla.
 
 ### D31 — Negociación de capabilities
 El paquete declara `requires` y `provides`; SoftSight publica `supports`.

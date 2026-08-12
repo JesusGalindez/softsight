@@ -124,7 +124,7 @@ const rechazos = [
   [conEscenas([{ ...guion.scenes[0], name: "" }]), /necesita un nombre/],
   [conEscenas([guion.scenes[0], guion.scenes[0]]), /ya es el nombre de otra escena/],
   // El rol inventado lo caza el esquema, con la lista de los que valen.
-  [conEscenas([{ ...guion.scenes[1], role: "clímax" }]), /role debe ser "apertura"/],
+  [conEscenas([{ ...guion.scenes[1], role: "clímax" }]), /role no admite "clímax"; admitidos: apertura, /],
   [conEscenas([{ ...guion.scenes[1], durationFrames: 0 }]), /entero positivo/],
   [conEscenas([{ ...guion.scenes[1], durationFrames: 12.5 }]), /entero positivo/],
 ];

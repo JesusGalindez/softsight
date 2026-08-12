@@ -192,7 +192,7 @@
     {
       "name": "documento con nombre ambiguo",
       "override": { "documentType": "reconstruction" },
-      "expect": "documentType debe ser"
+      "expect": "documentType no admite \"reconstruction\"; admitidos: videomesh.reconstruction-package"
     },
     {
       "name": "distorsión como vector posicional, que es lo que D19 elimina",

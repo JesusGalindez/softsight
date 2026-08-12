@@ -68,19 +68,214 @@
               "properties": {
                 "twist": {
                   "type": "object",
-                  "description": "{ axis, degrees } — gira alrededor del eje, proporcionalmente al recorrido. degrees admite número o tabla { at, ease }."
+                  "properties": {
+                    "axis": {
+                      "type": "string",
+                      "enum": [
+                        "x",
+                        "y",
+                        "z"
+                      ],
+                      "description": "Eje del deformador."
+                    },
+                    "degrees": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "array",
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                },
+                                "minItems": 2,
+                                "maxItems": 2
+                              },
+                              "description": "Pares (u, valor) con u de 0 a 1, ordenados y sin repetir."
+                            },
+                            "ease": {
+                              "type": "string",
+                              "description": "linear por defecto; smooth; o power:k. La curva la valida quien la lee."
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "at"
+                          ]
+                        }
+                      ],
+                      "description": "Grados en el extremo; número o tabla."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "axis",
+                    "degrees"
+                  ],
+                  "description": "Gira alrededor del eje, proporcionalmente al recorrido."
                 },
                 "taper": {
                   "type": "object",
-                  "description": "{ axis, scale } — escala las dos coordenadas que no son la del eje. scale admite número o tabla."
+                  "properties": {
+                    "axis": {
+                      "type": "string",
+                      "enum": [
+                        "x",
+                        "y",
+                        "z"
+                      ],
+                      "description": "Eje del deformador."
+                    },
+                    "scale": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "array",
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                },
+                                "minItems": 2,
+                                "maxItems": 2
+                              },
+                              "description": "Pares (u, valor) con u de 0 a 1, ordenados y sin repetir."
+                            },
+                            "ease": {
+                              "type": "string",
+                              "description": "linear por defecto; smooth; o power:k. La curva la valida quien la lee."
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "at"
+                          ]
+                        }
+                      ],
+                      "description": "Factor en el extremo; número o tabla."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "axis",
+                    "scale"
+                  ],
+                  "description": "Escala las dos coordenadas que no son la del eje."
                 },
                 "bend": {
                   "type": "object",
-                  "description": "{ axis, into, degrees } — dobla el eje sobre un arco hacia `into`, que no puede ser el eje."
+                  "properties": {
+                    "axis": {
+                      "type": "string",
+                      "enum": [
+                        "x",
+                        "y",
+                        "z"
+                      ],
+                      "description": "Eje del deformador."
+                    },
+                    "into": {
+                      "type": "string",
+                      "enum": [
+                        "x",
+                        "y",
+                        "z"
+                      ],
+                      "description": "Hacia dónde se dobla."
+                    },
+                    "degrees": {
+                      "type": "number",
+                      "description": "Grados del arco."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "axis",
+                    "into",
+                    "degrees"
+                  ],
+                  "description": "Dobla el eje sobre un arco hacia `into`, que no puede ser el eje."
                 },
                 "wave": {
                   "type": "object",
-                  "description": "{ axis, along, amplitude, cycles, phase } — ondula desplazando a lo largo de `along`, que no puede ser el eje. amplitude admite número o tabla."
+                  "properties": {
+                    "axis": {
+                      "type": "string",
+                      "enum": [
+                        "x",
+                        "y",
+                        "z"
+                      ],
+                      "description": "Eje del deformador."
+                    },
+                    "along": {
+                      "type": "string",
+                      "enum": [
+                        "x",
+                        "y",
+                        "z"
+                      ],
+                      "description": "Eje del desplazamiento."
+                    },
+                    "amplitude": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "array",
+                              "items": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                },
+                                "minItems": 2,
+                                "maxItems": 2
+                              },
+                              "description": "Pares (u, valor) con u de 0 a 1, ordenados y sin repetir."
+                            },
+                            "ease": {
+                              "type": "string",
+                              "description": "linear por defecto; smooth; o power:k. La curva la valida quien la lee."
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "at"
+                          ]
+                        }
+                      ],
+                      "description": "Amplitud; número o tabla."
+                    },
+                    "cycles": {
+                      "type": "number",
+                      "description": "Ciclos completos a lo largo del eje; 1 por defecto."
+                    },
+                    "phase": {
+                      "type": "number",
+                      "description": "Desfase en grados; 0 por defecto."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "axis",
+                    "along",
+                    "amplitude"
+                  ],
+                  "description": "Ondula desplazando a lo largo de `along`, que no puede ser el eje."
                 }
               },
               "additionalProperties": false
@@ -89,9 +284,6 @@
           },
           "geometry": {
             "anyOf": [
-              {
-                "type": "object"
-              },
               {
                 "type": "object",
                 "properties": {
@@ -281,7 +473,12 @@
                       "through": {
                         "type": "array",
                         "items": {
-                          "type": "object"
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
                         },
                         "description": "Puntos de tres números por los que pasa el recorrido; al menos dos."
                       },
@@ -337,7 +534,12 @@
                       "through": {
                         "type": "array",
                         "items": {
-                          "type": "object"
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
                         },
                         "description": "Puntos de tres números por los que pasa el recorrido; al menos dos."
                       },
@@ -366,7 +568,29 @@
                         "type": "number"
                       },
                       {
-                        "type": "object"
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "array",
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "number"
+                              },
+                              "minItems": 2,
+                              "maxItems": 2
+                            },
+                            "description": "Pares (u, valor) con u de 0 a 1, ordenados y sin repetir."
+                          },
+                          "ease": {
+                            "type": "string",
+                            "description": "linear por defecto; smooth; o power:k. La curva la valida quien la lee."
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "at"
+                        ]
                       }
                     ],
                     "description": "Multiplica el perfil en cada estación. Número constante, o tabla { at: [[u, valor], …], ease: linear|smooth|power:k }. 1 por defecto."
@@ -377,7 +601,29 @@
                         "type": "number"
                       },
                       {
-                        "type": "object"
+                        "type": "object",
+                        "properties": {
+                          "at": {
+                            "type": "array",
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "type": "number"
+                              },
+                              "minItems": 2,
+                              "maxItems": 2
+                            },
+                            "description": "Pares (u, valor) con u de 0 a 1, ordenados y sin repetir."
+                          },
+                          "ease": {
+                            "type": "string",
+                            "description": "linear por defecto; smooth; o power:k. La curva la valida quien la lee."
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "at"
+                        ]
                       }
                     ],
                     "description": "Grados alrededor de la tangente. Número constante o la misma tabla que radius. 0 por defecto."

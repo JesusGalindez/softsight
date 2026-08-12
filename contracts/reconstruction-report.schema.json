@@ -287,7 +287,22 @@
         },
         "uncertainty": {
           "type": "object",
-          "description": "Incertidumbre, si la hay."
+          "properties": {
+            "model": {
+              "type": "string",
+              "description": "Qué modelo describe el valor."
+            },
+            "value": {
+              "type": "number",
+              "description": "Magnitud en la unidad de la escala."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "value"
+          ],
+          "description": "Incertidumbre, si la hay; copiada del paquete con su modelo."
         }
       },
       "additionalProperties": false,

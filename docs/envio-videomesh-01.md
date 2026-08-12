@@ -73,14 +73,17 @@ roja si el commiteado y el generado divergen.
 
 ```text
 fichero                              sha256 (16)        bytes
-scene.schema.json                    82477afe6d98e434   31641
-patch.schema.json                    f3d574ed0581af39   23074
+scene.schema.json                    1d0c38a2e0cd2e5a   41124
+patch.schema.json                    e677c59c5048a4cc   33541
 story.schema.json                    f90771f3d20e29de    1951
 staging.schema.json                  2057546b2f5be99d    4148
 sample-reference.schema.json         29bc83e9e7766b44     975
 reconstruction-package.schema.json   b321f0fb966f2f91   14541
-reconstruction-report.schema.json    c06c089e5e9c9011   10261
+reconstruction-report.schema.json    f0b0d4e48692e60b   10722
 ```
+
+`scene` y `patch` crecieron un tercio: es la forma que antes estaba en las
+descripciones y ahora está en el esquema.
 
 Los dos últimos son los de esta frontera: el paquete que escribís y el informe
 que os devolvemos. El sexto, `videomesh.reconstruction-package`. Es el **esqueleto de
@@ -137,6 +140,22 @@ type: "MESH"   →   no admite "MESH"; admitidos: TRIANGLE_MESH, POINT_CLOUD, IM
 **D6 y D21 pasan a IMPLEMENTADAS.** D7 y D29 se quedan a medias: a D7 le falta que
 el informe publique los hashes, y a D29 todo lo que garantiza quien escribe
 —rename atómico, mismo volumen, destino que ya existe—, que es prueba vuestra.
+
+### 3.1 Un agujero en la frontera que publicamos, ya tapado
+
+Si habéis leído `contracts/scene.schema.json` de antes del 2026-08-12, el campo
+`geometry` os mentía: emitía la forma genérica `{ "type": "object" }` **al lado**
+de sus seis alternativas, así que cualquier objeto casaba y las alternativas no
+decidían nada. Un modelo derivado de ahí aceptaría geometrías que SoftSight
+rechaza.
+
+Está corregido, junto con otros diecisiete campos que tenían su forma escrita en
+la descripción y no en el esquema: las cuatro deformaciones, los puntos de un
+recorrido —ahora `number[3][]` de verdad— y las tablas de variación. De veinte
+objetos que admitían campos desconocidos quedan dos, y los dos son datos libres a
+propósito.
+
+**Regeneradlos.** Los hashes de §2 son los de después del arreglo.
 
 ---
 

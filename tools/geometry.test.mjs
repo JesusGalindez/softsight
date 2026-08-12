@@ -1018,7 +1018,10 @@ console.log("geometria: ok (barrido recto ≡ ½·n·r²·sin(2π/n)·L, dos res
           },
         ],
       },
-      /el punto 0 del recorrido son tres números/,
+      // Lo caza el esquema antes que el resolutor, desde que `through` se declara
+      // como lista de puntos y no como `object[]`. El del resolutor sigue ahí para
+      // quien construya la escena sin validarla.
+      /through\[0\] debe ser un punto de 3 números/,
     ],
   ];
   for (const [scene, expected] of casos) {
@@ -1239,7 +1242,10 @@ console.log("geometria: ok (taper multiplica el volumen por (1+k+k²)/3, dos k)"
   const casos = [
     [conDeform([{ bend: { axis: "y", into: "y", degrees: 30 } }]), /pala: la deformación 0: bend\.into \("y"\) no puede ser el propio eje/],
     [conDeform([{ wave: { axis: "y", along: "y", amplitude: 1 } }]), /wave\.along \("y"\) no puede ser el propio eje/],
-    [conDeform([{ twist: { axis: "w", degrees: 30 } }]), /el eje es "x", "y" o "z", no "w"/],
+    // Desde que la deformación declara su forma, el eje inválido lo caza el
+    // esquema antes que el resolutor, y con la lista de admitidos delante. El
+    // mensaje de `buildDeformers` sigue existiendo para quien no valide.
+    [conDeform([{ twist: { axis: "w", degrees: 30 } }]), /twist\.axis no admite "w"; admitidos: x, y, z/],
     [conDeform([{ twist: { axis: "y", degrees: 1 }, taper: { axis: "y", scale: 1 } }]), /declara 2 \(twist y taper\); declara una/],
     [conDeform([{}]), /no declara ninguna; admitidas: twist, taper, bend, wave/],
     [
@@ -1451,11 +1457,11 @@ const PALA = { primitive: "box", parameters: [0.1, 0.4, 1.2] };
     // del campo dentro.
     [
       { objects: [{ name: "p", geometry: PALA, repeat: { radial: { count: 4, axis: "w" } } }] },
-      /repeat\.radial\.axis debe ser/,
+      /repeat\.radial\.axis no admite "w"; admitidos: x, y, z/,
     ],
     [
       { objects: [{ name: "p", geometry: PALA, repeat: { mirror: "w" } }] },
-      /repeat\.mirror debe ser/,
+      /repeat\.mirror no admite "w"; admitidos: x, y, z/,
     ],
   ];
   for (const [scene, expected] of casos) {

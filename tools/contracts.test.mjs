@@ -26,25 +26,18 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  PATCH_SCHEMA,
-  SAMPLE_REFERENCE_SCHEMA,
-  SCENE_SCHEMA,
-  STAGING_SCHEMA,
-  STORY_SCHEMA,
-  validate,
-} from "../dist-node/agent3d.mjs";
+import { validate } from "../dist-node/agent3d.mjs";
+import { PUBLISHED } from "./contracts.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
 
-const SCHEMAS = {
-  scene: SCENE_SCHEMA,
-  patch: PATCH_SCHEMA,
-  story: STORY_SCHEMA,
-  staging: STAGING_SCHEMA,
-  "sample-reference": SAMPLE_REFERENCE_SCHEMA,
-};
+/**
+ * Los mismos que publica `contracts.mjs`, importados de allí y no copiados: una
+ * segunda lista se quedaría corta en cuanto se publicara un esquema nuevo, y la
+ * puerta diría que todo está bien sin haberlo mirado.
+ */
+const SCHEMAS = PUBLISHED;
 
 // 1. Lo commiteado es lo generado.
 {
@@ -56,46 +49,27 @@ const SCHEMAS = {
 }
 
 /**
- * Los objetos que hoy **no** cierran la puerta a campos desconocidos, uno a uno.
+ * Los dos objetos de la frontera que **no** cierran la puerta a campos
+ * desconocidos, y por qué cada uno.
  *
- * No es una excepción que se concede: es la deuda de D30, escrita. Un campo
- * declarado `object` sin `fields` no lo recorre `validate` ni lo cierra
- * `toJsonSchema`, así que dentro de él cabe cualquier cosa. La lista está aquí
- * para que **uno nuevo ponga la puerta roja**: aparecer en la frontera pública
- * sin declararse deja de ser gratis.
+ * Eran veinte. Dieciocho eran deuda de D30 —la forma escrita en la descripción y
+ * no en el esquema— y se cerraron declarándola: las cuatro deformaciones, los
+ * puntos de un recorrido, las tablas de variación y la forma genérica que `anyOf`
+ * arrastraba al lado de las alternativas de verdad. Quedan dos, y los dos son
+ * datos libres **a propósito**:
  *
- * Dos clases, y solo una es deuda:
+ *   - `clips.tracks.value` es una pista declarada como función, con la tabla
+ *     `{ at: [[u, [valores]], …], ease }`: el valor de cada par es una lista de
+ *     longitud variable según lo que se anime, y eso el vocabulario de tipos no
+ *     lo dice. La comprueba `evaluateVariation`, que es quien la lee.
+ *   - `scenes.data` lo dice en su propia descripción: son datos, no maqueta, y
+ *     admite campos de más porque el guion los lleva.
  *
- *   - **Datos libres, a propósito**: `clips.tracks.value` es una tabla de
- *     función declarada y `scenes.data` dice en su propia descripción que admite
- *     campos de más porque son datos, no maqueta.
- *   - **Forma escrita en la descripción y no en el esquema**: las cuatro
- *     deformaciones, los puntos de un recorrido, la geometría cruda y las tablas
- *     de radius y twist. Ahí `{ axis, degrees }` está en prosa, y una errata
- *     dentro pasa. Declararlas como `fields` es lo que cierra la primera fila de
- *     D30 del todo; no entra en S3 porque toca el esquema del núcleo y sus
- *     puertas, no la frontera.
+ * La lista está aquí para que **uno nuevo ponga la puerta roja**, y para que uno
+ * que deje de existir tampoco se quede.
  */
 const OPAQUE = new Set([
-  "scene.properties.objects.items.properties.deform.items.properties.twist",
-  "scene.properties.objects.items.properties.deform.items.properties.taper",
-  "scene.properties.objects.items.properties.deform.items.properties.bend",
-  "scene.properties.objects.items.properties.deform.items.properties.wave",
-  "scene.properties.objects.items.properties.geometry.anyOf[0]",
-  "scene.properties.objects.items.properties.geometry.anyOf[5].properties.path.properties.through.items",
-  "scene.properties.objects.items.properties.geometry.anyOf[6].properties.path.properties.through.items",
-  "scene.properties.objects.items.properties.geometry.anyOf[6].properties.radius.anyOf[1]",
-  "scene.properties.objects.items.properties.geometry.anyOf[6].properties.twist.anyOf[1]",
   "scene.properties.clips.items.properties.tracks.items.properties.value",
-  "patch.properties.edits.items.properties.object.properties.deform.items.properties.twist",
-  "patch.properties.edits.items.properties.object.properties.deform.items.properties.taper",
-  "patch.properties.edits.items.properties.object.properties.deform.items.properties.bend",
-  "patch.properties.edits.items.properties.object.properties.deform.items.properties.wave",
-  "patch.properties.edits.items.properties.object.properties.geometry.anyOf[0]",
-  "patch.properties.edits.items.properties.object.properties.geometry.anyOf[5].properties.path.properties.through.items",
-  "patch.properties.edits.items.properties.object.properties.geometry.anyOf[6].properties.path.properties.through.items",
-  "patch.properties.edits.items.properties.object.properties.geometry.anyOf[6].properties.radius.anyOf[1]",
-  "patch.properties.edits.items.properties.object.properties.geometry.anyOf[6].properties.twist.anyOf[1]",
   "story.properties.scenes.items.properties.data",
 ]);
 
@@ -133,7 +107,7 @@ const OPAQUE = new Set([
   assert.equal(gone.length, 0, `sobran en la lista de opacos: ${gone.join(", ")}`);
   console.log(
     `contratos: ok (additionalProperties: false en ${closed} objetos publicados; ` +
-      `${opaque.size} opacos declarados, la deuda de D30)`,
+      `${opaque.size} opacos declarados y a propósito)`,
   );
 }
 

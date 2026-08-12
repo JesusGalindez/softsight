@@ -352,7 +352,14 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
     fields: {
       status: { type: '"UNKNOWN"|"RELATIVE"|"ABSOLUTE"', required: true, description: "Estado de la escala." },
       source: { type: "string", required: true, description: "De dónde sale." },
-      uncertainty: { type: "object", description: "Incertidumbre, si la hay." },
+      uncertainty: {
+        type: "object",
+        description: "Incertidumbre, si la hay; copiada del paquete con su modelo.",
+        fields: {
+          model: { type: "string", required: true, description: "Qué modelo describe el valor." },
+          value: { type: "number", required: true, description: "Magnitud en la unidad de la escala." },
+        },
+      },
     },
   },
   cameras: {

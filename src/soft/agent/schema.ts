@@ -103,6 +103,28 @@ const PROFILE_FIELDS: ObjectSchema = {
   radius: { type: "number", description: "Multiplicador del radio de gielis; 1 por defecto." },
 };
 
+/**
+ * La tabla de variación, la misma para `radius`, `twist`, `scale`, `degrees` y
+ * `amplitude`: un modismo y no cinco.
+ *
+ * Estuvo sin declarar mientras `validate` aplicaba la forma del objeto también al
+ * número —estos campos admiten las dos cosas—, y sin forma declarada dentro cabía
+ * cualquier campo: `eases`, `at2`, lo que fuera. Lo que sigue comprobando
+ * `evaluateVariation` es lo que un esquema no puede ver: que los pares vengan en
+ * orden, sin repetir y con `u` de 0 a 1, y **cuál** de ellos rompe el orden.
+ */
+const VARIATION_FIELDS: ObjectSchema = {
+  at: {
+    type: "number[2][]",
+    required: true,
+    description: "Pares (u, valor) con u de 0 a 1, ordenados y sin repetir.",
+  },
+  ease: {
+    type: "string",
+    description: "linear por defecto; smooth; o power:k. La curva la valida quien la lee.",
+  },
+};
+
 const LOFT_SECTION_FIELDS: ObjectSchema = {
   at: {
     type: "number[3]",
@@ -125,7 +147,7 @@ const LOFT_SECTION_FIELDS: ObjectSchema = {
 
 const PATH_FIELDS: ObjectSchema = {
   through: {
-    type: "object[]",
+    type: "number[3][]",
     required: true,
     description: "Puntos de tres números por los que pasa el recorrido; al menos dos.",
   },
@@ -173,20 +195,18 @@ const GEOMETRY_SWEEP: ObjectSchema = {
       "Polígono en el plano XZ, pares x,z, o el nombre de un perfil declarado en `profiles`.",
   },
   path: { type: "object", required: true, description: "Recorrido del barrido.", fields: PATH_FIELDS },
-  // Sin `fields`: el valor puede ser un número, y `validate` aplicaría el esquema
-  // de objeto también a él. La forma de la tabla —`at` en orden y `ease` conocido—
-  // la comprueba `evaluateVariation`, que es quien la lee y quien puede decir cuál
-  // de los pares rompe el orden.
   radius: {
     type: "number|object",
     description:
       "Multiplica el perfil en cada estación. Número constante, o tabla { at: [[u, valor], …], " +
       "ease: linear|smooth|power:k }. 1 por defecto.",
+    fields: VARIATION_FIELDS,
   },
   twist: {
     type: "number|object",
     description:
       "Grados alrededor de la tangente. Número constante o la misma tabla que radius. 0 por defecto.",
+    fields: VARIATION_FIELDS,
   },
   stations: { type: "number", description: "Estaciones a lo largo del recorrido; 24 por defecto." },
   caps: {
@@ -209,28 +229,52 @@ const GEOMETRY_REVOLVE: ObjectSchema = {
  * de perfil: `anyOf` se aplica a un campo y no a los elementos de una lista. Que
  * haya exactamente una por entrada lo exige el resolutor.
  */
+const AXIS: FieldSchema = { type: '"x"|"y"|"z"', required: true, description: "Eje del deformador." };
+
+/** Número constante o tabla de variación, que es como llegan las tres magnitudes. */
+const VARYING = (description: string): FieldSchema => ({
+  type: "number|object",
+  required: true,
+  description,
+  fields: VARIATION_FIELDS,
+});
+
 const DEFORM_FIELDS: ObjectSchema = {
   twist: {
     type: "object",
-    description:
-      "{ axis, degrees } — gira alrededor del eje, proporcionalmente al recorrido. " +
-      "degrees admite número o tabla { at, ease }.",
+    description: "Gira alrededor del eje, proporcionalmente al recorrido.",
+    fields: {
+      axis: AXIS,
+      degrees: VARYING("Grados en el extremo; número o tabla."),
+    },
   },
   taper: {
     type: "object",
-    description:
-      "{ axis, scale } — escala las dos coordenadas que no son la del eje. " +
-      "scale admite número o tabla.",
+    description: "Escala las dos coordenadas que no son la del eje.",
+    fields: {
+      axis: AXIS,
+      scale: VARYING("Factor en el extremo; número o tabla."),
+    },
   },
   bend: {
     type: "object",
-    description: "{ axis, into, degrees } — dobla el eje sobre un arco hacia `into`, que no puede ser el eje.",
+    description: "Dobla el eje sobre un arco hacia `into`, que no puede ser el eje.",
+    fields: {
+      axis: AXIS,
+      into: { type: '"x"|"y"|"z"', required: true, description: "Hacia dónde se dobla." },
+      degrees: { type: "number", required: true, description: "Grados del arco." },
+    },
   },
   wave: {
     type: "object",
-    description:
-      "{ axis, along, amplitude, cycles, phase } — ondula desplazando a lo largo de `along`, " +
-      "que no puede ser el eje. amplitude admite número o tabla.",
+    description: "Ondula desplazando a lo largo de `along`, que no puede ser el eje.",
+    fields: {
+      axis: AXIS,
+      along: { type: '"x"|"y"|"z"', required: true, description: "Eje del desplazamiento." },
+      amplitude: VARYING("Amplitud; número o tabla."),
+      cycles: { type: "number", description: "Ciclos completos a lo largo del eje; 1 por defecto." },
+      phase: { type: "number", description: "Desfase en grados; 0 por defecto." },
+    },
   },
 };
 
@@ -714,6 +758,23 @@ function typeMatches(value: unknown, type: string): boolean {
     if (expected === "string[]" && Array.isArray(value) && value.every((entry) => typeof entry === "string")) {
       return true;
     }
+    const points = POINT_LIST.exec(expected);
+    if (points !== null) {
+      // Lista de puntos de N números, como los del recorrido de un barrido o los
+      // pares de una tabla de variación. Sin esto se declaraban `object[]`, que es
+      // mentira —son listas— y dejaba pasar cualquier cosa dentro.
+      const arity = Number(points[1]);
+      if (
+        Array.isArray(value) &&
+        value.every(
+          (entry) =>
+            Array.isArray(entry) && entry.length === arity && entry.every((n) => typeof n === "number"),
+        )
+      ) {
+        return true;
+      }
+      continue;
+    }
     if (expected === "number[3]") {
       if (Array.isArray(value) && value.length === 3 && value.every((entry) => typeof entry === "number")) {
         return true;
@@ -754,6 +815,9 @@ export function toJsonSchema(schema: ObjectSchema): Record<string, unknown> {
   return object;
 }
 
+/** `number[N][]`: una lista de puntos de N números, como `at` o `path.through`. */
+const POINT_LIST = /^number\[(\d+)\]\[\]$/;
+
 function fieldToJsonSchema(field: FieldSchema): Record<string, unknown> {
   const alternatives = field.type.split("|").map((alternative) => alternative.trim());
   const literals = alternatives.filter((alternative) => alternative.startsWith('"'));
@@ -772,13 +836,22 @@ function fieldToJsonSchema(field: FieldSchema): Record<string, unknown> {
       shapes.push({ type: "array", items: { type: "string" } });
     } else if (alternative === "number[3]") {
       shapes.push({ type: "array", items: { type: "number" }, minItems: 3, maxItems: 3 });
-    } else if (alternative === "object") {
-      shapes.push(field.fields !== undefined ? toJsonSchema(field.fields) : { type: "object" });
-    } else if (alternative === "object[]") {
+    } else if (POINT_LIST.test(alternative)) {
+      const arity = Number(POINT_LIST.exec(alternative)?.[1] ?? 0);
       shapes.push({
         type: "array",
-        items: field.fields !== undefined ? toJsonSchema(field.fields) : { type: "object" },
+        items: { type: "array", items: { type: "number" }, minItems: arity, maxItems: arity },
       });
+    } else if (alternative === "object") {
+      // Con `anyOf` la forma genérica no se emite: sería una alternativa que
+      // acepta cualquier objeto al lado de las que describen la geometría de
+      // verdad, y un validador del otro lado casaría contra ella. El campo
+      // publicado dejaría de decir nada.
+      if (field.fields !== undefined) shapes.push(toJsonSchema(field.fields));
+      else if (field.anyOf === undefined) shapes.push({ type: "object" });
+    } else if (alternative === "object[]") {
+      if (field.fields !== undefined) shapes.push({ type: "array", items: toJsonSchema(field.fields) });
+      else if (field.anyOf === undefined) shapes.push({ type: "array", items: { type: "object" } });
     }
   }
 
@@ -830,7 +903,11 @@ export function validate(value: unknown, schema: ObjectSchema, path = ""): strin
       continue;
     }
     if (!typeMatches(record[field], definition.type)) {
-      errors.push(`${here} debe ser ${definition.type}`);
+      errors.push(
+        pointListError(record[field], definition.type, here) ??
+          literalError(record[field], definition.type, here) ??
+          `${here} debe ser ${definition.type}`,
+      );
       continue;
     }
     if (definition.fields !== undefined) {
@@ -841,6 +918,13 @@ export function validate(value: unknown, schema: ObjectSchema, path = ""): strin
       const isList = Array.isArray(record[field]);
       const children = isList ? (record[field] as unknown[]) : [record[field]];
       children.forEach((child, index) => {
+        // Un campo que admite número **o** tabla —`radius`, `twist`, `degrees`—
+        // llega muchas veces como número, y aplicarle la forma del objeto diría
+        // «debe ser un objeto» sobre un valor perfectamente válido. El tipo ya lo
+        // comprobó arriba; aquí solo se recorre lo que es objeto. Sin esto, esas
+        // tablas tenían que quedarse sin `fields`, y sin `fields` dentro cabe
+        // cualquier cosa.
+        if (typeof child !== "object" || child === null) return;
         const childPath = isList ? `${here}[${index}]` : here;
         errors.push(...validate(child, definition.fields as ObjectSchema, childPath));
       });
@@ -897,6 +981,41 @@ export function validate(value: unknown, schema: ObjectSchema, path = ""): strin
   }
 
   return errors;
+}
+
+/**
+ * Cuál punto de la lista está mal, en vez de «debe ser number[3][]».
+ *
+ * Una lista de puntos falla casi siempre por uno solo —un par donde iba una
+ * terna, un punto de más—, y el mensaje que no dice cuál obliga a contarlos a
+ * mano. Devuelve `null` cuando el tipo no es una lista de puntos o cuando el
+ * valor ni siquiera es una lista, que ahí el mensaje genérico ya es el correcto.
+ */
+function pointListError(value: unknown, type: string, path: string): string | null {
+  const declared = type.split("|").map((alternative) => alternative.trim());
+  const points = declared.map((alternative) => POINT_LIST.exec(alternative)).find((match) => match !== null);
+  if (points === undefined || declared.length > 1 || !Array.isArray(value)) return null;
+  const arity = Number(points[1]);
+  const index = value.findIndex(
+    (entry) => !Array.isArray(entry) || entry.length !== arity || entry.some((n) => typeof n !== "number"),
+  );
+  if (index < 0) return null;
+  return `${path}[${index}] debe ser un punto de ${arity} números`;
+}
+
+/**
+ * Qué valor llegó y cuáles se admiten, cuando el tipo son solo literales.
+ *
+ * `axis debe ser "x"|"y"|"z"` obliga a leer una unión de tipos para entender que
+ * lo que falla es el valor. Con la lista delante, el agente corrige a la primera,
+ * y es el mismo mensaje que dan las formas discriminadas por tipo.
+ */
+function literalError(value: unknown, type: string, path: string): string | null {
+  const alternatives = type.split("|").map((alternative) => alternative.trim());
+  if (!alternatives.every((alternative) => alternative.startsWith('"'))) return null;
+  if (typeof value !== "string") return null;
+  const admitted = alternatives.map((alternative) => alternative.slice(1, -1));
+  return `${path} no admite ${JSON.stringify(value)}; admitidos: ${admitted.join(", ")}`;
 }
 
 /** Lanza con todos los errores juntos, o no lanza. */
