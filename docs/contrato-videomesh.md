@@ -97,9 +97,13 @@ IMPLEMENTADAS    1   D25
 
 **El único movimiento admisible ahora es de ACORDADA a IMPLEMENTADA.** La primera
 la trajo D25 el 2026-08-12: la puerta de recursos existe y falla si `auditMesh`
-vuelve a las estructuras que tenía. La siguiente candidata más barata es D30: ya
-es el comportamiento del código y solo le falta el fixture que falle si deja de
-serlo.
+vuelve a las estructuras que tenía.
+
+D30 era la siguiente candidata y **se quedó a un tercio**: su fixture existe y su
+primera fila está probada, pero las otras dos hablan de un espacio `extensions`
+que ningún esquema declara. La puerta las deja NOT_RUN con su motivo y la decisión
+sigue ACORDADA. Es la regla funcionando, no un fallo: la prueba no falla si se
+incumplen dos de las tres filas, así que no cuenta.
 
 ---
 
@@ -269,6 +273,13 @@ necesita, se extiende el esquema; el JSON Schema nunca se escribe a mano.
 **los dos lados deben rechazar**.
 **Prueba:** `test:contracts --check` con el patrón de `tools/agents-md.mjs
 --check`, más `unknown-field-v1`, `unknown-capability-v1`, `unsealed-package-v1`.
+
+**Hecho el 2026-08-12, la mitad:** `tools/contracts.mjs` genera
+`contracts/*.schema.json` de los cinco esquemas que hoy son frontera —escena,
+parche, guion, puesta en escena y referencia de muestreo— y `--check` pone la
+puerta roja si el commiteado y el generado divergen, o si sobra un esquema que ya
+no se publica. `unknown-field-v1` está; `unknown-capability-v1` y
+`unsealed-package-v1` piden capabilities y sellado, que no existen.
 
 ### D16 — El hash del esquema se comprueba
 Hash desconocido:
@@ -626,9 +637,31 @@ extensión opcional desconocida    → se preserva o se ignora, según política
 **Ya es el comportamiento de SoftSight**: `toJsonSchema` emite
 `additionalProperties: false`, y el commit `7d15332` —«un parámetro de más en una
 primitiva se rechaza en vez de ignorarse»— es esta decisión, tomada antes de que
-existiera este contrato. **Le falta solo el fixture que falle si desaparece**, y
-por eso es la primera candidata a IMPLEMENTADA.
-**Prueba:** `unknown-field-v1`.
+existiera este contrato.
+**Prueba:** `unknown-field-v1`, en `contracts/fixtures/`, con puerta
+`test:contracts`.
+
+**Estado al 2026-08-12: sigue ACORDADA, y el fixture dice por qué.** La primera
+fila está probada —siete documentos rechazados por su campo y tres aceptados, más
+`additionalProperties: false` comprobado en los 47 objetos de la frontera
+publicada—, y dos mutaciones del validador la ponen roja. Las otras dos filas no
+se pueden ejercer: **`extensions` no existe en ningún esquema todavía**, así que
+la puerta las declara NOT_RUN con su motivo. Una decisión con un tercio de prueba
+no es IMPLEMENTADA.
+
+Dos hallazgos del camino, que son deuda de esta decisión y no de otra:
+
+1. **Veinte objetos de la frontera no cierran la puerta.** Un campo declarado
+   `object` sin `fields` no lo recorre `validate` ni lo cierra `toJsonSchema`.
+   Dos de ellos son datos libres a propósito —la tabla de una pista de animación
+   y el `data` de una escena, que lo dice en su descripción—; los otros dieciocho
+   tienen la forma escrita en la prosa y no en el esquema: las cuatro
+   deformaciones, los puntos de un recorrido, la geometría cruda y las tablas de
+   `radius` y `twist`. Ahí dentro una errata pasa. La lista está enumerada en la
+   puerta, así que **uno nuevo la pone roja**.
+2. **La sugerencia tiene alcance dos**, por diseño: `duration` contra
+   `durationFrames` no sugiere, enumera. Traer una sugerencia de más lejos manda
+   al agente a otro campo.
 
 ### D31 — Negociación de capabilities
 El paquete declara `requires` y `provides`; SoftSight publica `supports`.
@@ -729,7 +762,11 @@ R13 doble transposición entre los dos parsers
 S1  línea base de auditMesh, medida y publicada    HECHO 2026-08-12
 S2  perfil de weldPositions y edgeUse              HECHO — las dos reescritas,
                                                    D25 IMPLEMENTADA
-S3  fixture unknown-field-v1 → D30 pasa a IMPLEMENTADA
+S3  fixture unknown-field-v1                        HECHO — la fila 1 de D30
+                                                   probada; las dos de
+                                                   extensiones, NOT_RUN sin
+                                                   `extensions`. D30 sigue
+                                                   ACORDADA
 S4  esqueleto de esquema e ingesta de R0-A
 S5  generador local de cube-v1
 S6  informe mínimo de reconstrucción

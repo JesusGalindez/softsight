@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JesusGalindez/softsight/contracts/sample-reference.schema.json",
+  "title": "sample-reference",
+  "type": "object",
+  "properties": {
+    "mesh": {
+      "type": "string",
+      "description": "Nombre de la malla: el suyo o el del primer nodo que la instancia."
+    },
+    "primitive": {
+      "type": "number",
+      "description": "Índice de la primitiva dentro de la malla."
+    },
+    "triangle": {
+      "type": "number",
+      "description": "Índice del triángulo en el búfer de índices de la primitiva."
+    },
+    "barycentric": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "description": "Pesos del punto dentro del triángulo; dos o tres valores no negativos que sumen 1 (el tercero se puede omitir)."
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "mesh",
+    "primitive",
+    "triangle",
+    "barycentric"
+  ]
+}

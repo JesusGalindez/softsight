@@ -145,15 +145,15 @@ tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
 alcance: cinco puertas —`animation-contract`, `glb-loader`, `sample-surface`,
 `glb-writer` y `bridge`— leen el fixture certificado del editor, que es un
 repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su
-motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **18 de
-las 23 puertas**; las cinco restantes solo las cierra una ejecución local con los
+motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **19 de
+las 24 puertas**; las cinco restantes solo las cierra una ejecución local con los
 dos repositorios al lado. `resources` corre en CI —su malla la genera el propio
 repositorio— pero **solo el escalón de 100k**: el de 5M pide `SOFTSIGHT_HEAVY=1` y
 sin él se declara «no ejecutada» con su motivo, D22. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 113
-comprobaciones de softsight en verde**, 23 puertas. El número ya no se lleva a mano: lo
+Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 116
+comprobaciones de softsight en verde**, 24 puertas. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
 
@@ -393,8 +393,14 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     acordadas, 12 principios, ninguna en PROPUESTA y una implementada —D25—**; el
     resto sigue sin una prueba que falle sin ella. El registro queda
     congelado —solo se admiten decisiones que bloqueen `cube-v1`— y el único
-    movimiento admisible es de acordada a implementada. La siguiente es D30: ya es
-    el comportamiento del código, solo le falta el fixture. Una tercera mitad
+    movimiento admisible es de acordada a implementada. **La frontera pública ya
+    está publicada**: `tools/contracts.mjs` genera `contracts/*.schema.json` de
+    los cinco esquemas que valida el código —nunca a mano, D15— y la puerta
+    `test:contracts` los compara con lo commiteado y ejerce el fixture
+    `unknown-field-v1`. Con eso D30 tiene probada su primera fila, campo
+    desconocido es error; las otras dos hablan de un espacio `extensions` que
+    ningún esquema declara, se quedan NOT_RUN con su motivo y **D30 sigue
+    acordada**. Una tercera mitad
     entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
     certifica lo que salga, sin convertirse en un motor de fotogrametría. Las
     secciones 0–83 las escribió el agente de VideoMesh; las 84–86 son la respuesta

@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JesusGalindez/softsight/contracts/staging.schema.json",
+  "title": "staging",
+  "type": "object",
+  "properties": {
+    "stagingVersion": {
+      "type": "number",
+      "description": "Versión del contrato de la puesta en escena; hoy 1."
+    },
+    "title": {
+      "type": "string",
+      "description": "Título de la pieza, si lo trae."
+    },
+    "frame": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "number",
+          "description": "Ancho en píxeles."
+        },
+        "height": {
+          "type": "number",
+          "description": "Alto en píxeles."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "width",
+        "height"
+      ],
+      "description": "Tamaño del cuadro en píxeles: es lo que define qué queda fuera."
+    },
+    "scenes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nombre de la escena; único en la pieza."
+          },
+          "startFrame": {
+            "type": "number",
+            "description": "Primer frame de la escena."
+          },
+          "durationFrames": {
+            "type": "number",
+            "description": "Duración en frames, mayor que cero."
+          },
+          "sampleFrame": {
+            "type": "number",
+            "description": "Frame en el que se midieron colores y cajas; tiene que caer dentro de la escena."
+          },
+          "layers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Identificador de la capa dentro de la escena."
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "model",
+                    "image",
+                    "shape",
+                    "particles"
+                  ],
+                  "description": "Qué clase de capa es. Solo el texto se juzga por caja y contraste."
+                },
+                "visible": {
+                  "type": "boolean",
+                  "description": "Si aporta algo visible en el frame de muestra. Lo decide quien monta: «poco visible» es criterio, no medida."
+                },
+                "box": {
+                  "anyOf": [],
+                  "description": "Caja en píxeles del cuadro, [x0, y0, x1, y1]. Obligatoria en un texto visible. Sale de la proyección, no de rasterizar."
+                },
+                "color": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "description": "Color del texto en sRGB 0..1. Obligatorio en un texto visible."
+                },
+                "backgroundColor": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "description": "Color medio del fondo bajo la caja, medido sobre el frame. Obligatorio en un texto visible."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "kind",
+                "visible"
+              ]
+            },
+            "description": "Capas colocadas, aunque la lista esté vacía: una escena vacía es un aviso, no un error."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "startFrame",
+          "durationFrames",
+          "sampleFrame",
+          "layers"
+        ]
+      },
+      "description": "Escenas montadas, en orden; al menos una."
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "stagingVersion",
+    "frame",
+    "scenes"
+  ]
+}

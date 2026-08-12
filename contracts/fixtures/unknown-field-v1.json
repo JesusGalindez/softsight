@@ -1,0 +1,123 @@
+{
+  "fixture": "unknown-field-v1",
+  "decision": "D30 — Campo desconocido es error",
+  "why": [
+    "Un validador que ignora lo que no conoce acepta en silencio una entrada que",
+    "nadie va a leer: el agente escribe `colour`, el color no se aplica, y la",
+    "imagen sale gris sin un solo error. Por eso el campo de más se rechaza.",
+    "Este fixture existe para que ese comportamiento falle en voz alta si alguien",
+    "lo quita, y para que los dos lados de la frontera rechacen lo mismo:",
+    "SoftSight con `validate`, VideoMesh con el modelo derivado de",
+    "`contracts/*.schema.json`.",
+    "",
+    "Cubre solo la primera fila de D30 —campo desconocido del núcleo, ERROR—.",
+    "Las otras dos, extensión requerida desconocida y extensión opcional",
+    "desconocida, piden un espacio `extensions` que todavía no existe en ningún",
+    "esquema: hasta que exista, la puerta las declara NOT_RUN con su motivo y D30",
+    "sigue ACORDADA, no IMPLEMENTADA."
+  ],
+  "reject": [
+    {
+      "name": "campo con errata en la raíz de la escena",
+      "schema": "scene",
+      "document": { "objetcs": [] },
+      "path": "objetcs",
+      "suggests": "objects"
+    },
+    {
+      "name": "campo inventado en una pieza, sin parecido con ninguno",
+      "schema": "scene",
+      "document": { "objects": [{ "geometry": { "primitive": "box" }, "material": "acero" }] },
+      "path": "objects[0].material",
+      "lists": true
+    },
+    {
+      "name": "campo con errata dentro de una pieza",
+      "schema": "scene",
+      "document": { "objects": [{ "geometry": { "primitive": "box" }, "colour": [1, 0, 0] }] },
+      "path": "objects[0].colour",
+      "suggests": "color"
+    },
+    {
+      "name": "campo de más en la geometría, dos niveles abajo",
+      "schema": "scene",
+      "document": { "objects": [{ "geometry": { "primitive": "sphere", "segments": 32 } }] },
+      "path": "objects[0].geometry.segments",
+      "lists": true
+    },
+    {
+      "name": "campo de más en una operación de parche",
+      "schema": "patch",
+      "document": {
+        "edits": [{ "op": "translate", "target": "*", "delta": [0, 1, 0], "easing": "ease" }]
+      },
+      "path": "edits[0].easing",
+      "lists": true
+    },
+    {
+      "name": "campo de más en una escena del guion, demasiado lejos para sugerir",
+      "note": [
+        "`duration` contra `durationFrames` son seis caracteres de diferencia y la",
+        "distancia de edición está acotada a dos a propósito: una sugerencia traída",
+        "de lejos manda al agente a otro campo. Aquí toca la lista de admitidos, no",
+        "una adivinanza."
+      ],
+      "schema": "story",
+      "document": {
+        "storyVersion": 1,
+        "title": "prueba",
+        "fps": 30,
+        "scenes": [
+          {
+            "name": "uno",
+            "role": "apertura",
+            "durationFrames": 60,
+            "data": { "line": "hola", "headline": "eh" },
+            "duration": 2
+          }
+        ]
+      },
+      "path": "scenes[0].duration",
+      "lists": true
+    },
+    {
+      "name": "extensión con nombre reservado, mientras el espacio no exista",
+      "note": [
+        "D30 reserva `extensions` para lo experimental. Ese campo no está en ningún",
+        "esquema todavía, así que hoy es un campo desconocido más y se rechaza.",
+        "Cuando el espacio exista, este caso deja de ir aquí y pasa a las filas de",
+        "UNSUPPORTED y de extensión opcional."
+      ],
+      "schema": "scene",
+      "document": { "objects": [], "extensions": { "org.videomesh.experimental.foo": {} } },
+      "path": "extensions",
+      "lists": true
+    }
+  ],
+  "accept": [
+    {
+      "name": "escena mínima, solo lo obligatorio",
+      "schema": "scene",
+      "document": { "objects": [{ "geometry": { "primitive": "box" } }] }
+    },
+    {
+      "name": "escena con los opcionales escritos bien",
+      "schema": "scene",
+      "document": {
+        "objects": [
+          {
+            "name": "cubo",
+            "geometry": { "primitive": "box", "parameters": [1, 2, 3] },
+            "color": [1, 0, 0],
+            "position": [0, 1, 0]
+          }
+        ]
+      }
+    },
+    {
+      "name": "parche con una operación completa",
+      "schema": "patch",
+      "document": { "edits": [{ "op": "translate", "target": "*", "delta": [0, 1, 0] }] }
+    }
+  ]
+}

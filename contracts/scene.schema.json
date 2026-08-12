@@ -1,0 +1,826 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JesusGalindez/softsight/contracts/scene.schema.json",
+  "title": "scene",
+  "type": "object",
+  "properties": {
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nombre de la pieza; si falta, `objetoN`."
+          },
+          "repeat": {
+            "type": "object",
+            "properties": {
+              "radial": {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "number",
+                    "description": "Copias; entero de 2 en adelante."
+                  },
+                  "axis": {
+                    "type": "string",
+                    "enum": [
+                      "x",
+                      "y",
+                      "z"
+                    ],
+                    "description": "Eje alrededor del que se reparten; y por defecto."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "count"
+                ],
+                "description": "Copias alrededor de un eje, a ángulos exactos de 2πi/count."
+              },
+              "mirror": {
+                "type": "string",
+                "enum": [
+                  "x",
+                  "y",
+                  "z"
+                ],
+                "description": "Una copia reflejada en este eje."
+              },
+              "about": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "Punto por el que pasa el eje de giro, o el plano del espejo; el origen por defecto. Sin él, un rotor solo se puede poner sobre el eje del mundo."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Copias de la pieza, aplicadas después de `deform`. La pieza pasa a llamarse `nombre-1` … `nombre-n`. Solo tiene efecto por el camino de escena."
+          },
+          "deform": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "twist": {
+                  "type": "object",
+                  "description": "{ axis, degrees } — gira alrededor del eje, proporcionalmente al recorrido. degrees admite número o tabla { at, ease }."
+                },
+                "taper": {
+                  "type": "object",
+                  "description": "{ axis, scale } — escala las dos coordenadas que no son la del eje. scale admite número o tabla."
+                },
+                "bend": {
+                  "type": "object",
+                  "description": "{ axis, into, degrees } — dobla el eje sobre un arco hacia `into`, que no puede ser el eje."
+                },
+                "wave": {
+                  "type": "object",
+                  "description": "{ axis, along, amplitude, cycles, phase } — ondula desplazando a lo largo de `along`, que no puede ser el eje. amplitude admite número o tabla."
+                }
+              },
+              "additionalProperties": false
+            },
+            "description": "Deformaciones en el orden en que se aplican, sobre la malla ya generada y antes de la matriz. El orden importa: torcer y luego doblar no es doblar y luego torcer."
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "primitive": {
+                    "type": "string",
+                    "enum": [
+                      "box",
+                      "sphere",
+                      "torus",
+                      "plane",
+                      "cylinder",
+                      "cone"
+                    ],
+                    "description": "Primitiva a generar."
+                  },
+                  "parameters": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "box: [ancho, alto, profundo]; sphere: [radio]; torus: [mayor, menor]; plane: [lado, subdivisiones]; cylinder: [radio, alto]; cone: [radio, alto]. Faltar vale —lo que no se escribe toma su valor por defecto—, sobrar no: un número de más se rechaza en vez de ignorarse. La resolución de la malla no se declara aquí."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "primitive"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "positions": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "Posiciones intercaladas x,y,z."
+                  },
+                  "indices": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "Índices de triángulo; si falta, tira secuencial."
+                  },
+                  "normals": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "Normales intercaladas; si faltan, se promedian."
+                  },
+                  "uvs": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "UVs intercaladas; si faltan, quedan a cero."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "positions"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "extrude": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        }
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ],
+                    "description": "Polígono en el plano XZ, pares x,z —cóncavo admitido y sin agujeros—, o el nombre de un perfil declarado en `profiles`."
+                  },
+                  "height": {
+                    "type": "number",
+                    "description": "Altura de la extrusión; 1 por defecto."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "extrude"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "revolve": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "description": "Perfil en pares radio,altura, girado alrededor de Y. Radio cero cierra en polo."
+                  },
+                  "segments": {
+                    "type": "number",
+                    "description": "Divisiones alrededor del eje; 32 por defecto."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "revolve"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "loft": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "at": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3,
+                          "description": "Dónde se coloca la sección. Obligatorio sin `path`, y prohibido con él: con recorrido la posición la pone la curva."
+                        },
+                        "profile": {
+                          "anyOf": [
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "number"
+                              }
+                            },
+                            {
+                              "type": "string"
+                            }
+                          ],
+                          "description": "Polígono en el plano XZ, pares x,z, o el nombre de un perfil declarado en `profiles`."
+                        },
+                        "scale": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "number"
+                              }
+                            }
+                          ],
+                          "description": "Escala uniforme, o [sx, sz]; 1 por defecto."
+                        },
+                        "twist": {
+                          "type": "number",
+                          "description": "Grados alrededor de Y, sobre el origen local del polígono; 0 por defecto."
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "profile"
+                      ]
+                    },
+                    "description": "Secciones cosidas, al menos dos. Las secciones quedan paralelas al plano XZ y la pieza crece a lo largo de Y; `at` puede además desplazarse en X y en Z."
+                  },
+                  "samples": {
+                    "type": "number",
+                    "description": "Puntos por sección tras remuestrear por longitud de arco; el mayor de las secciones por defecto."
+                  },
+                  "caps": {
+                    "type": "string",
+                    "enum": [
+                      "both",
+                      "none",
+                      "start",
+                      "end"
+                    ],
+                    "description": "Qué extremos se tapan; both por defecto."
+                  },
+                  "path": {
+                    "type": "object",
+                    "properties": {
+                      "through": {
+                        "type": "array",
+                        "items": {
+                          "type": "object"
+                        },
+                        "description": "Puntos de tres números por los que pasa el recorrido; al menos dos."
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "catmull-rom",
+                          "polyline"
+                        ],
+                        "description": "catmull-rom por defecto, centrípeta; polyline une los puntos con rectas."
+                      },
+                      "closed": {
+                        "type": "boolean",
+                        "description": "Si el recorrido se cierra sobre sí mismo."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "through"
+                    ],
+                    "description": "Recorrido por el que van las secciones, el mismo que declara un barrido. Con él las secciones se reparten uniformemente por índice a lo largo de la curva y cada estación lleva el perfil interpolado entre las dos que la rodean; sin él se apilan donde dice su `at`."
+                  },
+                  "stations": {
+                    "type": "number",
+                    "description": "Estaciones a lo largo del recorrido; 24 por defecto. Solo con `path`."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "loft"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "sweep": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        }
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ],
+                    "description": "Polígono en el plano XZ, pares x,z, o el nombre de un perfil declarado en `profiles`."
+                  },
+                  "path": {
+                    "type": "object",
+                    "properties": {
+                      "through": {
+                        "type": "array",
+                        "items": {
+                          "type": "object"
+                        },
+                        "description": "Puntos de tres números por los que pasa el recorrido; al menos dos."
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "catmull-rom",
+                          "polyline"
+                        ],
+                        "description": "catmull-rom por defecto, centrípeta; polyline une los puntos con rectas."
+                      },
+                      "closed": {
+                        "type": "boolean",
+                        "description": "Si el recorrido se cierra sobre sí mismo."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "through"
+                    ],
+                    "description": "Recorrido del barrido."
+                  },
+                  "radius": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "object"
+                      }
+                    ],
+                    "description": "Multiplica el perfil en cada estación. Número constante, o tabla { at: [[u, valor], …], ease: linear|smooth|power:k }. 1 por defecto."
+                  },
+                  "twist": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "object"
+                      }
+                    ],
+                    "description": "Grados alrededor de la tangente. Número constante o la misma tabla que radius. 0 por defecto."
+                  },
+                  "stations": {
+                    "type": "number",
+                    "description": "Estaciones a lo largo del recorrido; 24 por defecto."
+                  },
+                  "caps": {
+                    "type": "string",
+                    "enum": [
+                      "both",
+                      "none",
+                      "start",
+                      "end"
+                    ],
+                    "description": "Qué extremos se tapan; both por defecto. Un recorrido cerrado no tiene extremos."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "sweep",
+                  "path"
+                ]
+              }
+            ],
+            "description": "Primitiva con parámetros, malla cruda con sus arrays, extrusión de un polígono, revolucionado de un perfil, loft de secciones cosidas o barrido de un perfil por un recorrido."
+          },
+          "matrix": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Colocación exacta, 16 números en fila; manda sobre position, rotation y scale."
+          },
+          "position": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Traslación en unidades del fichero."
+          },
+          "rotation": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Rotación en grados, orden Y·X·Z."
+          },
+          "scale": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            ],
+            "description": "Escala uniforme o por eje."
+          },
+          "color": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Albedo en 0..1."
+          },
+          "specular": {
+            "type": "number",
+            "description": "Intensidad especular; 0,3 por defecto."
+          },
+          "shininess": {
+            "type": "number",
+            "description": "Exponente especular; 48 por defecto."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "geometry"
+        ]
+      },
+      "description": "Piezas de la escena; al menos una."
+    },
+    "profiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nombre del perfil; identifica, así que es único."
+          },
+          "circle": {
+            "type": "number",
+            "description": "Círculo de este radio."
+          },
+          "superellipse": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "[a, b, exponente]; con exponente 2 es una elipse."
+          },
+          "gielis": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "Superfórmula de Gielis [m, n1, n2, n3], con a y b opcionales detrás."
+          },
+          "naca": {
+            "type": "string",
+            "description": "Perfil aerodinámico de cuatro dígitos, como \"2412\"."
+          },
+          "points": {
+            "type": "number",
+            "description": "Puntos del polígono; 32, o 64 en gielis y naca."
+          },
+          "chord": {
+            "type": "number",
+            "description": "Cuerda del naca; 1 por defecto."
+          },
+          "radius": {
+            "type": "number",
+            "description": "Multiplicador del radio de gielis; 1 por defecto."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ]
+      },
+      "description": "Catálogo de perfiles con nombre, usados desde la geometría. Uno declarado y no usado no es error."
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "triangles": {
+          "type": "number",
+          "description": "Triángulos como máximo."
+        },
+        "parts": {
+          "type": "number",
+          "description": "Piezas como máximo."
+        },
+        "boundaryEdges": {
+          "type": "number",
+          "description": "Aristas de borde sumadas, como máximo."
+        },
+        "degenerateTriangles": {
+          "type": "number",
+          "description": "Triángulos de área nula, como máximo."
+        },
+        "symmetryError": {
+          "type": "number",
+          "description": "Error de simetría en X, en fracción del radio."
+        },
+        "watertight": {
+          "type": "boolean",
+          "description": "Exige que todas las mallas estén cerradas."
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "part": {
+                "type": "string",
+                "description": "Patrón de pieza, como --select: `rotor-*`. La cláusula se exige a cada pieza que encaje, y una que no encaje con ninguna incumple igual."
+              },
+              "volume": {
+                "type": "number",
+                "description": "Volumen firmado esperado, en unidades del documento al cubo."
+              },
+              "tolerance": {
+                "type": "number",
+                "description": "Desviación admitida, en fracción del volumen declarado; 0,01 por defecto. No puede ser 0: el volumen sale de sumar un determinante por triángulo sobre posiciones en Float32."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "part",
+              "volume"
+            ]
+          },
+          "description": "Cuánto tiene que desplazar cada pieza. Es la única cláusula por pieza: las demás miran el conjunto. Sirve para afirmar lo que el generador ya sabe —un cilindro de radio r y alto h desplaza π·r²·h— y que la puerta lo compruebe contra la malla de verdad."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Contrato que la escena debe cumplir; cada cláusula incumplida es un aviso."
+    },
+    "skeleton": {
+      "type": "object",
+      "properties": {
+        "joints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Nombre del hueso; identifica, así que es único."
+              },
+              "parent": {
+                "type": "string",
+                "description": "Nombre del hueso del que cuelga. Sin él, es raíz."
+              },
+              "offset": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "Desplazamiento respecto al padre. Cero por defecto."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name"
+            ]
+          },
+          "description": "Huesos del esqueleto; se referencian por nombre, nunca por índice."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "joints"
+      ],
+      "description": "Huesos que animarán las piezas. Declararlo no calcula pesos: el atado es rígido y el vínculo lo dices tú en `bindings`."
+    },
+    "bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "part": {
+            "type": "string",
+            "description": "Patrón de pieza, como --select: `rotor-*`."
+          },
+          "joint": {
+            "type": "string",
+            "description": "Hueso al que se ata. Debe existir."
+          },
+          "blend": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "with": {
+                    "type": "string",
+                    "description": "El otro hueso del reparto. Debe existir y no puede ser el de la regla."
+                  },
+                  "from": {
+                    "type": "number",
+                    "description": "Dónde empieza la banda, en unidades del segmento entre los dos huesos: 0 es el hueso de la regla y 1 es `with`. Se sale del rango a propósito cuando la costura cae fuera."
+                  },
+                  "to": {
+                    "type": "number",
+                    "description": "Dónde acaba. Mayor que `from`. Después de aquí, todo el peso es de `with`."
+                  },
+                  "ease": {
+                    "type": "string",
+                    "description": "linear (por defecto), smooth o power:k. La misma tabla que la forma y el movimiento."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "with",
+                  "from",
+                  "to"
+                ]
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "with": {
+                      "type": "string",
+                      "description": "El otro hueso del reparto. Debe existir y no puede ser el de la regla."
+                    },
+                    "from": {
+                      "type": "number",
+                      "description": "Dónde empieza la banda, en unidades del segmento entre los dos huesos: 0 es el hueso de la regla y 1 es `with`. Se sale del rango a propósito cuando la costura cae fuera."
+                    },
+                    "to": {
+                      "type": "number",
+                      "description": "Dónde acaba. Mayor que `from`. Después de aquí, todo el peso es de `with`."
+                    },
+                    "ease": {
+                      "type": "string",
+                      "description": "linear (por defecto), smooth o power:k. La misma tabla que la forma y el movimiento."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "with",
+                    "from",
+                    "to"
+                  ]
+                }
+              }
+            ],
+            "description": "Reparto del peso con otro hueso alrededor de la articulación, o una lista si la pieza tiene costura por más de un sitio —el antebrazo la tiene en el codo y en la muñeca—. Tres como mucho: glTF escribe cuatro influencias por vértice y una es siempre `joint`. Pueden solaparse, pero entre todas no pueden llevarse más de 1. Sin esto el atado es rígido, peso 1 sobre `joint`, que para una pieza rígida de verdad es la respuesta exacta."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "part",
+          "joint"
+        ]
+      },
+      "description": "Qué pieza va a qué hueso. Gana la primera regla que encaja; una pieza sin regla es un error, no se ata a la raíz por si acaso. Obligatorio si hay `skeleton`."
+    },
+    "clips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nombre del clip; `clipN` si falta."
+          },
+          "fps": {
+            "type": "number",
+            "description": "Fotogramas por segundo con los que se leen los `frame`; 30."
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "joint": {
+                  "type": "string",
+                  "description": "Hueso que anima esta pista."
+                },
+                "property": {
+                  "type": "string",
+                  "enum": [
+                    "translation",
+                    "rotation",
+                    "scale"
+                  ],
+                  "description": "Qué se anima del hueso."
+                },
+                "interpolation": {
+                  "type": "string",
+                  "enum": [
+                    "linear",
+                    "step"
+                  ],
+                  "description": "linear por defecto."
+                },
+                "keys": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "frame": {
+                        "type": "number",
+                        "description": "Fotograma; en orden creciente y sin repetir."
+                      },
+                      "value": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "description": "translation y scale: 3 números. rotation: 3 grados en orden Y·X·Z, o 4 del cuaternión x,y,z,w."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "frame",
+                      "value"
+                    ]
+                  },
+                  "description": "Fotogramas clave escritos a mano. Excluyente con `value`."
+                },
+                "value": {
+                  "type": "object",
+                  "description": "La pista como función declarada: { at: [[u, [valores]], …], ease } con la misma curva que la geometría —linear, smooth, power:k—. Necesita `frames` y se hornea a claves. La rotación va en 3 grados Y·X·Z; el cuaternión solo cabe en `keys`."
+                },
+                "frames": {
+                  "type": "number",
+                  "description": "Cuánto dura la pista declarada con `value`, en fotogramas."
+                },
+                "bake": {
+                  "type": "number",
+                  "description": "Claves a emitir al hornear: bake + 1. Una por fotograma por defecto."
+                },
+                "turns": {
+                  "type": "number",
+                  "description": "Vueltas completas alrededor de `axis` en `frames` fotogramas; negativo, al revés. Solo en rotation, excluyente con keys y value. Hornea a 90° por clave como mucho, porque el muestreador de glTF interpola por el arco más corto."
+                },
+                "axis": {
+                  "type": "string",
+                  "enum": [
+                    "x",
+                    "y",
+                    "z"
+                  ],
+                  "description": "Eje de `turns`; y por defecto."
+                },
+                "cycle": {
+                  "type": "number",
+                  "description": "Repeticiones del contenido de la pista, una detrás de otra. Con `turns` sobra: las vueltas ya se cuentan con ese número."
+                },
+                "offsetFrames": {
+                  "type": "number",
+                  "description": "Desfase en fotogramas del ciclo, tratando la pista como periódica: lo que sale por el final vuelve a entrar por el principio. Solo con `value`."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "joint",
+                "property"
+              ]
+            },
+            "description": "Pistas del clip."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "tracks"
+        ]
+      },
+      "description": "Animaciones sobre los huesos declarados."
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "objects"
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JesusGalindez/softsight/contracts/story.schema.json",
+  "title": "story",
+  "type": "object",
+  "properties": {
+    "storyVersion": {
+      "type": "number",
+      "description": "Versión del contrato del guion; hoy 1."
+    },
+    "title": {
+      "type": "string",
+      "description": "Título de la pieza."
+    },
+    "fps": {
+      "type": "number",
+      "description": "Fotogramas por segundo con los que se leen las duraciones."
+    },
+    "scenes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Nombre de la escena; identifica, así que es único."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "apertura",
+              "desarrollo",
+              "giro",
+              "cierre"
+            ],
+            "description": "Papel narrativo. Decide qué campos de data hacen falta y cómo se pone en escena."
+          },
+          "durationFrames": {
+            "type": "number",
+            "description": "Frames que dura. Las escenas van seguidas desde el frame 0, así que el inicio no se declara: se deduce, y la duración de la composición es la suma."
+          },
+          "data": {
+            "type": "object",
+            "description": "Lo que cuenta la escena, en texto: `line` siempre, y `headline` además en apertura y giro. Campos de más se admiten; son datos, no maqueta."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "role",
+          "durationFrames",
+          "data"
+        ]
+      },
+      "description": "Escenas en el orden en que se ven; al menos una."
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "storyVersion",
+    "title",
+    "fps",
+    "scenes"
+  ]
+}

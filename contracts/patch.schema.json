@@ -1,0 +1,585 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JesusGalindez/softsight/contracts/patch.schema.json",
+  "title": "patch",
+  "type": "object",
+  "properties": {
+    "edits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "add",
+              "translate",
+              "rotate",
+              "scale",
+              "color",
+              "hide",
+              "show",
+              "delete",
+              "rename",
+              "align",
+              "setPivot",
+              "mirror",
+              "instance"
+            ],
+            "description": "Operación a aplicar."
+          },
+          "target": {
+            "type": "string",
+            "description": "Nombre o ruta, con `*` como comodín. Obligatorio salvo en `add`. Sin coincidencias es un error, no un aviso."
+          },
+          "object": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Nombre de la pieza; si falta, `objetoN`."
+              },
+              "repeat": {
+                "type": "object",
+                "properties": {
+                  "radial": {
+                    "type": "object",
+                    "properties": {
+                      "count": {
+                        "type": "number",
+                        "description": "Copias; entero de 2 en adelante."
+                      },
+                      "axis": {
+                        "type": "string",
+                        "enum": [
+                          "x",
+                          "y",
+                          "z"
+                        ],
+                        "description": "Eje alrededor del que se reparten; y por defecto."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "count"
+                    ],
+                    "description": "Copias alrededor de un eje, a ángulos exactos de 2πi/count."
+                  },
+                  "mirror": {
+                    "type": "string",
+                    "enum": [
+                      "x",
+                      "y",
+                      "z"
+                    ],
+                    "description": "Una copia reflejada en este eje."
+                  },
+                  "about": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "description": "Punto por el que pasa el eje de giro, o el plano del espejo; el origen por defecto. Sin él, un rotor solo se puede poner sobre el eje del mundo."
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Copias de la pieza, aplicadas después de `deform`. La pieza pasa a llamarse `nombre-1` … `nombre-n`. Solo tiene efecto por el camino de escena."
+              },
+              "deform": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "twist": {
+                      "type": "object",
+                      "description": "{ axis, degrees } — gira alrededor del eje, proporcionalmente al recorrido. degrees admite número o tabla { at, ease }."
+                    },
+                    "taper": {
+                      "type": "object",
+                      "description": "{ axis, scale } — escala las dos coordenadas que no son la del eje. scale admite número o tabla."
+                    },
+                    "bend": {
+                      "type": "object",
+                      "description": "{ axis, into, degrees } — dobla el eje sobre un arco hacia `into`, que no puede ser el eje."
+                    },
+                    "wave": {
+                      "type": "object",
+                      "description": "{ axis, along, amplitude, cycles, phase } — ondula desplazando a lo largo de `along`, que no puede ser el eje. amplitude admite número o tabla."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "description": "Deformaciones en el orden en que se aplican, sobre la malla ya generada y antes de la matriz. El orden importa: torcer y luego doblar no es doblar y luego torcer."
+              },
+              "geometry": {
+                "anyOf": [
+                  {
+                    "type": "object"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "primitive": {
+                        "type": "string",
+                        "enum": [
+                          "box",
+                          "sphere",
+                          "torus",
+                          "plane",
+                          "cylinder",
+                          "cone"
+                        ],
+                        "description": "Primitiva a generar."
+                      },
+                      "parameters": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "description": "box: [ancho, alto, profundo]; sphere: [radio]; torus: [mayor, menor]; plane: [lado, subdivisiones]; cylinder: [radio, alto]; cone: [radio, alto]. Faltar vale —lo que no se escribe toma su valor por defecto—, sobrar no: un número de más se rechaza en vez de ignorarse. La resolución de la malla no se declara aquí."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "primitive"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "positions": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "description": "Posiciones intercaladas x,y,z."
+                      },
+                      "indices": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "description": "Índices de triángulo; si falta, tira secuencial."
+                      },
+                      "normals": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "description": "Normales intercaladas; si faltan, se promedian."
+                      },
+                      "uvs": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "description": "UVs intercaladas; si faltan, quedan a cero."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "positions"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "extrude": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "description": "Polígono en el plano XZ, pares x,z —cóncavo admitido y sin agujeros—, o el nombre de un perfil declarado en `profiles`."
+                      },
+                      "height": {
+                        "type": "number",
+                        "description": "Altura de la extrusión; 1 por defecto."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "extrude"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "revolve": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "description": "Perfil en pares radio,altura, girado alrededor de Y. Radio cero cierra en polo."
+                      },
+                      "segments": {
+                        "type": "number",
+                        "description": "Divisiones alrededor del eje; 32 por defecto."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "revolve"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "loft": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "at": {
+                              "type": "array",
+                              "items": {
+                                "type": "number"
+                              },
+                              "minItems": 3,
+                              "maxItems": 3,
+                              "description": "Dónde se coloca la sección. Obligatorio sin `path`, y prohibido con él: con recorrido la posición la pone la curva."
+                            },
+                            "profile": {
+                              "anyOf": [
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "number"
+                                  }
+                                },
+                                {
+                                  "type": "string"
+                                }
+                              ],
+                              "description": "Polígono en el plano XZ, pares x,z, o el nombre de un perfil declarado en `profiles`."
+                            },
+                            "scale": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "number"
+                                  }
+                                }
+                              ],
+                              "description": "Escala uniforme, o [sx, sz]; 1 por defecto."
+                            },
+                            "twist": {
+                              "type": "number",
+                              "description": "Grados alrededor de Y, sobre el origen local del polígono; 0 por defecto."
+                            }
+                          },
+                          "additionalProperties": false,
+                          "required": [
+                            "profile"
+                          ]
+                        },
+                        "description": "Secciones cosidas, al menos dos. Las secciones quedan paralelas al plano XZ y la pieza crece a lo largo de Y; `at` puede además desplazarse en X y en Z."
+                      },
+                      "samples": {
+                        "type": "number",
+                        "description": "Puntos por sección tras remuestrear por longitud de arco; el mayor de las secciones por defecto."
+                      },
+                      "caps": {
+                        "type": "string",
+                        "enum": [
+                          "both",
+                          "none",
+                          "start",
+                          "end"
+                        ],
+                        "description": "Qué extremos se tapan; both por defecto."
+                      },
+                      "path": {
+                        "type": "object",
+                        "properties": {
+                          "through": {
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            },
+                            "description": "Puntos de tres números por los que pasa el recorrido; al menos dos."
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "catmull-rom",
+                              "polyline"
+                            ],
+                            "description": "catmull-rom por defecto, centrípeta; polyline une los puntos con rectas."
+                          },
+                          "closed": {
+                            "type": "boolean",
+                            "description": "Si el recorrido se cierra sobre sí mismo."
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "through"
+                        ],
+                        "description": "Recorrido por el que van las secciones, el mismo que declara un barrido. Con él las secciones se reparten uniformemente por índice a lo largo de la curva y cada estación lleva el perfil interpolado entre las dos que la rodean; sin él se apilan donde dice su `at`."
+                      },
+                      "stations": {
+                        "type": "number",
+                        "description": "Estaciones a lo largo del recorrido; 24 por defecto. Solo con `path`."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "loft"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "sweep": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "description": "Polígono en el plano XZ, pares x,z, o el nombre de un perfil declarado en `profiles`."
+                      },
+                      "path": {
+                        "type": "object",
+                        "properties": {
+                          "through": {
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            },
+                            "description": "Puntos de tres números por los que pasa el recorrido; al menos dos."
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "catmull-rom",
+                              "polyline"
+                            ],
+                            "description": "catmull-rom por defecto, centrípeta; polyline une los puntos con rectas."
+                          },
+                          "closed": {
+                            "type": "boolean",
+                            "description": "Si el recorrido se cierra sobre sí mismo."
+                          }
+                        },
+                        "additionalProperties": false,
+                        "required": [
+                          "through"
+                        ],
+                        "description": "Recorrido del barrido."
+                      },
+                      "radius": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ],
+                        "description": "Multiplica el perfil en cada estación. Número constante, o tabla { at: [[u, valor], …], ease: linear|smooth|power:k }. 1 por defecto."
+                      },
+                      "twist": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "object"
+                          }
+                        ],
+                        "description": "Grados alrededor de la tangente. Número constante o la misma tabla que radius. 0 por defecto."
+                      },
+                      "stations": {
+                        "type": "number",
+                        "description": "Estaciones a lo largo del recorrido; 24 por defecto."
+                      },
+                      "caps": {
+                        "type": "string",
+                        "enum": [
+                          "both",
+                          "none",
+                          "start",
+                          "end"
+                        ],
+                        "description": "Qué extremos se tapan; both por defecto. Un recorrido cerrado no tiene extremos."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "sweep",
+                      "path"
+                    ]
+                  }
+                ],
+                "description": "Primitiva con parámetros, malla cruda con sus arrays, extrusión de un polígono, revolucionado de un perfil, loft de secciones cosidas o barrido de un perfil por un recorrido."
+              },
+              "matrix": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "Colocación exacta, 16 números en fila; manda sobre position, rotation y scale."
+              },
+              "position": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "Traslación en unidades del fichero."
+              },
+              "rotation": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "Rotación en grados, orden Y·X·Z."
+              },
+              "scale": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                ],
+                "description": "Escala uniforme o por eje."
+              },
+              "color": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3,
+                "description": "Albedo en 0..1."
+              },
+              "specular": {
+                "type": "number",
+                "description": "Intensidad especular; 0,3 por defecto."
+              },
+              "shininess": {
+                "type": "number",
+                "description": "Exponente especular; 48 por defecto."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "geometry"
+            ],
+            "description": "add: la pieza a añadir, descrita igual que en una escena."
+          },
+          "delta": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "translate: desplazamiento."
+          },
+          "degrees": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "rotate: grados por eje, alrededor del origen de la pieza."
+          },
+          "factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            ],
+            "description": "scale: factor uniforme o por eje."
+          },
+          "rgb": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "color: albedo en 0..1."
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            ],
+            "description": "rename: nombre nuevo, con el patrón coincidiendo con una sola pieza. align: pieza contra la que pegarse. setPivot: origen nuevo en local, centro por defecto."
+          },
+          "axis": {
+            "type": "string",
+            "enum": [
+              "x",
+              "y",
+              "z"
+            ],
+            "description": "align: eje por el que mover; mirror: plano de reflexión."
+          },
+          "gap": {
+            "type": "number",
+            "description": "align: separación que se deja, cero por defecto."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "op"
+        ]
+      },
+      "description": "Operaciones, aplicadas en orden."
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "edits"
+  ]
+}
