@@ -1,7 +1,7 @@
 /**
  * Puerta del esqueleto de R0-A: esquema del paquete e ingesta.
  *
- * Cuatro bloques, en el orden en que un paquete los atraviesa:
+ * Cinco bloques, en el orden en que un paquete los atraviesa:
  *
  *   1. La forma del manifest, con los cuatro casos de D21 y los de D19, D20 y
  *      D14. Cada rechazo se comprueba **por su motivo**, no por «falló»: la
@@ -12,15 +12,27 @@
  *   3. Lo mismo sobre un paquete de verdad en disco, con su symlink saliendo de
  *      la raíz. La simulación prueba la política; esto prueba que la política
  *      encaja con lo que el sistema de ficheros contesta de verdad.
- *   4. Lo que R0 se prohíbe: cobertura y confianza no entran por el esquema.
+ *   4. `cube-v1` entero: se genera, se comprueba que dos generaciones dan los
+ *      mismos hashes, entra por la ingesta, su malla se lee del PLY y se audita,
+ *      y sus cuatro imágenes se miran para que no sean un lienzo vacío.
+ *   5. Lo que R0 se prohíbe: cobertura y confianza no entran por el esquema.
  *
- * Lo que **no** hay todavía, y la puerta lo dice: no se lee el PLY, no se
- * registra el CameraSet ni se emite informe. R0-A no está cerrado.
+ * Lo que **no** hay todavía, y la puerta lo dice al terminar: el sobre del
+ * informe. R0-A no está cerrado.
  */
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, mkdirSync, realpathSync, statSync, symlinkSync, writeFileSync, readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,10 +40,14 @@ import { fileURLToPath } from "node:url";
 import {
   PACKAGE_CODES,
   RECONSTRUCTION_PACKAGE_SCHEMA,
+  auditMesh,
   exitCodeFor,
   ingestPackage,
+  parsePlyAscii,
   validate,
 } from "../dist-node/agent3d.mjs";
+import { decodePng } from "./agent3d.mjs";
+import { writeCubePackage } from "./cubeV1.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
@@ -196,8 +212,94 @@ function sha256Of(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
-// 4. Lo que R0 no admite todavía, dicho en voz alta.
+// 4. `cube-v1` de punta a punta: se genera, se ingiere y se audita su malla.
+{
+  const sandbox = realpathSync(mkdtempSync(join(tmpdir(), "softsight-cube-")));
+  const primero = join(sandbox, "cube-v1");
+  const segundo = join(sandbox, "cube-v1-otra-vez");
+  const uno = writeCubePackage(primero);
+  const dos = writeCubePackage(segundo);
+
+  // Determinismo, que es lo que permite comparar contra el cube-v1 de VideoMesh:
+  // los mismos ficheros con los mismos hashes, incluidas las imágenes.
+  assert.deepEqual(
+    uno.manifest.artifacts.map((artifact) => [artifact.path, artifact.sha256]),
+    dos.manifest.artifacts.map((artifact) => [artifact.path, artifact.sha256]),
+    "dos generaciones dan paquetes distintos",
+  );
+
+  const manifest = JSON.parse(readFileSync(join(primero, "manifest.json"), "utf8"));
+  const reader = {
+    root: primero,
+    stat: (path) => {
+      try {
+        const real = realpathSync(join(primero, path));
+        return { realPath: real, bytes: statSync(real).size, sha256: sha256Of(real) };
+      } catch {
+        return null;
+      }
+    },
+  };
+
+  const entrada = ingestPackage(manifest, reader);
+  assert.equal(entrada.execution, "COMPLETE", JSON.stringify(entrada.issues));
+  assert.equal(exitCodeFor(entrada), 0);
+  assert.equal(entrada.packageId, "cube-v1");
+  assert.equal(entrada.artifacts.length, 6, "malla, nube y cuatro imágenes");
+  assert.equal(manifest.cameras.length, 4);
+  console.log(
+    `reconstrucción: ok (cube-v1: ${entrada.artifacts.length} artifacts sellados y determinista, ` +
+      `${manifest.cameras.length} cámaras, entra con COMPLETE)`,
+  );
+
+  // La malla del paquete, leída del PLY y auditada: es el primer número que sale
+  // de un paquete en vez de de una escena de este repositorio.
+  const mesh = parsePlyAscii(readFileSync(join(primero, "mesh.ply"), "utf8")).mesh;
+  const audit = auditMesh({ ...mesh, normals: new Float32Array(0), uvs: new Float32Array(0), boundingRadius: 1 });
+  assert.equal(audit.triangles, 12);
+  assert.equal(audit.vertices, 24, "el cubo del motor parte los vértices por cara");
+  assert.equal(audit.duplicatePositions, 16, "y la soldadura los junta en ocho esquinas");
+  assert.equal(audit.watertight, true, "cerrado tras soldar, que es lo que la topología mide");
+  assert.equal(audit.signedVolume, 1, "lado 1");
+  assert.equal(audit.inverted, false);
+
+  // Las imágenes tienen que enseñar el cubo. Un lienzo del color de fondo pasaría
+  // los hashes igual de bien y sería evidencia falsa: el CameraSet describiría
+  // unas cámaras que no miraron nada.
+  const fondo = [Math.round(0.09 * 255), Math.round(0.1 * 255), Math.round(0.13 * 255)];
+  for (const camera of manifest.cameras) {
+    const artifact = manifest.artifacts.find((entry) => entry.id === camera.imageArtifactId);
+    assert.ok(artifact !== undefined, `${camera.id} apunta a un artifact que no existe`);
+    const image = decodePng(readFileSync(join(primero, artifact.path)));
+    let geometria = 0;
+    for (let pixel = 0; pixel < image.width * image.height; pixel += 1) {
+      const offset = pixel * 4;
+      if (
+        Math.abs(image.pixels[offset] - fondo[0]) > 2 ||
+        Math.abs(image.pixels[offset + 1] - fondo[1]) > 2 ||
+        Math.abs(image.pixels[offset + 2] - fondo[2]) > 2
+      ) {
+        geometria += 1;
+      }
+    }
+    const fraccion = geometria / (image.width * image.height);
+    assert.ok(fraccion > 0.05, `${camera.id}: solo ${(fraccion * 100).toFixed(1)} % de píxeles con geometría`);
+    // Y los intrínsecos son los de esa imagen, no los de otra rejilla.
+    assert.equal(camera.width, image.width);
+    assert.equal(camera.height, image.height);
+    assert.equal(camera.cx ?? camera.intrinsics.cx, image.width / 2);
+  }
+  console.log(
+    "reconstrucción: ok (las cuatro imágenes del paquete enseñan el cubo y sus intrínsecos " +
+      "describen la rejilla que se renderizó)",
+  );
+
+  rmSync(sandbox, { recursive: true, force: true });
+}
+
+// 5. Lo que R0-A todavía no tiene, dicho en voz alta.
 console.log(
-  "reconstrucción: no ejecutada — R0-A no está cerrado: falta leer el PLY, registrar el CameraSet " +
-    "y emitir el sobre del informe (S5 y S6). Cobertura y confianza siguen fuera del esquema por D34",
+  "reconstrucción: no ejecutada — R0-A no está cerrado: el paquete entra y su malla se audita, " +
+    "pero falta el sobre del informe con packageId, manifestSha256 y los hashes (S6). " +
+    "Cobertura y confianza siguen fuera del esquema por D34",
 );

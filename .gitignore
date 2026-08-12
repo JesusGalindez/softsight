@@ -14,3 +14,7 @@ artifacts/agent/*.obj
 
 # Caché del modelo analizado: se rehace sola
 .cache/
+
+# El paquete cube-v1 lo escribe `npm run cube-v1` y es determinista: commitearlo
+# sería un segundo original de lo que produce el generador
+artifacts/cube-v1/

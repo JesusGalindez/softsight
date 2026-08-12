@@ -152,7 +152,7 @@ repositorio— pero **solo el escalón de 100k**: el de 5M pide `SOFTSIGHT_HEAVY
 sin él se declara «no ejecutada» con su motivo, D22. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 119
+Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 121
 comprobaciones de softsight en verde**, 25 puertas. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
@@ -407,9 +407,11 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     **D6** y **D21**; D7 y D29 quedan a medias porque sus otras mitades son el
     informe y el escritor. D21 obligó a extender el esquema en ejecución con
     `variants`, formas discriminadas por el literal del tipo: `anyOf` no llegaba
-    porque se aplica al campo y no a los elementos de una lista. Lo que falta para
-    R0-A es leer el PLY, registrar el CameraSet y emitir el informe. Una tercera
-    mitad
+    porque se aplica al campo y no a los elementos de una lista. **`cube-v1` ya se
+    genera aquí** —`npm run cube-v1`, 12,7 KB deterministas con malla, nube,
+    cuatro imágenes renderizadas por el propio motor y su CameraSet— y recorre
+    esquema, sandbox, hashes, PLY y auditoría: 12 triángulos, cerrada, volumen 1.
+    Lo que falta para R0-A es el sobre del informe. Una tercera mitad
     entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
     certifica lo que salga, sin convertirse en un motor de fotogrametría. Las
     secciones 0–83 las escribió el agente de VideoMesh; las 84–86 son la respuesta

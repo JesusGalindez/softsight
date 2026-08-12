@@ -359,6 +359,20 @@ con `execution: COMPLETE` y `certification: PASS`, recorriendo esquema, sandbox,
 hashes, PLY, CameraSet, escala, FrameGraph, auditoría mínima y sobre del informe.
 El criterio se parte según D34.
 
+**`cube-v1` local, del 2026-08-12.** `tools/cubeV1.mjs` lo fabrica —no lo
+reconstruye, que es de VideoMesh (P1)— con la geometría del propio motor: el cubo
+sale de `resolveScene`, así que el PLY lleva sus 24 vértices partidos por cara y
+la auditoría tiene que soldarlos para ver que está cerrado. Las cuatro imágenes
+son renders del rasterizador que certifica y **los intrínsecos del manifest son
+los de la cámara que las produjo**; la puerta mira los píxeles para que ninguna
+sea un lienzo del color de fondo, que pasaría los hashes igual de bien y sería
+evidencia falsa. 12,7 KB, determinista, y no se commitea: lo escribe el generador.
+
+Lo que el paquete atraviesa hoy: esquema, sandbox, hashes, PLY, CameraSet
+declarado, escala, FrameGraph y auditoría de la malla —12 triángulos, 24
+vértices, 16 duplicados soldados, cerrada, volumen 1—. **Falta el sobre del
+informe**, que es S6, y con él R0-A.
+
 **R0 se queda pequeño a propósito:** sin cobertura, sin confianza, sin LOD, UV,
 PBR ni collision. La cobertura depende del árbol de triángulos, la visibilidad y
 el muestreo, y llega después.
@@ -831,7 +845,10 @@ S3  fixture unknown-field-v1                        HECHO — la fila 1 de D30
 S4  esqueleto de esquema e ingesta de R0-A       HECHO — esquema del paquete,
                                                 sandbox e integridad. D6 y D21
                                                 pasan a IMPLEMENTADAS
-S5  generador local de cube-v1
+S5  generador local de cube-v1                   HECHO — `npm run cube-v1`:
+                                                malla, nube, cuatro imágenes
+                                                renderizadas y su CameraSet,
+                                                sellado con rename
 S6  informe mínimo de reconstrucción
 ```
 

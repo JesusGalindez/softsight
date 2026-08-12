@@ -69,6 +69,7 @@ abierta—; tratarlos igual lleva a «arreglar» piezas que estaban bien.
 | `npm run verify` | **Lo primero y lo último.** Tipos y las puertas, la misma orden que ejecuta CI |
 | `npm run agent3d` | `vite build --config vite.node.config.ts --logLevel error 1>&2 && node tools/agent3d.mjs` |
 | `npm run bridge` | `node tools/bridge.mjs` |
+| `npm run cube-v1` | `npm run build:agent3d && node tools/cubeV1.mjs` |
 | `npm run filmstrip` | `npm run build:agent3d --silent && node tools/filmstrip.mjs` |
 | `npm run worker` | `node tools/workerServer.mjs` |
 <!-- /generado: comandos -->
