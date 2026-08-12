@@ -90,9 +90,9 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-08-12, cerrada la tercera ronda:
 
 ```text
-ACORDADAS       28   D1, D2, D4, D5, D8–D13, D15–D20, D22–D24, D26–D34
+ACORDADAS       27   D1, D2, D4, D5, D8–D13, D15–D20, D22, D23, D26–D34
 PROPUESTAS       0
-IMPLEMENTADAS    6   D3, D6, D7, D14, D21, D25
+IMPLEMENTADAS    7   D3, D6, D7, D14, D21, D24, D25
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -588,8 +588,45 @@ su `cube-v1`.
 consume en producción. La lógica vive en `tests/contracts/parity/`.
 **Prueba:** es la prueba.
 
-### D24 — El árbol de triángulos se llama `boundsTree.ts`
+### D24 — El árbol de triángulos se llama `boundsTree.ts` — IMPLEMENTADA (2026-08-12)
 Tipo `TriangleBoundsTree`. `bvhLoader.ts` ya existe y es Biovision Hierarchy.
+
+**Prueba:** `test:bounds-tree`, con **la fuerza bruta de juez**: mil rayos y cien
+cajas deterministas comparados contra recorrer la malla entera, triángulo a
+triángulo. Un árbol solo sirve si contesta exactamente lo mismo que mirarlo todo,
+y eso no se comprueba leyendo el código.
+
+`buildTriangleBoundsTree`, `raycast`, `nearestPoint` y `queryAabb`, la API que el
+plan pedía. Determinista: partición por el punto medio del eje mayor —no por
+mediana, que depende de cómo el motor ordena los empates—, partición **estable**
+en dos pasadas, y empates de distancia resueltos por índice de triángulo
+ascendente. Dos construcciones dan los mismos arrays byte a byte, que es el
+criterio del plan: misma malla y misma versión, mismo recorrido.
+
+```text
+triángulos   CPU      nodos       árbol      RSS máx
+100k         0,16 s      34.879     1,7 MiB    71 MiB
+1M           0,60 s     342.463    16,9 MiB   154 MiB
+5M           2,56 s   1.742.943    85,6 MiB   478 MiB
+```
+
+Medido con el arnés de D25 —proceso aparte, tiempo de CPU, RSS muestreado— para
+que las dos estructuras se puedan comparar. 5M cabe de sobra.
+
+**Dos fallos que solo la comparación con fuerza bruta habría encontrado**, y los
+dos daban respuestas plausibles:
+
+1. El truco clásico de los BVH —«el hijo izquierdo es el nodo siguiente»— **no
+   vale cuando se construye con una pila**: entre un nodo y sus hijos se crean los
+   de otra rama. Los dos hijos van explícitos.
+2. La cota de nodos `2·ceil(n/L) − 1` **no es una cota**: es la del árbol
+   equilibrado, y una partición que deja un triángulo a un lado la supera.
+   Escribir fuera de un `Int32Array` **no lanza, se ignora**, así que el árbol
+   salía con nodos a cero y las consultas contestaban. Los arrays crecen.
+
+Lo que este árbol desbloquea —cobertura, distancia de superficie, visibilidad,
+oclusión— sigue bloqueado por D34 hasta R0-B. Esto es la estructura, no la
+métrica.
 
 ### D25 — `auditMesh` antes que cualquier árbol — IMPLEMENTADA (2026-08-12)
 Medir el techo actual, perfilar, reescribir las estructuras calientes, puerta de

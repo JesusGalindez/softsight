@@ -80,6 +80,14 @@ export {
 export { drawSDFText } from "../text";
 export type { TextRun } from "../text";
 export { auditMesh } from "./inspect";
+export {
+  BOUNDS_TREE_VERSION,
+  buildTriangleBoundsTree,
+  nearestPoint,
+  queryAabb,
+  raycast,
+} from "./boundsTree";
+export type { NearestHit, RayHit, TriangleBoundsTree } from "./boundsTree";
 export { parseGlb } from "./glbLoader";
 export { parseBvh, bvhToSkinnedScene } from "./bvhLoader";
 export { bindModelToSkeleton, restWorldMatrices, skeletonFromParsedGlb } from "./skinBinding";

@@ -29,6 +29,7 @@
     "test:contracts": "npm run build:agent3d && node tools/contracts.test.mjs",
     "reconstruction": "npm run build:agent3d && node tools/reconstruction.mjs",
     "cube-v1": "npm run build:agent3d && node tools/cubeV1.mjs",
+    "test:bounds-tree": "npm run build:agent3d && node tools/bounds-tree.test.mjs",
     "test:reconstruction": "npm run build:agent3d && node tools/reconstruction.test.mjs",
     "test:resources": "npm run build:agent3d && node tools/resources.test.mjs",
     "test:determinism": "npm run build:agent3d && node tools/render-hashes.mjs",

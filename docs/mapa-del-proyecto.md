@@ -145,15 +145,15 @@ tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
 alcance: cinco puertas —`animation-contract`, `glb-loader`, `sample-surface`,
 `glb-writer` y `bridge`— leen el fixture certificado del editor, que es un
 repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su
-motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **20 de
-las 25 puertas**; las cinco restantes solo las cierra una ejecución local con los
+motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **21 de
+las 26 puertas**; las cinco restantes solo las cierra una ejecución local con los
 dos repositorios al lado. `resources` corre en CI —su malla la genera el propio
 repositorio— pero **solo el escalón de 100k**: el de 5M pide `SOFTSIGHT_HEAVY=1` y
 sin él se declara «no ejecutada» con su motivo, D22. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 129
-comprobaciones de softsight en verde**, 25 puertas. El número ya no se lleva a mano: lo
+Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 135
+comprobaciones de softsight en verde**, 26 puertas. El número ya no se lleva a mano: lo
 imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
 emiten las propias puertas, junto con el tiempo de cada una.
 
@@ -424,8 +424,11 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     **convenciones de cámara dejaron de ser una afirmación sin puerta**: la
     proyección de puntos conocidos se comprueba contra valores dorados y contra la
     silueta que el rasterizador pintó, lo que destapó que las imágenes de
-    `cube-v1` salían ortográficas mientras el manifest declaraba `PINHOLE`. Lo
-    siguiente es de los dos, R0-B, y espera al `cube-v1` de VideoMesh. Una tercera mitad
+    `cube-v1` salían ortográficas mientras el manifest declaraba `PINHOLE`. Y **el árbol de triángulos existe**: `boundsTree.ts`, con
+    `raycast`, `nearestPoint` y `queryAabb` juzgados contra la fuerza bruta y
+    deterministas byte a byte —5M triángulos en 2,56 s de CPU y 85,6 MiB de
+    árbol—. Es la estructura, no la métrica: la cobertura sigue bloqueada por D34.
+    Lo siguiente es de los dos, R0-B, y espera al `cube-v1` de VideoMesh. Una tercera mitad
     entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
     certifica lo que salga, sin convertirse en un motor de fotogrametría. Las
     secciones 0–83 las escribió el agente de VideoMesh; las 84–86 son la respuesta

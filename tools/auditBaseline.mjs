@@ -65,6 +65,29 @@ function mib(bytes) {
 // Hilo de cálculo: genera la malla y ejecuta una de las tres medidas.
 // ---------------------------------------------------------------------------
 
+/**
+ * Lo que cuesta construir el árbol de triángulos (D24), con el mismo arnés que
+ * midió `auditMesh`: mismo proceso aparte, mismo muestreo de RSS y mismo tiempo
+ * de CPU. Comparar dos estructuras medidas de dos maneras distintas no es
+ * comparar.
+ */
+function measureBoundsTree(mesh, buildTriangleBoundsTree) {
+  const start = process.cpuUsage();
+  const tree = buildTriangleBoundsTree(mesh);
+  const cpu = process.cpuUsage(start);
+  return {
+    cpuMs: (cpu.user + cpu.system) / 1000,
+    nodes: tree.nodeCount,
+    treeBytes:
+      tree.bounds.byteLength +
+      tree.start.byteLength +
+      tree.count.byteLength +
+      tree.left.byteLength +
+      tree.right.byteLength +
+      tree.order.byteLength,
+  };
+}
+
 function measureAudit(mesh, auditMesh) {
   const start = process.cpuUsage();
   const audit = auditMesh(mesh);
@@ -177,7 +200,7 @@ function measureEdge(mesh) {
 
 async function runWorker() {
   const { triangles, measure } = workerData;
-  const { auditMesh } = await import(resolve(projectRoot, "dist-node/agent3d.mjs"));
+  const { auditMesh, buildTriangleBoundsTree } = await import(resolve(projectRoot, "dist-node/agent3d.mjs"));
 
   const buildStart = process.cpuUsage();
   const mesh = torusMesh(triangles);
@@ -187,9 +210,11 @@ async function runWorker() {
   const result =
     measure === "audit"
       ? measureAudit(mesh, auditMesh)
-      : measure === "weld"
-        ? measureWeld(mesh)
-        : measureEdge(mesh);
+      : measure === "boundsTree"
+        ? measureBoundsTree(mesh, buildTriangleBoundsTree)
+        : measure === "weld"
+          ? measureWeld(mesh)
+          : measureEdge(mesh);
 
   const memory = process.memoryUsage();
   parentPort.postMessage({
