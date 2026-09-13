@@ -9,6 +9,11 @@ reglas de trabajo**. Si algo de aquí contradice a esos dos, mandan ellos.
 Escrito el 2026-09-13, sobre `main` en `bae4463`, con la suite en verde:
 28 puertas, 143 comprobaciones, 65,3 s, 5 declaradas NOT_RUN con motivo.
 
+**A0 a A4 están hechas el mismo día**, en cinco commits de `88f8b90` a `4f2e99a`.
+Qué quedó de cada una lo lleva [`mapa-del-proyecto.md`](mapa-del-proyecto.md) §5
+y el registro de decisiones lleva su cuenta; aquí no se repite. El bloque A sigue
+abierto por **A5**.
+
 ---
 
 ## 0. Antes del primer comando
