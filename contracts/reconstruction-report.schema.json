@@ -109,6 +109,52 @@
       ],
       "description": "Qué se hizo con el espacio de extensiones de D30, y con qué política."
     },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "policy": {
+          "type": "string",
+          "description": "Qué se hace con una provista desconocida."
+        },
+        "supports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Lo que este binario sabe hacer; se publica aunque el paquete no pida nada."
+        },
+        "required": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Lo que el paquete exigía."
+        },
+        "provided": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Lo que el paquete traía."
+        },
+        "unknownProvided": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "De lo que traía, lo que no conocemos: preservado y nombrado, nunca tirado en silencio."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "policy",
+        "supports",
+        "required",
+        "provided",
+        "unknownProvided"
+      ],
+      "description": "La negociación de D31: qué sabe hacer este binario, qué pedía el paquete y qué traía."
+    },
     "run": {
       "type": "object",
       "properties": {
@@ -460,6 +506,7 @@
     "certificationPolicy",
     "limits",
     "extensions",
+    "capabilities",
     "run",
     "versions",
     "evidence",

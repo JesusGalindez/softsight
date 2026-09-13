@@ -496,6 +496,14 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     el número del puente, y por un motivo: `agent3d --serve` importa de
     `bridge.mjs`, así que importar allí el artefacto cerraría un ciclo; la puerta
     compara los dos números.
+    Y **D31, la negociación de capabilities**, que comparte con D30 la función
+    que decide porque la forma es la misma: `requires` para el consumo si hay una
+    que no sabemos hacer, `provides` desconocida se preserva y se nombra, y
+    `supports` viaja siempre. La lista de lo que sabemos hacer no está vacía
+    —`mesh-audit`, `camera-projection`, `ply-ascii`— y **`coverage` y `confidence`
+    no están a propósito**: siguen bloqueadas por D34, y un paquete que las pida
+    sale UNSUPPORTED diciendo qué sí se sabe hacer, en vez de un informe sobre
+    otra cosa. Con eso el registro va por **14 implementadas** de 34.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

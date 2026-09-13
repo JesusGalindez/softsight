@@ -90,11 +90,11 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-09-13:
 
 ```text
-ACORDADAS       21   D1, D2, D4, D5, D8–D11, D15, D18, D20, D22, D23, D26–D29,
-                     D31–D34
+ACORDADAS       20   D1, D2, D4, D5, D8–D11, D15, D18, D20, D22, D23, D26–D29,
+                     D32–D34
 PROPUESTAS       0
-IMPLEMENTADAS   13   D3, D6, D7, D12, D13, D14, D16, D17, D19, D21, D24, D25,
-                     D30
+IMPLEMENTADAS   14   D3, D6, D7, D12, D13, D14, D16, D17, D19, D21, D24, D25,
+                     D30, D31
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -1006,13 +1006,39 @@ Dos mensajes mejoraron de paso, y los dos son la misma idea que la nota de D21:
 una unión de literales dice ahora `axis no admite "w"; admitidos: x, y, z` en vez
 de `axis debe ser "x"|"y"|"z"`, y una lista de puntos dice cuál punto falla.
 
-### D31 — Negociación de capabilities
+### D31 — Negociación de capabilities — IMPLEMENTADA (2026-09-13)
 El paquete declara `requires` y `provides`; SoftSight publica `supports`.
 ```text
 capability requerida desconocida         → UNSUPPORTED
 capability opcional provista desconocida → continuar si el contrato lo permite
 ```
-**Prueba:** `unknown-capability-v1`.
+**Prueba:** la puerta `test:contracts`, en vez del `unknown-capability-v1` que la
+decisión preveía. El fixture habría sido un tercer fichero para lo que el propio
+manifest ya dice en dos campos; lo que la prueba necesita es ejercer las tres
+ramas, y eso se hace con el manifest base y tres listas.
+
+**Comparte la función que decide con D30**, y eso es deliberado: la negociación
+tiene la misma forma —lo requerido desconocido para, lo provisto desconocido se
+preserva— y escribirla dos veces garantiza que la segunda copia se quede sin el
+arreglo de la primera. Lo que cambia es qué se negocia: una extensión es forma de
+los datos, una capability es comportamiento.
+
+**`supports` no está vacía**, al revés que la lista de extensiones: `mesh-audit`,
+`camera-projection` y `ply-ascii` son nombres para trabajo que una puerta ejerce
+hoy. Poner uno que no se hace sería prometerlo, y un productor que lo pidiera
+recibiría un PASS sobre algo que nadie midió.
+
+**`coverage` y `confidence` no están, y la puerta lo comprueba.** Siguen
+bloqueadas por D34, y es exactamente el caso que la negociación existe para
+contestar bien: un paquete que las requiera sale UNSUPPORTED con el mensaje
+diciendo qué sí se sabe hacer, en vez de un informe sobre otra cosa.
+
+La política de la provista desconocida se elige igual que en D30: **preservar y
+declarar**. «Continuar si el contrato lo permite» deja al productor sin saber si
+su capability se usó o se tiró.
+
+`supports` viaja en el informe aunque el paquete no pida nada: es lo que le dice
+al productor qué puede pedir la próxima vez sin tener que probarlo.
 
 ### D32 — Álgebra canónica de transformaciones
 ```text

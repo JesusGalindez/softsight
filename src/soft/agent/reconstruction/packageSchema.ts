@@ -274,6 +274,18 @@ export const RECONSTRUCTION_PACKAGE_SCHEMA: ObjectSchema = {
       "Identidades de artifact que el contrato exige para certificar. " +
       "Faltar una da INCONCLUSIVE; faltar evidencia que nadie usa es irrelevante (D8).",
   },
+  requires: {
+    type: "string[]",
+    description:
+      "Capabilities sin las cuales el paquete no se puede consumir. Una que este binario no sepa " +
+      "hacer deja el paquete UNSUPPORTED: medir sin ella produciría un informe sobre otra cosa (D31).",
+  },
+  provides: {
+    type: "string[]",
+    description:
+      "Capabilities que el paquete trae. Una desconocida no impide consumirlo, pero se declara en " +
+      "el informe: no decirlo deja al productor sin saber si se usó o se tiró (D31).",
+  },
   extensions: {
     type: "object",
     description:

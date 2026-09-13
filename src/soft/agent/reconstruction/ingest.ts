@@ -62,6 +62,43 @@ export const SUPPORTED_EXTENSIONS: readonly string[] = [];
  */
 export const EXTENSION_POLICY = "preservar-y-declarar" as const;
 
+/**
+ * Qué sabe hacer este binario, publicado como `supports` (D31).
+ *
+ * A diferencia de las extensiones, aquí la lista **no** está vacía: son nombres
+ * para trabajo que existe y que una puerta ejerce hoy. Poner uno que todavía no
+ * se hace sería prometerlo, y un productor que lo pidiera recibiría un PASS sobre
+ * algo que nadie midió.
+ *
+ * `coverage` y `confidence` **no están** a propósito: siguen bloqueadas por D34,
+ * y es justo el caso que la negociación existe para contestar bien.
+ */
+export const SUPPORTED_CAPABILITIES: readonly string[] = [
+  "mesh-audit",
+  "camera-projection",
+  "ply-ascii",
+];
+
+/**
+ * Qué se hace con una capability **provista** que no conocemos.
+ *
+ * La misma elección que con las extensiones opcionales, y por el mismo motivo:
+ * se preserva y se nombra. «Continuar si el contrato lo permite» deja al
+ * productor sin saber si su capability se usó o se tiró.
+ */
+export const CAPABILITY_POLICY = "preservar-y-declarar" as const;
+
+/**
+ * Qué nombres de una lista no conocemos.
+ *
+ * Una función y no dos bucles: extensiones y capabilities negocian igual —lo
+ * requerido desconocido para, lo opcional desconocido se preserva— y escribirlo
+ * dos veces es garantizar que la segunda se quede sin el arreglo de la primera.
+ */
+function unknownOf(names: readonly string[], supported: ReadonlySet<string>): string[] {
+  return names.filter((name) => !supported.has(name));
+}
+
 export interface IngestOptions {
   /**
    * Hashes de esquema registrados como compatibles. Se pasan desde fuera porque
@@ -74,6 +111,11 @@ export interface IngestOptions {
    * `SUPPORTED_EXTENSIONS`, que hoy está vacía.
    */
   supportedExtensions?: readonly string[];
+  /**
+   * Capabilities que este despliegue sabe hacer. Sin pasarla rige
+   * `SUPPORTED_CAPABILITIES`.
+   */
+  supportedCapabilities?: readonly string[];
 }
 
 export interface PackageReader {
@@ -106,6 +148,8 @@ export interface IngestResult {
   artifacts: Array<{ id: string; type: string; realPath: string; sha256: string; bytes: number }>;
   /** Qué extensiones se entendieron y cuáles se preservaron sin entender (D30). */
   extensions: { honoured: string[]; ignored: string[] };
+  /** La negociación de D31: qué pedía el paquete, qué traía, y qué sabemos hacer. */
+  capabilities: { required: string[]; provided: string[]; supports: string[]; unknownProvided: string[] };
 }
 
 /**
@@ -129,6 +173,7 @@ export const PACKAGE_CODES = {
   HASH_MISMATCH: "SS-PKG-013",
   HASH_MALFORMED: "SS-PKG-014",
   EXTENSION_REQUIRED_UNSUPPORTED: "SS-PKG-023",
+  CAPABILITY_REQUIRED_UNSUPPORTED: "SS-PKG-024",
   // El espacio de lectura: topes de recurso y ficheros que no se pueden
   // interpretar. Los cinco primeros los proyecta el código de salida 23, que D13
   // reservaba y hasta ahora no devolvía nadie.
@@ -192,7 +237,20 @@ export function ingestPackage(
 ): IngestResult {
   const issues: IngestIssue[] = [];
   const extensions = { honoured: [] as string[], ignored: [] as string[] };
-  const empty: IngestResult = { execution: "ERROR", issues, packageId: null, artifacts: [], extensions };
+  const capabilities = {
+    required: [] as string[],
+    provided: [] as string[],
+    supports: [...(options.supportedCapabilities ?? SUPPORTED_CAPABILITIES)],
+    unknownProvided: [] as string[],
+  };
+  const empty: IngestResult = {
+    execution: "ERROR",
+    issues,
+    packageId: null,
+    artifacts: [],
+    extensions,
+    capabilities,
+  };
 
   const schemaErrors = validate(manifest, RECONSTRUCTION_PACKAGE_SCHEMA);
   if (schemaErrors.length > 0) {
@@ -208,6 +266,8 @@ export function ingestPackage(
     packageId: string;
     contractVersion: string;
     contractSchemaSha256?: string;
+    requires?: string[];
+    provides?: string[];
     extensions?: Record<string, { required?: boolean }>;
     state: string;
     artifacts: Array<{ id: string; type: string; path: string; bytes: number; sha256: string }>;
@@ -252,6 +312,26 @@ export function ingestPackage(
       ),
     );
     return { ...empty, packageId: document.packageId };
+  }
+
+  // La negociación de D31, antes que las extensiones y antes que cualquier
+  // artifact: una capability requerida que no sabemos hacer significa que el
+  // trabajo que el paquete pide no lo podemos hacer, y seguir produciría un
+  // informe sobre otra cosa.
+  const supportedCapabilities = new Set(options.supportedCapabilities ?? SUPPORTED_CAPABILITIES);
+  capabilities.required = [...(document.requires ?? [])];
+  capabilities.provided = [...(document.provides ?? [])];
+  capabilities.unknownProvided = unknownOf(capabilities.provided, supportedCapabilities);
+  const unknownRequiredCapabilities = unknownOf(capabilities.required, supportedCapabilities);
+  if (unknownRequiredCapabilities.length > 0) {
+    issues.push(
+      issue(
+        PACKAGE_CODES.CAPABILITY_REQUIRED_UNSUPPORTED,
+        `capabilities requeridas que este binario no sabe hacer: ${unknownRequiredCapabilities.join(", ")}; ` +
+          `sabe hacer ${[...supportedCapabilities].join(", ")}`,
+      ),
+    );
+    return { ...empty, execution: "UNSUPPORTED", packageId: document.packageId };
   }
 
   // Las extensiones antes de tocar un artifact: si el paquete exige una que no
@@ -366,6 +446,7 @@ export function ingestPackage(
     packageId: document.packageId,
     artifacts,
     extensions,
+    capabilities,
   };
 }
 

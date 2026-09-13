@@ -15,7 +15,9 @@
  *      puerta.
  *   4. El bloque de versiones de D12: ningún número de contrato vive fuera del
  *      registro, y una combinación que nadie ha declarado se rechaza.
- *   5. Las otras dos filas de D30, que hasta el 2026-09-13 no se podían ejercer
+ *   5. La negociación de capabilities de D31: requerida desconocida para el
+ *      consumo, provista desconocida se preserva y se nombra.
+ *   6. Las otras dos filas de D30, que hasta el 2026-09-13 no se podían ejercer
  *      porque ningún esquema declaraba `extensions`: una extensión **requerida**
  *      desconocida deja el paquete UNSUPPORTED con salida 21, y una **opcional**
  *      desconocida se preserva y se nombra en el informe, que es la política que
@@ -30,10 +32,12 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  CAPABILITY_POLICY,
   CONTRACT_VERSIONS,
   CURRENT_VERSION_PAIRS,
   EXTENSION_POLICY,
   PACKAGE_CODES,
+  SUPPORTED_CAPABILITIES,
   exitCodeFor,
   ingestPackage,
   isDeclaredVersionSet,
@@ -327,5 +331,64 @@ const OPAQUE = new Set([
   console.log(
     `contratos: ok (D12: ${versions.contracts.length} contratos en un bloque, la combinación vigente ` +
       "declarada, una subida sin declarar y un bloque incompleto rechazados, y el puente al día)",
+  );
+}
+
+// 6. La negociación de capabilities — D31.
+//
+// Misma forma que las extensiones y por eso comparte la función que decide: lo
+// requerido desconocido para, lo provisto desconocido se preserva. Lo que cambia
+// es qué se negocia —comportamiento, no forma de los datos— y que aquí la lista
+// de lo que sabemos hacer **no está vacía**: son nombres para trabajo que una
+// puerta ejerce hoy.
+{
+  const base = JSON.parse(
+    readFileSync(resolve(projectRoot, "contracts/fixtures/package-integrity-v1.json"), "utf8"),
+  ).base;
+  const reader = {
+    root: base.packageId,
+    stat: () => {
+      throw new Error("las capabilities se deciden antes de tocar un artifact");
+    },
+  };
+  const withCapabilities = (extra) => ({ ...base, artifacts: [], ...extra });
+
+  // Requerida desconocida: no se mide nada. Y el mensaje dice qué sabemos hacer,
+  // porque «no soportada» a secas manda al productor a adivinar el nombre.
+  const pide = ingestPackage(withCapabilities({ requires: ["coverage"] }), reader);
+  assert.equal(pide.execution, "UNSUPPORTED");
+  assert.deepEqual(
+    pide.issues.map((entry) => entry.code),
+    [PACKAGE_CODES.CAPABILITY_REQUIRED_UNSUPPORTED],
+  );
+  assert.match(pide.issues[0].message, /sabe hacer .*mesh-audit/);
+  assert.equal(exitCodeFor(pide), 21);
+
+  // `coverage` y `confidence` no están a propósito: siguen bloqueadas por D34, y
+  // es justo el caso que la negociación existe para contestar bien. Si alguien
+  // las añade a la lista sin que existan, esto se pone rojo.
+  assert.equal(SUPPORTED_CAPABILITIES.includes("coverage"), false);
+  assert.equal(SUPPORTED_CAPABILITIES.includes("confidence"), false);
+
+  // Requerida conocida: entra.
+  const conocida = ingestPackage(withCapabilities({ requires: ["mesh-audit"] }), reader);
+  assert.equal(conocida.execution, "COMPLETE");
+  assert.deepEqual(conocida.issues, []);
+
+  // Provista desconocida: no impide consumir, pero se nombra.
+  const trae = ingestPackage(withCapabilities({ provides: ["org.videomesh.densify"] }), reader);
+  assert.equal(trae.execution, "COMPLETE");
+  assert.deepEqual(trae.capabilities.unknownProvided, ["org.videomesh.densify"]);
+  assert.equal(CAPABILITY_POLICY, "preservar-y-declarar");
+
+  // Y `supports` viaja aunque el paquete no pida nada: es lo que le dice al
+  // productor qué puede pedir la próxima vez sin probarlo.
+  const mudo = ingestPackage(withCapabilities({}), reader);
+  assert.deepEqual(mudo.capabilities.supports, [...SUPPORTED_CAPABILITIES]);
+
+  console.log(
+    `contratos: ok (D31: requerida desconocida → UNSUPPORTED con salida 21 y el mensaje dice qué se sabe ` +
+      `hacer, requerida conocida entra, provista desconocida preservada y nombrada, y los ` +
+      `${SUPPORTED_CAPABILITIES.length} supports viajan aunque nadie pida nada)`,
   );
 }

@@ -259,8 +259,10 @@ export {
 } from "./versions";
 export type { ContractVersion, ContractVersionName } from "./versions";
 export {
+  CAPABILITY_POLICY,
   EXTENSION_POLICY,
   PACKAGE_CODES,
+  SUPPORTED_CAPABILITIES,
   SUPPORTED_EXTENSIONS,
   exitCodeFor,
   ingestPackage,

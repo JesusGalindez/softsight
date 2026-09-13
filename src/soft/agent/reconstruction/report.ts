@@ -21,7 +21,7 @@
 import type { MeshAudit } from "../inspect";
 import type { ObjectSchema } from "../schema";
 import { CONTRACT_VERSIONS, CURRENT_VERSION_PAIRS } from "../versions";
-import { EXTENSION_POLICY } from "./ingest";
+import { CAPABILITY_POLICY, EXTENSION_POLICY } from "./ingest";
 import type { IngestIssue, IngestResult } from "./ingest";
 import { RESOURCE_LIMIT_LIST } from "./limits";
 
@@ -95,6 +95,18 @@ export interface ReconstructionReport {
    * que mandó algo que se usó.
    */
   extensions: { policy: string; honoured: string[]; ignored: string[] };
+  /**
+   * La negociación de D31. `supports` se publica siempre, también cuando el
+   * paquete no pide nada: es lo que le dice al productor qué puede pedir la
+   * próxima vez sin tener que probarlo.
+   */
+  capabilities: {
+    policy: string;
+    supports: string[];
+    required: string[];
+    provided: string[];
+    unknownProvided: string[];
+  };
   run: {
     runId: string;
     /** Ausente si el manifest no llegó a validar y no hay identidad que citar. */
@@ -222,6 +234,13 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
       honoured: [...ingest.extensions.honoured],
       ignored: [...ingest.extensions.ignored],
     },
+    capabilities: {
+      policy: CAPABILITY_POLICY,
+      supports: [...ingest.capabilities.supports],
+      required: [...ingest.capabilities.required],
+      provided: [...ingest.capabilities.provided],
+      unknownProvided: [...ingest.capabilities.unknownProvided],
+    },
     run: {
       runId: runIdFor(manifestSha256),
       ...(ingest.packageId === null ? {} : { inputPackageId: ingest.packageId }),
@@ -306,6 +325,26 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
         type: "string[]",
         required: true,
         description: "Opcionales desconocidas: preservadas en el paquete y nombradas aquí.",
+      },
+    },
+  },
+  capabilities: {
+    type: "object",
+    required: true,
+    description: "La negociación de D31: qué sabe hacer este binario, qué pedía el paquete y qué traía.",
+    fields: {
+      policy: { type: "string", required: true, description: "Qué se hace con una provista desconocida." },
+      supports: {
+        type: "string[]",
+        required: true,
+        description: "Lo que este binario sabe hacer; se publica aunque el paquete no pida nada.",
+      },
+      required: { type: "string[]", required: true, description: "Lo que el paquete exigía." },
+      provided: { type: "string[]", required: true, description: "Lo que el paquete traía." },
+      unknownProvided: {
+        type: "string[]",
+        required: true,
+        description: "De lo que traía, lo que no conocemos: preservado y nombrado, nunca tirado en silencio.",
       },
     },
   },

@@ -123,6 +123,12 @@ export const PACKAGE_CODE_TABLE = {
     status: "PROPUESTO",
     decision: "D30 nombra el desenlace UNSUPPORTED, sin número",
   },
+  "SS-PKG-024": {
+    reason: "CAPABILITY_REQUIRED_UNSUPPORTED",
+    cause: "el paquete requiere una capability que este binario no sabe hacer",
+    status: "PROPUESTO",
+    decision: "D31 nombra el desenlace UNSUPPORTED, sin número",
+  },
 
   // El espacio `SS-IO`: leer ficheros de otro. Son los topes de `limits.ts` y la
   // lectura que no se puede completar, y se separan de `SS-PKG` porque no dicen
