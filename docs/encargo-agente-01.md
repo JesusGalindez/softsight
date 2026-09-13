@@ -9,17 +9,19 @@ reglas de trabajo**. Si algo de aquí contradice a esos dos, mandan ellos.
 Escrito el 2026-09-13, sobre `main` en `bae4463`, con la suite en verde:
 28 puertas, 143 comprobaciones, 65,3 s, 5 declaradas NOT_RUN con motivo.
 
-**Este encargo está terminado.** El bloque A se cerró el 2026-09-13, y con él
-cayeron además el bloque D en sus dos primeros escalones —R4 y R5— y la costura
-del suavizado que el bloque A destapó. Qué quedó de cada tarea lo lleva
+**Este encargo está terminado, y los tres bloques que dependían de nosotros
+también.** El bloque A se cerró el 2026-09-13; el mismo día cayeron el **B**
+—D4, con datos reales de COLMAP—, los dos primeros escalones del **D** —R4 y
+R5— y la costura del suavizado que el bloque A destapó. Solo el **C** sigue
+abierto, y por definición: está bloqueado fuera. Qué quedó de cada tarea lo lleva
 [`mapa-del-proyecto.md`](mapa-del-proyecto.md) §5 y el registro de decisiones
 lleva su cuenta; aquí no se repite.
 
 **Lo que queda no es trabajo de este repositorio**, y está en el §5.20 del mapa
-con su dueño al lado. El envío 02 se mandó el 2026-09-13 y el idioma de los
-códigos se decidió el mismo día —**todo en español**—, así que del dueño solo
-queda conseguir un COLMAP real; R0-B y los 28 identificadores son de VideoMesh;
-E1, Ω6.4 y F1 viven en el editor.
+con su dueño al lado. Las tres cosas del dueño se cerraron el 2026-09-13 —el
+envío 02 mandado, el idioma de los códigos decidido en español, y el COLMAP real
+descargado y con D4 cerrada—, así que **del dueño no queda nada**. R0-B y los 28
+identificadores son de VideoMesh; E1, Ω6.4 y F1 viven en el editor.
 
 El documento se queda **como plantilla**: las reglas de §1 y la forma de §2 valen
 para el encargo siguiente, que empezará por donde el §5.20 diga que se ha
@@ -383,7 +385,7 @@ algo**.
 
 ---
 
-### Bloque B — necesita datos que hoy no existen · **sigue abierto**
+### Bloque B — necesita datos que hoy no existen · **cerrado el 2026-09-13**
 
 #### B1 · Un COLMAP real, fuera del repositorio
 
@@ -404,6 +406,14 @@ hoy.
 apunta a él, el sha256 cuadra, y **D4 pasa a IMPLEMENTADA**. Si el dataset no
 aparece, la tarea **no se cierra**: se dice que sigue abierta y por qué. No se
 inventa un fixture «casi real».
+
+**Hecho el 2026-09-13, y el criterio se quedó corto.** Apareció el dataset
+—`south-building` y `gerrard-hall` en texto, 58 MB, fuera del repositorio con su
+sha256— pero lo que cierra la decisión no es que la puerta *corra*: es que
+**COLMAP publica el error de reproyección que él mismo calculó** y se puede
+comparar con el nuestro. 0,49697 px contra 0,49703 sobre 61.514 puntos. El
+enunciado pedía ejecutar; lo que valía era encontrar el segundo camino al mismo
+número. Con el contraste al lado: sin distorsión, 2,57 y 30,58 px.
 
 **Parar y preguntar.** De dónde sale el dataset y dónde vive es decisión del
 dueño, no del agente.

@@ -497,10 +497,11 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     **Del dueño:** nada desde el 2026-09-13. Lo que había queda tachado abajo,
     con la fecha, para que se vea qué desbloqueó a qué.
 
-    - **Mandar el envío 02.** Está redactado en
-      [`envio-videomesh-02.md`](envio-videomesh-02.md) y no se ha enviado. Desde el
-      01 —que sigue sin respuesta— han cambiado dos esquemas, hay cuatro campos
-      obligatorios nuevos y **28 identificadores en PROPUESTO**.
+    - ~~Mandar el envío 02.~~ **Enviado el 2026-09-13**, publicado en `main` con
+      los commits que lo sostienen —[`envio-videomesh-02.md`](envio-videomesh-02.md)—.
+      Lleva cuatro campos obligatorios nuevos, la sustitución de `versions.report`
+      por `versions.contracts`, y los **28 identificadores en PROPUESTO** que
+      siguen esperando respuesta desde el envío 01.
     - ~~El idioma de los códigos.~~ **Decidido el 2026-09-13: todo en español**, y
       aplicado a los 32 motivos de frontera y a los cuatro del veredicto. No toca
       los valores de enum que VideoMesh escribe —eso es el vocabulario del
