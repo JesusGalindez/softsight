@@ -79,6 +79,11 @@ import { trimDirectory } from "./lru.mjs";
 
 const execFileAsync = promisify(execFile);
 
+// El número vive aquí y no se importa del registro a propósito: `agent3d --serve`
+// importa `handleRequest` de este fichero, así que importar el artefacto
+// construido desde aquí cerraría un ciclo. La fuente sigue siendo una —el
+// registro— y quien lo comprueba es `test:contracts`, que pone la puerta roja si
+// los dos números dejan de coincidir.
 const BRIDGE_CONTRACT_VERSION = 1;
 const here = dirname(fileURLToPath(import.meta.url));
 const AGENT3D = resolve(here, "agent3d.mjs");

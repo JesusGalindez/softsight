@@ -13,7 +13,9 @@
  *      motivo y por la ruta correcta, y los que deben pasar pasan. Sin los casos
  *      de `accept`, un validador que rechazara todo también aprobaría esta
  *      puerta.
- *   4. Las otras dos filas de D30, que hasta el 2026-09-13 no se podían ejercer
+ *   4. El bloque de versiones de D12: ningún número de contrato vive fuera del
+ *      registro, y una combinación que nadie ha declarado se rechaza.
+ *   5. Las otras dos filas de D30, que hasta el 2026-09-13 no se podían ejercer
  *      porque ningún esquema declaraba `extensions`: una extensión **requerida**
  *      desconocida deja el paquete UNSUPPORTED con salida 21, y una **opcional**
  *      desconocida se preserva y se nombra en el informe, que es la política que
@@ -28,10 +30,13 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  CONTRACT_VERSIONS,
+  CURRENT_VERSION_PAIRS,
   EXTENSION_POLICY,
   PACKAGE_CODES,
   exitCodeFor,
   ingestPackage,
+  isDeclaredVersionSet,
   validate,
 } from "../dist-node/agent3d.mjs";
 import { PUBLISHED } from "./contracts.mjs";
@@ -263,5 +268,64 @@ const OPAQUE = new Set([
     "contratos: ok (D30 entera: clave fuera del espacio, envoltorio cerrado, `required` obligatorio, " +
       "requerida desconocida → UNSUPPORTED con salida 21, opcional desconocida preservada y declarada, " +
       "y la misma extensión entendida entra por la otra rama)",
+  );
+}
+
+// 5. El bloque de versiones — D12 y el hueco (h) del §86.2.
+//
+// Eran siete números en cinco ficheros y ninguna tabla que dijera cuáles van
+// juntos. Lo que la decisión pide es que el consumidor compruebe **el bloque**,
+// así que aquí se comprueban las dos mitades: que no queden números sueltos, y
+// que una combinación sin declarar no pase.
+{
+  const versions = JSON.parse(readFileSync(resolve(projectRoot, "contracts/versions.json"), "utf8"));
+
+  // La combinación vigente es una de las declaradas —hoy es la única— y el
+  // fichero publicado dice lo mismo que el registro en ejecución.
+  assert.ok(
+    isDeclaredVersionSet(CURRENT_VERSION_PAIRS, versions.declared),
+    "la combinación vigente no está declarada en contracts/versions.json",
+  );
+  assert.deepEqual(
+    versions.contracts.map((entry) => entry.name).sort(),
+    Object.keys(CONTRACT_VERSIONS).sort(),
+    "el fichero publicado no lista los mismos contratos que el registro",
+  );
+
+  // Y la puerta discrimina: subir un número sin declarar la combinación nueva es
+  // justo lo que esto existe para impedir. Sin este caso, una función que
+  // devolviera siempre `true` también aprobaría la puerta.
+  const subida = CURRENT_VERSION_PAIRS.map((pair) =>
+    pair.name === "stagingAudit" ? { ...pair, value: 2 } : { ...pair },
+  );
+  assert.equal(
+    isDeclaredVersionSet(subida, versions.declared),
+    false,
+    "una combinación con una versión subida y sin declarar tiene que rechazarse",
+  );
+  // Y no basta con que los números existan por separado: quitar un contrato del
+  // bloque deja una combinación distinta, aunque cada número siga siendo válido.
+  assert.equal(
+    isDeclaredVersionSet(CURRENT_VERSION_PAIRS.slice(1), versions.declared),
+    false,
+    "un bloque incompleto no es la combinación declarada",
+  );
+
+  // La otra mitad: ningún número de contrato escrito fuera del registro. El
+  // puente es la excepción declarada —`agent3d --serve` importa `handleRequest`
+  // de él, así que importar el artefacto construido cerraría un ciclo— y por eso
+  // se compara aquí en vez de importarse allí.
+  const bridge = readFileSync(resolve(projectRoot, "tools/bridge.mjs"), "utf8");
+  const literal = /^const BRIDGE_CONTRACT_VERSION = (\d+);$/m.exec(bridge);
+  assert.ok(literal !== null, "el puente ya no declara su versión como se esperaba");
+  assert.equal(
+    Number(literal[1]),
+    CONTRACT_VERSIONS.bridge.value,
+    "el número del puente y el del registro han divergido",
+  );
+
+  console.log(
+    `contratos: ok (D12: ${versions.contracts.length} contratos en un bloque, la combinación vigente ` +
+      "declarada, una subida sin declarar y un bloque incompleto rechazados, y el puente al día)",
   );
 }

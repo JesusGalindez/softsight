@@ -29,6 +29,8 @@ import { loadModelCached } from "./modelCache.mjs";
 import { deflateSync, inflateSync } from "node:zlib";
 
 import {
+  CONTRACT_VERSIONS,
+  CURRENT_VERSION_PAIRS,
   DEMO_SCENE,
   PATCH_SCHEMA,
   ROLE_REQUIRED_DATA,
@@ -84,7 +86,7 @@ import {
  * hash obliga a subir la versión— para que el consumidor falle en la puerta en
  * vez de comparar contra un hash que ya no significa lo mismo.
  */
-const REPORT_CONTRACT_VERSION = 3;
+const REPORT_CONTRACT_VERSION = CONTRACT_VERSIONS.report.value;
 
 const CRC_TABLE = (() => {
   const table = new Int32Array(256);

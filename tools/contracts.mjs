@@ -24,6 +24,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  CONTRACT_VERSION_LIST,
+  CURRENT_VERSION_PAIRS,
   PATCH_SCHEMA,
   RECONSTRUCTION_PACKAGE_SCHEMA,
   RECONSTRUCTION_REPORT_SCHEMA,
@@ -106,6 +108,34 @@ function renderRegistry(rendered) {
   )}\n`;
 }
 
+/**
+ * Las combinaciones de versión admitidas — D12 y el hueco (h) del §86.2.
+ *
+ * Hoy es **una**, la vigente, y decirlo así es lo honesto: nunca ha habido dos
+ * combinaciones en circulación a la vez. Lo que el fichero hace no es enumerar
+ * historia, es **obligar a declarar**: subir un número en `versions.ts` sin
+ * regenerar esto pone `--check` en rojo, así que una versión no se puede mover en
+ * silencio. Es el mismo mecanismo que los esquemas, por el mismo motivo.
+ */
+function renderVersions() {
+  return `${JSON.stringify(
+    {
+      $comment:
+        "Generado por tools/contracts.mjs de src/soft/agent/versions.ts. El consumidor comprueba la " +
+        "combinación entera, no un campo: dos versiones que por separado existen pueden no haberse " +
+        "visto nunca juntas.",
+      contracts: CONTRACT_VERSION_LIST.map((entry) => ({
+        name: entry.name,
+        governs: entry.governs,
+        consumer: entry.consumer,
+      })).sort((a, b) => (a.name < b.name ? -1 : 1)),
+      declared: [CURRENT_VERSION_PAIRS.map((pair) => ({ ...pair }))],
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 export function syncContracts({ check }) {
   mkdirSync(CONTRACTS, { recursive: true });
 
@@ -140,6 +170,20 @@ export function syncContracts({ check }) {
     if (currentRegistry !== registry) stale.push("registry");
   } else if (currentRegistry !== registry) {
     writeFileSync(registryPath, registry);
+  }
+
+  const versionsPath = resolve(CONTRACTS, "versions.json");
+  const versions = renderVersions();
+  let currentVersions = null;
+  try {
+    currentVersions = readFileSync(versionsPath, "utf8");
+  } catch {
+    currentVersions = null;
+  }
+  if (check) {
+    if (currentVersions !== versions) stale.push("versions");
+  } else if (currentVersions !== versions) {
+    writeFileSync(versionsPath, versions);
   }
 
   // Un esquema que se deja de publicar tiene que desaparecer del directorio: si se

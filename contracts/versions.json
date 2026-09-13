@@ -1,0 +1,72 @@
+{
+  "$comment": "Generado por tools/contracts.mjs de src/soft/agent/versions.ts. El consumidor comprueba la combinación entera, no un campo: dos versiones que por separado existen pueden no haberse visto nunca juntas.",
+  "contracts": [
+    {
+      "name": "animationAudit",
+      "governs": "la auditoría de animación publicada en el informe",
+      "consumer": "softsight-motion-editor"
+    },
+    {
+      "name": "bridge",
+      "governs": "la petición y la respuesta del puente local",
+      "consumer": "softsight-motion-editor, por softsight-adapter.ts"
+    },
+    {
+      "name": "reconstructionPackage",
+      "governs": "el paquete de reconstrucción que entra",
+      "consumer": "VideoMesh, que lo escribe"
+    },
+    {
+      "name": "reconstructionReport",
+      "governs": "el informe de reconstrucción que sale",
+      "consumer": "VideoMesh, que lo lee"
+    },
+    {
+      "name": "report",
+      "governs": "el informe de escena que produce agent3d",
+      "consumer": "softsight-motion-editor, que fija el commit y compara hashes"
+    },
+    {
+      "name": "stagingAudit",
+      "governs": "la auditoría de puesta en escena",
+      "consumer": "softsight-motion-editor"
+    },
+    {
+      "name": "storyAudit",
+      "governs": "la auditoría de guion",
+      "consumer": "softsight-motion-editor, por el contrato de roles"
+    }
+  ],
+  "declared": [
+    [
+      {
+        "name": "animationAudit",
+        "value": 1
+      },
+      {
+        "name": "bridge",
+        "value": 1
+      },
+      {
+        "name": "reconstructionPackage",
+        "value": "0.1"
+      },
+      {
+        "name": "reconstructionReport",
+        "value": "0.1"
+      },
+      {
+        "name": "report",
+        "value": 3
+      },
+      {
+        "name": "stagingAudit",
+        "value": 1
+      },
+      {
+        "name": "storyAudit",
+        "value": 1
+      }
+    ]
+  ]
+}

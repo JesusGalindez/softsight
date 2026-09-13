@@ -22,6 +22,7 @@
 
 import { resolveStory, type StorySpec } from "./storySpec";
 import { SCENE_ROLES, type SceneRole } from "./schema";
+import { CONTRACT_VERSIONS } from "./versions";
 import { withSeverity } from "./warningCodes";
 import type { WarningCode, WarningSeverity } from "./warningCodes";
 
@@ -45,7 +46,7 @@ export const DEFAULT_READING_RATE = 15;
  */
 export const REQUIRED_ROLES: readonly SceneRole[] = ["cierre"];
 
-export const STORY_AUDIT_CONTRACT_VERSION = 1;
+export const STORY_AUDIT_CONTRACT_VERSION = CONTRACT_VERSIONS.storyAudit.value;
 
 export interface StoryWarning {
   /** Del registro de `warningCodes.ts`, igual que los avisos de topología. */

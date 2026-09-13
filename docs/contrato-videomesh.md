@@ -90,10 +90,11 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-09-13:
 
 ```text
-ACORDADAS       22   D1, D2, D4, D5, D8–D12, D15, D18, D20, D22, D23, D26–D29,
+ACORDADAS       21   D1, D2, D4, D5, D8–D11, D15, D18, D20, D22, D23, D26–D29,
                      D31–D34
 PROPUESTAS       0
-IMPLEMENTADAS   12   D3, D6, D7, D13, D14, D16, D17, D19, D21, D24, D25, D30
+IMPLEMENTADAS   13   D3, D6, D7, D12, D13, D14, D16, D17, D19, D21, D24, D25,
+                     D30
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -335,9 +336,38 @@ guardando marco origen, marco destino, matriz, motivo y productor. Ninguna se
 hornea sin registrarla.
 **Prueba:** sin escribir.
 
-### D12 — Versiones y capabilities
+### D12 — Versiones y capabilities — IMPLEMENTADA a medias (2026-09-13)
 Bloque `versions`, bloque `models`, lista `capabilities`. El consumidor comprueba
 el bloque, no un campo.
+
+**El bloque de versiones está hecho el 2026-09-13.** Eran **siete números
+repartidos por cinco ficheros** —`REPORT_CONTRACT_VERSION` en el CLI,
+`BRIDGE_CONTRACT_VERSION` en el puente, las dos auditorías, la animación y las dos
+de reconstrucción— y ninguna tabla que dijera cuáles van juntos. Ahora viven en
+`src/soft/agent/versions.ts` con qué versionan y quién los lee, el informe de
+reconstrucción los publica **todos en `versions.contracts`**, y
+`contracts/versions.json` se genera de ahí y se commitea.
+
+Lo que la puerta comprueba, y por lo que esto cuenta como prueba:
+
+```text
+la combinación vigente está declarada
+una versión subida sin regenerar el fichero          se rechaza
+un bloque al que le falta un contrato                se rechaza
+el número del puente coincide con el del registro
+```
+
+El puente es la excepción declarada: `agent3d --serve` importa `handleRequest` de
+`bridge.mjs`, así que importar allí el artefacto construido cerraría un ciclo. El
+número se queda escrito y **la puerta lo compara**, que da la misma garantía sin
+el ciclo.
+
+Hoy hay **una** combinación declarada, y decirlo así es lo honesto: nunca ha
+habido dos en circulación. Lo que el fichero hace no es enumerar historia, es
+obligar a declarar — subir un número sin regenerar pone la puerta roja.
+
+**Lo que falta para IMPLEMENTADA entera:** el bloque `models` y la lista
+`capabilities`, que van con D31 y no antes.
 **Prueba:** sin escribir.
 
 ### D13 — Códigos de salida nuevos, solo en subcomandos nuevos — IMPLEMENTADA (2026-08-12)

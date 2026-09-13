@@ -488,6 +488,14 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     que la decisión dejaba abierta, porque ignorarla en silencio deja al productor
     creyendo que mandó algo que se usó. `test:contracts` sale de las puertas no
     ejecutadas: quedan cuatro, todas por fixture privado o por `SOFTSIGHT_HEAVY`.
+    Y **la mitad de versiones de D12**: eran siete números en cinco ficheros sin
+    tabla que dijera cuáles van juntos, y ahora viven en `versions.ts` con qué
+    versionan y quién los lee, el informe los publica en un bloque, y
+    `contracts/versions.json` se genera de ahí. La puerta rechaza una versión
+    subida sin declarar y un bloque incompleto. Queda escrito fuera del registro
+    el número del puente, y por un motivo: `agent3d --serve` importa de
+    `bridge.mjs`, así que importar allí el artefacto cerraría un ciclo; la puerta
+    compara los dos números.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

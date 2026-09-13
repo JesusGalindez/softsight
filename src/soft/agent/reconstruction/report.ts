@@ -20,6 +20,7 @@
 
 import type { MeshAudit } from "../inspect";
 import type { ObjectSchema } from "../schema";
+import { CONTRACT_VERSIONS, CURRENT_VERSION_PAIRS } from "../versions";
 import { EXTENSION_POLICY } from "./ingest";
 import type { IngestIssue, IngestResult } from "./ingest";
 import { RESOURCE_LIMIT_LIST } from "./limits";
@@ -102,7 +103,17 @@ export interface ReconstructionReport {
     /** Estado del consumo, que pertenece al run y nunca al paquete (D29). */
     status: "COMPLETE" | "ERROR" | "UNSUPPORTED";
   };
-  versions: { softsight: string; report: string };
+  /**
+   * El bloque de D12: **todas** las versiones de contrato que rigieron, no un
+   * campo suelto. Un consumidor que comprobara `reconstructionReport === "0.1"`
+   * no se enteraría de que la auditoría de puesta en escena cambió debajo, porque
+   * esa lleva su propio número y nada los relaciona. Lo que se compara es la
+   * combinación, y una que nadie ha declarado no se acepta.
+   *
+   * `softsight` no es un contrato: es la versión del binario, y va aparte para
+   * que no se confunda con lo que otro repositorio fija.
+   */
+  versions: { softsight: string; contracts: Array<{ name: string; value: number | string }> };
   evidence: {
     artifacts: Array<{ id: string; type: string; sha256: string; bytes: number }>;
     requiredEvidence: string[];
@@ -131,7 +142,8 @@ export interface ReconstructionReport {
   warnings: IngestIssue[];
 }
 
-const REPORT_VERSION = "0.1";
+/** La del registro, no un segundo número: el `runId` la lleva dentro. */
+const REPORT_VERSION = CONTRACT_VERSIONS.reconstructionReport.value;
 
 /**
  * `runId` determinista: mismo paquete y misma versión, mismo identificador. No es
@@ -216,7 +228,7 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
       inputManifestSha256: manifestSha256,
       status: ingest.execution === "COMPLETE" ? "COMPLETE" : "ERROR",
     },
-    versions: { softsight: softsightVersion, report: REPORT_VERSION },
+    versions: { softsight: softsightVersion, contracts: CURRENT_VERSION_PAIRS.map((pair) => ({ ...pair })) },
     evidence: {
       artifacts: ingest.artifacts.map((artifact) => ({
         id: artifact.id,
@@ -317,8 +329,19 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
     required: true,
     description: "Bloque de versiones; el consumidor comprueba el bloque, no un campo (D12).",
     fields: {
-      softsight: { type: "string", required: true, description: "Versión del evaluador." },
-      report: { type: "string", required: true, description: "Versión del documento." },
+      softsight: { type: "string", required: true, description: "Versión del binario; no es un contrato." },
+      contracts: {
+        type: "object[]",
+        required: true,
+        description:
+          "Todas las versiones de contrato que rigieron, ordenadas por nombre. El consumidor comprueba " +
+          "la combinación y no un campo: dos versiones que por separado existen pueden no haberse " +
+          "visto nunca juntas, y es ahí donde se rompe sin que nadie sepa por qué (D12).",
+        fields: {
+          name: { type: "string", required: true, description: "Qué contrato." },
+          value: { type: "number|string", required: true, description: "Su versión." },
+        },
+      },
     },
   },
   evidence: {

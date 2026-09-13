@@ -3602,11 +3602,17 @@ y `externo`. Mismo campo, misma tabla, misma puerta.
 ilegible en dos idiomas. **Decidirlo arriba del documento**, no código a código.
 Afecta a VideoMesh, que es quien los va a leer.
 
-**h) Nueve versiones de contrato y ninguna tabla de compatibilidad.**
-Existen ya `contractVersion` (hoy 3), `bridgeContractVersion` (1),
-`STORY_AUDIT_CONTRACT_VERSION` y `STAGING_AUDIT_CONTRACT_VERSION`. El plan añade
-cinco. Regla que falta: **el informe declara en un solo bloque todas las
-versiones que usó, y una puerta rechaza las combinaciones no declaradas.**
+**h) Nueve versiones de contrato y ninguna tabla de compatibilidad. HECHO el
+2026-09-13.**
+Existían ya `contractVersion` (3), `bridgeContractVersion` (1),
+`STORY_AUDIT_CONTRACT_VERSION` y `STAGING_AUDIT_CONTRACT_VERSION`, y el plan
+añadía cinco. La regla que faltaba —**el informe declara en un solo bloque todas
+las versiones que usó, y una puerta rechaza las combinaciones no declaradas**— es
+ahora `src/soft/agent/versions.ts`, `versions.contracts` en el informe y
+`contracts/versions.json` generado y commiteado. Eran siete números en cinco
+ficheros; queda uno escrito fuera del registro, el del puente, y por un motivo
+declarado: `agent3d --serve` importa de él, así que un import cerraría un ciclo.
+La puerta lo compara. Ver D12.
 
 **i) El layout del §70 rompe las cuatro identidades.**
 `src/soft/*.ts` sin `agent/` es el rasterizador puro, que «no sabe qué es un GLB

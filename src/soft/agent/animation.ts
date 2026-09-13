@@ -1,3 +1,4 @@
+import { CONTRACT_VERSIONS } from "./versions";
 import type { MeshoptDecoderLike } from "./glbLoader";
 import { readGlbChunks, writeMatrixFromGltf, writeMatrixFromGltfTrs } from "./gltfFrame";
 
@@ -124,7 +125,7 @@ export interface AnimationClipSummary {
 
 export interface SoftSightAnimationInspection {
   animation: {
-    contractVersion: 1;
+    contractVersion: typeof CONTRACT_VERSIONS.animationAudit.value;
     status: "accepted" | "pending" | "rejected";
     clips: AnimationClipSummary[];
   };
@@ -265,7 +266,7 @@ export async function inspectGlbAnimation(
   const accepted = clips.length > 0 && generated.length > 0 && errors.length === 0;
   return {
     animation: {
-      contractVersion: 1,
+      contractVersion: CONTRACT_VERSIONS.animationAudit.value,
       status: rejected ? "rejected" : accepted ? "accepted" : "pending",
       clips,
     },

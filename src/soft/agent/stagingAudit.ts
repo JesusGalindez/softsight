@@ -17,11 +17,12 @@
  * discutible enseña a discutir la puerta.
  */
 
+import { CONTRACT_VERSIONS } from "./versions";
 import { withSeverity } from "./warningCodes";
 import type { WarningCode, WarningSeverity } from "./warningCodes";
 
 export const STAGING_VERSION = 1;
-export const STAGING_AUDIT_CONTRACT_VERSION = 1;
+export const STAGING_AUDIT_CONTRACT_VERSION = CONTRACT_VERSIONS.stagingAudit.value;
 
 /**
  * Contraste mínimo entre el texto y su fondo.

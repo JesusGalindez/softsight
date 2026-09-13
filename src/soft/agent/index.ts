@@ -252,6 +252,13 @@ export type { SceneRole } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
 export { RECONSTRUCTION_PACKAGE_SCHEMA } from "./reconstruction/packageSchema";
 export {
+  CONTRACT_VERSIONS,
+  CONTRACT_VERSION_LIST,
+  CURRENT_VERSION_PAIRS,
+  isDeclaredVersionSet,
+} from "./versions";
+export type { ContractVersion, ContractVersionName } from "./versions";
+export {
   EXTENSION_POLICY,
   PACKAGE_CODES,
   SUPPORTED_EXTENSIONS,

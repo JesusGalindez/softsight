@@ -147,17 +147,42 @@
       "properties": {
         "softsight": {
           "type": "string",
-          "description": "Versión del evaluador."
+          "description": "Versión del binario; no es un contrato."
         },
-        "report": {
-          "type": "string",
-          "description": "Versión del documento."
+        "contracts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Qué contrato."
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "description": "Su versión."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "value"
+            ]
+          },
+          "description": "Todas las versiones de contrato que rigieron, ordenadas por nombre. El consumidor comprueba la combinación y no un campo: dos versiones que por separado existen pueden no haberse visto nunca juntas, y es ahí donde se rompe sin que nadie sepa por qué (D12)."
         }
       },
       "additionalProperties": false,
       "required": [
         "softsight",
-        "report"
+        "contracts"
       ],
       "description": "Bloque de versiones; el consumidor comprueba el bloque, no un campo (D12)."
     },
