@@ -23,6 +23,42 @@
 
 import type { Framebuffer } from "./framebuffer";
 
+/**
+ * La fila de cortesía que una banda necesita para suavizar su propio borde.
+ *
+ * El bucle de abajo recorre `y` de 1 a `height - 2` porque el píxel de la
+ * primera y la última fila **no tiene vecino** arriba o abajo. Con una sola
+ * banda eso es correcto: son el borde de la imagen. Partida en varias, no lo es —
+ * el borde de una banda es el interior de la imagen, y esas filas se quedaban sin
+ * suavizar.
+ *
+ * Medido antes de arreglarlo: partir 240×180 en dos bandas dejaba **15 píxeles
+ * distintos, los 15 en las filas 89 y 90**, que son exactamente las dos del
+ * límite. No es que se suavizaran mal: es que no se suavizaban.
+ *
+ * El arreglo es que cada banda **renderice una fila de más por cada lado que
+ * tenga vecino** y las descarte al volcar. Con eso el bucle llega a todas sus
+ * filas propias y a ninguna ajena, así que `smoothedPixels` sigue siendo exacto:
+ * las filas de cortesía no se suavizan —les falta su propio vecino— y tampoco se
+ * vuelcan.
+ *
+ * Vive aquí, al lado del bucle que lo obliga, y no en quien reparte: quien
+ * reparte no tiene por qué saber que hay una pasada que mira vecinos.
+ */
+export function bandWithHalo(
+  rowOffset: number,
+  bandHeight: number,
+  fullHeight: number,
+): { renderOffset: number; renderHeight: number; haloTop: number } {
+  const haloTop = rowOffset > 0 ? 1 : 0;
+  const haloBottom = rowOffset + bandHeight < fullHeight ? 1 : 0;
+  return {
+    renderOffset: rowOffset - haloTop,
+    renderHeight: bandHeight + haloTop + haloBottom,
+    haloTop,
+  };
+}
+
 let scratchColor = new Uint8ClampedArray(0);
 
 export function applyDepthEdgeAntialias(target: Framebuffer, threshold = 0.02): number {

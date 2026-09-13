@@ -544,9 +544,13 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     índice de bloque, nunca por orden de llegada— y **al escribirla destapó una
     costura**: con suavizado, partir 240×180 en dos bandas cambia 15 píxeles, los
     15 en las filas 89 y 90, porque la pasada lee filas que la banda no posee. Sin
-    suavizado, cero en las cuatro particiones. Queda **acotado, no tapado**:
-    arreglarlo es pedirle al suavizado una fila de cortesía al vecino, que toca el
-    rasterizador y la puerta de paridad del editor. Abierto y con su medida.
+    suavizado, cero en las cuatro particiones. **Arreglado el mismo día**: no era
+    que se suavizaran mal, es que no se suavizaban —el bucle salta la primera y la
+    última fila de la banda, que con una sola es el borde de la imagen y partida
+    es su interior—, así que cada banda renderiza una fila de cortesía por cada
+    lado con vecino y la descarta al volcar. La puerta exige igualdad byte a byte
+    con suavizado y sin él, y que el recuento de suavizados no dependa del
+    reparto: 1.017 en las cuatro particiones.
     Y **R1.5 queda declarado** en el §71 del plan, que era horizontal y solo
     demostraba la integración en R9/R15, tras unos cincuenta items: la rebanada
     vertical es `cube-v1` recorriendo el camino entero, y está hecha. Lo que le

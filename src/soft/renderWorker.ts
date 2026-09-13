@@ -10,6 +10,7 @@
  * copiados.
  */
 
+import { bandWithHalo } from "./postprocess";
 import { SoftwareRenderer, type Camera, type FrameStats, type RenderOptions } from "./renderer";
 import { createScene, updateScene } from "./scene";
 
@@ -41,14 +42,24 @@ self.onmessage = (event: MessageEvent<WorkerJob>) => {
   const job = event.data;
   const start = performance.now();
 
+  // La banda se renderiza con una fila de cortesía por cada lado que tenga
+  // vecino: sin ella el suavizado se salta las filas del límite, porque su bucle
+  // no puede mirar arriba y abajo. Se descartan al volcar, así que nada de esto
+  // sale del worker.
+  const { renderOffset, renderHeight, haloTop } = bandWithHalo(
+    job.rowOffset,
+    job.bandHeight,
+    job.fullHeight,
+  );
+
   if (
     renderer === null ||
     renderer.framebuffer.width !== job.width ||
-    renderer.framebuffer.height !== job.bandHeight ||
-    renderer.framebuffer.rowOffset !== job.rowOffset ||
+    renderer.framebuffer.height !== renderHeight ||
+    renderer.framebuffer.rowOffset !== renderOffset ||
     renderer.framebuffer.fullHeight !== job.fullHeight
   ) {
-    renderer = new SoftwareRenderer(job.width, job.bandHeight, job.rowOffset, job.fullHeight);
+    renderer = new SoftwareRenderer(job.width, renderHeight, renderOffset, job.fullHeight);
   }
 
   updateScene(scene, job.time);
@@ -63,7 +74,8 @@ self.onmessage = (event: MessageEvent<WorkerJob>) => {
     job.recycled && job.recycled.byteLength === byteLength
       ? job.recycled
       : new ArrayBuffer(byteLength);
-  new Uint8ClampedArray(pixels).set(renderer.framebuffer.color);
+  const from = haloTop * job.width * 4;
+  new Uint8ClampedArray(pixels).set(renderer.framebuffer.color.subarray(from, from + byteLength));
 
   const result: WorkerResult = {
     rowOffset: job.rowOffset,

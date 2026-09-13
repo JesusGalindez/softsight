@@ -3693,16 +3693,23 @@ regla —**reducción en orden fijo por índice de bloque**, nunca sobre resulta
 según llegan— es ahora la puerta `test:bands`: la misma escena partida en 1, 2, 3
 y 4 franjas tiene que dar **el mismo sha256**.
 
-**Y al escribirla se destapó que con el suavizado encendido no lo da.** Medido:
-partir 240×180 en dos bandas cambia **15 píxeles, todos en las filas 89 y 90**,
-que es exactamente la costura. Sin suavizado, cero diferencias en las cuatro
-particiones. El motivo es que la pasada de suavizado **lee filas que la banda no
-posee**, así que en su borde suaviza contra el fondo.
+**Al escribirla se destapó que con el suavizado encendido no lo daba, y se
+arregló el mismo día.** Medido antes: partir 240×180 en dos bandas cambiaba **15
+píxeles, todos en las filas 89 y 90**, que es exactamente la costura. Sin
+suavizado, cero diferencias.
 
-La puerta lo **acota en vez de taparlo**: exige cero sin suavizado, y con él exige
-que ninguna diferencia salga de las dos filas del límite. Arreglarlo es pedirle al
-suavizado una fila de cortesía al vecino, que es un cambio del rasterizador y
-toca la puerta de paridad del editor: **queda abierto y con su medida**.
+**No era que se suavizaran mal: no se suavizaban.** El bucle de la pasada recorre
+`y` de 1 a `height - 2` porque el píxel de la primera y la última fila no tiene
+vecino arriba o abajo. Con una sola banda eso es correcto —son el borde de la
+imagen—; partida en varias, el borde de una banda es el **interior** de la imagen,
+y esas filas se caían del bucle.
+
+Cerrado con `bandWithHalo`, en `postprocess.ts` al lado del bucle que lo obliga:
+cada banda **renderiza una fila de más por cada lado que tenga vecino** y la
+descarta al volcar. La puerta exige ahora igualdad byte a byte **con suavizado y
+sin él**, y además que el recuento de píxeles suavizados no dependa del reparto
+—1.017 en las cuatro particiones—: si una fila de cortesía se suavizara o se
+volcara, se contaría dos veces. Ningún hash congelado se movió.
 
 De paso quedó escrito que `trianglesRasterized` **no es invariante al reparto**
 —1576, 1675, 1788 y 1675 con una, dos, tres y cuatro bandas— porque un triángulo

@@ -15,23 +15,23 @@
  * —un acumulador compartido, una reducción por orden de llegada— el píxel cambia
  * y esto se pone rojo.
  *
- * ## Lo que la puerta destapó al escribirla, medido
+ * ## Lo que la puerta destapó al escribirla, y cómo se cerró
  *
- * **Con el suavizado encendido el reparto sí decide el píxel**, y solo en la
- * costura: partir 240×180 en dos bandas cambia **15 píxeles, todos en las filas
- * 89 y 90**, que es justo el límite. Sin suavizado las cuatro particiones dan
- * cero diferencias.
+ * Con el suavizado encendido el reparto **sí decidía el píxel**, y solo en la
+ * costura: partir 240×180 en dos bandas cambiaba **15 píxeles, todos en las filas
+ * 89 y 90**. Sin suavizado, cero diferencias en las cuatro particiones.
  *
- * El motivo es que la pasada de suavizado lee filas vecinas que la banda **no
- * posee**: en el borde de su franja no las tiene, así que suaviza contra el fondo.
- * Es una costura, no un error de reducción, y por eso esta puerta la **acota en
- * vez de taparla**: exige cero diferencias sin suavizado, y con él exige que
- * ninguna diferencia salga de las dos filas del límite. Bajar el listón a
- * «parecido» dejaría de detectar el fallo que la puerta busca; subirlo a «igual
- * siempre» exigiría que el suavizado pidiera una fila de cortesía al vecino, que
- * es un cambio del rasterizador y no de esta puerta.
+ * No era que se suavizaran mal: **no se suavizaban**. El bucle de la pasada
+ * recorre `y` de 1 a `height - 2` porque el píxel de la primera y la última fila
+ * no tiene vecino arriba o abajo. Con una banda eso es correcto —son el borde de
+ * la imagen—; partida en varias, el borde de una banda es el **interior** de la
+ * imagen, y esas filas se caían del bucle.
  *
- * Queda anotado en `plan-reconstruccion.md` §86.3 (m).
+ * Cerrado con `bandWithHalo`: cada banda renderiza una fila de más por cada lado
+ * que tenga vecino y la descarta al volcar. La puerta exige ahora **igualdad byte
+ * a byte con suavizado y sin él**, y además que el recuento de píxeles suavizados
+ * no dependa del reparto —si una fila de cortesía se suavizara o se volcara, se
+ * contaría dos veces—.
  *
  * Lo que **no** existe todavía es una reducción en coma flotante: sumar
  * distancias de cobertura sobre millones de muestras. Cuando llegue, el sitio
@@ -49,6 +49,7 @@ import { createHash } from "node:crypto";
 import {
   DEMO_SCENE,
   SoftwareRenderer,
+  bandWithHalo,
   computeSceneAabb,
   modelFromScene,
   toSceneNodes,
@@ -116,9 +117,16 @@ function renderInBands(bands, antialias) {
     const rowOffset = boundaries[index];
     const bandHeight = boundaries[index + 1] - rowOffset;
     if (bandHeight === 0) continue;
-    const renderer = new SoftwareRenderer(WIDTH, bandHeight, rowOffset, HEIGHT);
+    // El mismo reparto que hace el worker, importado y no reescrito: una segunda
+    // copia de esta aritmética probaría la copia y no el reparto de verdad.
+    const { renderOffset, renderHeight, haloTop } = bandWithHalo(rowOffset, bandHeight, HEIGHT);
+    const renderer = new SoftwareRenderer(WIDTH, renderHeight, renderOffset, HEIGHT);
     stats.push(renderer.render(nodes, camera, { ...options, antialias }));
-    pixels.set(renderer.framebuffer.color.subarray(0, WIDTH * bandHeight * 4), rowOffset * WIDTH * 4);
+    const from = haloTop * WIDTH * 4;
+    pixels.set(
+      renderer.framebuffer.color.subarray(from, from + WIDTH * bandHeight * 4),
+      rowOffset * WIDTH * 4,
+    );
   }
   return { pixels, stats };
 }
@@ -171,35 +179,39 @@ console.log(
     `que cruza una costura lo rasterizan las dos bandas)`,
 );
 
-// Y el límite conocido, acotado en vez de tapado: con suavizado la costura sí
-// cambia, y lo que la puerta exige es que **no salga de ella**.
+// Y con suavizado, que es donde estaba el fallo: el bucle de la pasada recorre
+// `y` de 1 a `height - 2` porque el píxel de la primera y la última fila no tiene
+// vecino. Con una banda eso es el borde de la imagen; partida, es su interior, y
+// esas filas se quedaban **sin suavizar**. Ahora cada banda renderiza una fila de
+// cortesía por cada lado con vecino y la descarta al volcar.
 {
-  const entera = renderInBands(1, true).pixels;
-  const partida = renderInBands(2, true).pixels;
-  const seam = Math.round(HEIGHT / 2);
-  const rows = new Set();
-  let differing = 0;
-  for (let index = 0; index < entera.length; index += 4) {
-    if (
-      entera[index] !== partida[index] ||
-      entera[index + 1] !== partida[index + 1] ||
-      entera[index + 2] !== partida[index + 2]
-    ) {
-      differing += 1;
-      rows.add(Math.floor(index / 4 / WIDTH));
-    }
+  const smoothed = new Map();
+  for (const bands of [1, 2, 3, 4]) {
+    const { pixels, stats } = renderInBands(bands, true);
+    smoothed.set(bands, {
+      hash: createHash("sha256").update(Buffer.from(pixels.buffer)).digest("hex"),
+      pixels: stats.reduce((total, entry) => total + entry.smoothedPixels, 0),
+    });
   }
-  const outside = [...rows].filter((row) => row !== seam - 1 && row !== seam);
-  assert.deepEqual(
-    outside,
-    [],
-    `el suavizado cambia filas fuera de la costura ${seam - 1}/${seam}: ${outside.join(", ")}`,
-  );
+  const reference = smoothed.get(1);
+  for (const [bands, entry] of smoothed) {
+    assert.equal(entry.hash, reference.hash, `con ${bands} bandas y suavizado la imagen cambia`);
+    // Y el recuento también, que es la otra mitad: las filas de cortesía no se
+    // suavizan —les falta su propio vecino— y tampoco se vuelcan, así que ninguna
+    // fila se cuenta dos veces.
+    assert.equal(
+      entry.pixels,
+      reference.pixels,
+      `con ${bands} bandas se suavizan ${entry.pixels} píxeles y no ${reference.pixels}`,
+    );
+  }
+  assert.notEqual(reference.hash, hashes.get(1), "sin suavizado y con él no pueden dar la misma imagen");
   console.log(
-    `bandas: ok (con suavizado la costura cambia ${differing} píxeles y ninguno sale de las filas ` +
-      `${seam - 1} y ${seam}: la pasada lee filas que la banda no posee, y el límite queda acotado)`,
+    `bandas: ok (con suavizado las cuatro particiones dan el mismo sha256 y los mismos ` +
+      `${reference.pixels} píxeles suavizados: la fila de cortesía cierra la costura)`,
   );
 }
+
 console.log(
   "bandas: no ejecutada — la reducción en coma flotante que el §86.3 (m) teme, sumar distancias de " +
     "cobertura sobre millones de muestras, no existe todavía: la bloquea D34. Cuando llegue, el sitio " +

@@ -285,6 +285,7 @@ export {
   RESOURCE_LIMIT_REASONS,
 } from "./reconstruction/limits";
 export type { ResourceLimit, ResourceLimitName } from "./reconstruction/limits";
+export { bandWithHalo } from "../postprocess";
 export { projectPoint } from "./reconstruction/camera";
 export { FRAMES, auditTransforms, resolveFrame } from "./reconstruction/frameGraph";
 export type { Frame, FrameTransform } from "./reconstruction/frameGraph";
