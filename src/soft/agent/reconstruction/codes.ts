@@ -146,6 +146,32 @@ export const PACKAGE_CODE_TABLE = {
     decision: "D9 fija la regla, sin número",
   },
 
+  // El espacio `SS-CAM`: la cámara y los píxeles que dice describir.
+  "SS-CAM-001": {
+    reason: "CAMERA_IMAGE_HASH_MISMATCH",
+    cause: "la cámara declara un sha256 de imagen que no es el del artifact al que apunta",
+    status: "PROPUESTO",
+    decision: "D10 exige atar píxeles y calibración, sin número",
+  },
+  "SS-CAM-002": {
+    reason: "CAMERA_IMAGE_MISSING",
+    cause: "la cámara apunta a un artifact que no existe o no es una imagen",
+    status: "PROPUESTO",
+    decision: "D10 exige atar píxeles y calibración, sin número",
+  },
+  "SS-CAM-003": {
+    reason: "RECTIFIED_WITH_DISTORTION",
+    cause: "unos intrínsecos declarados sobre imagen rectificada traen coeficientes de distorsión",
+    status: "PROPUESTO",
+    decision: "D10 nombra el caso, sin número",
+  },
+  "SS-CAM-004": {
+    reason: "CAMERA_GRID_MISMATCH",
+    cause: "las dimensiones declaradas no son las de la rejilla real de la imagen",
+    status: "PROPUESTO",
+    decision: "D33 fija que las dimensiones describen la rejilla real, sin número",
+  },
+
   // El espacio `SS-IO`: leer ficheros de otro. Son los topes de `limits.ts` y la
   // lectura que no se puede completar, y se separan de `SS-PKG` porque no dicen
   // que el paquete esté mal: un paquete perfecto puede no caber. Por eso los

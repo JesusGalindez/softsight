@@ -152,7 +152,9 @@
               0,
               0,
               1
-            ]
+            ],
+            "imageArtifactHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "imageSpace": "ORIGINAL"
           }
         ]
       }
@@ -296,7 +298,9 @@
               0,
               0,
               1
-            ]
+            ],
+            "imageArtifactHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "imageSpace": "ORIGINAL"
           }
         ]
       },
@@ -347,7 +351,9 @@
               "fy": 2809.9,
               "cx": 1920.0,
               "cy": 1080.0
-            }
+            },
+            "imageArtifactHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "imageSpace": "ORIGINAL"
           }
         ]
       },
@@ -393,7 +399,9 @@
               "fy": 2809.9,
               "cx": 1920.0,
               "cy": 1080.0
-            }
+            },
+            "imageArtifactHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "imageSpace": "ORIGINAL"
           }
         ]
       },
@@ -427,7 +435,9 @@
               "fy": 2809.9,
               "cx": 1920.0,
               "cy": 1080.0
-            }
+            },
+            "imageArtifactHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "imageSpace": "ORIGINAL"
           }
         ]
       },

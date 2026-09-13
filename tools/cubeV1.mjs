@@ -207,16 +207,23 @@ export function buildCubePackage() {
     const { png, intrinsics, worldFromCamera } = renderView(nodes, aabb, view);
     const path = `images/${view.id}.png`;
     files.set(path, png);
+    const imageHash = sha256(png);
     artifacts.push({
       id: `img-${view.id}`,
       type: "IMAGE",
       path,
       bytes: png.length,
-      sha256: sha256(png),
+      sha256: imageHash,
     });
     cameras.push({
       id: view.id,
       imageArtifactId: `img-${view.id}`,
+      // El mismo hash que el artifact, y calculado una vez: la cámara se ata a
+      // los píxeles y no a un nombre (D10).
+      imageArtifactHash: imageHash,
+      // Lo renderiza este motor sin distorsión, así que la imagen es la original
+      // y no hay nada que rectificar.
+      imageSpace: "ORIGINAL",
       width: IMAGE_SIZE,
       height: IMAGE_SIZE,
       pixelOrigin: "TOP_LEFT",

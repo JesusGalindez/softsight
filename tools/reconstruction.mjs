@@ -30,6 +30,7 @@ import { readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { decodePng } from "./agent3d.mjs";
 import {
   PACKAGE_CODES,
   PACKAGE_CODE_TABLE,
@@ -151,6 +152,44 @@ export function inspectPackage(manifestPath) {
         boundingRadius: 0,
       }),
     });
+  }
+
+  // D33: las dimensiones de la cámara describen **la rejilla real**, no una
+  // rotación EXIF pendiente. Se comprueba abriendo la imagen, que es lo único
+  // que lo puede desmentir, y por eso vive aquí y no en `ingest.ts`: allí no hay
+  // IO. Una cámara que declare 4032×3024 sobre una imagen de 3024×4032 tiene los
+  // intrínsecos girados, y el error no se ve en la miniatura.
+  const imagePath = new Map(
+    ingest.artifacts.filter((artifact) => artifact.type === "IMAGE").map((a) => [a.id, a.realPath]),
+  );
+  for (const camera of manifest.cameras ?? []) {
+    const path = imagePath.get(camera.imageArtifactId);
+    if (path === undefined) continue;
+    let grid = null;
+    try {
+      const decoded = decodePng(readFileSync(path));
+      grid = { width: decoded.width, height: decoded.height };
+    } catch {
+      // Un formato de imagen que no sabemos abrir no es una cámara mal
+      // declarada: se dice por su nombre y se sigue, igual que con el PLY.
+      ingest.issues.push({
+        code: PACKAGE_CODES.FORMAT_UNSUPPORTED,
+        reason: PACKAGE_CODE_TABLE[PACKAGE_CODES.FORMAT_UNSUPPORTED].reason,
+        message: `cámara ${camera.id}: ${camera.imageArtifactId} no se puede abrir para comprobar su rejilla`,
+      });
+      ingest.execution = "UNSUPPORTED";
+      continue;
+    }
+    if (grid.width !== camera.width || grid.height !== camera.height) {
+      ingest.issues.push({
+        code: PACKAGE_CODES.CAMERA_GRID_MISMATCH,
+        reason: PACKAGE_CODE_TABLE[PACKAGE_CODES.CAMERA_GRID_MISMATCH].reason,
+        message:
+          `cámara ${camera.id}: declara ${camera.width}×${camera.height} y la imagen es ` +
+          `${grid.width}×${grid.height}`,
+      });
+      ingest.execution = "ERROR";
+    }
   }
 
   const report = buildReconstructionReport({

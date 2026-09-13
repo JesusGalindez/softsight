@@ -106,7 +106,25 @@ const model = parseColmapModel({
 
 // 3. El CameraSet que sale es el del contrato, no uno parecido.
 {
-  const cameraSet = toCameraSet(model);
+  // El hash de cada imagen entra por parámetro: COLMAP nombra sus imágenes y no
+  // las hashea, así que el adaptador no se lo puede inventar (D10). Aquí el
+  // fixture es sintético y los ficheros no existen, de modo que el mapa lleva un
+  // hash de relleno que es el mismo que declaran los artifacts; lo que la puerta
+  // comprueba es que el adaptador **lo traslade**, no que lo calcule.
+  const relleno = "0".repeat(64);
+  const hashes = new Map(model.images.map((image) => [image.name, relleno]));
+  const cameraSet = toCameraSet(model, hashes);
+  for (const camera of cameraSet) {
+    assert.equal(camera.imageArtifactHash, relleno, "el adaptador tiene que trasladar el hash que recibe");
+    // COLMAP calibra sobre la imagen tal y como la grabó la cámara: sus
+    // coeficientes describen lo que hay que corregir, así que declarar RECTIFIED
+    // contradiría sus propios números.
+    assert.equal(camera.imageSpace, "ORIGINAL");
+  }
+  // Y sin el mapa la entrada sale sin hash, y el paquete se rechaza por esquema:
+  // mejor que inventarlo.
+  assert.equal(toCameraSet(model)[0].imageArtifactHash, undefined);
+
   const manifest = {
     documentType: "videomesh.reconstruction-package",
     contractVersion: "0.1",

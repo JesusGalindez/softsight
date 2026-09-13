@@ -90,11 +90,11 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-09-13:
 
 ```text
-ACORDADAS       19   D1, D2, D4, D5, D8, D10, D11, D15, D18, D20, D22, D23,
-                     D26–D29, D32–D34
+ACORDADAS       17   D1, D2, D4, D5, D8, D11, D15, D18, D20, D22, D23, D26–D29,
+                     D32, D34
 PROPUESTAS       0
-IMPLEMENTADAS   15   D3, D6, D7, D9, D12, D13, D14, D16, D17, D19, D21, D24,
-                     D25, D30, D31
+IMPLEMENTADAS   17   D3, D6, D7, D9, D10, D12, D13, D14, D16, D17, D19, D21,
+                     D24, D25, D30, D31, D33
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -349,7 +349,7 @@ ciertos a la vez. De ahí el espacio `SS-RECON`, que es nuevo.
   fijada a mano y sin modelo, el informe no promete nada, que es exactamente lo
   que la última frase de la decisión pide.
 
-### D10 — Convenciones de espacio de imagen
+### D10 — Convenciones de espacio de imagen — IMPLEMENTADA (2026-09-13)
 `imageSpace`, `pixelOrigin`, `pixelCenter`, `transformConvention`, handedness y
 ejes, viajando como **una sola unidad** `CameraImageSpace` con
 `imageArtifactHash`, dimensiones, intrínsecos, distorsión y orientación. Impide
@@ -362,8 +362,32 @@ hacia dónde mira**: `cameraAxes` con `X_RIGHT_Y_DOWN_Z_FORWARD` —COLMAP, Open
 o `X_RIGHT_Y_UP_Z_BACKWARD` —gráficos, y el rasterizador de este repositorio—,
 sin valor por defecto. Confundirlos no da una imagen torcida: da una especular en
 Y con la profundidad invertida, y sobre un objeto simétrico las dos parecen
-correctas. Falta `imageArtifactHash` atado a la imagen, que hoy es
-`imageArtifactId`.
+correctas.
+
+**Cerrada el 2026-09-13 con los dos campos que faltaban.**
+
+`imageArtifactHash` ata la cámara a **los píxeles y no a un nombre**. Un
+`imageArtifactId` se reapunta a otro fichero sin que nada chille, y entonces los
+intrínsecos describen una imagen que no es la suya; la puerta lo ejerce cambiando
+el hash de una cámara por el de otra imagen del mismo paquete —mismo tamaño,
+misma cámara, todo plausible— y sale rechazado.
+
+`imageSpace` —`ORIGINAL` o `RECTIFIED`— es lo que impide el caso que la decisión
+nombra: unos intrínsecos rectificados con coeficientes de distorsión se
+contradicen, porque si la imagen ya está rectificada no queda nada que corregir.
+Y `RECTIFIED` **sin** distorsión pasa, que es lo que separa una regla de un
+rechazo indiscriminado.
+
+`transformConvention` no se declara por cámara a propósito: **D32 ya la fija para
+todo el repositorio** y `test:gltf-frame` la vigila. Repetirla aquí sería un
+segundo original de la misma decisión.
+
+El adaptador de COLMAP recibe los hashes **por parámetro**: sus ficheros nombran
+la imagen y no la hashean, y calcularlo dentro exigiría leer el disco desde un
+módulo que a propósito no lo toca. Sin el mapa, la entrada sale sin hash y el
+paquete se rechaza por esquema, que es mejor que inventarlo. Y declara
+`ORIGINAL`, porque los coeficientes que trae describen precisamente lo que hay
+que corregir.
 
 ### D11 — FrameGraph
 CAMERA, RECONSTRUCTION, ASSET_CANONICAL, PRODUCTION, con cada transformación
@@ -1120,12 +1144,24 @@ que nadie la pida.
 y una composición no trivial: ida y vuelta canónico → glTF → canónico, más un
 punto conocido a su punto transformado conocido.
 
-### D33 — Orientación canónica de imagen
+### D33 — Orientación canónica de imagen — IMPLEMENTADA (2026-09-13)
 Toda imagen referenciada por el CameraSet entra con la **orientación horneada en
 los píxeles**. Las dimensiones de cámara describen la rejilla real, no una
 rotación EXIF pendiente. `sourceOrientation` puede guardarse como provenance,
 pero nada aguas abajo interpreta píxeles a partir de esa metadata.
-**Prueba:** `image-orientation-v1`.
+**Prueba:** `test:reconstruction`, con dos mitades.
+
+**La primera abre la imagen.** Las dimensiones de la cámara se comparan con la
+rejilla real del PNG, y una cámara que declare la rejilla girada se rechaza con
+`SS-CAM-004`. Vive en el CLI y no en `ingest.ts` porque decodificar es IO, y allí
+no hay. Es el único sitio desde el que la afirmación se puede desmentir: una foto
+con los intrínsecos girados **se ve bien en miniatura**.
+
+**La segunda comprueba una ausencia.** `sourceOrientation` solo aparece donde se
+declara y donde se prueba, igual que D32 vigila que `column * 4 + row` no salga de
+su fichero, y por el mismo motivo: **un uso de este campo no rompe ninguna
+prueba**. Da una imagen girada que sigue siendo una imagen, así que ningún hash lo
+delata. Declararlo no mueve el veredicto, y eso también se ejerce.
 
 ### D34 — El criterio de salida de R0, en dos
 ```text

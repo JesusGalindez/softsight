@@ -44,6 +44,8 @@
     {
       "id": "cam-frontal",
       "imageArtifactId": "img-cam-frontal",
+      "imageArtifactHash": "219f364dc53e2f3f6b8efcf5ef147383c49718a52a92abfaeffb53206f320903",
+      "imageSpace": "ORIGINAL",
       "width": 256,
       "height": 256,
       "pixelOrigin": "TOP_LEFT",
@@ -78,6 +80,8 @@
     {
       "id": "cam-lateral",
       "imageArtifactId": "img-cam-lateral",
+      "imageArtifactHash": "2e85fb58f51c0d1702cb71587c30eae4126083e0f8cf4ff319b7009f2a48278f",
+      "imageSpace": "ORIGINAL",
       "width": 256,
       "height": 256,
       "pixelOrigin": "TOP_LEFT",
@@ -112,6 +116,8 @@
     {
       "id": "cam-cenital",
       "imageArtifactId": "img-cam-cenital",
+      "imageArtifactHash": "1107bd69afa74a65e5d190efe34d5f4d898c70d5d83772c9c2cbd74eb693cc3c",
+      "imageSpace": "ORIGINAL",
       "width": 256,
       "height": 256,
       "pixelOrigin": "TOP_LEFT",
@@ -146,6 +152,8 @@
     {
       "id": "cam-tres-cuartos",
       "imageArtifactId": "img-cam-tres-cuartos",
+      "imageArtifactHash": "6135b96ca69554f12d7a664d7d7171cf10df9720cf73e638af5ac944e5d74405",
+      "imageSpace": "ORIGINAL",
       "width": 256,
       "height": 256,
       "pixelOrigin": "TOP_LEFT",

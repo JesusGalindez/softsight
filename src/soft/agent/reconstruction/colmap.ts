@@ -251,7 +251,18 @@ export function parseColmapModel(files: {
  * «esta imagen se tomó desde aquí con estos intrínsecos». Colapsarlo perdería las
  * poses, que es casi todo lo que COLMAP produce.
  */
-export function toCameraSet(model: ColmapModel): Array<Record<string, unknown>> {
+export function toCameraSet(
+  model: ColmapModel,
+  /**
+   * sha256 de cada imagen, por su nombre en COLMAP.
+   *
+   * Entra por parámetro porque **COLMAP no lo sabe**: sus ficheros nombran la
+   * imagen y no la hashean, y calcularlo aquí exigiría leer el disco desde un
+   * módulo que a propósito no lo toca. Sin el mapa, la entrada sale sin hash y el
+   * paquete se rechaza por esquema, que es mejor que inventarlo (D10).
+   */
+  imageHashes: ReadonlyMap<string, string> = new Map(),
+): Array<Record<string, unknown>> {
   const byId = new Map(model.cameras.map((camera) => [camera.id, camera]));
   const cameraSet: Array<Record<string, unknown>> = [];
 
@@ -261,6 +272,12 @@ export function toCameraSet(model: ColmapModel): Array<Record<string, unknown>> 
     cameraSet.push({
       id: `img-${image.id}`,
       imageArtifactId: `img-${image.id}`,
+      ...(imageHashes.has(image.name) ? { imageArtifactHash: imageHashes.get(image.name) } : {}),
+      // COLMAP calibra sobre la imagen **tal y como la grabó la cámara**: los
+      // coeficientes de distorsión que trae describen precisamente lo que hay que
+      // corregir, así que declarar RECTIFIED aquí sería decir que no queda nada
+      // que corregir y contradecir sus propios números (D10).
+      imageSpace: "ORIGINAL",
       width: camera.width,
       height: camera.height,
       // COLMAP pone el origen del píxel arriba a la izquierda y el centro del

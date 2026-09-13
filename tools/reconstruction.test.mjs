@@ -29,6 +29,7 @@
  */
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   mkdtempSync,
@@ -800,6 +801,101 @@ function sha256Of(path) {
   console.log(
     "reconstrucción: ok (el informe publica la diagonal del fallback —√3 en el cubo unidad— y solo " +
       "promete precisión absoluta con escala ABSOLUTE y un modelo de incertidumbre que no sea NONE)",
+  );
+}
+
+// D10 y D33: la cámara se ata a los píxeles, no a un nombre.
+//
+// Los cuatro casos comparten la misma forma de error: **el resultado sigue
+// pareciendo plausible**. Una imagen reapuntada tiene el mismo tamaño, unos
+// intrínsecos rectificados sobre imagen distorsionada dan una reproyección casi
+// buena, y una rejilla girada da una foto que se ve bien en miniatura. Por eso
+// ninguno se caza mirando, y por eso van en el contrato.
+{
+  const sandbox = realpathSync(mkdtempSync(join(tmpdir(), "softsight-cam2-")));
+  const root = join(sandbox, "cube-v1");
+  writeCubePackage(root);
+  const manifestPath = join(root, "manifest.json");
+  const base = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+  const conCamaras = (patch) => ({
+    ...base,
+    cameras: base.cameras.map((camera, index) => (index === 0 ? { ...camera, ...patch } : camera)),
+  });
+  const inspeccionar = (manifest) => {
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    return inspectPackage(manifestPath);
+  };
+
+  // El id sigue apuntando a una imagen que existe; lo que ya no cuadra son los
+  // píxeles. Sin el hash, esto pasaba entero.
+  const reapuntada = inspeccionar(
+    conCamaras({ imageArtifactHash: base.cameras[1].imageArtifactHash }),
+  );
+  assert.deepEqual(
+    reapuntada.report.warnings.map((entry) => entry.code),
+    [PACKAGE_CODES.CAMERA_IMAGE_HASH_MISMATCH],
+  );
+  assert.equal(reapuntada.exitCode, 20);
+
+  // Rectificada y con distorsión a la vez: si la imagen ya está rectificada, no
+  // queda distorsión que corregir.
+  const contradictoria = inspeccionar(
+    conCamaras({ imageSpace: "RECTIFIED", distortion: { k1: -0.28, k2: 0.07 } }),
+  );
+  assert.deepEqual(
+    contradictoria.report.warnings.map((entry) => entry.code),
+    [PACKAGE_CODES.RECTIFIED_WITH_DISTORTION],
+  );
+  assert.match(contradictoria.report.warnings[0].message, /RECTIFIED con k1, k2/);
+
+  // Y rectificada **sin** distorsión pasa: sin este caso, rechazar todo
+  // `RECTIFIED` también aprobaría la puerta.
+  assert.equal(inspeccionar(conCamaras({ imageSpace: "RECTIFIED" })).exitCode, 0);
+
+  // D33: las dimensiones describen la rejilla real. Girarlas es exactamente lo
+  // que pasa cuando alguien se cree la rotación EXIF en vez de los píxeles, y el
+  // resultado es una foto que se ve bien con los intrínsecos girados.
+  const girada = inspeccionar(
+    conCamaras({ width: base.cameras[0].height + 1, height: base.cameras[0].width }),
+  );
+  assert.deepEqual(
+    girada.report.warnings.map((entry) => entry.code),
+    [PACKAGE_CODES.CAMERA_GRID_MISMATCH],
+  );
+  assert.match(girada.report.warnings[0].message, /declara \d+×\d+ y la imagen es \d+×\d+/);
+
+  // `sourceOrientation` es provenance y nada más: declararlo no mueve un píxel ni
+  // cambia el veredicto.
+  const conOrientacion = inspeccionar(conCamaras({ sourceOrientation: 90 }));
+  assert.equal(conOrientacion.exitCode, 0, "sourceOrientation no puede cambiar el veredicto");
+
+  rmSync(sandbox, { recursive: true, force: true });
+  console.log(
+    "reconstrucción: ok (D10 y D33: imagen reapuntada con el mismo tamaño cazada por su hash, " +
+      "RECTIFIED con distorsión rechazado y sin ella aceptado, rejilla girada cazada abriendo la " +
+      "imagen, y sourceOrientation no mueve el veredicto)",
+  );
+}
+
+// Y lo que D33 prohíbe de verdad: que algo aguas abajo **interprete** píxeles a
+// partir de esa metadata. Se comprueba como D32 comprueba su transposición —por
+// ausencia en el código— porque un uso de este campo no rompe ninguna prueba: da
+// una imagen girada que sigue siendo una imagen.
+{
+  const leen = [];
+  for (const file of ["src/soft/agent/reconstruction", "tools"]) {
+    const salida = execFileSync("grep", ["-rl", "sourceOrientation", resolve(projectRoot, file)], {
+      encoding: "utf8",
+    }).trim();
+    for (const found of salida === "" ? [] : salida.split("\n")) leen.push(found);
+  }
+  const permitidos = new Set(["packageSchema.ts", "reconstruction.test.mjs"]);
+  const intrusos = leen.filter((file) => !permitidos.has(file.split("/").pop()));
+  assert.deepEqual(intrusos, [], `sourceOrientation se lee fuera de donde se declara: ${intrusos}`);
+  console.log(
+    "reconstrucción: ok (sourceOrientation solo aparece donde se declara y donde se prueba: nada " +
+      "aguas abajo interpreta píxeles a partir de esa metadata)",
   );
 }
 

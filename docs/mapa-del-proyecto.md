@@ -512,8 +512,18 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     diagonal con unidad también, porque ponerle una es declarar una escala por la
     puerta de atrás. El informe publica el denominador del fallback —√3 en el cubo
     unidad— y `claimsAbsolutePrecision`, que exige **las dos cosas**: escala
-    absoluta y un modelo de incertidumbre que no sea `NONE`. Con eso el registro
-    va por **15 implementadas** de 34.
+    absoluta y un modelo de incertidumbre que no sea `NONE`.
+    Y **D10 y D33**, que cierran la cámara: `imageArtifactHash` ata la calibración
+    a los píxeles y no a un nombre —un id se reapunta a otro fichero sin que nada
+    chille—, e `imageSpace` impide unos intrínsecos rectificados con coeficientes
+    de distorsión, que es el caso que la decisión nombra y que no se ve mirando la
+    imagen. `transformConvention` **no** se declara por cámara: D32 ya la fija para
+    todo el repositorio, y repetirla sería un segundo original. De D33, las
+    dimensiones se comparan con la rejilla real abriendo el PNG —lo hace el CLI,
+    porque en `ingest.ts` no hay IO— y `sourceOrientation` se vigila **por
+    ausencia**, como `column * 4 + row`, porque usarlo no rompe ninguna prueba: da
+    una imagen girada que sigue siendo una imagen. Con eso el registro va por
+    **17 implementadas** de 34, la mitad justa.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

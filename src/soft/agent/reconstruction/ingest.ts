@@ -176,6 +176,13 @@ export const PACKAGE_CODES = {
   CAPABILITY_REQUIRED_UNSUPPORTED: "SS-PKG-024",
   ABSOLUTE_BUDGET_WITHOUT_SCALE: "SS-RECON-001",
   BUDGET_UNIT_MISDECLARED: "SS-RECON-002",
+  CAMERA_IMAGE_HASH_MISMATCH: "SS-CAM-001",
+  CAMERA_IMAGE_MISSING: "SS-CAM-002",
+  RECTIFIED_WITH_DISTORTION: "SS-CAM-003",
+  // Lo emite el CLI y no este módulo: comprobarlo exige **decodificar la
+  // imagen**, y aquí no hay IO a propósito. El identificador vive igual en la
+  // tabla, que es lo que el otro lado parsea.
+  CAMERA_GRID_MISMATCH: "SS-CAM-004",
   // El espacio de lectura: topes de recurso y ficheros que no se pueden
   // interpretar. Los cinco primeros los proyecta el código de salida 23, que D13
   // reservaba y hasta ahora no devolvía nadie.
@@ -271,6 +278,13 @@ export function ingestPackage(
     requires?: string[];
     provides?: string[];
     scale?: { status?: string };
+    cameras?: Array<{
+      id: string;
+      imageArtifactId: string;
+      imageArtifactHash: string;
+      imageSpace: string;
+      distortion?: Record<string, number>;
+    }>;
     budgets?: Array<{ name: string; units: string; unit?: string; max: number }>;
     extensions?: Record<string, { required?: boolean }>;
     state: string;
@@ -480,6 +494,50 @@ export function ingestPackage(
       sha256: artifact.sha256,
       bytes: artifact.bytes,
     });
+  }
+
+  // D10: la cámara se ata a **los píxeles**, no a un nombre. El id se puede
+  // reapuntar a otro fichero sin que nada chille —y entonces los intrínsecos
+  // describen una imagen que no es la suya—; el hash no. Se comprueba con los
+  // artifacts ya admitidos, así que un hash que no cuadraba se rechazó antes y
+  // aquí la cámara sale por «su imagen no está», que es la verdad.
+  const imageBy = new Map(
+    artifacts.filter((artifact) => artifact.type === "IMAGE").map((artifact) => [artifact.id, artifact]),
+  );
+  for (const camera of document.cameras ?? []) {
+    const where = `cámara ${camera.id}`;
+    const image = imageBy.get(camera.imageArtifactId);
+    if (image === undefined) {
+      issues.push(
+        issue(
+          PACKAGE_CODES.CAMERA_IMAGE_MISSING,
+          `${where}: ${camera.imageArtifactId} no es un artifact IMAGE admitido`,
+        ),
+      );
+      continue;
+    }
+    if (image.sha256 !== camera.imageArtifactHash) {
+      issues.push(
+        issue(
+          PACKAGE_CODES.CAMERA_IMAGE_HASH_MISMATCH,
+          `${where}: declara ${camera.imageArtifactHash.slice(0, 16)}… y ${camera.imageArtifactId} ` +
+            `es ${image.sha256.slice(0, 16)}…`,
+        ),
+      );
+      continue;
+    }
+    // Unos intrínsecos rectificados con coeficientes de distorsión se contradicen
+    // a sí mismos: si la imagen ya está rectificada, no queda distorsión que
+    // corregir. Es el caso que D10 nombra, y no se ve mirando la imagen porque
+    // tiene el mismo tamaño y el mismo aspecto que la original.
+    if (camera.imageSpace === "RECTIFIED" && Object.keys(camera.distortion ?? {}).length > 0) {
+      issues.push(
+        issue(
+          PACKAGE_CODES.RECTIFIED_WITH_DISTORTION,
+          `${where}: imageSpace RECTIFIED con ${Object.keys(camera.distortion ?? {}).join(", ")}`,
+        ),
+      );
+    }
   }
 
   return {

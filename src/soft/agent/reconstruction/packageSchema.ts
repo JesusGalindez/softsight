@@ -92,6 +92,28 @@ const CAMERA_FIELDS: ObjectSchema = {
     required: true,
     description: "Artifact IMAGE al que pertenecen estos intrínsecos; ata píxeles y calibración (D10).",
   },
+  imageArtifactHash: {
+    type: "string",
+    required: true,
+    description:
+      "sha256 de esa imagen, y no solo su identidad: un id se puede reapuntar a otro fichero sin que " +
+      "nada chille, y entonces los intrínsecos describen píxeles que no son los suyos. El hash no (D10).",
+  },
+  imageSpace: {
+    type: '"ORIGINAL"|"RECTIFIED"',
+    required: true,
+    description:
+      "Qué imagen describen estos intrínsecos. Es lo que impide combinar una calibración rectificada " +
+      "con la imagen distorsionada, o una máscara del frame original con profundidad del rectificado: " +
+      "el error no se ve, porque las dos imágenes tienen el mismo tamaño y el mismo aspecto (D10).",
+  },
+  sourceOrientation: {
+    type: "number",
+    description:
+      "Orientación EXIF del original, en grados, **solo como provenance** (D33). `width` y `height` " +
+      "describen la rejilla real, con la orientación ya horneada en los píxeles; nada aguas abajo " +
+      "interpreta píxeles a partir de este campo, y una puerta lo comprueba.",
+  },
   width: { type: "number", required: true, description: "Ancho de la rejilla real, en píxeles." },
   height: { type: "number", required: true, description: "Alto de la rejilla real, en píxeles." },
   pixelOrigin: {
