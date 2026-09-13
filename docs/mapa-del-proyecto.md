@@ -540,6 +540,13 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     detrás su número no significa nada. Leer los píxeles sigue sin poder hacerse:
     D5 —EXR— no está escrita, y comprobar que la profundidad cuadre es R8.
     **19 de 34.**
+    Y la puerta `test:bands`, que escribe la regla del hueco (m) —reducción por
+    índice de bloque, nunca por orden de llegada— y **al escribirla destapó una
+    costura**: con suavizado, partir 240×180 en dos bandas cambia 15 píxeles, los
+    15 en las filas 89 y 90, porque la pasada lee filas que la banda no posee. Sin
+    suavizado, cero en las cuatro particiones. Queda **acotado, no tapado**:
+    arreglarlo es pedirle al suavizado una fila de cortesía al vecino, que toca el
+    rasterizador y la puerta de paridad del editor. Abierto y con su medida.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

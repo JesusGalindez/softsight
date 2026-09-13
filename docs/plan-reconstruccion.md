@@ -3658,13 +3658,33 @@ Nota adjunta, que sigue abierta: `auditMesh` redondea `signedVolume` con
 informe ya dice si se permite hablar en absoluto —`claimsAbsolutePrecision`—,
 pero el redondeo del volumen no lo mira todavía.
 
-**m) Determinismo con paralelo, sin resolver.**
-El §57 pide semilla fija y orden estable, y no dice nada de la reducción. El
-repositorio ya rasteriza por bandas (`src/soft/parallel.ts`) y comprueba
-determinismo en dos sistemas. Sumar distancias sobre millones de muestras en
-paralelo da un resultado distinto según el orden en que terminen los workers.
-Regla que falta: **reducción en orden fijo por índice de bloque**, nunca sobre
-resultados según llegan.
+**m) Determinismo con paralelo. ACOTADO el 2026-09-13, con un hallazgo.**
+El §57 pide semilla fija y orden estable y no decía nada de la reducción. La
+regla —**reducción en orden fijo por índice de bloque**, nunca sobre resultados
+según llegan— es ahora la puerta `test:bands`: la misma escena partida en 1, 2, 3
+y 4 franjas tiene que dar **el mismo sha256**.
+
+**Y al escribirla se destapó que con el suavizado encendido no lo da.** Medido:
+partir 240×180 en dos bandas cambia **15 píxeles, todos en las filas 89 y 90**,
+que es exactamente la costura. Sin suavizado, cero diferencias en las cuatro
+particiones. El motivo es que la pasada de suavizado **lee filas que la banda no
+posee**, así que en su borde suaviza contra el fondo.
+
+La puerta lo **acota en vez de taparlo**: exige cero sin suavizado, y con él exige
+que ninguna diferencia salga de las dos filas del límite. Arreglarlo es pedirle al
+suavizado una fila de cortesía al vecino, que es un cambio del rasterizador y
+toca la puerta de paridad del editor: **queda abierto y con su medida**.
+
+De paso quedó escrito que `trianglesRasterized` **no es invariante al reparto**
+—1576, 1675, 1788 y 1675 con una, dos, tres y cuatro bandas— porque un triángulo
+que cruza una costura lo rasterizan las dos. Cuenta envíos por banda, no
+triángulos de la escena, y ni siquiera crece con el número de bandas: depende de
+dónde caigan las costuras.
+
+Lo que sigue sin existir es la reducción en coma flotante que el hueco teme
+—sumar distancias de cobertura sobre millones de muestras—, bloqueada por D34. La
+puerta lo declara NOT_RUN con su motivo, y está escrita ahora porque escribirla
+después es escribirla sobre el código que ya se equivocó.
 
 **n) `SELF_INTERSECTION_CONFIRMED` no existe en coma flotante.**
 La lección ya está escrita en `src/soft/agent/geometryAudit.ts`: `segmentsCross`

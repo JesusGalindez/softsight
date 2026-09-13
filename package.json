@@ -32,6 +32,7 @@
     "reconstruction": "npm run build:agent3d && node tools/reconstruction.mjs",
     "colmap-small-v1": "node tools/colmapSmall.mjs",
     "cube-v1": "npm run build:agent3d && node tools/cubeV1.mjs",
+    "test:bands": "npm run build:agent3d && node tools/bands.test.mjs",
     "test:bounds-tree": "npm run build:agent3d && node tools/bounds-tree.test.mjs",
     "test:reconstruction": "npm run build:agent3d && node tools/reconstruction.test.mjs",
     "test:resources": "npm run build:agent3d && node tools/resources.test.mjs",
