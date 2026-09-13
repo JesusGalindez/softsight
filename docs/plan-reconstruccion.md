@@ -3715,11 +3715,30 @@ divergen al tercer código.
 **Sustituir el §27 por: extender el enum existente** con `aproximacion-determinista`
 y `externo`. Mismo campo, misma tabla, misma puerta.
 
-**g) Idioma de los códigos.**
+**g) Idioma de los códigos. DECIDIDO el 2026-09-13: todo en español.**
 `RECON_LOW_COVERAGE` junto a `BORDE_ABIERTO`, `PIVOTE_DESCENTRADO` y
-`MALLA_INVERTIDA`. La tabla que `test:codes` compara contra `src/` se vuelve
-ilegible en dos idiomas. **Decidirlo arriba del documento**, no código a código.
-Afecta a VideoMesh, que es quien los va a leer.
+`MALLA_INVERTIDA` volvía ilegible en dos idiomas la tabla que `test:codes` compara
+contra `src/`. La decisión se toma arriba y no código a código, que es lo que esta
+sección pedía.
+
+**Qué entra y qué no**, porque «código» y «campo del esquema» no son lo mismo:
+
+```text
+entran    el `reason` de los 32 identificadores de frontera
+          el `certificationReason` del informe
+          los nombres internos de PACKAGE_CODES y las excepciones del lector PLY
+no entran los nombres de campo del esquema —`artifacts`, `imageArtifactHash`—
+          los valores de enum que VideoMesh escribe: SEALED, TRIANGLE_MESH,
+          ABSOLUTE, PASS, COMPLETE, APPROXIMATE, los cuatro marcos
+```
+
+Lo segundo no son códigos: son **el vocabulario con el que se escribe un paquete**,
+y traducirlo rompería todo manifest existente. Es otra decisión, con otro coste, y
+si se quiere se toma aparte.
+
+**No rompe a VideoMesh**, y por una razón escrita en D2 desde el principio: se
+parsea el identificador, nunca el mensaje ni el motivo. `SS-CAM-001` sigue siendo
+`SS-CAM-001`.
 
 **h) Nueve versiones de contrato y ninguna tabla de compatibilidad. HECHO el
 2026-09-13.**
@@ -3744,7 +3763,7 @@ es lo que el §75 exige. **Todo bajo `src/soft/agent/reconstruction/` y
 
 **j) Falta el veredicto «no se pudo evaluar».**
 Los §41, §50 y §77 solo contemplan PASS y FAIL. Un paquete sin cámaras, sin
-máscaras o sin depth **no puede dar PASS**. Hace falta `INSUFFICIENT_EVIDENCE`
+máscaras o sin depth **no puede dar PASS**. Hace falta `EVIDENCIA_INSUFICIENTE`
 como veredicto de primera clase, con su propio código de salida. Ausencia de
 evidencia convertida en aprobado es el peor fallo posible de una capa de
 certificación, y es el que sale por defecto si nadie lo escribe.

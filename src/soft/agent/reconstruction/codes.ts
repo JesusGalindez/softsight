@@ -7,7 +7,7 @@
  *
  * ```text
  * code     SS-PKG-001      identificador neutro; esto es lo que se parsea
- * reason   ARTIFACT_MISSING  motivo canónico, el vocabulario del contrato
+ * reason   ARTEFACTO_AUSENTE  motivo canónico, el vocabulario del contrato
  * message  texto en español, con la ruta y el número concretos; nunca se parsea
  * ```
  *
@@ -42,49 +42,49 @@ export interface PackageCodeEntry {
 
 export const PACKAGE_CODE_TABLE = {
   "SS-PKG-001": {
-    reason: "ARTIFACT_PATH_ESCAPES_ROOT",
+    reason: "RUTA_FUERA_DE_LA_RAIZ",
     cause: "la ruta de un artifact sale de la raíz del paquete con `..`",
     status: "FIJADO",
     decision: "D6",
   },
   "SS-PKG-002": {
-    reason: "ARTIFACT_PATH_ABSOLUTE",
+    reason: "RUTA_ABSOLUTA",
     cause: "la ruta de un artifact es absoluta en vez de relativa a la raíz",
     status: "FIJADO",
     decision: "D6",
   },
   "SS-PKG-003": {
-    reason: "ARTIFACT_PATH_ESCAPES_ROOT",
+    reason: "RUTA_FUERA_DE_LA_RAIZ",
     cause: "la ruta es legal pero su enlace resuelve fuera de la raíz",
     status: "FIJADO",
     decision: "D6",
   },
   "SS-PKG-004": {
-    reason: "ARTIFACT_MISSING",
+    reason: "ARTEFACTO_AUSENTE",
     cause: "el artifact declarado no existe, no se puede leer o su enlace está roto",
     status: "FIJADO",
     decision: "D6",
   },
   "SS-PKG-010": {
-    reason: "CONTRACT_SCHEMA_MISMATCH",
+    reason: "ESQUEMA_NO_COINCIDE",
     cause: "el manifest no encaja con el esquema del paquete",
     status: "PROPUESTO",
     decision: "D16 nombra el motivo, sin número",
   },
   "SS-PKG-011": {
-    reason: "PACKAGE_NOT_SEALED",
+    reason: "PAQUETE_SIN_SELLAR",
     cause: "el paquete no está sellado y solo se consume SEALED",
     status: "PROPUESTO",
     decision: "D29 nombra el motivo, sin número",
   },
   "SS-PKG-012": {
-    reason: "ARTIFACT_SIZE_MISMATCH",
+    reason: "TAMANO_NO_COINCIDE",
     cause: "el tamaño declarado no es el del fichero",
     status: "PROPUESTO",
     decision: "D7 nombra la comprobación, sin número",
   },
   "SS-PKG-013": {
-    reason: "ARTIFACT_HASH_MISMATCH",
+    reason: "HASH_NO_COINCIDE",
     cause: "el contenido no coincide con el sha256 declarado",
     status: "PROPUESTO",
     decision: "D7 nombra la comprobación, sin número",
@@ -94,37 +94,37 @@ export const PACKAGE_CODE_TABLE = {
     // hash» se arreglan en sitios distintos —uno es el contenido, el otro el
     // escritor del manifest— y quien automatice sobre el identificador quiere
     // poder distinguirlos.
-    reason: "ARTIFACT_HASH_MALFORMED",
+    reason: "HASH_MAL_FORMADO",
     cause: "el sha256 declarado no es hexadecimal de 64 caracteres en minúscula",
     status: "PROPUESTO",
     decision: "D7 nombra la comprobación, sin número",
   },
   "SS-PKG-020": {
-    reason: "CONTRACT_VERSION_UNSUPPORTED",
+    reason: "VERSION_DE_CONTRATO_NO_SOPORTADA",
     cause: "el paquete declara una versión de contrato que este binario no sabe leer",
     status: "PROPUESTO",
     decision: "D16 nombra el motivo, sin número",
   },
   "SS-PKG-021": {
-    reason: "CONTRACT_SCHEMA_MISMATCH",
+    reason: "ESQUEMA_NO_COINCIDE",
     cause: "el hash de esquema declarado no está en el registro de versiones aceptadas",
     status: "PROPUESTO",
     decision: "D16 nombra el motivo, sin número",
   },
   "SS-PKG-022": {
-    reason: "ARTIFACT_FORMAT_UNSUPPORTED",
+    reason: "FORMATO_NO_SOPORTADO",
     cause: "el artifact viene en un formato que este binario no lee, como un PLY binario",
     status: "PROPUESTO",
     decision: "D5 y D13 nombran el caso, sin número",
   },
   "SS-PKG-023": {
-    reason: "EXTENSION_REQUIRED_UNSUPPORTED",
+    reason: "EXTENSION_REQUERIDA_NO_SOPORTADA",
     cause: "el paquete declara una extensión `required` que este binario no entiende",
     status: "PROPUESTO",
     decision: "D30 nombra el desenlace UNSUPPORTED, sin número",
   },
   "SS-PKG-024": {
-    reason: "CAPABILITY_REQUIRED_UNSUPPORTED",
+    reason: "CAPACIDAD_REQUERIDA_NO_SOPORTADA",
     cause: "el paquete requiere una capability que este binario no sabe hacer",
     status: "PROPUESTO",
     decision: "D31 nombra el desenlace UNSUPPORTED, sin número",
@@ -134,31 +134,31 @@ export const PACKAGE_CODE_TABLE = {
   // No es un fallo de lectura ni de integridad —el fichero está bien y el hash
   // cuadra—, es que dos campos suyos no pueden ser ciertos a la vez.
   "SS-RECON-001": {
-    reason: "ABSOLUTE_BUDGET_WITHOUT_ABSOLUTE_SCALE",
+    reason: "PRESUPUESTO_ABSOLUTO_SIN_ESCALA_ABSOLUTA",
     cause: "un presupuesto en unidades absolutas sobre una escala que no es ABSOLUTE",
     status: "PROPUESTO",
     decision: "D9 fija la regla, sin número",
   },
   "SS-RECON-002": {
-    reason: "BUDGET_UNIT_MISDECLARED",
+    reason: "UNIDAD_DE_PRESUPUESTO_MAL_DECLARADA",
     cause: "un presupuesto absoluto sin unidad, o uno relativo con ella",
     status: "PROPUESTO",
     decision: "D9 fija la regla, sin número",
   },
   "SS-RECON-003": {
-    reason: "FRAME_TRANSFORM_MALFORMED",
+    reason: "TRANSFORMACION_MAL_FORMADA",
     cause: "una arista del FrameGraph que no son dieciséis números finitos, o que va de un marco a sí mismo, o que está declarada dos veces",
     status: "PROPUESTO",
     decision: "D11 exige registrar cada transformación, sin número",
   },
   "SS-RECON-004": {
-    reason: "FRAME_TRANSFORM_NOT_RIGID",
+    reason: "TRANSFORMACION_NO_RIGIDA",
     cause: "una transformación entre marcos cuya última fila no es [0, 0, 0, 1]",
     status: "PROPUESTO",
     decision: "D11 y D32 fijan la forma, sin número",
   },
   "SS-RECON-005": {
-    reason: "FRAME_UNREACHABLE",
+    reason: "MARCO_INALCANZABLE",
     cause: "un marco declarado al que no hay camino desde el marco en el que se mide",
     status: "PROPUESTO",
     decision: "D11 exige registrar cada transformación, sin número",
@@ -166,37 +166,37 @@ export const PACKAGE_CODE_TABLE = {
 
   // El espacio `SS-CAM`: la cámara y los píxeles que dice describir.
   "SS-CAM-001": {
-    reason: "CAMERA_IMAGE_HASH_MISMATCH",
+    reason: "HASH_DE_IMAGEN_NO_COINCIDE",
     cause: "la cámara declara un sha256 de imagen que no es el del artifact al que apunta",
     status: "PROPUESTO",
     decision: "D10 exige atar píxeles y calibración, sin número",
   },
   "SS-CAM-002": {
-    reason: "CAMERA_IMAGE_MISSING",
+    reason: "IMAGEN_DE_CAMARA_AUSENTE",
     cause: "la cámara apunta a un artifact que no existe o no es una imagen",
     status: "PROPUESTO",
     decision: "D10 exige atar píxeles y calibración, sin número",
   },
   "SS-CAM-003": {
-    reason: "RECTIFIED_WITH_DISTORTION",
+    reason: "RECTIFICADA_CON_DISTORSION",
     cause: "unos intrínsecos declarados sobre imagen rectificada traen coeficientes de distorsión",
     status: "PROPUESTO",
     decision: "D10 nombra el caso, sin número",
   },
   "SS-CAM-006": {
-    reason: "DEPTH_CAMERA_MISSING",
+    reason: "CAMARA_DE_PROFUNDIDAD_AUSENTE",
     cause: "un mapa de profundidad apunta a una cámara que el CameraSet no declara",
     status: "PROPUESTO",
     decision: "D20 exige que la profundidad sea interpretable, sin número",
   },
   "SS-CAM-005": {
-    reason: "CAMERA_POSE_NOT_RIGID",
+    reason: "POSE_NO_RIGIDA",
     cause: "una pose de cámara cuya última fila no es [0, 0, 0, 1]",
     status: "PROPUESTO",
     decision: "D32 fija la forma de la matriz, sin número",
   },
   "SS-CAM-004": {
-    reason: "CAMERA_GRID_MISMATCH",
+    reason: "REJILLA_NO_COINCIDE",
     cause: "las dimensiones declaradas no son las de la rejilla real de la imagen",
     status: "PROPUESTO",
     decision: "D33 fija que las dimensiones describen la rejilla real, sin número",
@@ -207,31 +207,31 @@ export const PACKAGE_CODE_TABLE = {
   // que el paquete esté mal: un paquete perfecto puede no caber. Por eso los
   // proyecta el código de salida 23 y no el 20.
   "SS-IO-001": {
-    reason: "MANIFEST_TOO_LARGE",
+    reason: "MANIFIESTO_DEMASIADO_GRANDE",
     cause: "el manifest pasa del tope de bytes antes de leerlo",
     status: "PROPUESTO",
     decision: "D13 reserva el código de salida 23, sin número de identificador",
   },
   "SS-IO-002": {
-    reason: "ARTIFACT_TOO_LARGE",
+    reason: "ARTEFACTO_DEMASIADO_GRANDE",
     cause: "el artifact declara más bytes que el tope",
     status: "PROPUESTO",
     decision: "D13 reserva el código de salida 23, sin número de identificador",
   },
   "SS-IO-003": {
-    reason: "PACKAGE_TOO_MANY_ARTIFACTS",
+    reason: "DEMASIADOS_ARTEFACTOS",
     cause: "el manifest declara más artifacts que el tope",
     status: "PROPUESTO",
     decision: "D13 reserva el código de salida 23, sin número de identificador",
   },
   "SS-IO-004": {
-    reason: "PLY_HEADER_TOO_LONG",
+    reason: "CABECERA_PLY_DEMASIADO_LARGA",
     cause: "la cabecera del PLY no termina dentro del tope de líneas",
     status: "PROPUESTO",
     decision: "D13 reserva el código de salida 23, sin número de identificador",
   },
   "SS-IO-005": {
-    reason: "PLY_ELEMENT_COUNT_EXCEEDS_LIMIT",
+    reason: "ELEMENTO_PLY_SOBRE_EL_TOPE",
     cause: "un elemento del PLY declara más entradas que el tope",
     status: "PROPUESTO",
     decision: "D13 reserva el código de salida 23, sin número de identificador",
@@ -241,13 +241,13 @@ export const PACKAGE_CODE_TABLE = {
     // arregla quien produce el fichero y «declara más de lo que trae» lo arregla
     // su escritor. Y es el que de verdad ataja la cabecera mentirosa, porque se
     // decide contando filas y sin reservar nada.
-    reason: "PLY_TRUNCATED",
+    reason: "PLY_TRUNCADO",
     cause: "un elemento del PLY declara más entradas de las que el fichero trae",
     status: "PROPUESTO",
     decision: "D13 reserva el código de salida 23, sin número de identificador",
   },
   "SS-IO-007": {
-    reason: "ARTIFACT_UNREADABLE",
+    reason: "ARTEFACTO_ILEGIBLE",
     cause: "el artifact está admitido pero no se puede interpretar, y no es un formato que se rechace por su nombre",
     status: "PROPUESTO",
     decision: "D7 nombra la lectura, sin número",

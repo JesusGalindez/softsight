@@ -185,7 +185,7 @@ function documentOf(base, testCase) {
   assert.equal(escapado.execution, "ERROR");
   assert.deepEqual(
     escapado.issues.map((issue) => issue.code),
-    [PACKAGE_CODES.SYMLINK_ESCAPE],
+    [PACKAGE_CODES.ENLACE_FUERA_DE_LA_RAIZ],
   );
 
   // D6 nombra dos casos más que un `realpath` resuelve de una vez, pero que
@@ -199,7 +199,7 @@ function documentOf(base, testCase) {
   );
   assert.deepEqual(
     anidado.issues.map((issue) => issue.code),
-    [PACKAGE_CODES.SYMLINK_ESCAPE],
+    [PACKAGE_CODES.ENLACE_FUERA_DE_LA_RAIZ],
   );
   const roto = ingestPackage(
     { ...base, artifacts: [{ ...base.artifacts[0], path: "roto.ply" }] },
@@ -207,7 +207,7 @@ function documentOf(base, testCase) {
   );
   assert.deepEqual(
     roto.issues.map((issue) => issue.code),
-    [PACKAGE_CODES.MISSING_ARTIFACT],
+    [PACKAGE_CODES.ARTEFACTO_AUSENTE],
   );
 
   const tocado = ingestPackage(
@@ -216,7 +216,7 @@ function documentOf(base, testCase) {
   );
   assert.deepEqual(
     tocado.issues.map((issue) => issue.code),
-    [PACKAGE_CODES.HASH_MISMATCH],
+    [PACKAGE_CODES.HASH_NO_COINCIDE],
   );
 
   console.log(
@@ -367,7 +367,7 @@ function sha256Of(path) {
   const sinEvidencia = conManifest({ requiredEvidence: ["mesh", "depth-frontal"] });
   assert.equal(sinEvidencia.report.execution, "COMPLETE");
   assert.equal(sinEvidencia.report.certification, "INCONCLUSIVE");
-  assert.equal(sinEvidencia.report.certificationReason, "INSUFFICIENT_EVIDENCE");
+  assert.equal(sinEvidencia.report.certificationReason, "EVIDENCIA_INSUFICIENTE");
   assert.deepEqual(sinEvidencia.report.evidence.missingEvidence, ["depth-frontal"]);
   assert.equal(sinEvidencia.exitCode, 11);
 
@@ -376,7 +376,7 @@ function sha256Of(path) {
   const sinSellar = conManifest({ state: "WRITING", requiredEvidence: ["mesh"] });
   assert.equal(sinSellar.report.execution, "ERROR");
   assert.equal(sinSellar.report.certification, "INCONCLUSIVE");
-  assert.equal(sinSellar.report.certificationReason, "PACKAGE_NOT_CONSUMABLE");
+  assert.equal(sinSellar.report.certificationReason, "PAQUETE_NO_CONSUMIBLE");
   assert.equal(sinSellar.report.measurements.length, 0, "no se mide lo que no se admitió");
   assert.equal(sinSellar.exitCode, 20);
 
@@ -406,7 +406,7 @@ function sha256Of(path) {
   assert.equal(noLegible.report.certification, "INCONCLUSIVE");
   assert.equal(noLegible.exitCode, 22, "formato no soportado tiene su propio código de salida");
   assert.ok(
-    noLegible.report.warnings.some((entry) => entry.reason === "ARTIFACT_FORMAT_UNSUPPORTED"),
+    noLegible.report.warnings.some((entry) => entry.reason === "FORMATO_NO_SOPORTADO"),
     "el motivo dice que es el formato, no que el fichero esté roto",
   );
 
@@ -439,7 +439,7 @@ function sha256Of(path) {
   const roto = inspectPackage(join(vacio, "manifest.json"));
   assert.equal(roto.report.execution, "COMPLETE", "el paquete es íntegro: el problema es lo que dice");
   assert.equal(roto.report.certification, "FAIL");
-  assert.equal(roto.report.certificationReason, "MESH_DECLARED_WITHOUT_SURFACE");
+  assert.equal(roto.report.certificationReason, "MALLA_SIN_SUPERFICIE");
   assert.equal(roto.exitCode, 1);
   console.log(
     "reconstrucción: ok (una malla declarada sin un solo triángulo es FAIL con salida 1, y la " +
@@ -597,7 +597,7 @@ function sha256Of(path) {
   const antes = process.memoryUsage().arrayBuffers;
   assert.throws(
     () => parsePlyAscii(cabecera(5_000_000)),
-    /^Error: PLY_TRUNCATED: /,
+    /^Error: PLY_TRUNCADO: /,
     "una cabecera que promete más filas de las que hay tiene que rechazarse por su nombre",
   );
   const crecimiento = process.memoryUsage().arrayBuffers - antes;
@@ -609,18 +609,18 @@ function sha256Of(path) {
   // Y por encima del tope no hace falta ni contar filas: se para en la cabecera.
   assert.throws(
     () => parsePlyAscii(cabecera(RESOURCE_LIMITS.plyElementCount.value + 1)),
-    /^Error: PLY_ELEMENT_COUNT_EXCEEDS_LIMIT: /,
+    /^Error: ELEMENTO_PLY_SOBRE_EL_TOPE: /,
     "por encima del tope de entradas se para en la cabecera",
   );
 
   // `Number("1e999")` es `Infinity` sin que nadie escriba la palabra, y con él la
   // reserva es `NaN` y el bucle no termina (D17).
-  assert.throws(() => parsePlyAscii(cabecera("1e999")), /^Error: PLY_HEADER_INVALID: /);
-  assert.throws(() => parsePlyAscii(cabecera("-1")), /^Error: PLY_HEADER_INVALID: /);
+  assert.throws(() => parsePlyAscii(cabecera("1e999")), /^Error: CABECERA_PLY_INVALIDA: /);
+  assert.throws(() => parsePlyAscii(cabecera("-1")), /^Error: CABECERA_PLY_INVALIDA: /);
 
   // Una cabecera sin `end_header` recorría el documento entero buscándolo.
   const sinFin = ["ply", "format ascii 1.0", ...Array(2_000).fill("comment relleno")].join("\n");
-  assert.throws(() => parsePlyAscii(sinFin), /^Error: PLY_HEADER_TOO_LONG: /);
+  assert.throws(() => parsePlyAscii(sinFin), /^Error: CABECERA_PLY_DEMASIADO_LARGA: /);
 
   console.log(
     `reconstrucción: ok (PLY: truncado, tope de entradas, 1e999, negativo y cabecera sin fin; ` +
@@ -648,7 +648,7 @@ function sha256Of(path) {
   const unoEnorme = ingestPackage(enorme, reader);
   assert.deepEqual(
     unoEnorme.issues.map((entry) => entry.code),
-    [PACKAGE_CODES.ARTIFACT_TOO_LARGE],
+    [PACKAGE_CODES.ARTEFACTO_DEMASIADO_GRANDE],
   );
   assert.equal(exitCodeFor(unoEnorme), 23, "un artifact que no cabe no es un paquete inválido");
 
@@ -662,7 +662,7 @@ function sha256Of(path) {
   const demasiados = ingestPackage(muchos, reader);
   assert.deepEqual(
     demasiados.issues.map((entry) => entry.code),
-    [PACKAGE_CODES.TOO_MANY_ARTIFACTS],
+    [PACKAGE_CODES.DEMASIADOS_ARTEFACTOS],
   );
   assert.equal(exitCodeFor(demasiados), 23);
 
@@ -723,7 +723,7 @@ function sha256Of(path) {
   const mal = ingestPackage(conEscala(relativa, enMetros), reader);
   assert.deepEqual(
     mal.issues.map((entry) => entry.code),
-    [PACKAGE_CODES.ABSOLUTE_BUDGET_WITHOUT_SCALE],
+    [PACKAGE_CODES.PRESUPUESTO_ABSOLUTO_SIN_ESCALA],
   );
   // El mensaje trae el número, la unidad y el estado: sin los tres, el productor
   // no sabe si arreglar la escala o el presupuesto.
@@ -741,7 +741,7 @@ function sha256Of(path) {
   );
   assert.deepEqual(
     sinUnidad.issues.map((entry) => entry.code),
-    [PACKAGE_CODES.BUDGET_UNIT_MISDECLARED],
+    [PACKAGE_CODES.UNIDAD_DE_PRESUPUESTO_MAL_DECLARADA],
   );
   const relativaConUnidad = ingestPackage(
     conEscala(relativa, [{ name: "desviación", units: "RELATIVE_TO_DIAGONAL", unit: "m", max: 0.01 }]),
@@ -749,7 +749,7 @@ function sha256Of(path) {
   );
   assert.deepEqual(
     relativaConUnidad.issues.map((entry) => entry.code),
-    [PACKAGE_CODES.BUDGET_UNIT_MISDECLARED],
+    [PACKAGE_CODES.UNIDAD_DE_PRESUPUESTO_MAL_DECLARADA],
   );
 
   console.log(
@@ -835,7 +835,7 @@ function sha256Of(path) {
   );
   assert.deepEqual(
     reapuntada.report.warnings.map((entry) => entry.code),
-    [PACKAGE_CODES.CAMERA_IMAGE_HASH_MISMATCH],
+    [PACKAGE_CODES.HASH_DE_IMAGEN_NO_COINCIDE],
   );
   assert.equal(reapuntada.exitCode, 20);
 
@@ -846,7 +846,7 @@ function sha256Of(path) {
   );
   assert.deepEqual(
     contradictoria.report.warnings.map((entry) => entry.code),
-    [PACKAGE_CODES.RECTIFIED_WITH_DISTORTION],
+    [PACKAGE_CODES.RECTIFICADA_CON_DISTORSION],
   );
   assert.match(contradictoria.report.warnings[0].message, /RECTIFIED con k1, k2/);
 
@@ -862,7 +862,7 @@ function sha256Of(path) {
   );
   assert.deepEqual(
     girada.report.warnings.map((entry) => entry.code),
-    [PACKAGE_CODES.CAMERA_GRID_MISMATCH],
+    [PACKAGE_CODES.REJILLA_NO_COINCIDE],
   );
   assert.match(girada.report.warnings[0].message, /declara \d+×\d+ y la imagen es \d+×\d+/);
 
@@ -936,7 +936,7 @@ function sha256Of(path) {
   const suelto = ingestPackage(conGrafo([arista("ASSET_CANONICAL", "PRODUCTION")]), reader);
   assert.deepEqual(
     suelto.issues.map((entry) => entry.code).sort(),
-    [PACKAGE_CODES.FRAME_UNREACHABLE, PACKAGE_CODES.FRAME_UNREACHABLE],
+    [PACKAGE_CODES.MARCO_INALCANZABLE, PACKAGE_CODES.MARCO_INALCANZABLE],
     `los dos marcos quedan sueltos: ${JSON.stringify(suelto.issues)}`,
   );
 
@@ -956,13 +956,13 @@ function sha256Of(path) {
     ingestPackage(conGrafo([arista("RECONSTRUCTION", "ASSET_CANONICAL", noRigida)]), reader).issues.map(
       (entry) => entry.code,
     ),
-    [PACKAGE_CODES.FRAME_TRANSFORM_NOT_RIGID],
+    [PACKAGE_CODES.TRANSFORMACION_NO_RIGIDA],
   );
   assert.deepEqual(
     ingestPackage(conGrafo([arista("RECONSTRUCTION", "RECONSTRUCTION")]), reader).issues.map(
       (entry) => entry.code,
     ),
-    [PACKAGE_CODES.FRAME_TRANSFORM_MALFORMED],
+    [PACKAGE_CODES.TRANSFORMACION_MAL_FORMADA],
   );
   // Duplicada: componer dependería de cuál se coja, y nadie ha dicho cuál manda.
   assert.deepEqual(
@@ -970,7 +970,7 @@ function sha256Of(path) {
       conGrafo([arista("RECONSTRUCTION", "ASSET_CANONICAL"), arista("RECONSTRUCTION", "ASSET_CANONICAL")]),
       reader,
     ).issues.map((entry) => entry.code),
-    [PACKAGE_CODES.FRAME_TRANSFORM_MALFORMED],
+    [PACKAGE_CODES.TRANSFORMACION_MAL_FORMADA],
   );
 
   console.log(
@@ -1039,7 +1039,7 @@ function sha256Of(path) {
   const mala = inspectPackage(manifestPath);
   assert.deepEqual(
     mala.report.warnings.map((entry) => entry.code),
-    [PACKAGE_CODES.CAMERA_POSE_NOT_RIGID],
+    [PACKAGE_CODES.POSE_NO_RIGIDA],
   );
   assert.equal(mala.exitCode, 20);
 
@@ -1087,7 +1087,7 @@ function sha256Of(path) {
   );
   assert.deepEqual(
     sinCamara.issues.map((entry) => entry.code),
-    [PACKAGE_CODES.DEPTH_CAMERA_MISSING],
+    [PACKAGE_CODES.CAMARA_DE_PROFUNDIDAD_AUSENTE],
   );
 
   // El número. Para un píxel a (u, v) del punto principal, la longitud del rayo

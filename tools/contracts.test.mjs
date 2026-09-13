@@ -243,7 +243,7 @@ const OPAQUE = new Set([
   assert.equal(requerida.execution, "UNSUPPORTED", "una extensión requerida que no se entiende no se mide");
   assert.deepEqual(
     requerida.issues.map((entry) => entry.code),
-    [PACKAGE_CODES.EXTENSION_REQUIRED_UNSUPPORTED],
+    [PACKAGE_CODES.EXTENSION_REQUERIDA_NO_SOPORTADA],
   );
   assert.equal(exitCodeFor(requerida), 21, "21 es «este contrato no lo leo», y eso es lo que pasa");
 
@@ -359,7 +359,7 @@ const OPAQUE = new Set([
   assert.equal(pide.execution, "UNSUPPORTED");
   assert.deepEqual(
     pide.issues.map((entry) => entry.code),
-    [PACKAGE_CODES.CAPABILITY_REQUIRED_UNSUPPORTED],
+    [PACKAGE_CODES.CAPACIDAD_REQUERIDA_NO_SOPORTADA],
   );
   assert.match(pide.issues[0].message, /sabe hacer .*mesh-audit/);
   assert.equal(exitCodeFor(pide), 21);

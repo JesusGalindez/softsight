@@ -95,7 +95,7 @@ export function inspectPackage(manifestPath) {
       exitCode: 23,
       fatal:
         `el manifest ocupa ${manifestBytes} bytes y el tope son ${RESOURCE_LIMITS.manifestBytes.value} ` +
-        `(${PACKAGE_CODES.MANIFEST_TOO_LARGE})`,
+        `(${PACKAGE_CODES.MANIFIESTO_DEMASIADO_GRANDE})`,
     };
   }
   const raw = readFileSync(manifestPath);
@@ -129,7 +129,7 @@ export function inspectPackage(manifestPath) {
       // de salida lo distingue de «el contrato no lo leo».
       //
       // El `reason` sale de la tabla y no se escribe aquí: escrito a mano decía
-      // `ARTIFACT_UNREADABLE` con el identificador de «el hash no cuadra», que es
+      // `ARTEFACTO_ILEGIBLE` con el identificador de «el hash no cuadra», que es
       // lo que el otro lado parsea. Un dato, un dueño.
       const code = plyErrorCode(String(error.message));
       ingest.issues.push({
@@ -137,7 +137,7 @@ export function inspectPackage(manifestPath) {
         reason: PACKAGE_CODE_TABLE[code].reason,
         message: `artifact ${artifact.id}: ${error.message}`,
       });
-      ingest.execution = code === PACKAGE_CODES.FORMAT_UNSUPPORTED ? "UNSUPPORTED" : "ERROR";
+      ingest.execution = code === PACKAGE_CODES.FORMATO_NO_SOPORTADO ? "UNSUPPORTED" : "ERROR";
       continue;
     }
     if (mesh === null) continue;
@@ -173,8 +173,8 @@ export function inspectPackage(manifestPath) {
       // Un formato de imagen que no sabemos abrir no es una cámara mal
       // declarada: se dice por su nombre y se sigue, igual que con el PLY.
       ingest.issues.push({
-        code: PACKAGE_CODES.FORMAT_UNSUPPORTED,
-        reason: PACKAGE_CODE_TABLE[PACKAGE_CODES.FORMAT_UNSUPPORTED].reason,
+        code: PACKAGE_CODES.FORMATO_NO_SOPORTADO,
+        reason: PACKAGE_CODE_TABLE[PACKAGE_CODES.FORMATO_NO_SOPORTADO].reason,
         message: `cámara ${camera.id}: ${camera.imageArtifactId} no se puede abrir para comprobar su rejilla`,
       });
       ingest.execution = "UNSUPPORTED";
@@ -182,8 +182,8 @@ export function inspectPackage(manifestPath) {
     }
     if (grid.width !== camera.width || grid.height !== camera.height) {
       ingest.issues.push({
-        code: PACKAGE_CODES.CAMERA_GRID_MISMATCH,
-        reason: PACKAGE_CODE_TABLE[PACKAGE_CODES.CAMERA_GRID_MISMATCH].reason,
+        code: PACKAGE_CODES.REJILLA_NO_COINCIDE,
+        reason: PACKAGE_CODE_TABLE[PACKAGE_CODES.REJILLA_NO_COINCIDE].reason,
         message:
           `cámara ${camera.id}: declara ${camera.width}×${camera.height} y la imagen es ` +
           `${grid.width}×${grid.height}`,
@@ -211,11 +211,11 @@ export function inspectPackage(manifestPath) {
  * aquí deja al lector sin saber nada de la tabla de la frontera.
  */
 function plyErrorCode(message) {
-  if (message.startsWith("PLY_FORMAT_UNSUPPORTED")) return PACKAGE_CODES.FORMAT_UNSUPPORTED;
-  if (message.startsWith("PLY_HEADER_TOO_LONG")) return PACKAGE_CODES.PLY_HEADER_TOO_LONG;
-  if (message.startsWith("PLY_ELEMENT_COUNT_EXCEEDS_LIMIT")) return PACKAGE_CODES.PLY_COUNT_EXCEEDS_LIMIT;
-  if (message.startsWith("PLY_TRUNCATED")) return PACKAGE_CODES.PLY_TRUNCATED;
-  return PACKAGE_CODES.UNREADABLE;
+  if (message.startsWith("FORMATO_PLY_NO_SOPORTADO")) return PACKAGE_CODES.FORMATO_NO_SOPORTADO;
+  if (message.startsWith("CABECERA_PLY_DEMASIADO_LARGA")) return PACKAGE_CODES.CABECERA_PLY_DEMASIADO_LARGA;
+  if (message.startsWith("ELEMENTO_PLY_SOBRE_EL_TOPE")) return PACKAGE_CODES.ELEMENTO_PLY_SOBRE_EL_TOPE;
+  if (message.startsWith("PLY_TRUNCADO")) return PACKAGE_CODES.PLY_TRUNCADO;
+  return PACKAGE_CODES.ARTEFACTO_ILEGIBLE;
 }
 
 /** La proyección de D13, con los dos ejes decidiendo juntos. */
@@ -225,7 +225,7 @@ export function exitCodeForReport(report) {
   // que no está roto.
   if (report.warnings.some((entry) => RESOURCE_LIMIT_REASONS.includes(entry.reason))) return 23;
   if (report.execution === "UNSUPPORTED") {
-    return report.warnings.some((entry) => entry.reason === "ARTIFACT_FORMAT_UNSUPPORTED") ? 22 : 21;
+    return report.warnings.some((entry) => entry.reason === "FORMATO_NO_SOPORTADO") ? 22 : 21;
   }
   if (report.execution !== "COMPLETE") return 20;
   if (report.certification === "PASS") return 0;

@@ -101,7 +101,7 @@ interface PlyElement {
  */
 export function parsePlyAscii(text: string): { mesh: PlyMesh | null; points: PlyPoints } {
   const lines = text.split(/\r?\n/);
-  if (lines[0]?.trim() !== "ply") throw new Error("PLY_HEADER_MISSING: el fichero no empieza por `ply`");
+  if (lines[0]?.trim() !== "ply") throw new Error("CABECERA_PLY_AUSENTE: el fichero no empieza por `ply`");
 
   const elements: PlyElement[] = [];
   let cursor = 1;
@@ -131,12 +131,12 @@ export function parsePlyAscii(text: string): { mesh: PlyMesh | null; points: Ply
       // termina nunca (D17).
       if (!Number.isSafeInteger(count) || count < 0) {
         throw new Error(
-          `PLY_HEADER_INVALID: el elemento ${parts[1]} declara ${JSON.stringify(parts[2])}, que no es un entero`,
+          `CABECERA_PLY_INVALIDA: el elemento ${parts[1]} declara ${JSON.stringify(parts[2])}, que no es un entero`,
         );
       }
       if (count > RESOURCE_LIMITS.plyElementCount.value) {
         throw new Error(
-          `PLY_ELEMENT_COUNT_EXCEEDS_LIMIT: el elemento ${parts[1]} declara ${count} entradas y el tope son ${RESOURCE_LIMITS.plyElementCount.value}`,
+          `ELEMENTO_PLY_SOBRE_EL_TOPE: el elemento ${parts[1]} declara ${count} entradas y el tope son ${RESOURCE_LIMITS.plyElementCount.value}`,
         );
       }
       elements.push({ name: parts[1], count, properties: [] });
@@ -144,21 +144,21 @@ export function parsePlyAscii(text: string): { mesh: PlyMesh | null; points: Ply
     }
     if (parts[0] === "property") {
       const element = elements[elements.length - 1];
-      if (element === undefined) throw new Error("PLY_HEADER_INVALID: una propiedad antes de su elemento");
+      if (element === undefined) throw new Error("CABECERA_PLY_INVALIDA: una propiedad antes de su elemento");
       element.properties.push({ name: parts[parts.length - 1], list: parts[1] === "list" });
     }
   }
 
   if (!sawEndHeader) {
     throw new Error(
-      `PLY_HEADER_TOO_LONG: la cabecera no termina en las primeras ${RESOURCE_LIMITS.plyHeaderLines.value} líneas`,
+      `CABECERA_PLY_DEMASIADO_LARGA: la cabecera no termina en las primeras ${RESOURCE_LIMITS.plyHeaderLines.value} líneas`,
     );
   }
 
   if (format !== "ascii") {
     // Por su nombre y no con un fallo genérico: quien reciba esto tiene que poder
     // distinguir «no lo entiendo» de «está roto».
-    throw new Error(`PLY_FORMAT_UNSUPPORTED: solo se lee ascii, y este declara ${format ?? "nada"}`);
+    throw new Error(`FORMATO_PLY_NO_SOPORTADO: solo se lee ascii, y este declara ${format ?? "nada"}`);
   }
 
   const values: string[] = [];
@@ -181,13 +181,13 @@ export function parsePlyAscii(text: string): { mesh: PlyMesh | null; points: Ply
     // gigabytes para morir en la primera. Se decide contando, sin tocar memoria.
     if (element.count > values.length - row) {
       throw new Error(
-        `PLY_TRUNCATED: el elemento ${element.name} declara ${element.count} entradas y quedan ${values.length - row} filas`,
+        `PLY_TRUNCADO: el elemento ${element.name} declara ${element.count} entradas y quedan ${values.length - row} filas`,
       );
     }
     if (element.name === "vertex") {
       const names = element.properties.map((property) => property.name);
       const [x, y, z] = ["x", "y", "z"].map((axis) => names.indexOf(axis));
-      if (x < 0 || y < 0 || z < 0) throw new Error("PLY_VERTEX_INVALID: faltan x, y o z");
+      if (x < 0 || y < 0 || z < 0) throw new Error("VERTICE_PLY_INVALIDO: faltan x, y o z");
       positions = new Float32Array(element.count * 3);
       for (let index = 0; index < element.count; index += 1, row += 1) {
         const parts = values[row].split(/\s+/);

@@ -290,7 +290,7 @@ export const RECONSTRUCTION_PACKAGE_SCHEMA: ObjectSchema = {
   state: {
     type: '"WRITING"|"SEALED"',
     required: true,
-    description: "Un paquete solo se consume SEALED; cualquier otro estado es PACKAGE_NOT_SEALED (D29).",
+    description: "Un paquete solo se consume SEALED; cualquier otro estado es PAQUETE_SIN_SELLAR (D29).",
   },
   producer: {
     type: "object",

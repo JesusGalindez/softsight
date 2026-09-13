@@ -180,7 +180,7 @@ console.log("códigos: ok (--schema publica el registro igual que la biblioteca)
     assert.match(code, /^SS-[A-Z]{2,6}-\d{3}$/, `${code}: fuera del formato del espacio`);
   }
   // El motivo canónico sí puede repetirse —dos causas distintas comparten
-  // `ARTIFACT_PATH_ESCAPES_ROOT`, la ruta textual y el enlace— y por eso el
+  // `RUTA_FUERA_DE_LA_RAIZ`, la ruta textual y el enlace— y por eso el
   // contrato dice que se parsea el identificador y no el motivo.
   for (const entry of PACKAGE_CODE_LIST) {
     assert.match(entry.reason, /^[A-Z][A-Z0-9_]+$/, `${entry.code}: motivo fuera de vocabulario`);

@@ -273,16 +273,16 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
     // Sin paquete no hay nada sobre lo que opinar. No es FAIL: FAIL diría algo
     // sobre la geometría de alguien, y aquí no se ha medido nada (P2).
     certification = "INCONCLUSIVE";
-    reason = "PACKAGE_NOT_CONSUMABLE";
+    reason = "PAQUETE_NO_CONSUMIBLE";
   } else if (missing.length > 0) {
     certification = "INCONCLUSIVE";
-    reason = "INSUFFICIENT_EVIDENCE";
+    reason = "EVIDENCIA_INSUFICIENTE";
   } else if (measurements.length === 0) {
     certification = "INCONCLUSIVE";
-    reason = "REQUIRED_METRIC_UNAVAILABLE";
+    reason = "METRICA_REQUERIDA_NO_DISPONIBLE";
   } else if (measurements.some((measurement) => measurement.triangles === 0)) {
     certification = "FAIL";
-    reason = "MESH_DECLARED_WITHOUT_SURFACE";
+    reason = "MALLA_SIN_SUPERFICIE";
   }
 
   return {

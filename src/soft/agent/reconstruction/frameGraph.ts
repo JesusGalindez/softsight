@@ -72,7 +72,7 @@ export function auditTransforms(transforms: readonly FrameTransform[]): FrameGra
     const where = `${transform.from} → ${transform.to}`;
     if (transform.from === transform.to) {
       issues.push({
-        reason: "FRAME_TRANSFORM_SELF",
+        reason: "TRANSFORMACION_A_SI_MISMA",
         message: `${where}: una transformación de un marco a sí mismo no registra nada`,
       });
       continue;
@@ -82,7 +82,7 @@ export function auditTransforms(transforms: readonly FrameTransform[]): FrameGra
       // Dos aristas entre los mismos marcos hacen que el resultado dependa de
       // cuál se coja, y nadie ha dicho cuál manda.
       issues.push({
-        reason: "FRAME_TRANSFORM_DUPLICATE",
+        reason: "TRANSFORMACION_DUPLICADA",
         message: `${where}: declarada dos veces, y componer depende de cuál se elija`,
       });
       continue;
@@ -91,7 +91,7 @@ export function auditTransforms(transforms: readonly FrameTransform[]): FrameGra
 
     if (transform.matrix.length !== 16 || !transform.matrix.every((value) => Number.isFinite(value))) {
       issues.push({
-        reason: "FRAME_TRANSFORM_MALFORMED",
+        reason: "TRANSFORMACION_MAL_FORMADA",
         message: `${where}: la matriz no son dieciséis números finitos`,
       });
       continue;
@@ -99,7 +99,7 @@ export function auditTransforms(transforms: readonly FrameTransform[]): FrameGra
     const lastRow = transform.matrix.slice(12);
     if (lastRow.some((value, index) => value !== IDENTITY.slice(12)[index])) {
       issues.push({
-        reason: "FRAME_TRANSFORM_NOT_RIGID",
+        reason: "TRANSFORMACION_NO_RIGIDA",
         message:
           `${where}: la última fila es [${lastRow.join(", ")}] y una transformación entre marcos ` +
           "es rígida, con [0, 0, 0, 1]",

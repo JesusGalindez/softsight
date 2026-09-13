@@ -16,9 +16,10 @@ del suavizado que el bloque A destapó. Qué quedó de cada tarea lo lleva
 lleva su cuenta; aquí no se repite.
 
 **Lo que queda no es trabajo de este repositorio**, y está en el §5.20 del mapa
-con su dueño al lado: mandar el envío 02, decidir el idioma de los códigos y
-conseguir un COLMAP real son del dueño; R0-B y los 28 identificadores son de
-VideoMesh; E1, Ω6.4 y F1 viven en el editor.
+con su dueño al lado. El envío 02 se mandó el 2026-09-13 y el idioma de los
+códigos se decidió el mismo día —**todo en español**—, así que del dueño solo
+queda conseguir un COLMAP real; R0-B y los 28 identificadores son de VideoMesh;
+E1, Ω6.4 y F1 viven en el editor.
 
 El documento se queda **como plantilla**: las reglas de §1 y la forma de §2 valen
 para el encargo siguiente, que empezará por donde el §5.20 diga que se ha
@@ -152,11 +153,11 @@ códigos, §86.2 (g)— y apunta a D1 y D27 para las otras dos en vez de repetir
 
 **Contrato.** No se mueve nada. Es prosa.
 
-**Aviso.** El idioma de los códigos **es una decisión de criterio y afecta a
-VideoMesh**: no la toma el agente. Se deja anotada como pendiente del dueño, con
-el coste escrito: `test:codes` compara la tabla contra `src/` en las dos
-direcciones, así que mezclar `RECON_LOW_COVERAGE` con `BORDE_ABIERTO` se paga en
-cada código nuevo.
+**Aviso, ya resuelto.** El idioma de los códigos era una decisión de criterio que
+afectaba a VideoMesh, así que no la tomó el agente. **La tomó el dueño el
+2026-09-13: todo en español**, y se aplicó a los 36 motivos. La frontera está en
+§86.2 (g) del plan: entran los motivos, no los valores de enum que VideoMesh
+escribe.
 
 ---
 

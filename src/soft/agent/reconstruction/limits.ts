@@ -17,7 +17,7 @@
  * ## Qué protege cada uno, y qué no
  *
  * Los topes son el techo, no la comprobación fina. Lo que de verdad mata el caso
- * de la cabecera mentirosa es `PLY_TRUNCATED`: un elemento no puede declarar más
+ * de la cabecera mentirosa es `PLY_TRUNCADO`: un elemento no puede declarar más
  * entradas de las que el fichero trae, y eso se sabe **contando filas, sin
  * reservar nada**. El tope existe para el caso contrario —un fichero enorme y
  * coherente— y para que el rechazo tenga número en vez de terminar en un
@@ -105,10 +105,10 @@ export const RESOURCE_LIMIT_LIST = Object.entries(RESOURCE_LIMITS).map(([name, l
  * paquete puede ser perfecto y no caber.
  */
 export const RESOURCE_LIMIT_REASONS: readonly string[] = [
-  "MANIFEST_TOO_LARGE",
-  "ARTIFACT_TOO_LARGE",
-  "PACKAGE_TOO_MANY_ARTIFACTS",
-  "PLY_HEADER_TOO_LONG",
-  "PLY_ELEMENT_COUNT_EXCEEDS_LIMIT",
-  "PLY_TRUNCATED",
+  "MANIFIESTO_DEMASIADO_GRANDE",
+  "ARTEFACTO_DEMASIADO_GRANDE",
+  "DEMASIADOS_ARTEFACTOS",
+  "CABECERA_PLY_DEMASIADO_LARGA",
+  "ELEMENTO_PLY_SOBRE_EL_TOPE",
+  "PLY_TRUNCADO",
 ];

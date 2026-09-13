@@ -500,8 +500,12 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       [`envio-videomesh-02.md`](envio-videomesh-02.md) y no se ha enviado. Desde el
       01 —que sigue sin respuesta— han cambiado dos esquemas, hay cuatro campos
       obligatorios nuevos y **28 identificadores en PROPUESTO**.
-    - **El idioma de los códigos nuevos.** Es lo único que queda de las tres cosas
-      que el punto 19 daba por abiertas, y lo paga cada código que se escribe.
+    - ~~El idioma de los códigos.~~ **Decidido el 2026-09-13: todo en español**, y
+      aplicado a los 32 motivos de frontera y a los cuatro del veredicto. No toca
+      los valores de enum que VideoMesh escribe —eso es el vocabulario del
+      paquete, no un código— y no os rompe porque D2 manda parsear el
+      identificador. Con esto se cierra lo último que quedaba abierto de las tres
+      cosas del punto 19.
     - **De dónde sale un COLMAP real.** Sin él D4 no pasa de MEDIO HECHA y
       `test:colmap` sigue declarándose no ejecutada.
 

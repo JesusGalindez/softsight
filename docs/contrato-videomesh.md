@@ -167,7 +167,7 @@ Código legible en español, más un **identificador neutro y estable**
 
 **Pendiente de VideoMesh, del 2026-08-12.** La ingesta necesitó cinco
 identificadores que el contrato no asigna: el espacio nombra los motivos
-—`CONTRACT_SCHEMA_MISMATCH`, `PACKAGE_NOT_SEALED`— pero no los números, y el
+—`ESQUEMA_NO_COINCIDE`, `PAQUETE_SIN_SELLAR`— pero no los números, y el
 número es lo que se parsea.
 
 ```text
@@ -192,12 +192,24 @@ formato del espacio, coincidan con lo que se emite en las dos direcciones, que l
 cuatro de D6 estén FIJADO, y que ningún PROPUESTO se cuele como fijado sin decir
 qué decisión le falta. Cambiar un número cuesta un sitio.
 
+**Idioma decidido el 2026-09-13: todo en español**, también el motivo canónico.
+Lo pedía el §86.2 (g) del plan de reconstrucción, que avisaba de que una tabla en
+dos idiomas se vuelve ilegible. Entran los 32 motivos de frontera y los cuatro
+del veredicto; **no entran** los nombres de campo ni los valores de enum que
+VideoMesh escribe —`SEALED`, `TRIANGLE_MESH`, `ABSOLUTE`, `PASS`—, porque eso no
+es un código sino el vocabulario del paquete, y traducirlo rompería todo manifest
+existente.
+
+Que esto **no os rompa** es mérito de esta misma decisión: se parsea el
+identificador. `SS-CAM-001` sigue siendo `SS-CAM-001` y solo cambia el texto que
+lo acompaña.
+
 `SS-PKG-014` es nuevo respecto al envío: «el hash no cuadra» y «el hash no es un
 hash» se arreglan en sitios distintos —el contenido y el escritor del manifest— y
 quien automatice sobre el identificador quiere poder distinguirlos.
 
 **Un motivo puede repetirse y un identificador no.** `SS-PKG-001` y `SS-PKG-003`
-comparten `ARTIFACT_PATH_ESCAPES_ROOT` porque el resultado es el mismo y la causa
+comparten `RUTA_FUERA_DE_LA_RAIZ` porque el resultado es el mismo y la causa
 no. Es la razón de que el contrato mande parsear el identificador.
 
 ### D3 — Ejecución y certificación son dos ejes — IMPLEMENTADA (2026-08-12)
@@ -205,8 +217,8 @@ no. Es la razón de que el contrato mande parsear el identificador.
 ExecutionStatus        COMPLETE | PARTIAL | ERROR | UNSUPPORTED
 CertificationVerdict   PASS | FAIL | INCONCLUSIVE
 ```
-Motivos aparte: `INSUFFICIENT_EVIDENCE`, `UNCERTAINTY_OVERLAPS_THRESHOLD`,
-`REQUIRED_METRIC_UNAVAILABLE`.
+Motivos aparte: `EVIDENCIA_INSUFICIENTE`, `UNCERTAINTY_OVERLAPS_THRESHOLD`,
+`METRICA_REQUERIDA_NO_DISPONIBLE`.
 **Prueba:** `test:reconstruction`, con los dos ejes moviéndose por separado:
 
 ```text
@@ -402,9 +414,9 @@ cumple rellenando una lista— sino **que un marco al que no hay camino se
 rechaza**:
 
 ```text
-arista con la última fila distinta de [0,0,0,1]    FRAME_TRANSFORM_NOT_RIGID
-arista de un marco a sí mismo, o duplicada         FRAME_TRANSFORM_MALFORMED
-marco declarado sin camino desde RECONSTRUCTION    FRAME_UNREACHABLE
+arista con la última fila distinta de [0,0,0,1]    TRANSFORMACION_NO_RIGIDA
+arista de un marco a sí mismo, o duplicada         TRANSFORMACION_MAL_FORMADA
+marco declarado sin camino desde RECONSTRUCTION    MARCO_INALCANZABLE
 ```
 
 **Desde `RECONSTRUCTION` porque es donde están los números**: las cajas y los
@@ -533,7 +545,7 @@ no se publica. `unknown-field-v1` está; `unknown-capability-v1` y
 ### D16 — El hash del esquema se comprueba — IMPLEMENTADA (2026-08-12)
 Hash desconocido:
 ```text
-execution: ERROR   reason: CONTRACT_SCHEMA_MISMATCH
+execution: ERROR   reason: ESQUEMA_NO_COINCIDE
 ```
 Nunca aviso y continuar. En DRAFT una versión puede admitir más de un hash si
 están registrados.
@@ -549,7 +561,7 @@ registro generado         la búsqueda de compatibilidad por hash
 **Prueba:** `contracts/registry.json`, generado por `tools/contracts.mjs` del
 propio artefacto y comprobado por `test:contracts` contra los ficheros: mismos
 esquemas, mismo hash, mismo tamaño. En la ingesta, un `contractSchemaSha256` que
-no esté registrado da `UNSUPPORTED` con `CONTRACT_SCHEMA_MISMATCH` y nunca un
+no esté registrado da `UNSUPPORTED` con `ESQUEMA_NO_COINCIDE` y nunca un
 aviso, y una `contractVersion` fuera de las aceptadas para antes de mirar el
 contenido.
 
@@ -990,8 +1002,8 @@ en silencio a copiar y borrar manteniendo la etiqueta de atómico.
 ```text
 existe el manifest en el paquete final     y     manifest.state == "SEALED"
 
-falta el manifest        → PACKAGE_NOT_SEALED
-state != SEALED          → PACKAGE_NOT_SEALED
+falta el manifest        → PAQUETE_SIN_SELLAR
+state != SEALED          → PAQUETE_SIN_SELLAR
 ```
 
 **`CONSUMED` no es un estado del paquete.** Corrección de VideoMesh sobre su
@@ -1017,7 +1029,7 @@ destino ya existente, y temporal en otro volumen si se puede probar.
 
 **Medio hecha el 2026-08-12, por el lado del consumidor.** `package-integrity-v1`
 prueba las dos condiciones de sellado que SoftSight puede comprobar: sellado entra,
-`WRITING` se rechaza con `PACKAGE_NOT_SEALED`. El resto —rename atómico, mismo
+`WRITING` se rechaza con `PAQUETE_SIN_SELLAR`. El resto —rename atómico, mismo
 volumen, destino que ya existe— lo garantiza quien escribe, y su prueba es de
 VideoMesh.
 

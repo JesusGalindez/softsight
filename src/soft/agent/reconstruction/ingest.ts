@@ -161,44 +161,44 @@ export interface IngestResult {
  * que emitir uno que no exista no compile.
  */
 export const PACKAGE_CODES = {
-  ESCAPES_ROOT: "SS-PKG-001",
-  ABSOLUTE_PATH: "SS-PKG-002",
-  SYMLINK_ESCAPE: "SS-PKG-003",
-  MISSING_ARTIFACT: "SS-PKG-004",
-  SCHEMA_INVALID: "SS-PKG-010",
-  CONTRACT_UNSUPPORTED: "SS-PKG-020",
-  SCHEMA_HASH_UNKNOWN: "SS-PKG-021",
-  FORMAT_UNSUPPORTED: "SS-PKG-022",
-  NOT_SEALED: "SS-PKG-011",
-  SIZE_MISMATCH: "SS-PKG-012",
-  HASH_MISMATCH: "SS-PKG-013",
-  HASH_MALFORMED: "SS-PKG-014",
-  EXTENSION_REQUIRED_UNSUPPORTED: "SS-PKG-023",
-  CAPABILITY_REQUIRED_UNSUPPORTED: "SS-PKG-024",
-  ABSOLUTE_BUDGET_WITHOUT_SCALE: "SS-RECON-001",
-  BUDGET_UNIT_MISDECLARED: "SS-RECON-002",
-  FRAME_TRANSFORM_MALFORMED: "SS-RECON-003",
-  FRAME_TRANSFORM_NOT_RIGID: "SS-RECON-004",
-  FRAME_UNREACHABLE: "SS-RECON-005",
-  CAMERA_POSE_NOT_RIGID: "SS-CAM-005",
-  DEPTH_CAMERA_MISSING: "SS-CAM-006",
-  CAMERA_IMAGE_HASH_MISMATCH: "SS-CAM-001",
-  CAMERA_IMAGE_MISSING: "SS-CAM-002",
-  RECTIFIED_WITH_DISTORTION: "SS-CAM-003",
+  FUERA_DE_LA_RAIZ: "SS-PKG-001",
+  RUTA_ABSOLUTA: "SS-PKG-002",
+  ENLACE_FUERA_DE_LA_RAIZ: "SS-PKG-003",
+  ARTEFACTO_AUSENTE: "SS-PKG-004",
+  ESQUEMA_INVALIDO: "SS-PKG-010",
+  CONTRATO_NO_SOPORTADO: "SS-PKG-020",
+  HASH_DE_ESQUEMA_DESCONOCIDO: "SS-PKG-021",
+  FORMATO_NO_SOPORTADO: "SS-PKG-022",
+  SIN_SELLAR: "SS-PKG-011",
+  TAMANO_NO_COINCIDE: "SS-PKG-012",
+  HASH_NO_COINCIDE: "SS-PKG-013",
+  HASH_MAL_FORMADO: "SS-PKG-014",
+  EXTENSION_REQUERIDA_NO_SOPORTADA: "SS-PKG-023",
+  CAPACIDAD_REQUERIDA_NO_SOPORTADA: "SS-PKG-024",
+  PRESUPUESTO_ABSOLUTO_SIN_ESCALA: "SS-RECON-001",
+  UNIDAD_DE_PRESUPUESTO_MAL_DECLARADA: "SS-RECON-002",
+  TRANSFORMACION_MAL_FORMADA: "SS-RECON-003",
+  TRANSFORMACION_NO_RIGIDA: "SS-RECON-004",
+  MARCO_INALCANZABLE: "SS-RECON-005",
+  POSE_NO_RIGIDA: "SS-CAM-005",
+  CAMARA_DE_PROFUNDIDAD_AUSENTE: "SS-CAM-006",
+  HASH_DE_IMAGEN_NO_COINCIDE: "SS-CAM-001",
+  IMAGEN_DE_CAMARA_AUSENTE: "SS-CAM-002",
+  RECTIFICADA_CON_DISTORSION: "SS-CAM-003",
   // Lo emite el CLI y no este módulo: comprobarlo exige **decodificar la
   // imagen**, y aquí no hay IO a propósito. El identificador vive igual en la
   // tabla, que es lo que el otro lado parsea.
-  CAMERA_GRID_MISMATCH: "SS-CAM-004",
+  REJILLA_NO_COINCIDE: "SS-CAM-004",
   // El espacio de lectura: topes de recurso y ficheros que no se pueden
   // interpretar. Los cinco primeros los proyecta el código de salida 23, que D13
   // reservaba y hasta ahora no devolvía nadie.
-  MANIFEST_TOO_LARGE: "SS-IO-001",
-  ARTIFACT_TOO_LARGE: "SS-IO-002",
-  TOO_MANY_ARTIFACTS: "SS-IO-003",
-  PLY_HEADER_TOO_LONG: "SS-IO-004",
-  PLY_COUNT_EXCEEDS_LIMIT: "SS-IO-005",
-  PLY_TRUNCATED: "SS-IO-006",
-  UNREADABLE: "SS-IO-007",
+  MANIFIESTO_DEMASIADO_GRANDE: "SS-IO-001",
+  ARTEFACTO_DEMASIADO_GRANDE: "SS-IO-002",
+  DEMASIADOS_ARTEFACTOS: "SS-IO-003",
+  CABECERA_PLY_DEMASIADO_LARGA: "SS-IO-004",
+  ELEMENTO_PLY_SOBRE_EL_TOPE: "SS-IO-005",
+  PLY_TRUNCADO: "SS-IO-006",
+  ARTEFACTO_ILEGIBLE: "SS-IO-007",
 } as const satisfies Record<string, PackageCode>;
 
 /**
@@ -226,14 +226,14 @@ const SHA256 = /^[0-9a-f]{64}$/;
 function pathIssue(path: string): IngestIssue | null {
   if (path.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(path)) {
     return issue(
-      PACKAGE_CODES.ABSOLUTE_PATH,
+      PACKAGE_CODES.RUTA_ABSOLUTA,
       `la ruta ${JSON.stringify(path)} es absoluta; los artifacts se declaran relativos a la raíz`,
     );
   }
   const segments = path.split(/[\\/]/);
   if (segments.includes("..")) {
     return issue(
-      PACKAGE_CODES.ESCAPES_ROOT,
+      PACKAGE_CODES.FUERA_DE_LA_RAIZ,
       `la ruta ${JSON.stringify(path)} sale de la raíz del paquete con ..`,
     );
   }
@@ -272,7 +272,7 @@ export function ingestPackage(
     // Todos de una vez y no el primero: cada vuelta le cuesta un ciclo entero al
     // productor, igual que en el esquema de escena.
     for (const error of schemaErrors) {
-      issues.push(issue(PACKAGE_CODES.SCHEMA_INVALID, error));
+      issues.push(issue(PACKAGE_CODES.ESQUEMA_INVALIDO, error));
     }
     return empty;
   }
@@ -313,7 +313,7 @@ export function ingestPackage(
   if (!SUPPORTED_CONTRACT_VERSIONS.includes(document.contractVersion as "0.1")) {
     issues.push(
       issue(
-        PACKAGE_CODES.CONTRACT_UNSUPPORTED,
+        PACKAGE_CODES.CONTRATO_NO_SOPORTADO,
         `contractVersion ${JSON.stringify(document.contractVersion)}; este binario lee ${SUPPORTED_CONTRACT_VERSIONS.join(", ")}`,
       ),
     );
@@ -326,7 +326,7 @@ export function ingestPackage(
       // ninguno de los que conocemos, lo que viene detrás no se puede interpretar.
       issues.push(
         issue(
-          PACKAGE_CODES.SCHEMA_HASH_UNKNOWN,
+          PACKAGE_CODES.HASH_DE_ESQUEMA_DESCONOCIDO,
           `el hash de esquema ${document.contractSchemaSha256.slice(0, 16)}… no está registrado`,
         ),
       );
@@ -340,7 +340,7 @@ export function ingestPackage(
     // todavía. No es un aviso, es un rechazo (D29).
     issues.push(
       issue(
-        PACKAGE_CODES.NOT_SEALED,
+        PACKAGE_CODES.SIN_SELLAR,
         `state es ${JSON.stringify(document.state)} y solo se consume SEALED`,
       ),
     );
@@ -359,7 +359,7 @@ export function ingestPackage(
   if (unknownRequiredCapabilities.length > 0) {
     issues.push(
       issue(
-        PACKAGE_CODES.CAPABILITY_REQUIRED_UNSUPPORTED,
+        PACKAGE_CODES.CAPACIDAD_REQUERIDA_NO_SOPORTADA,
         `capabilities requeridas que este binario no sabe hacer: ${unknownRequiredCapabilities.join(", ")}; ` +
           `sabe hacer ${[...supportedCapabilities].join(", ")}`,
       ),
@@ -385,7 +385,7 @@ export function ingestPackage(
   if (unknownRequired.length > 0) {
     issues.push(
       issue(
-        PACKAGE_CODES.EXTENSION_REQUIRED_UNSUPPORTED,
+        PACKAGE_CODES.EXTENSION_REQUERIDA_NO_SOPORTADA,
         `extensiones requeridas que este binario no entiende: ${unknownRequired.join(", ")}`,
       ),
     );
@@ -401,13 +401,13 @@ export function ingestPackage(
     const where = `presupuesto ${budget.name}`;
     if (budget.units === "ABSOLUTE") {
       if (budget.unit === undefined) {
-        issues.push(issue(PACKAGE_CODES.BUDGET_UNIT_MISDECLARED, `${where}: absoluto y sin unidad`));
+        issues.push(issue(PACKAGE_CODES.UNIDAD_DE_PRESUPUESTO_MAL_DECLARADA, `${where}: absoluto y sin unidad`));
         continue;
       }
       if (!absoluteScale) {
         issues.push(
           issue(
-            PACKAGE_CODES.ABSOLUTE_BUDGET_WITHOUT_SCALE,
+            PACKAGE_CODES.PRESUPUESTO_ABSOLUTO_SIN_ESCALA,
             `${where}: ${budget.max} ${budget.unit} con scale.status ` +
               `${JSON.stringify(document.scale?.status ?? "ausente")}; con escala no absoluta el ` +
               `presupuesto va en RELATIVE_TO_DIAGONAL`,
@@ -422,7 +422,7 @@ export function ingestPackage(
       // productor quiso decir «el 1 % de la pieza».
       issues.push(
         issue(
-          PACKAGE_CODES.BUDGET_UNIT_MISDECLARED,
+          PACKAGE_CODES.UNIDAD_DE_PRESUPUESTO_MAL_DECLARADA,
           `${where}: relativo a la diagonal y con unidad ${JSON.stringify(budget.unit)}`,
         ),
       );
@@ -441,7 +441,7 @@ export function ingestPackage(
     if (!cameraIds.has(artifact.cameraId ?? "")) {
       issues.push(
         issue(
-          PACKAGE_CODES.DEPTH_CAMERA_MISSING,
+          PACKAGE_CODES.CAMARA_DE_PROFUNDIDAD_AUSENTE,
           `artifact ${artifact.id}: cameraId ${JSON.stringify(artifact.cameraId)} no está en el CameraSet`,
         ),
       );
@@ -458,7 +458,7 @@ export function ingestPackage(
   if (document.artifacts.length > RESOURCE_LIMITS.packageArtifacts.value) {
     issues.push(
       issue(
-        PACKAGE_CODES.TOO_MANY_ARTIFACTS,
+        PACKAGE_CODES.DEMASIADOS_ARTEFACTOS,
         `el manifest declara ${document.artifacts.length} artifacts y el tope son ${RESOURCE_LIMITS.packageArtifacts.value}`,
       ),
     );
@@ -476,7 +476,7 @@ export function ingestPackage(
     if (!SHA256.test(artifact.sha256)) {
       issues.push(
         issue(
-          PACKAGE_CODES.HASH_MALFORMED,
+          PACKAGE_CODES.HASH_MAL_FORMADO,
           `${where}: sha256 no es hexadecimal de 64 caracteres en minúscula`,
         ),
       );
@@ -490,7 +490,7 @@ export function ingestPackage(
     if (artifact.bytes > RESOURCE_LIMITS.artifactBytes.value) {
       issues.push(
         issue(
-          PACKAGE_CODES.ARTIFACT_TOO_LARGE,
+          PACKAGE_CODES.ARTEFACTO_DEMASIADO_GRANDE,
           `${where}: declara ${artifact.bytes} bytes y el tope son ${RESOURCE_LIMITS.artifactBytes.value}`,
         ),
       );
@@ -499,7 +499,7 @@ export function ingestPackage(
 
     const stat = reader.stat(artifact.path);
     if (stat === null) {
-      issues.push(issue(PACKAGE_CODES.MISSING_ARTIFACT, `${where}: ${artifact.path} no existe o no se puede leer`));
+      issues.push(issue(PACKAGE_CODES.ARTEFACTO_AUSENTE, `${where}: ${artifact.path} no existe o no se puede leer`));
       continue;
     }
     if (!insideRoot(stat.realPath, reader.root)) {
@@ -507,19 +507,19 @@ export function ingestPackage(
       // llevado fuera. Es el caso que un sandbox que solo normaliza cadenas deja
       // pasar entero.
       issues.push(
-        issue(PACKAGE_CODES.SYMLINK_ESCAPE, `${where}: ${artifact.path} resuelve fuera de la raíz del paquete`),
+        issue(PACKAGE_CODES.ENLACE_FUERA_DE_LA_RAIZ, `${where}: ${artifact.path} resuelve fuera de la raíz del paquete`),
       );
       continue;
     }
     if (stat.bytes !== artifact.bytes) {
       issues.push(
-        issue(PACKAGE_CODES.SIZE_MISMATCH, `${where}: declara ${artifact.bytes} bytes y tiene ${stat.bytes}`),
+        issue(PACKAGE_CODES.TAMANO_NO_COINCIDE, `${where}: declara ${artifact.bytes} bytes y tiene ${stat.bytes}`),
       );
       continue;
     }
     if (stat.sha256 !== artifact.sha256) {
       issues.push(
-        issue(PACKAGE_CODES.HASH_MISMATCH, `${where}: el contenido no coincide con el sha256 declarado`),
+        issue(PACKAGE_CODES.HASH_NO_COINCIDE, `${where}: el contenido no coincide con el sha256 declarado`),
       );
       continue;
     }
@@ -547,7 +547,7 @@ export function ingestPackage(
     if (image === undefined) {
       issues.push(
         issue(
-          PACKAGE_CODES.CAMERA_IMAGE_MISSING,
+          PACKAGE_CODES.IMAGEN_DE_CAMARA_AUSENTE,
           `${where}: ${camera.imageArtifactId} no es un artifact IMAGE admitido`,
         ),
       );
@@ -556,7 +556,7 @@ export function ingestPackage(
     if (image.sha256 !== camera.imageArtifactHash) {
       issues.push(
         issue(
-          PACKAGE_CODES.CAMERA_IMAGE_HASH_MISMATCH,
+          PACKAGE_CODES.HASH_DE_IMAGEN_NO_COINCIDE,
           `${where}: declara ${camera.imageArtifactHash.slice(0, 16)}… y ${camera.imageArtifactId} ` +
             `es ${image.sha256.slice(0, 16)}…`,
         ),
@@ -582,14 +582,14 @@ export function ingestPackage(
     ]);
     if (poseProblem.length > 0) {
       issues.push(
-        issue(PACKAGE_CODES.CAMERA_POSE_NOT_RIGID, `${where}: ${poseProblem[0].message.split(": ")[1]}`),
+        issue(PACKAGE_CODES.POSE_NO_RIGIDA, `${where}: ${poseProblem[0].message.split(": ")[1]}`),
       );
       continue;
     }
     if (camera.imageSpace === "RECTIFIED" && Object.keys(camera.distortion ?? {}).length > 0) {
       issues.push(
         issue(
-          PACKAGE_CODES.RECTIFIED_WITH_DISTORTION,
+          PACKAGE_CODES.RECTIFICADA_CON_DISTORSION,
           `${where}: imageSpace RECTIFIED con ${Object.keys(camera.distortion ?? {}).join(", ")}`,
         ),
       );
@@ -605,9 +605,9 @@ export function ingestPackage(
   for (const problem of auditTransforms(transforms)) {
     issues.push(
       issue(
-        problem.reason === "FRAME_TRANSFORM_NOT_RIGID"
-          ? PACKAGE_CODES.FRAME_TRANSFORM_NOT_RIGID
-          : PACKAGE_CODES.FRAME_TRANSFORM_MALFORMED,
+        problem.reason === "TRANSFORMACION_NO_RIGIDA"
+          ? PACKAGE_CODES.TRANSFORMACION_NO_RIGIDA
+          : PACKAGE_CODES.TRANSFORMACION_MAL_FORMADA,
         problem.message,
       ),
     );
@@ -626,7 +626,7 @@ export function ingestPackage(
     if (resolveFrame(transforms, "RECONSTRUCTION", frame) === null) {
       issues.push(
         issue(
-          PACKAGE_CODES.FRAME_UNREACHABLE,
+          PACKAGE_CODES.MARCO_INALCANZABLE,
           `${frame} se declara en el grafo y no hay camino desde RECONSTRUCTION, que es donde se mide`,
         ),
       );
@@ -657,5 +657,5 @@ export function exitCodeFor(result: IngestResult): number {
   // 21 y 22 son cosas distintas: una es «este contrato no lo leo» y la otra «este
   // fichero no lo leo». Quien automatiza reacciona distinto —actualizar el
   // consumidor, o convertir el artifact— y un único código las mezclaría.
-  return result.issues.some((entry) => entry.reason === "ARTIFACT_FORMAT_UNSUPPORTED") ? 22 : 21;
+  return result.issues.some((entry) => entry.reason === "FORMATO_NO_SOPORTADO") ? 22 : 21;
 }

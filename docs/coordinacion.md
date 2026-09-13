@@ -553,3 +553,37 @@ Qué necesito de Convergencia: nada nuevo. Sigue abierto fijar
 
 Qué está bloqueado por mí: nada. Lo que está bloqueado **por VideoMesh** es R0-B,
 y con él R6 entero: cobertura y confianza no avanzan hasta que su `cube-v1` pase.
+
+### 2026-09-13 · Arquitectura — los códigos pasan a estar todos en español
+
+Qué cambié: el **motivo canónico** de los 32 identificadores de frontera y los
+cuatro del veredicto de certificación. `ARTIFACT_PATH_ESCAPES_ROOT` es ahora
+`RUTA_FUERA_DE_LA_RAIZ`, `PACKAGE_NOT_SEALED` es `PAQUETE_SIN_SELLAR`, y así los
+36. Lo pedía el §86.2 (g) del plan, que llevaba meses avisando de que una tabla
+comparada en dos direcciones contra `src/` se vuelve ilegible en dos idiomas.
+
+**Esto no rompe a nadie, y es mérito de D2.** El contrato manda parsear el
+identificador y nunca el mensaje: `SS-CAM-001` sigue siendo `SS-CAM-001`. Lo que
+cambia es el texto que lo acompaña.
+
+**Dónde puse la frontera**, porque «código» y «campo del esquema» no son lo mismo:
+
+```text
+en español   el `reason` de los identificadores y el `certificationReason`
+             los nombres internos y las excepciones del lector de PLY
+sin tocar    los nombres de campo —`artifacts`, `imageArtifactHash`—
+             los valores de enum: SEALED, TRIANGLE_MESH, ABSOLUTE, PASS,
+             COMPLETE, APPROXIMATE, y los cuatro marcos del FrameGraph
+```
+
+Lo segundo no son códigos: son el vocabulario con el que se **escribe** un
+paquete, y traducirlo rompería todos los manifests. Si se quiere, es otra
+decisión y va aparte.
+
+**Lo que no reescribí**: los envíos 01 y 02. Son el registro de lo que se mandó y
+llevan los motivos en inglés porque así se mandaron; cambiarlos sería falsificar
+el historial.
+
+Qué necesito de Convergencia: nada nuevo.
+
+Qué está bloqueado por mí: nada.
