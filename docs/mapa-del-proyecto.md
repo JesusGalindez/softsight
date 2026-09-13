@@ -532,7 +532,14 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     rechaza**; y desde ahí porque es donde están los números. `resolveFrame` no
     devuelve la identidad cuando no hay camino: suponer que dos marcos sin arista
     son el mismo es el error, no el arreglo. Una pose de cámara pasa por la misma
-    auditoría que una arista, no por una segunda parecida. **18 de 34.**
+    auditoría que una arista, no por una segunda parecida.
+    Y **D20**, donde el campo estaba desde R0-A y lo que faltaba era el número:
+    confundir la coordenada sobre el eje óptico con la longitud del rayo cuesta
+    **0 % exacto en el centro y 12,5 % en la esquina** de la cámara de `cube-v1`.
+    Un mapa de profundidad declara ahora su cámara, porque sin pose ni intrínsecos
+    detrás su número no significa nada. Leer los píxeles sigue sin poder hacerse:
+    D5 —EXR— no está escrita, y comprobar que la profundidad cuadre es R8.
+    **19 de 34.**
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

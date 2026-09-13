@@ -183,6 +183,12 @@ export const PACKAGE_CODE_TABLE = {
     status: "PROPUESTO",
     decision: "D10 nombra el caso, sin número",
   },
+  "SS-CAM-006": {
+    reason: "DEPTH_CAMERA_MISSING",
+    cause: "un mapa de profundidad apunta a una cámara que el CameraSet no declara",
+    status: "PROPUESTO",
+    decision: "D20 exige que la profundidad sea interpretable, sin número",
+  },
   "SS-CAM-005": {
     reason: "CAMERA_POSE_NOT_RIGID",
     cause: "una pose de cámara cuya última fila no es [0, 0, 0, 1]",

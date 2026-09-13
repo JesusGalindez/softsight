@@ -1050,6 +1050,63 @@ function sha256Of(path) {
   );
 }
 
+// D20: `depthKind` sin valor por defecto, y el número que dice por qué importa.
+//
+// La decisión se explica sola en una frase —confundir la coordenada sobre el eje
+// óptico con la longitud del rayo mete un error que crece con el ángulo— pero
+// una frase no es una prueba. Aquí se mide sobre la cámara de `cube-v1`.
+{
+  const cases = fixture("package-integrity-v1");
+  const camara = fixture("camera-projection-v1").cameras[0];
+  const reader = {
+    root: cases.root,
+    stat: () => {
+      throw new Error("la profundidad se decide antes de tocar un artifact");
+    },
+  };
+  const conProfundidad = (depth) => ({
+    ...cases.base,
+    artifacts: [{ id: "depth-0", type: "DEPTH_MAP", path: "depth/0.exr", bytes: 1, sha256: "b".repeat(64), ...depth }],
+    cameras: [camara],
+  });
+
+  // Sin `depthKind` es error de esquema, no un aviso: un valor por defecto aquí
+  // elige una de las dos interpretaciones sin que nadie lo haya decidido.
+  const sinTipo = validate(
+    conProfundidad({ cameraId: camara.id }),
+    RECONSTRUCTION_PACKAGE_SCHEMA,
+  );
+  assert.equal(sinTipo.length, 1, `depthKind es obligatorio: ${sinTipo}`);
+  assert.match(sinTipo[0], /falta artifacts\[0\]\.depthKind/);
+
+  // Y sin cámara no se puede interpretar: el número de cada píxel solo significa
+  // algo con unos intrínsecos y una pose detrás.
+  const sinCamara = ingestPackage(
+    conProfundidad({ cameraId: "no-existe", depthKind: "OPTICAL_AXIS" }),
+    reader,
+  );
+  assert.deepEqual(
+    sinCamara.issues.map((entry) => entry.code),
+    [PACKAGE_CODES.DEPTH_CAMERA_MISSING],
+  );
+
+  // El número. Para un píxel a (u, v) del punto principal, la longitud del rayo
+  // es la coordenada sobre el eje por √(1 + (u² + v²)/f²): cero en el centro y
+  // máximo en la esquina, que es donde la profundidad se usa para cerrar la
+  // silueta.
+  const factor = (u, v) => Math.hypot(1, u / camara.intrinsics.fx, v / camara.intrinsics.fy);
+  const centro = factor(0, 0);
+  const esquina = factor(camara.width / 2, camara.height / 2);
+  assert.equal(centro, 1, "en el centro las dos interpretaciones coinciden exactamente");
+  assert.ok(esquina > 1.05, `en la esquina la diferencia es del ${((esquina - 1) * 100).toFixed(1)} %`);
+
+  console.log(
+    `reconstrucción: ok (D20: depthKind obligatorio y sin valor por defecto, un mapa sin su cámara ` +
+      `rechazado, y confundir las dos interpretaciones cuesta 0 % en el centro y ` +
+      `${((esquina - 1) * 100).toFixed(1)} % en la esquina de esta cámara)`,
+  );
+}
+
 // 7. Lo que sigue fuera, dicho en voz alta.
 console.log(
   "reconstrucción: no ejecutada — el criterio de certificación de R0 no tiene decisión con número: " +

@@ -193,6 +193,10 @@
                 ],
                 "description": "Mapa de profundidad."
               },
+              "cameraId": {
+                "type": "string",
+                "description": "Cámara desde la que se midió. Sin ella un mapa de profundidad no se puede interpretar: el número de cada píxel solo significa algo con unos intrínsecos y una pose detrás, y es el mismo argumento que ata la imagen a su calibración en D10."
+              },
               "depthKind": {
                 "type": "string",
                 "enum": [
@@ -209,6 +213,7 @@
               "bytes",
               "sha256",
               "type",
+              "cameraId",
               "depthKind"
             ]
           }

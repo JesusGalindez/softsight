@@ -181,6 +181,7 @@ export const PACKAGE_CODES = {
   FRAME_TRANSFORM_NOT_RIGID: "SS-RECON-004",
   FRAME_UNREACHABLE: "SS-RECON-005",
   CAMERA_POSE_NOT_RIGID: "SS-CAM-005",
+  DEPTH_CAMERA_MISSING: "SS-CAM-006",
   CAMERA_IMAGE_HASH_MISMATCH: "SS-CAM-001",
   CAMERA_IMAGE_MISSING: "SS-CAM-002",
   RECTIFIED_WITH_DISTORTION: "SS-CAM-003",
@@ -295,7 +296,14 @@ export function ingestPackage(
     budgets?: Array<{ name: string; units: string; unit?: string; max: number }>;
     extensions?: Record<string, { required?: boolean }>;
     state: string;
-    artifacts: Array<{ id: string; type: string; path: string; bytes: number; sha256: string }>;
+    artifacts: Array<{
+      id: string;
+      type: string;
+      path: string;
+      bytes: number;
+      sha256: string;
+      cameraId?: string;
+    }>;
   };
 
   // El contrato antes que el contenido: un paquete de una versión que no sabemos
@@ -420,6 +428,28 @@ export function ingestPackage(
       );
     }
   }
+  if (issues.length > 0) return { ...empty, packageId: document.packageId };
+
+  // D20: un mapa de profundidad sin su cámara no se puede interpretar. El número
+  // de cada píxel solo significa algo con unos intrínsecos y una pose detrás, y
+  // `depthKind` decide **cuál** de las dos cosas es ese número —la coordenada
+  // sobre el eje óptico o la longitud del rayo—, una distinción que solo tiene
+  // sentido respecto a una cámara concreta.
+  const cameraIds = new Set((document.cameras ?? []).map((camera) => camera.id));
+  for (const artifact of document.artifacts) {
+    if (artifact.type !== "DEPTH_MAP") continue;
+    if (!cameraIds.has(artifact.cameraId ?? "")) {
+      issues.push(
+        issue(
+          PACKAGE_CODES.DEPTH_CAMERA_MISSING,
+          `artifact ${artifact.id}: cameraId ${JSON.stringify(artifact.cameraId)} no está en el CameraSet`,
+        ),
+      );
+    }
+  }
+  // Como con los presupuestos: un manifest que se contradice se para antes de
+  // abrir nada. Seguir daría además los errores de leer un paquete cuya
+  // descripción ya se sabe mal, y el productor tendría que separarlos.
   if (issues.length > 0) return { ...empty, packageId: document.packageId };
 
   // El recuento antes del recorrido: cada artifact cuesta una resolución de

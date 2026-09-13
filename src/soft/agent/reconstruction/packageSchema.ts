@@ -70,6 +70,14 @@ const ARTIFACT_VARIANTS: Record<string, ObjectSchema> = {
   DEPTH_MAP: {
     ...ARTIFACT_COMMON,
     type: KIND(["DEPTH_MAP"], "Mapa de profundidad."),
+    cameraId: {
+      type: "string",
+      required: true,
+      description:
+        "Cámara desde la que se midió. Sin ella un mapa de profundidad no se puede interpretar: " +
+        "el número de cada píxel solo significa algo con unos intrínsecos y una pose detrás, " +
+        "y es el mismo argumento que ata la imagen a su calibración en D10.",
+    },
     depthKind: {
       type: '"OPTICAL_AXIS"|"RAY_LENGTH"',
       required: true,

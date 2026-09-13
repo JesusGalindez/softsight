@@ -90,11 +90,10 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-09-13:
 
 ```text
-ACORDADAS       16   D1, D2, D4, D5, D8, D15, D18, D20, D22, D23, D26–D29,
-                     D32, D34
+ACORDADAS       15   D1, D2, D4, D5, D8, D15, D18, D22, D23, D26–D29, D32, D34
 PROPUESTAS       0
-IMPLEMENTADAS   18   D3, D6, D7, D9, D10, D11, D12, D13, D14, D16, D17, D19,
-                     D21, D24, D25, D30, D31, D33
+IMPLEMENTADAS   19   D3, D6, D7, D9, D10, D11, D12, D13, D14, D16, D17, D19,
+                     D20, D21, D24, D25, D30, D31, D33
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -640,12 +639,29 @@ La tercera es la que importa: aproximar un ojo de pez ignorando los coeficientes
 que sobran da una proyección que se equivoca poco en el centro y mucho en el
 borde, que es justo donde la distorsión decide.
 
-### D20 — `depthKind` obligatorio
+### D20 — `depthKind` obligatorio — IMPLEMENTADA (2026-09-13)
 `OPTICAL_AXIS | RAY_LENGTH`, sin valor por defecto y sin inferirlo por proveedor.
 Confundirlos mete un error que crece con el ángulo respecto al centro: cero en el
 centro, máximo en las esquinas. `INVERSE_DEPTH` y `DISPARITY` llegarán por
 capability, nunca reinterpretando depth V1.
 **Prueba:** `depth-optical-axis-v1`, `depth-ray-length-v1`.
+
+**El campo estaba desde R0-A; lo que faltaba era la prueba y el número.** La
+decisión se explicaba sola en una frase —confundir la coordenada sobre el eje
+óptico con la longitud del rayo mete un error que crece con el ángulo— y una
+frase no es una prueba. Medido sobre la cámara de `cube-v1`: **0 % exacto en el
+centro y 12,5 % en la esquina**. Ése es el tamaño del error que un valor por
+defecto metería en silencio.
+
+Y un mapa de profundidad **declara ahora su cámara**. Sin ella el número de cada
+píxel no significa nada: hace falta una pose y unos intrínsecos detrás, y
+`depthKind` decide cuál de las dos cosas es ese número, una distinción que solo
+existe respecto a una cámara concreta. Es el mismo argumento que ata la imagen a
+su calibración en D10.
+
+**Leer los píxeles de profundidad sigue sin poder hacerse**, porque D5 —EXR— no
+está escrita. Lo que R0 comprueba es que el paquete sea interpretable, no que la
+profundidad cuadre; eso es R8.
 
 ### D21 — Coverage v1 sin provenance, y qué puede certificar — IMPLEMENTADA (2026-08-12)
 Coverage v1 publica `provenanceAware: false`. Solo puede **certificar** sobre
