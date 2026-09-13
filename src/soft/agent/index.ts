@@ -288,6 +288,8 @@ export type { ResourceLimit, ResourceLimitName } from "./reconstruction/limits";
 export { bandWithHalo } from "../postprocess";
 export { DIFF_NOISE_FLOOR, diffMeshes } from "./reconstruction/meshDiff";
 export { analyzeMeshTopology } from "./reconstruction/meshTopology";
+export { SELF_INTERSECTION_EPSILON, findSelfIntersections } from "./reconstruction/selfIntersection";
+export type { SelfIntersectionPair, SelfIntersectionReport } from "./reconstruction/selfIntersection";
 export type { BoundaryLoop, MeshComponent, MeshTopology } from "./reconstruction/meshTopology";
 export type { MeshDiff, MeshDiffOptions, SurfaceDistance, TopologyDelta } from "./reconstruction/meshDiff";
 export { projectPoint } from "./reconstruction/camera";

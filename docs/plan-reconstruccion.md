@@ -2653,9 +2653,34 @@ notara.
 Medido sobre el dron real: **296 piezas, ninguna con más de un componente, 32 con
 agujeros, 46 bucles en total, 0,16 s de CPU** para las 296.
 
-**La autointersección sigue fuera y con su motivo**: en coma flotante no existe el
-confirmado (§86.3 n), así que solo cabe como `aproximacion-determinista` con su
-epsilon, igual que el perfil 2D. La puerta lo declara NOT_RUN.
+**La autointersección entra el mismo día**, en `reconstruction/selfIntersection.ts`
+con puerta `test:self-intersection`, y entra como el §86.3 (n) manda: **candidato
+con su epsilon**, nunca confirmado. Tres decisiones la hacen utilizable:
+
+- **Los vecinos no cuentan**, y se excluyen por **posición soldada**: dos
+  triángulos que comparten un vértice se tocan por construcción, y por índice no
+  se detecta —un cubo con vértices partidos por cara no comparte ninguno—. Sin
+  esto, toda malla saldría autointersecada y nadie miraría el aviso, que es
+  literalmente lo que le pasó a `segmentsCross` con el caso colineal.
+- **Lo coplanar se cuenta, no se afirma.** Ahí el signo vale cero y decide el
+  redondeo. Va en `coplanarPairs`.
+- **El epsilon es relativo, y su origen es `Float32`.** Medido: sobre puntos
+  resueltos para caer exactamente en el plano, con las posiciones en `Float32`
+  como vienen en una malla, la distancia se aleja hasta **2,3e-8 de la magnitud de
+  la coordenada**, estable entre 1 y 10⁶. No es redondeo de doble: es la rejilla
+  en la que viven las posiciones, y ningún test sobre ellas puede resolver por
+  debajo por mucha precisión que se use después.
+
+**Escribir la puerta destapó un error de libro.** La versión que busca «qué
+vértice queda solo de su lado» **divide por cero** con los signos `(0, +, +)` —un
+vértice justo en el plano y los otros dos del mismo lado—, y con eso **un cubo
+cerrado salía con cuatro autointersecciones**: pares de caras que solo se tocan en
+una esquina. El intervalo se calcula ahora recorriendo aristas, donde ese caso no
+es especial.
+
+Sobre el dron real: 296 piezas, 37.950 triángulos, **71.556 pares probados en 0,59
+s de CPU**, 3 piezas con candidatos y 13.727 pares coplanares que se cuentan sin
+afirmarse.
 
 ---
 

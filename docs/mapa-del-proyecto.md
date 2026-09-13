@@ -574,7 +574,15 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     vértices partidos parece doce triángulos sueltos. Lo ambiguo se cuenta y no se
     reparte, y la puerta exige que bucles + irresolubles == `boundaryEdges`. Sobre
     el dron: 296 piezas, 32 con agujeros, 46 bucles, 0,16 s de CPU. La
-    autointersección queda fuera con su motivo, que es el mismo §86.3 (n).
+    autointersección entra el mismo día y como manda el §86.3 (n): **candidato con
+    su epsilon**, nunca confirmado. Los vecinos se excluyen por posición soldada
+    —por índice no valdría, un cubo con vértices partidos no comparte ninguno—, lo
+    coplanar se cuenta sin afirmarse, y el epsilon es relativo con origen medido en
+    la rejilla de `Float32`: 2,3e-8 de la coordenada, estable entre 1 y 10⁶.
+    Escribir la puerta destapó un error de libro: la versión que busca «qué vértice
+    queda solo» divide por cero con los signos `(0, +, +)`, y con eso **un cubo
+    cerrado salía con cuatro autointersecciones**. Sobre el dron, 71.556 pares en
+    0,59 s de CPU. **R4 queda cerrado.**
     Y **la severidad gana un tercer valor**, `aproximacion-determinista`, que es
     el hueco (n): el determinante de orientación da un valor no nulo en **884 de
     2.200 puntos que están sobre la recta**, así que llamar `certeza` a lo que
