@@ -90,10 +90,10 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-09-13:
 
 ```text
-ACORDADAS       15   D1, D2, D4, D5, D8, D15, D18, D22, D23, D26–D29, D32, D34
+ACORDADAS       14   D1, D2, D5, D8, D15, D18, D22, D23, D26–D29, D32, D34
 PROPUESTAS       0
-IMPLEMENTADAS   19   D3, D6, D7, D9, D10, D11, D12, D13, D14, D16, D17, D19,
-                     D20, D21, D24, D25, D30, D31, D33
+IMPLEMENTADAS   20   D3, D4, D6, D7, D9, D10, D11, D12, D13, D14, D16, D17,
+                     D19, D20, D21, D24, D25, D30, D31, D33
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -232,7 +232,7 @@ La última fila es la que sostiene la decisión: un paquete que no se puede leer
 **no es un veredicto sobre la geometría de nadie**. Colapsar los dos ejes
 convertiría un error de transporte en un FAIL de VideoMesh.
 
-### D4 — ColmapAdapter produce los fixtures reales — MEDIO HECHA (2026-08-12)
+### D4 — ColmapAdapter produce los fixtures reales — IMPLEMENTADA (2026-09-13)
 Cámaras, `points3D` y convenciones reales. `colmap-small-v1` sigue siendo
 imprescindible: el cubo no ejerce modelos de cámara reales, ni datos en coma
 flotante reales, ni el comportamiento real de la escala.
@@ -249,12 +249,41 @@ un punto y un píxel.
 La escala sale `UNKNOWN` con fuente `NONE`, que es lo que una reconstrucción sin
 restricción externa sabe de sí misma.
 
-**Lo que falta para IMPLEMENTADA son los datos.** `colmap-small-v1` es sintético
-—se genera con `npm run colmap-small-v1`— y ejerce **la conversión**, no los
-datos: sin ruido, sin observaciones sin triangular, sin cientos de imágenes. Una
-reconstrucción real va fuera del repositorio con su sha256 en un manifiesto
-(D22), y todavía no existe. La puerta lo dice al terminar en vez de dejar creer
-que D4 está cerrada.
+**Cerrada el 2026-09-13 con datos reales.** El fixture es `colmap-real-v1`:
+`south-building` y `gerrard-hall`, los dos datasets de ejemplo de COLMAP, con su
+modelo disperso en texto. Vive **fuera del repositorio** con su sha256 en
+`contracts/fixtures/colmap-real-v1.json`, como manda D22 — son 58 MB de terceros
+sin licencia explícita, así que se apunta en vez de redistribuirse. Sin él,
+`test:colmap` se declara no ejecutada.
+
+**La comprobación que la cierra son dos caminos independientes hacia el mismo
+número.** COLMAP guarda en `points3D.txt` el error de reproyección medio de cada
+punto, calculado por su código; nosotros lo recalculamos con el nuestro sobre el
+CameraSet canónico:
+
+```text
+south-building   0,49697 px   COLMAP declara   0,49703 px
+gerrard-hall     0,61220 px   COLMAP declara   0,61217 px
+```
+
+Sobre 61.514 y 43.188 puntos. La mediana de la diferencia punto a punto es
+1,2e-3 px y el p99 8,4e-3; el 0,7 % se separa más y la puerta **no mide el
+máximo** por eso, sino mediana, p99 y la media del conjunto.
+
+**Y el contraste que lo hace significar algo**: con la distorsión quitada, los
+mismos números se van a 2,57 y **30,58 px**. Sin él, una proyección que ignorase
+la distorsión también pasaría si los coeficientes fueran pequeños.
+
+**Lo que el sintético no podía dar, y ahora está:**
+
+```text
+SIMPLE_RADIAL y OPENCV      dos de los cinco modelos, no dos veces el mismo
+fx 3838,27 / fy 3837,22     focales distintas, que ningún fixture había ejercido
+1.094.145 de 1.420.660      observaciones sin triangular: el 77 %
+```
+
+Lo último es la diferencia de fondo: `colmap-small-v1` lo escribimos nosotros y
+triangula todo, así que no puede tener sorpresas que no previéramos.
 
 **El juez son las observaciones del propio fichero.** COLMAP guarda dónde cayó
 cada punto 3D en píxeles, así que el camino se cierra sobre sí mismo sin inventar

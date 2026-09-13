@@ -477,9 +477,9 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     [`plan-reconstruccion.md`](plan-reconstruccion.md) §71 y §86. Lo que cambió el
     estado:
 
-    - **Ocho decisiones pasan a IMPLEMENTADAS** —D9, D10, D11, D12, D20, D30, D31 y
-      D33—, así que el registro va por **19 de 34**. `test:contracts` sale de las
-      puertas bloqueadas por falta de fixture.
+    - **Nueve decisiones pasan a IMPLEMENTADAS** —D4, D9, D10, D11, D12, D20, D30,
+      D31 y D33—, así que el registro va por **20 de 34**. `test:contracts` y
+      `test:colmap` salen de las puertas bloqueadas por falta de fixture.
     - **R1.5 declarado, y R4 y R5 cerrados.** Con ellos entran cuatro puertas
       nuevas: `test:bands`, `test:mesh-diff`, `test:mesh-topology` y
       `test:self-intersection`.
@@ -494,7 +494,8 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     que no dependa de otro**, y conviene que esté dicho en un sitio en vez de
     deducirse.
 
-    **Del dueño, y bloquean lo demás:**
+    **Del dueño:** nada desde el 2026-09-13. Lo que había queda tachado abajo,
+    con la fecha, para que se vea qué desbloqueó a qué.
 
     - **Mandar el envío 02.** Está redactado en
       [`envio-videomesh-02.md`](envio-videomesh-02.md) y no se ha enviado. Desde el
@@ -506,8 +507,13 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       paquete, no un código— y no os rompe porque D2 manda parsear el
       identificador. Con esto se cierra lo último que quedaba abierto de las tres
       cosas del punto 19.
-    - **De dónde sale un COLMAP real.** Sin él D4 no pasa de MEDIO HECHA y
-      `test:colmap` sigue declarándose no ejecutada.
+    - ~~De dónde sale un COLMAP real.~~ **Resuelto el 2026-09-13**: `colmap-real-v1`
+      —`south-building` y `gerrard-hall`— vive fuera del repositorio con su sha256
+      en `contracts/fixtures/colmap-real-v1.json` y la puerta lo busca en
+      `SOFTSIGHT_COLMAP`. **D4 pasa a IMPLEMENTADA** y `test:colmap` sale de las no
+      ejecutadas. Lo que la cierra son dos caminos al mismo número: nuestro error
+      medio de reproyección da 0,49697 px donde COLMAP declara 0,49703, sobre
+      61.514 puntos. Con esto **del dueño no queda nada**.
 
     **De VideoMesh:**
 

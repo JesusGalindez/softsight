@@ -23,10 +23,12 @@
  */
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { colmapRoot } from "./fixtures.mjs";
 import {
   parseColmapCameras,
   parseColmapModel,
@@ -37,6 +39,7 @@ import {
 } from "../dist-node/agent3d.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(here, "..");
 const FIXTURE = resolve(here, "../contracts/fixtures/colmap-small-v1");
 
 const model = parseColmapModel({
@@ -173,9 +176,165 @@ const model = parseColmapModel({
   );
 }
 
-// 5. Lo que este fixture no puede probar, dicho en voz alta.
-console.log(
-  "colmap: no ejecutada — colmap-small-v1 es sintético: ejerce la conversión, no los datos. " +
-    "Una reconstrucción real —ruido, observaciones sin triangular, cientos de imágenes— va fuera del " +
-    "repositorio con su sha256 en un manifiesto, D22, y todavía no existe",
-);
+// 5. La reconstrucción real — D4.
+//
+// `colmap-small-v1` lo escribimos nosotros, así que no puede tener sorpresas que
+// no previéramos. Éste sí: ruido de verdad, el 77 % de las observaciones sin
+// triangular, y dos modelos de cámara distintos.
+//
+// **La comprobación que vale es la última.** COLMAP guarda en `points3D.txt` el
+// error de reproyección medio de cada punto, calculado por su código. Nosotros lo
+// recalculamos con el nuestro sobre el CameraSet canónico. Son dos caminos
+// independientes hacia el mismo número, que es como se cierra una fase en este
+// repositorio.
+{
+  const manifest = JSON.parse(
+    readFileSync(resolve(projectRoot, "contracts/fixtures/colmap-real-v1.json"), "utf8"),
+  );
+  const escenas = Object.keys(manifest.scenes);
+  const presente = escenas.every((escena) =>
+    Object.keys(manifest.scenes[escena]).every((f) => existsSync(resolve(colmapRoot, escena, f))),
+  );
+
+  if (!presente) {
+    console.log(
+      `colmap: no ejecutada — falta el fixture pesado ${manifest.name} en ${colmapRoot} ` +
+        "(SOFTSIGHT_COLMAP). Son 58 MB de texto de terceros y por eso no están aquí, D22",
+    );
+  } else {
+    for (const escena of escenas) {
+      // El hash primero: sin él no se sabe contra qué se está midiendo, y un
+      // fichero cambiado daría números distintos sin que nadie supiera por qué.
+      const leer = (nombre) => {
+        const raw = readFileSync(resolve(colmapRoot, escena, nombre));
+        assert.equal(
+          createHash("sha256").update(raw).digest("hex"),
+          manifest.scenes[escena][nombre].sha256,
+          `${escena}/${nombre}: el fichero no es el del manifiesto`,
+        );
+        return raw.toString("utf8");
+      };
+      const model = parseColmapModel({
+        cameras: leer("cameras.txt"),
+        images: leer("images.txt"),
+        points: leer("points3D.txt"),
+      });
+
+      assert.deepEqual(model.unsupported, [], `${escena}: un modelo de cámara sin convertir`);
+      const observaciones = model.images.reduce((n, i) => n + i.observations.length, 0);
+      const sinTriangular = model.images.reduce(
+        (n, i) => n + i.observations.filter((o) => o.pointId === null).length,
+        0,
+      );
+      // Lo que el sintético no tiene: la mayoría de lo que ve una cámara no acaba
+      // en un punto 3D. Si el adaptador las tirara, este número sería cero.
+      assert.ok(
+        sinTriangular > observaciones / 2,
+        `${escena}: solo ${sinTriangular} observaciones sin triangular de ${observaciones}`,
+      );
+
+      const byId = new Map(toCameraSet(model, new Map()).map((c) => [c.id, c]));
+      const pista = new Map();
+      for (const img of model.images) {
+        const cam = byId.get(`img-${img.id}`);
+        for (const o of img.observations) {
+          if (o.pointId === null) continue;
+          const lista = pista.get(o.pointId) ?? [];
+          lista.push([cam, o]);
+          pista.set(o.pointId, lista);
+        }
+      }
+
+      const diferencias = [];
+      let nuestro = 0;
+      let suyo = 0;
+      let sinDistorsion = 0;
+      let sinDistorsionPuntos = 0;
+      let puntos = 0;
+      // El contraste sin distorsión se mide sobre una muestra y no sobre el
+      // millón entero: existe para enseñar que ese camino hace trabajo, y con dos
+      // mil puntos la diferencia ya es de un orden de magnitud. Proyectarlo todo
+      // dos veces doblaba el coste de la puerta para afinar un número que no
+      // decide nada.
+      const MUESTRA_SIN_DISTORSION = 2_000;
+      for (const p of model.points) {
+        const observadores = pista.get(p.id);
+        if (observadores === undefined) continue;
+        let con = 0;
+        for (const [cam, o] of observadores) {
+          const a = projectPoint(cam, p.position);
+          con += Math.hypot(a.x - o.x, a.y - o.y);
+        }
+        con /= observadores.length;
+        diferencias.push(Math.abs(con - p.error));
+        nuestro += con;
+        suyo += p.error;
+        puntos += 1;
+
+        // La misma cuenta con la distorsión quitada, para que se vea que ese
+        // camino hace trabajo y no decora.
+        if (sinDistorsionPuntos < MUESTRA_SIN_DISTORSION) {
+          let sin = 0;
+          for (const [cam, o] of observadores) {
+            const b = projectPoint({ ...cam, distortion: undefined }, p.position);
+            sin += Math.hypot(b.x - o.x, b.y - o.y);
+          }
+          sinDistorsion += sin / observadores.length;
+          sinDistorsionPuntos += 1;
+        }
+      }
+
+      diferencias.sort((a, b) => a - b);
+      const cuantil = (f) => diferencias[Math.floor(diferencias.length * f)];
+      const medio = nuestro / puntos;
+      const suyoMedio = suyo / puntos;
+
+      // Sobre estadísticos robustos y no sobre el máximo: el `ERROR` que COLMAP
+      // guarda viene de su último ajuste de haces y una cola fina de puntos
+      // —el 0,7 %— se separa más. Lo que no puede pasar es que la distribución
+      // entera se mueva.
+      assert.ok(
+        Math.abs(medio - suyoMedio) < 1e-3,
+        `${escena}: nuestro error medio es ${medio} y COLMAP declara ${suyoMedio}`,
+      );
+      assert.ok(cuantil(0.5) < 5e-3, `${escena}: la mediana de la diferencia es ${cuantil(0.5)}`);
+      assert.ok(cuantil(0.99) < 5e-2, `${escena}: el p99 de la diferencia es ${cuantil(0.99)}`);
+
+      // Y el contraste que lo hace significar algo: sin distorsión el número se
+      // dispara. Sin esto, una proyección que ignorase la distorsión también
+      // pasaría si los coeficientes fueran pequeños.
+      const medioSinDistorsion = sinDistorsion / sinDistorsionPuntos;
+      assert.ok(
+        medioSinDistorsion > medio * 5,
+        `${escena}: quitar la distorsión apenas mueve el error, ${medioSinDistorsion} contra ${medio}`,
+      );
+
+      console.log(
+        `colmap: ok (${escena}: ${model.images.length} imágenes, ${model.points.length} puntos, ` +
+          `${sinTriangular} de ${observaciones} observaciones sin triangular. Error medio de ` +
+          `reproyección ${medio.toFixed(5)} px contra los ${suyoMedio.toFixed(5)} que declara COLMAP; ` +
+          `sin distorsión, ${medioSinDistorsion.toFixed(2)} px sobre ${sinDistorsionPuntos} puntos)`,
+      );
+    }
+
+    // Los dos modelos, que es la otra mitad de lo que el sintético no da.
+    // La primera línea con contenido, no la primera: COLMAP abre con tres de
+    // comentario y `split` sobre ellas devuelve la palabra «Camera».
+    const declarados = escenas.map((escena) =>
+      readFileSync(resolve(colmapRoot, escena, "cameras.txt"), "utf8")
+        .split(/\r?\n/)
+        .map((linea) => linea.trim())
+        .filter((linea) => linea !== "" && !linea.startsWith("#"))[0]
+        .split(/\s+/)[1],
+    );
+    assert.deepEqual(
+      [...declarados].sort(),
+      ["OPENCV", "SIMPLE_RADIAL"],
+      "el fixture tiene que ejercer dos modelos distintos, no dos veces el mismo",
+    );
+    console.log(
+      `colmap: ok (dos de los cinco modelos soportados, SIMPLE_RADIAL y OPENCV, y con ` +
+        "focales distintas en x e y —3838.27 y 3837.22— que ningún fixture sintético había ejercido)",
+    );
+  }
+}

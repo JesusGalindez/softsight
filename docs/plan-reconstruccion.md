@@ -3889,11 +3889,21 @@ items. Si el contrato está mal, se descubre al final. **Insertar R1.5**: un cub
 PLY, cuatro cámaras sintéticas, informe mínimo y PASS/FAIL, recorriendo el camino
 entero. Poco trabajo, y valida el contrato antes de construir encima.
 
-**q) El §82 congela un contrato contra un productor que aún no existe.**
+**q) El §82 congela un contrato contra un productor que aún no existe. HECHO en su
+mitad barata, el 2026-09-13.**
 Congelar antes de que VideoMesh haya entregado un paquete real produce contratos
 que nadie puede cumplir. **Subir `ColmapAdapter` (§18) de «opcional» a fuente de
 fixtures de R0**: COLMAP produce datos reales hoy, gratis, sin esperar a nadie.
 El contrato se congela cuando **dos productores distintos** lo han llenado.
+
+**Los datos reales ya están**, en `colmap-real-v1`: dos escenas, 228 imágenes,
+104.702 puntos y el 77 % de las observaciones sin triangular, con el error de
+reproyección que calculamos coincidiendo con el que COLMAP declara hasta la
+quinta cifra. Ver D4.
+
+Lo que **sigue faltando** para congelar el contrato es el segundo productor de
+paquetes, que es otra cosa: COLMAP llena el CameraSet, no escribe un
+`ReconstructionManifest`. Eso es R0-B.
 
 **r) El editor no aparece en el plan.**
 `softsight-motion-editor` pincha el commit de SoftSight y tiene dos puertas

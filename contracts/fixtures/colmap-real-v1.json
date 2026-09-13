@@ -1,0 +1,41 @@
+{
+  "$comment": "Manifiesto de un fixture pesado (D22). Los ficheros NO viven en este repositorio: se declaran por su sha256 y la puerta los busca en SOFTSIGHT_COLMAP. Sin ellos se declara no ejecutada, nunca verde en falso.",
+  "name": "colmap-real-v1",
+  "why": "colmap-small-v1 es sintético y lo escribimos nosotros, así que no puede tener sorpresas que no previéramos. Esto sí: ruido real, el 77 % de las observaciones sin triangular, y dos modelos de cámara distintos de los cinco que el adaptador soporta.",
+  "source": {
+    "dataset": "alexmkwizu/colmap-testing-dataset",
+    "url": "https://huggingface.co/datasets/alexmkwizu/colmap-testing-dataset",
+    "upstream": "datasets de ejemplo de COLMAP (Schönberger & Frahm, CVPR 2016), https://colmap.github.io/datasets.html",
+    "license": "`other`: sigue a las fuentes originales, que no declaran una licencia explícita. Por eso el fixture vive fuera del repositorio y aquí solo está su hash: se apunta, no se redistribuye."
+  },
+  "scenes": {
+    "south-building": {
+      "cameras.txt": {
+        "bytes": 172,
+        "sha256": "2193006c1390caa227b6713951cebdfe4e7fc9805c980d91d4125d43f8ede660"
+      },
+      "images.txt": {
+        "bytes": 27577452,
+        "sha256": "a9dca725dcbd197ccdaa5fe5c51a8567ade99b0bfbd477f1df080b11f4de8086"
+      },
+      "points3D.txt": {
+        "bytes": 5872182,
+        "sha256": "5afb847913a9e141cd025dad70db1da9acbab8523f18890f4676b3c384907923"
+      }
+    },
+    "gerrard-hall": {
+      "cameras.txt": {
+        "bytes": 204,
+        "sha256": "ab9265a55e84c2f61c7ef43202321e0cfb2e928ee397801b4ae92499aabe0187"
+      },
+      "images.txt": {
+        "bytes": 20622366,
+        "sha256": "205e29b5e177e8029cfb4aa5e0a11238a3a1937add8e58f5b3bfb8cc651e7dbc"
+      },
+      "points3D.txt": {
+        "bytes": 4240540,
+        "sha256": "16f336dbaa34e2c255daedd769b0f1602b05e8350314fcb1366dfdd4b179b733"
+      }
+    }
+  }
+}

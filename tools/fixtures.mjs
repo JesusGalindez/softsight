@@ -28,6 +28,17 @@ export const fixturesRoot =
   process.env.SOFTSIGHT_FIXTURES ??
   resolve(projectRoot, "../../Codex/After effect ThreeJS/public/fixtures");
 
+/**
+ * Raíz del fixture pesado de COLMAP real — D22.
+ *
+ * Fuera del repositorio y por variable de entorno, como el del editor y por un
+ * motivo parecido: son 58 MB de texto de un dataset de terceros sin licencia
+ * explícita, así que se **apunta** en vez de redistribuirse. Su sha256 vive en
+ * `contracts/fixtures/colmap-real-v1.json`, que sí está versionado.
+ */
+export const colmapRoot =
+  process.env.SOFTSIGHT_COLMAP ?? resolve(projectRoot, "../softsight-fixtures/colmap");
+
 /** Ruta de un fixture por nombre de fichero. */
 export function fixture(name) {
   return resolve(fixturesRoot, name);

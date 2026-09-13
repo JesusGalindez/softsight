@@ -587,3 +587,33 @@ el historial.
 Qué necesito de Convergencia: nada nuevo.
 
 Qué está bloqueado por mí: nada.
+
+### 2026-09-13 · Arquitectura — D4 se cierra con datos reales de COLMAP
+
+Qué cambié: `test:colmap` deja de ser sintética a medias. El fixture
+`colmap-real-v1` son los dos datasets de ejemplo de COLMAP —`south-building` y
+`gerrard-hall`— con su modelo disperso en texto, **fuera del repositorio** y con
+su sha256 en `contracts/fixtures/colmap-real-v1.json`, como manda D22. La puerta
+los busca en `SOFTSIGHT_COLMAP`; sin ellos se declara no ejecutada, igual que las
+cinco que dependen de vuestro fixture certificado.
+
+**Lo que la cierra son dos caminos independientes al mismo número.** COLMAP
+guarda el error de reproyección medio de cada punto, calculado por su código;
+nosotros lo recalculamos con el nuestro sobre el CameraSet canónico:
+
+```text
+south-building   0,49697 px   COLMAP declara   0,49703 px   61.514 puntos
+gerrard-hall     0,61220 px   COLMAP declara   0,61217 px   43.188 puntos
+```
+
+Con la distorsión quitada, los mismos números se van a 2,57 y 30,58 px. Ése es el
+contraste que hace que la coincidencia signifique algo.
+
+**Por qué importa para vosotros**, aunque no os toque nada: el `projectPoint` que
+comparte el CameraSet con vuestro lado queda ahora verificado contra un tercero,
+no solo contra un fixture que escribimos nosotros. Si alguna vez discrepamos de
+una proyección, el número de arriba es el punto de partida.
+
+Qué necesito de Convergencia: nada nuevo.
+
+Qué está bloqueado por mí: nada.
