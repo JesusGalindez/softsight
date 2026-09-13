@@ -524,3 +524,32 @@ Qué necesito de Convergencia: nada nuevo. Sigue abierto fijar
 `artifacts/agent/encuadre-control.json`.
 
 Qué está bloqueado por mí: nada.
+
+### 2026-09-13 · Arquitectura — envío 02 a VideoMesh, publicado
+
+Qué mandé: [`envio-videomesh-02.md`](envio-videomesh-02.md), y con él los 21
+commits que lo sostienen, sobre `main` del repositorio público. Lo dispara el
+§1.4 del contrato, que obliga a avisar cuando cambia cualquier esquema: han
+cambiado dos.
+
+**Lo que rompe del lado de VideoMesh**, y por eso el envío va ahora y no al
+cerrar la fase: tres campos obligatorios nuevos en el paquete
+—`cameras[].imageArtifactHash`, `cameras[].imageSpace` y `artifacts[].cameraId`
+en los mapas de profundidad—. Un manifest escrito contra el esquema de agosto ya
+no valida, y el error dice cuál falta.
+
+**Lo que cambia en el informe que leen**: `versions.report` desaparece y en su
+sitio va `versions.contracts` con la combinación entera. Es la única sustitución
+del envío y se hace ahora porque el documento está en DRAFT y ellos son el único
+consumidor.
+
+**Lo que sigue esperando respuesta**: los identificadores en PROPUESTO han pasado
+de cinco a **28**, en cuatro espacios. El envío 01 sigue sin contestar, así que
+esto se acumula. Y el idioma de los códigos nuevos, que lo decide quien los va a
+leer.
+
+Qué necesito de Convergencia: nada nuevo. Sigue abierto fijar
+`artifacts/agent/encuadre-control.json`.
+
+Qué está bloqueado por mí: nada. Lo que está bloqueado **por VideoMesh** es R0-B,
+y con él R6 entero: cobertura y confianza no avanzan hasta que su `cube-v1` pase.
