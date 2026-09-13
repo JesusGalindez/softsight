@@ -448,13 +448,16 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     certifica lo que salga, sin convertirse en un motor de fotogrametría. Las
     secciones 0–83 las escribió el agente de VideoMesh; las 84–86 son la respuesta
     de este lado tras contrastarlas contra el código, y mandan donde se
-    contradigan. **No se escribe código hasta cerrar tres cosas**: por dónde viaja
-    el paquete —el puente lleva los ficheros en base64 dentro del JSON, con topes
-    de 256 MB y 120 s, y un paquete de reconstrucción no cabe por ahí—; si
-    `reconstruction/` y `production/` viven aquí o en un tercer repositorio que
-    consuma el contrato público, porque doblan las 19.565 líneas de `src/soft/`;
-    y en qué idioma van los códigos nuevos, porque la tabla de `warningCodes.ts`
-    es una y la comparan las dos direcciones de `test:codes`. De lo ya contrastado,
+    contradigan. De las tres cosas que este párrafo daba por abiertas, **dos las
+    cerró el registro de decisiones y queda una**: el transporte del paquete lo
+    fija **D1** —filesystem y rutas, nada de base64 por el puente— y dónde viven
+    `reconstruction/` y `production/` lo fija **D27** —aquí, bajo
+    `src/soft/agent/`, con frontera modular estricta—. La que sigue abierta es
+    **en qué idioma van los códigos nuevos**, porque la tabla de
+    `warningCodes.ts` es una y la comparan las dos direcciones de `test:codes`;
+    es decisión de criterio y afecta a VideoMesh, así que no la toma un lado
+    solo. Queda anotada en [`plan-reconstruccion.md`](plan-reconstruccion.md)
+    §86.2 (g). De lo ya contrastado,
     lo que cambió el orden de trabajo es que el techo de tamaño no estaba donde el
     plan creía: `mesh.ts` ya es de arrays tipados, y quien no escalaba era
     `auditMesh`, con un `Map` de clave de texto por vértice y otro de aristas.
