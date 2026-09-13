@@ -79,6 +79,36 @@
       },
       "description": "Topes de recurso aplicados, para que un rechazo por tamaño se pueda reproducir."
     },
+    "extensions": {
+      "type": "object",
+      "properties": {
+        "policy": {
+          "type": "string",
+          "description": "Qué se hace con una opcional desconocida."
+        },
+        "honoured": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Extensiones que este binario entiende."
+        },
+        "ignored": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Opcionales desconocidas: preservadas en el paquete y nombradas aquí."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "policy",
+        "honoured",
+        "ignored"
+      ],
+      "description": "Qué se hizo con el espacio de extensiones de D30, y con qué política."
+    },
     "run": {
       "type": "object",
       "properties": {
@@ -404,6 +434,7 @@
     "certification",
     "certificationPolicy",
     "limits",
+    "extensions",
     "run",
     "versions",
     "evidence",

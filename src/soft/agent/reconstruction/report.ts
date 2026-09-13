@@ -20,6 +20,7 @@
 
 import type { MeshAudit } from "../inspect";
 import type { ObjectSchema } from "../schema";
+import { EXTENSION_POLICY } from "./ingest";
 import type { IngestIssue, IngestResult } from "./ingest";
 import { RESOURCE_LIMIT_LIST } from "./limits";
 
@@ -87,6 +88,12 @@ export interface ReconstructionReport {
    * comparó, y un PASS que dependió de que algo cupiera también.
    */
   limits: Array<{ name: string; value: number; unit: string; rationale: string }>;
+  /**
+   * Qué se hizo con el espacio de extensiones (D30). Una opcional desconocida se
+   * preserva y se nombra aquí: ignorarla en silencio deja al productor creyendo
+   * que mandó algo que se usó.
+   */
+  extensions: { policy: string; honoured: string[]; ignored: string[] };
   run: {
     runId: string;
     /** Ausente si el manifest no llegó a validar y no hay identidad que citar. */
@@ -198,6 +205,11 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
     ...(reason === null ? {} : { certificationReason: reason }),
     certificationPolicy: CERTIFICATION_POLICY,
     limits: RESOURCE_LIMIT_LIST.map((limit) => ({ ...limit })),
+    extensions: {
+      policy: EXTENSION_POLICY,
+      honoured: [...ingest.extensions.honoured],
+      ignored: [...ingest.extensions.ignored],
+    },
     run: {
       runId: runIdFor(manifestSha256),
       ...(ingest.packageId === null ? {} : { inputPackageId: ingest.packageId }),
@@ -269,6 +281,20 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
       value: { type: "number", required: true, description: "El número que rigió." },
       unit: { type: '"bytes"|"entradas"|"líneas"', required: true, description: "En qué se cuenta." },
       rationale: { type: "string", required: true, description: "Por qué ese número y no otro." },
+    },
+  },
+  extensions: {
+    type: "object",
+    required: true,
+    description: "Qué se hizo con el espacio de extensiones de D30, y con qué política.",
+    fields: {
+      policy: { type: "string", required: true, description: "Qué se hace con una opcional desconocida." },
+      honoured: { type: "string[]", required: true, description: "Extensiones que este binario entiende." },
+      ignored: {
+        type: "string[]",
+        required: true,
+        description: "Opcionales desconocidas: preservadas en el paquete y nombradas aquí.",
+      },
     },
   },
   run: {

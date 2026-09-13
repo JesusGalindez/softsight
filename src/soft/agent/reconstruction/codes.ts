@@ -117,6 +117,12 @@ export const PACKAGE_CODE_TABLE = {
     status: "PROPUESTO",
     decision: "D5 y D13 nombran el caso, sin número",
   },
+  "SS-PKG-023": {
+    reason: "EXTENSION_REQUIRED_UNSUPPORTED",
+    cause: "el paquete declara una extensión `required` que este binario no entiende",
+    status: "PROPUESTO",
+    decision: "D30 nombra el desenlace UNSUPPORTED, sin número",
+  },
 
   // El espacio `SS-IO`: leer ficheros de otro. Son los topes de `limits.ts` y la
   // lectura que no se puede completar, y se separan de `SS-PKG` porque no dicen

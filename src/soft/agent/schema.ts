@@ -44,6 +44,28 @@ export interface FieldSchema {
     /** Forma por cada valor del discriminante, incluido el propio campo. */
     forms: Record<string, Record<string, FieldSchema>>;
   };
+  /**
+   * Mapa de claves libres a una forma común: un objeto cuyos **nombres de campo
+   * son datos**, no vocabulario.
+   *
+   * `fields` no llega: exige conocer los nombres de antemano, que es justo lo
+   * contrario de un espacio de extensiones, donde la clave la elige el productor
+   * y este binario no puede haberla previsto (D30). Sin esto, la única
+   * alternativa era declarar el campo `object` sin `fields`, que abre la puerta a
+   * cualquier cosa y deshace D30 en el mismo sitio donde se pretendía cumplirla.
+   *
+   * La clave **sí** se valida, por patrón: un espacio de nombres sin forma no es
+   * un espacio, es un cajón. Y el valor se recorre como cualquier otro objeto, de
+   * modo que `additionalProperties: false` sigue siendo cierto en lo publicado.
+   */
+  entries?: {
+    /** Expresión regular que la clave tiene que cumplir. */
+    keyPattern: string;
+    /** Qué es una clave válida, en una línea, para el mensaje de error. */
+    keyDescription: string;
+    /** Forma de cada valor del mapa. */
+    fields: Record<string, FieldSchema>;
+  };
 }
 
 export type ObjectSchema = Record<string, FieldSchema>;
@@ -868,7 +890,16 @@ function fieldToJsonSchema(field: FieldSchema): Record<string, unknown> {
       // acepta cualquier objeto al lado de las que describen la geometría de
       // verdad, y un validador del otro lado casaría contra ella. El campo
       // publicado dejaría de decir nada.
-      if (field.fields !== undefined) shapes.push(toJsonSchema(field.fields));
+      if (field.entries !== undefined) {
+        // `patternProperties` con la puerta cerrada: el otro lado rechaza una
+        // clave fuera del espacio igual que la rechaza `validate`, que es lo que
+        // D30 pide que cruce la frontera.
+        shapes.push({
+          type: "object",
+          patternProperties: { [field.entries.keyPattern]: toJsonSchema(field.entries.fields) },
+          additionalProperties: false,
+        });
+      } else if (field.fields !== undefined) shapes.push(toJsonSchema(field.fields));
       else if (field.anyOf === undefined) shapes.push({ type: "object" });
     } else if (alternative === "object[]") {
       if (field.fields !== undefined) shapes.push({ type: "array", items: toJsonSchema(field.fields) });
@@ -978,6 +1009,25 @@ export function validate(value: unknown, schema: ObjectSchema, path = ""): strin
         }
         errors.push(...validate(child, form, childPath));
       });
+    }
+    if (definition.entries !== undefined) {
+      const { keyPattern, keyDescription, fields } = definition.entries;
+      const pattern = new RegExp(keyPattern);
+      for (const [key, entry] of Object.entries(record[field] as Record<string, unknown>)) {
+        // Entre comillas y con corchetes: la clave es un dato y puede traer
+        // puntos, así que `a.b.c.d` en una ruta con puntos no dejaría ver dónde
+        // acaba el camino y empieza el nombre.
+        const entryPath = `${here}[${JSON.stringify(key)}]`;
+        if (!pattern.test(key)) {
+          errors.push(`${entryPath} no es una clave admitida: ${keyDescription}`);
+          continue;
+        }
+        if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+          errors.push(`${entryPath} debe ser un objeto`);
+          continue;
+        }
+        errors.push(...validate(entry, fields as ObjectSchema, entryPath));
+      }
     }
     if (definition.anyOf !== undefined) {
       const attempts = definition.anyOf.map((alternative) => validate(record[field], alternative, here));

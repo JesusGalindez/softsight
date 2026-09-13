@@ -274,4 +274,37 @@ export const RECONSTRUCTION_PACKAGE_SCHEMA: ObjectSchema = {
       "Identidades de artifact que el contrato exige para certificar. " +
       "Faltar una da INCONCLUSIVE; faltar evidencia que nadie usa es irrelevante (D8).",
   },
+  extensions: {
+    type: "object",
+    description:
+      "Espacio explícito para lo experimental (D30). Fuera de aquí, un campo desconocido es error; " +
+      "dentro, la clave la elige el productor y este binario no tiene por qué conocerla. " +
+      "Una extensión `required` que no se entienda para el consumo con UNSUPPORTED; " +
+      "una opcional se preserva y se declara, nunca se ignora en silencio.",
+    entries: {
+      // Espacio de nombres invertido y con al menos tres tramos: `foo` no es un
+      // espacio, y dos productores que elijan `experimental` a secas chocan. El
+      // patrón es lo que impide que el espacio de extensiones se convierta en el
+      // cajón donde acaba lo que no cabía en el esquema.
+      keyPattern: "^[a-z][a-z0-9]*(\\.[a-z0-9-]+){2,}$",
+      keyDescription:
+        "espacio de nombres invertido del productor, con tres tramos o más, como org.videomesh.experimental.foo",
+      fields: {
+        required: {
+          type: "boolean",
+          required: true,
+          description:
+            "Si el consumidor no puede interpretar el paquete sin entenderla. Obligatorio y sin valor " +
+            "por defecto: suponerlo `false` convertiría en silencio una extensión que cambia el sentido " +
+            "de los datos.",
+        },
+        data: {
+          type: "object",
+          description:
+            "Carga de la extensión. Opaca a propósito: es del productor, y darle forma aquí sería " +
+            "declarar como frontera algo que todavía es experimento.",
+        },
+      },
+    },
+  },
 };

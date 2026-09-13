@@ -41,6 +41,27 @@ export interface ArtifactStat {
  */
 export const SUPPORTED_CONTRACT_VERSIONS = ["0.1"] as const;
 
+/**
+ * Qué extensiones entiende este binario. **Hoy ninguna**, y decirlo así es la
+ * respuesta honesta: una lista con nombres inventados para que la prueba
+ * discrimine sería declarar frontera un experimento que nadie ha escrito.
+ *
+ * Se puede sustituir por parámetro, igual que `schemaHashes`, porque quien sabe
+ * qué entiende un despliegue concreto no es este módulo.
+ */
+export const SUPPORTED_EXTENSIONS: readonly string[] = [];
+
+/**
+ * La política de D30 para la extensión **opcional** desconocida, que la decisión
+ * deja abierta entre preservar e ignorar.
+ *
+ * Se elige preservar **y declararla en el informe**. Ignorar en silencio tiene el
+ * mismo problema que aceptar un campo desconocido: el productor cree que mandó
+ * algo que se usó. Preservarla y nombrarla convierte «no lo entendí» en un dato
+ * que se puede leer, que es lo que separa esto de adivinar.
+ */
+export const EXTENSION_POLICY = "preservar-y-declarar" as const;
+
 export interface IngestOptions {
   /**
    * Hashes de esquema registrados como compatibles. Se pasan desde fuera porque
@@ -48,6 +69,11 @@ export interface IngestOptions {
    * se comprueba el hash: no tenerlo es no saber, y no saber no es rechazar.
    */
   schemaHashes?: readonly string[];
+  /**
+   * Extensiones que este despliegue entiende. Sin pasarla rige
+   * `SUPPORTED_EXTENSIONS`, que hoy está vacía.
+   */
+  supportedExtensions?: readonly string[];
 }
 
 export interface PackageReader {
@@ -78,6 +104,8 @@ export interface IngestResult {
   packageId: string | null;
   /** Artifacts admitidos, con su ruta real ya comprobada. */
   artifacts: Array<{ id: string; type: string; realPath: string; sha256: string; bytes: number }>;
+  /** Qué extensiones se entendieron y cuáles se preservaron sin entender (D30). */
+  extensions: { honoured: string[]; ignored: string[] };
 }
 
 /**
@@ -100,6 +128,7 @@ export const PACKAGE_CODES = {
   SIZE_MISMATCH: "SS-PKG-012",
   HASH_MISMATCH: "SS-PKG-013",
   HASH_MALFORMED: "SS-PKG-014",
+  EXTENSION_REQUIRED_UNSUPPORTED: "SS-PKG-023",
   // El espacio de lectura: topes de recurso y ficheros que no se pueden
   // interpretar. Los cinco primeros los proyecta el código de salida 23, que D13
   // reservaba y hasta ahora no devolvía nadie.
@@ -162,7 +191,8 @@ export function ingestPackage(
   options: IngestOptions = {},
 ): IngestResult {
   const issues: IngestIssue[] = [];
-  const empty: IngestResult = { execution: "ERROR", issues, packageId: null, artifacts: [] };
+  const extensions = { honoured: [] as string[], ignored: [] as string[] };
+  const empty: IngestResult = { execution: "ERROR", issues, packageId: null, artifacts: [], extensions };
 
   const schemaErrors = validate(manifest, RECONSTRUCTION_PACKAGE_SCHEMA);
   if (schemaErrors.length > 0) {
@@ -178,6 +208,7 @@ export function ingestPackage(
     packageId: string;
     contractVersion: string;
     contractSchemaSha256?: string;
+    extensions?: Record<string, { required?: boolean }>;
     state: string;
     artifacts: Array<{ id: string; type: string; path: string; bytes: number; sha256: string }>;
   };
@@ -221,6 +252,31 @@ export function ingestPackage(
       ),
     );
     return { ...empty, packageId: document.packageId };
+  }
+
+  // Las extensiones antes de tocar un artifact: si el paquete exige una que no
+  // entendemos, lo que venga detrás **no se puede interpretar**, y medirlo sería
+  // producir números sobre unos datos cuyo sentido nos falta (D30).
+  const supported = new Set(options.supportedExtensions ?? SUPPORTED_EXTENSIONS);
+  const unknownRequired: string[] = [];
+  for (const [name, entry] of Object.entries(
+    (document.extensions ?? {}) as Record<string, { required?: boolean }>,
+  )) {
+    if (supported.has(name)) {
+      extensions.honoured.push(name);
+      continue;
+    }
+    if (entry.required === true) unknownRequired.push(name);
+    else extensions.ignored.push(name);
+  }
+  if (unknownRequired.length > 0) {
+    issues.push(
+      issue(
+        PACKAGE_CODES.EXTENSION_REQUIRED_UNSUPPORTED,
+        `extensiones requeridas que este binario no entiende: ${unknownRequired.join(", ")}`,
+      ),
+    );
+    return { ...empty, execution: "UNSUPPORTED", packageId: document.packageId };
   }
 
   // El recuento antes del recorrido: cada artifact cuesta una resolución de
@@ -309,6 +365,7 @@ export function ingestPackage(
     issues,
     packageId: document.packageId,
     artifacts,
+    extensions,
   };
 }
 

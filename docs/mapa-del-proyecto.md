@@ -480,6 +480,14 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     bytes de memoria de arrays**, cuando antes reservaba 60 MB para morir con un
     `TypeError` ajeno. Cierra el hueco (o) de
     [`plan-reconstruccion.md`](plan-reconstruccion.md) §86.3.
+    Y **D30 se cerró entera el mismo día**: el espacio `extensions` existe, con
+    `entries` —vocabulario nuevo del esquema, claves libres con patrón, como D21
+    trajo `variants`— para que la clave la elija el productor sin que la puerta se
+    abra. Una extensión requerida que no se entienda deja el paquete UNSUPPORTED
+    con salida 21; una opcional **se preserva y se declara**, que es la política
+    que la decisión dejaba abierta, porque ignorarla en silencio deja al productor
+    creyendo que mandó algo que se usó. `test:contracts` sale de las puertas no
+    ejecutadas: quedan cuatro, todas por fixture privado o por `SOFTSIGHT_HEAVY`.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

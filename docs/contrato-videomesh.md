@@ -87,12 +87,13 @@ reuniones periódicas                 las sustituye el aviso por evento
 
 ## 2. Estado del registro
 
-Al 2026-08-12, cerrada la tercera ronda:
+Al 2026-09-13:
 
 ```text
-ACORDADAS       23   D1, D2, D4, D5, D8–D12, D15, D18, D20, D22, D23, D26–D34
+ACORDADAS       22   D1, D2, D4, D5, D8–D12, D15, D18, D20, D22, D23, D26–D29,
+                     D31–D34
 PROPUESTAS       0
-IMPLEMENTADAS   11   D3, D6, D7, D13, D14, D16, D17, D19, D21, D24, D25
+IMPLEMENTADAS   12   D3, D6, D7, D13, D14, D16, D17, D19, D21, D24, D25, D30
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -105,11 +106,11 @@ paquete real y sobre uno simulado, y **D21**, cuyos cuatro casos exigieron
 extender el esquema en ejecución con formas discriminadas por el literal del
 tipo. D7 y D29 se quedaron a medias, cada una con su mitad anotada.
 
-D30 era la primera candidata y **se quedó a un tercio**: su fixture existe y su
-primera fila está probada, pero las otras dos hablan de un espacio `extensions`
-que ningún esquema declara. La puerta las deja NOT_RUN con su motivo y la decisión
-sigue ACORDADA. Es la regla funcionando, no un fallo: la prueba no falla si se
-incumplen dos de las tres filas, así que no cuenta.
+D30 se quedó a un tercio el 2026-08-12 —su fixture existía y su primera fila
+estaba probada, pero las otras dos hablaban de un espacio `extensions` que ningún
+esquema declaraba— y **se cerró entera el 2026-09-13**. Fue la regla funcionando,
+no un fallo: durante un mes la prueba no fallaba si se incumplían dos de las tres
+filas, así que la decisión no contaba.
 
 ---
 
@@ -884,7 +885,7 @@ prueba las dos condiciones de sellado que SoftSight puede comprobar: sellado ent
 volumen, destino que ya existe— lo garantiza quien escribe, y su prueba es de
 VideoMesh.
 
-### D30 — Campo desconocido es error
+### D30 — Campo desconocido es error — IMPLEMENTADA (2026-09-13)
 `additionalProperties: false` en el núcleo, y un espacio explícito para lo
 experimental:
 ```json
@@ -902,13 +903,43 @@ existiera este contrato.
 **Prueba:** `unknown-field-v1`, en `contracts/fixtures/`, con puerta
 `test:contracts`.
 
-**Estado al 2026-08-12: sigue ACORDADA, y el fixture dice por qué.** La primera
-fila está probada —siete documentos rechazados por su campo y tres aceptados, más
-`additionalProperties: false` comprobado en los 47 objetos de la frontera
-publicada—, y dos mutaciones del validador la ponen roja. Las otras dos filas no
-se pueden ejercer: **`extensions` no existe en ningún esquema todavía**, así que
-la puerta las declara NOT_RUN con su motivo. Una decisión con un tercio de prueba
-no es IMPLEMENTADA.
+**Estado al 2026-08-12: seguía ACORDADA, y el fixture decía por qué.** La primera
+fila estaba probada —siete documentos rechazados por su campo y tres aceptados,
+más `additionalProperties: false` comprobado en los objetos de la frontera
+publicada—, y dos mutaciones del validador la ponían roja. Las otras dos no se
+podían ejercer: `extensions` no existía en ningún esquema, así que la puerta las
+declaraba NOT_RUN. Una decisión con un tercio de prueba no era IMPLEMENTADA.
+
+**Cerrada el 2026-09-13, y costó vocabulario nuevo.** `fields` no servía: exige
+conocer los nombres de antemano, que es justo lo contrario de un espacio de
+extensiones, donde la clave la elige el productor. Declarar el campo `object` sin
+`fields` habría abierto la puerta a cualquier cosa, o sea deshacer D30 en el mismo
+sitio donde se pretendía cumplirla. Así que el esquema en ejecución gana `entries`
+—un mapa de claves libres a una forma común, con **patrón para la clave**—, igual
+que D21 le hizo ganar `variants`, y `toJsonSchema` lo emite como
+`patternProperties` con `additionalProperties: false`: el otro lado rechaza una
+clave fuera del espacio igual que la rechaza `validate`.
+
+```text
+extensions["foo"]                          clave sin espacio de nombres → error
+{ required: false, niveles: 3 }            campo de más en el envoltorio → error
+{}                                         `required` sin valor por defecto → error
+{ required: true }   desconocida           UNSUPPORTED, salida 21
+{ required: false }  desconocida           preservada y declarada en el informe
+{ required: true }   entendida             COMPLETE, en `honoured`
+```
+
+**La política que la decisión dejaba abierta se elige: preservar y declarar.**
+Ignorar en silencio tiene el mismo problema que aceptar un campo desconocido —el
+productor cree que mandó algo que se usó—, así que el informe publica `policy`,
+`honoured` e `ignored`. Lo que este binario entiende hoy es **nada**, y decirlo
+así es la respuesta honesta: `SUPPORTED_EXTENSIONS` está vacía y se sustituye por
+parámetro, como `schemaHashes`. El último caso de la puerta existe por eso: sin
+él, un binario que declarase todo desconocido también la aprobaría.
+
+Un tercer objeto opaco entra en la lista de la puerta, y **su opacidad es la
+decisión**: la carga de una extensión es del productor. Lo que no es libre es su
+envoltorio ni su clave.
 
 Dos hallazgos del camino, que son deuda de esta decisión y no de otra:
 

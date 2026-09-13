@@ -475,6 +475,30 @@
         "type": "string"
       },
       "description": "Identidades de artifact que el contrato exige para certificar. Faltar una da INCONCLUSIVE; faltar evidencia que nadie usa es irrelevante (D8)."
+    },
+    "extensions": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z][a-z0-9]*(\\.[a-z0-9-]+){2,}$": {
+          "type": "object",
+          "properties": {
+            "required": {
+              "type": "boolean",
+              "description": "Si el consumidor no puede interpretar el paquete sin entenderla. Obligatorio y sin valor por defecto: suponerlo `false` convertiría en silencio una extensión que cambia el sentido de los datos."
+            },
+            "data": {
+              "type": "object",
+              "description": "Carga de la extensión. Opaca a propósito: es del productor, y darle forma aquí sería declarar como frontera algo que todavía es experimento."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "required"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "Espacio explícito para lo experimental (D30). Fuera de aquí, un campo desconocido es error; dentro, la clave la elige el productor y este binario no tiene por qué conocerla. Una extensión `required` que no se entienda para el consumo con UNSUPPORTED; una opcional se preserva y se declara, nunca se ignora en silencio."
     }
   },
   "additionalProperties": false,

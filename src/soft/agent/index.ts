@@ -251,7 +251,13 @@ export {
 export type { SceneRole } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
 export { RECONSTRUCTION_PACKAGE_SCHEMA } from "./reconstruction/packageSchema";
-export { PACKAGE_CODES, exitCodeFor, ingestPackage } from "./reconstruction/ingest";
+export {
+  EXTENSION_POLICY,
+  PACKAGE_CODES,
+  SUPPORTED_EXTENSIONS,
+  exitCodeFor,
+  ingestPackage,
+} from "./reconstruction/ingest";
 export {
   PACKAGE_CODE_LIST,
   PACKAGE_CODE_TABLE,
