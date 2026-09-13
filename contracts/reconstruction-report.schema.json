@@ -42,6 +42,43 @@
       "type": "string",
       "description": "Qué criterio se aplicó, para que un PASS de hoy y uno de mañana se puedan comparar."
     },
+    "limits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Qué tope es."
+          },
+          "value": {
+            "type": "number",
+            "description": "El número que rigió."
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "bytes",
+              "entradas",
+              "líneas"
+            ],
+            "description": "En qué se cuenta."
+          },
+          "rationale": {
+            "type": "string",
+            "description": "Por qué ese número y no otro."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "value",
+          "unit",
+          "rationale"
+        ]
+      },
+      "description": "Topes de recurso aplicados, para que un rechazo por tamaño se pueda reproducir."
+    },
     "run": {
       "type": "object",
       "properties": {
@@ -366,6 +403,7 @@
     "execution",
     "certification",
     "certificationPolicy",
+    "limits",
     "run",
     "versions",
     "evidence",

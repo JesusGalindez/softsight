@@ -31,6 +31,10 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  PACKAGE_CODES,
+  PACKAGE_CODE_TABLE,
+  RESOURCE_LIMITS,
+  RESOURCE_LIMIT_REASONS,
   auditMesh,
   buildReconstructionReport,
   ingestPackage,
@@ -81,6 +85,18 @@ function schemaHashes() {
 }
 
 export function inspectPackage(manifestPath) {
+  // El primer fichero que se lee sin haber comprobado nada. Antes de `readFileSync`
+  // y no después: después ya está en memoria, que es lo que el tope evita.
+  const manifestBytes = statSync(manifestPath).size;
+  if (manifestBytes > RESOURCE_LIMITS.manifestBytes.value) {
+    return {
+      report: null,
+      exitCode: 23,
+      fatal:
+        `el manifest ocupa ${manifestBytes} bytes y el tope son ${RESOURCE_LIMITS.manifestBytes.value} ` +
+        `(${PACKAGE_CODES.MANIFEST_TOO_LARGE})`,
+    };
+  }
   const raw = readFileSync(manifestPath);
   const root = realpathSync(dirname(manifestPath));
   const manifestSha256 = createHash("sha256").update(raw).digest("hex");
@@ -110,13 +126,17 @@ export function inspectPackage(manifestPath) {
       // Un formato que no sabemos leer no es un paquete inválido ni una malla
       // mala: es trabajo que no se puede hacer. Se marca UNSUPPORTED y el código
       // de salida lo distingue de «el contrato no lo leo».
-      const unsupported = String(error.message).startsWith("PLY_FORMAT_UNSUPPORTED");
+      //
+      // El `reason` sale de la tabla y no se escribe aquí: escrito a mano decía
+      // `ARTIFACT_UNREADABLE` con el identificador de «el hash no cuadra», que es
+      // lo que el otro lado parsea. Un dato, un dueño.
+      const code = plyErrorCode(String(error.message));
       ingest.issues.push({
-        code: unsupported ? "SS-PKG-022" : "SS-PKG-013",
-        reason: unsupported ? "ARTIFACT_FORMAT_UNSUPPORTED" : "ARTIFACT_UNREADABLE",
+        code,
+        reason: PACKAGE_CODE_TABLE[code].reason,
         message: `artifact ${artifact.id}: ${error.message}`,
       });
-      ingest.execution = unsupported ? "UNSUPPORTED" : "ERROR";
+      ingest.execution = code === PACKAGE_CODES.FORMAT_UNSUPPORTED ? "UNSUPPORTED" : "ERROR";
       continue;
     }
     if (mesh === null) continue;
@@ -144,8 +164,27 @@ export function inspectPackage(manifestPath) {
   return { report, exitCode: exitCodeForReport(report), fatal: null };
 }
 
+/**
+ * Qué identificador le toca a un fallo del lector de PLY.
+ *
+ * Por el prefijo del mensaje, que el lector escribe a propósito: es la única
+ * información que cruza la frontera de una excepción, y convertirla en código
+ * aquí deja al lector sin saber nada de la tabla de la frontera.
+ */
+function plyErrorCode(message) {
+  if (message.startsWith("PLY_FORMAT_UNSUPPORTED")) return PACKAGE_CODES.FORMAT_UNSUPPORTED;
+  if (message.startsWith("PLY_HEADER_TOO_LONG")) return PACKAGE_CODES.PLY_HEADER_TOO_LONG;
+  if (message.startsWith("PLY_ELEMENT_COUNT_EXCEEDS_LIMIT")) return PACKAGE_CODES.PLY_COUNT_EXCEEDS_LIMIT;
+  if (message.startsWith("PLY_TRUNCATED")) return PACKAGE_CODES.PLY_TRUNCATED;
+  return PACKAGE_CODES.UNREADABLE;
+}
+
 /** La proyección de D13, con los dos ejes decidiendo juntos. */
 export function exitCodeForReport(report) {
+  // El 23 por delante de todo lo demás: un paquete que no cabe puede ser
+  // impecable, y confundirlo con uno inválido manda al productor a arreglar lo
+  // que no está roto.
+  if (report.warnings.some((entry) => RESOURCE_LIMIT_REASONS.includes(entry.reason))) return 23;
   if (report.execution === "UNSUPPORTED") {
     return report.warnings.some((entry) => entry.reason === "ARTIFACT_FORMAT_UNSUPPORTED") ? 22 : 21;
   }

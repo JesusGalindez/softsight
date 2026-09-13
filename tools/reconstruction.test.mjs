@@ -19,7 +19,12 @@
  *      su informe valida contra el esquema publicado y es idéntico byte a byte
  *      entre dos ejecuciones. Con los tres desenlaces que no son PASS: evidencia
  *      requerida ausente, paquete sin sellar, y malla declarada sin superficie.
- *   6. Lo que sigue fuera: el criterio de certificación no tiene número, y
+ *   6. Los topes de recurso: lo que se rechaza **antes de reservar**. Es el
+ *      bloque que mide, además de comprobar el motivo: una cabecera que promete
+ *      cinco millones de vértices en un fichero de tres líneas no puede hacer
+ *      crecer la memoria de arrays, y sin el tope la hacía crecer 60 MB antes de
+ *      morir con un error que no era suyo.
+ *   7. Lo que sigue fuera: el criterio de certificación no tiene número, y
  *      cobertura y confianza siguen bloqueadas por D34.
  */
 
@@ -41,6 +46,8 @@ import { fileURLToPath } from "node:url";
 
 import {
   PACKAGE_CODES,
+  RESOURCE_LIMITS,
+  RESOURCE_LIMIT_LIST,
   RECONSTRUCTION_PACKAGE_SCHEMA,
   RECONSTRUCTION_REPORT_SCHEMA,
   auditMesh,
@@ -558,6 +565,137 @@ function sha256Of(path) {
   );
 
   rmSync(sandbox, { recursive: true, force: true });
+}
+
+// 6. Los topes de recurso: rechazar antes de reservar.
+//
+// SoftSight lee ficheros que escribe otro, y hasta aquí no tenía un solo tope.
+// Cada caso comprueba **el motivo**, porque «falló» no distingue un rechazo de
+// un `RangeError`, y el primero además **mide**, porque el motivo correcto con
+// la reserva ya hecha no arregla nada.
+{
+  const cabecera = (vertices) =>
+    [
+      "ply",
+      "format ascii 1.0",
+      `element vertex ${vertices}`,
+      "property float x",
+      "property float y",
+      "property float z",
+      "end_header",
+      "0 0 0",
+      "1 0 0",
+      "0 1 0",
+    ].join("\n");
+
+  // El caso de verdad: la cabecera promete cinco millones y el fichero trae tres
+  // filas. Antes reservaba `5e6 * 3` flotantes —60 MB— y moría al leer la cuarta
+  // fila con un `TypeError` sobre `undefined`, que no dice nada de lo que pasó.
+  const antes = process.memoryUsage().arrayBuffers;
+  assert.throws(
+    () => parsePlyAscii(cabecera(5_000_000)),
+    /^Error: PLY_TRUNCATED: /,
+    "una cabecera que promete más filas de las que hay tiene que rechazarse por su nombre",
+  );
+  const crecimiento = process.memoryUsage().arrayBuffers - antes;
+  assert.ok(
+    crecimiento < 16 * 1024 * 1024,
+    `rechazar no puede reservar: la memoria de arrays creció ${crecimiento} bytes`,
+  );
+
+  // Y por encima del tope no hace falta ni contar filas: se para en la cabecera.
+  assert.throws(
+    () => parsePlyAscii(cabecera(RESOURCE_LIMITS.plyElementCount.value + 1)),
+    /^Error: PLY_ELEMENT_COUNT_EXCEEDS_LIMIT: /,
+    "por encima del tope de entradas se para en la cabecera",
+  );
+
+  // `Number("1e999")` es `Infinity` sin que nadie escriba la palabra, y con él la
+  // reserva es `NaN` y el bucle no termina (D17).
+  assert.throws(() => parsePlyAscii(cabecera("1e999")), /^Error: PLY_HEADER_INVALID: /);
+  assert.throws(() => parsePlyAscii(cabecera("-1")), /^Error: PLY_HEADER_INVALID: /);
+
+  // Una cabecera sin `end_header` recorría el documento entero buscándolo.
+  const sinFin = ["ply", "format ascii 1.0", ...Array(2_000).fill("comment relleno")].join("\n");
+  assert.throws(() => parsePlyAscii(sinFin), /^Error: PLY_HEADER_TOO_LONG: /);
+
+  console.log(
+    `reconstrucción: ok (PLY: truncado, tope de entradas, 1e999, negativo y cabecera sin fin; ` +
+      `rechazar creció ${crecimiento} bytes de memoria de arrays)`,
+  );
+}
+
+// Los dos topes de la ingesta se miran sobre lo **declarado**, antes de abrir un
+// fichero: comprobarlos después sería haberlo leído ya.
+{
+  const cases = fixture("package-integrity-v1");
+  const reader = {
+    root: cases.root,
+    // Si algo llega hasta aquí, el tope no ha parado nada: el paquete de este
+    // bloque no tiene un solo fichero detrás.
+    stat: () => {
+      throw new Error("el tope tenía que haber rechazado antes de tocar el disco");
+    },
+  };
+
+  const enorme = {
+    ...cases.base,
+    artifacts: [{ ...cases.base.artifacts[0], bytes: RESOURCE_LIMITS.artifactBytes.value + 1 }],
+  };
+  const unoEnorme = ingestPackage(enorme, reader);
+  assert.deepEqual(
+    unoEnorme.issues.map((entry) => entry.code),
+    [PACKAGE_CODES.ARTIFACT_TOO_LARGE],
+  );
+  assert.equal(exitCodeFor(unoEnorme), 23, "un artifact que no cabe no es un paquete inválido");
+
+  const muchos = {
+    ...cases.base,
+    artifacts: Array.from({ length: RESOURCE_LIMITS.packageArtifacts.value + 1 }, (_, index) => ({
+      ...cases.base.artifacts[0],
+      id: `mesh-${index}`,
+    })),
+  };
+  const demasiados = ingestPackage(muchos, reader);
+  assert.deepEqual(
+    demasiados.issues.map((entry) => entry.code),
+    [PACKAGE_CODES.TOO_MANY_ARTIFACTS],
+  );
+  assert.equal(exitCodeFor(demasiados), 23);
+
+  console.log(
+    "reconstrucción: ok (artifact que no cabe y manifest de 10.001 entradas: los dos salen 23 sin " +
+      "tocar el disco, y 23 no es 20 porque el paquete puede estar impecable)",
+  );
+}
+
+// El manifest es la primera lectura del recorrido y era la única sin tope.
+{
+  const sandbox = realpathSync(mkdtempSync(join(tmpdir(), "softsight-limite-")));
+  const gordo = join(sandbox, "manifest.json");
+  writeFileSync(gordo, `{"relleno":"${"a".repeat(RESOURCE_LIMITS.manifestBytes.value)}"}`);
+  const salida = inspectPackage(gordo);
+  assert.equal(salida.exitCode, 23, "un manifest que no cabe sale 23");
+  assert.equal(salida.report, null, "sin leerlo no hay informe que dar");
+  assert.match(salida.fatal, /SS-IO-001/);
+  rmSync(sandbox, { recursive: true, force: true });
+  console.log("reconstrucción: ok (manifest por encima del tope: 23 antes de leerlo, con su identificador)");
+}
+
+// Y los topes se publican: un rechazo por tamaño solo se puede reproducir si el
+// informe dice contra qué número se comparó.
+{
+  const sandbox = realpathSync(mkdtempSync(join(tmpdir(), "softsight-topes-")));
+  const root = join(sandbox, "cube-v1");
+  writeCubePackage(root);
+  const { report } = inspectPackage(join(root, "manifest.json"));
+  assert.deepEqual(report.limits, RESOURCE_LIMIT_LIST.map((limit) => ({ ...limit })));
+  for (const limit of report.limits) {
+    assert.ok(Number.isSafeInteger(limit.value) && limit.value > 0, `${limit.name}: tope no entero`);
+    assert.ok(limit.rationale.length > 0, `${limit.name}: sin por qué`);
+  }
+  rmSync(sandbox, { recursive: true, force: true });
+  console.log(`reconstrucción: ok (el informe publica los ${report.limits.length} topes con su unidad y su por qué)`);
 }
 
 // 7. Lo que sigue fuera, dicho en voz alta.

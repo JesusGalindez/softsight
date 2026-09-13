@@ -9,7 +9,14 @@
  *
  * Un PLY que no se sepa leer **se rechaza diciendo por qué**. Adivinar el formato
  * es como se acaba interpretando basura como geometría.
+ *
+ * Y no se cree lo que la cabecera declara: los topes de `limits.ts` y la cuenta
+ * de filas que el fichero trae de verdad se comprueban **antes de reservar**. Un
+ * `element vertex 4000000000` en un fichero de cien bytes reservaba doce
+ * gigabytes y moría sin decir por qué.
  */
+
+import { RESOURCE_LIMITS } from "./limits";
 
 export interface PlyMesh {
   positions: Float32Array;
@@ -99,11 +106,17 @@ export function parsePlyAscii(text: string): { mesh: PlyMesh | null; points: Ply
   const elements: PlyElement[] = [];
   let cursor = 1;
   let format: string | null = null;
-  for (; cursor < lines.length; cursor += 1) {
+  let sawEndHeader = false;
+  // El tope se mira sobre el cursor y no sobre las líneas consumidas: un fichero
+  // sin `end_header` recorría el documento entero buscándolo, y un PLY de un giga
+  // es un documento entero.
+  const headerCeiling = Math.min(lines.length, 1 + RESOURCE_LIMITS.plyHeaderLines.value);
+  for (; cursor < headerCeiling; cursor += 1) {
     const line = lines[cursor].trim();
     if (line === "" || line.startsWith("comment")) continue;
     if (line === "end_header") {
       cursor += 1;
+      sawEndHeader = true;
       break;
     }
     const parts = line.split(/\s+/);
@@ -112,7 +125,21 @@ export function parsePlyAscii(text: string): { mesh: PlyMesh | null; points: Ply
       continue;
     }
     if (parts[0] === "element") {
-      elements.push({ name: parts[1], count: Number(parts[2]), properties: [] });
+      const count = Number(parts[2]);
+      // Entero, finito y no negativo. `Number("1e999")` es `Infinity` sin que
+      // nadie escriba la palabra, y con él la reserva es `NaN` y el bucle no
+      // termina nunca (D17).
+      if (!Number.isSafeInteger(count) || count < 0) {
+        throw new Error(
+          `PLY_HEADER_INVALID: el elemento ${parts[1]} declara ${JSON.stringify(parts[2])}, que no es un entero`,
+        );
+      }
+      if (count > RESOURCE_LIMITS.plyElementCount.value) {
+        throw new Error(
+          `PLY_ELEMENT_COUNT_EXCEEDS_LIMIT: el elemento ${parts[1]} declara ${count} entradas y el tope son ${RESOURCE_LIMITS.plyElementCount.value}`,
+        );
+      }
+      elements.push({ name: parts[1], count, properties: [] });
       continue;
     }
     if (parts[0] === "property") {
@@ -120,6 +147,12 @@ export function parsePlyAscii(text: string): { mesh: PlyMesh | null; points: Ply
       if (element === undefined) throw new Error("PLY_HEADER_INVALID: una propiedad antes de su elemento");
       element.properties.push({ name: parts[parts.length - 1], list: parts[1] === "list" });
     }
+  }
+
+  if (!sawEndHeader) {
+    throw new Error(
+      `PLY_HEADER_TOO_LONG: la cabecera no termina en las primeras ${RESOURCE_LIMITS.plyHeaderLines.value} líneas`,
+    );
   }
 
   if (format !== "ascii") {
@@ -143,6 +176,14 @@ export function parsePlyAscii(text: string): { mesh: PlyMesh | null; points: Ply
   // que permite que el informe conteste FAIL en vez de encogerse de hombros.
   let declaresFaces = false;
   for (const element of elements) {
+    // Antes de reservar y antes de indexar: el fichero dice cuántas filas trae, y
+    // una cabecera que promete más de las que hay es el caso que reservaba
+    // gigabytes para morir en la primera. Se decide contando, sin tocar memoria.
+    if (element.count > values.length - row) {
+      throw new Error(
+        `PLY_TRUNCATED: el elemento ${element.name} declara ${element.count} entradas y quedan ${values.length - row} filas`,
+      );
+    }
     if (element.name === "vertex") {
       const names = element.properties.map((property) => property.name);
       const [x, y, z] = ["x", "y", "z"].map((axis) => names.indexOf(axis));

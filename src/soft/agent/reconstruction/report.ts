@@ -21,6 +21,7 @@
 import type { MeshAudit } from "../inspect";
 import type { ObjectSchema } from "../schema";
 import type { IngestIssue, IngestResult } from "./ingest";
+import { RESOURCE_LIMIT_LIST } from "./limits";
 
 export type CertificationVerdict = "PASS" | "FAIL" | "INCONCLUSIVE";
 
@@ -80,6 +81,12 @@ export interface ReconstructionReport {
    */
   certificationReason?: string;
   certificationPolicy: string;
+  /**
+   * Los topes de recurso que rigieron. Publicados y no implícitos: un rechazo por
+   * tamaño solo se puede reproducir si el informe dice contra qué número se
+   * comparó, y un PASS que dependió de que algo cupiera también.
+   */
+  limits: Array<{ name: string; value: number; unit: string; rationale: string }>;
   run: {
     runId: string;
     /** Ausente si el manifest no llegó a validar y no hay identidad que citar. */
@@ -190,6 +197,7 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
     certification,
     ...(reason === null ? {} : { certificationReason: reason }),
     certificationPolicy: CERTIFICATION_POLICY,
+    limits: RESOURCE_LIMIT_LIST.map((limit) => ({ ...limit })),
     run: {
       runId: runIdFor(manifestSha256),
       ...(ingest.packageId === null ? {} : { inputPackageId: ingest.packageId }),
@@ -251,6 +259,17 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
     type: "string",
     required: true,
     description: "Qué criterio se aplicó, para que un PASS de hoy y uno de mañana se puedan comparar.",
+  },
+  limits: {
+    type: "object[]",
+    required: true,
+    description: "Topes de recurso aplicados, para que un rechazo por tamaño se pueda reproducir.",
+    fields: {
+      name: { type: "string", required: true, description: "Qué tope es." },
+      value: { type: "number", required: true, description: "El número que rigió." },
+      unit: { type: '"bytes"|"entradas"|"líneas"', required: true, description: "En qué se cuenta." },
+      rationale: { type: "string", required: true, description: "Por qué ese número y no otro." },
+    },
   },
   run: {
     type: "object",

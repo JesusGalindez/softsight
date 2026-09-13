@@ -19,6 +19,7 @@
 
 import { validate } from "../schema";
 import { PACKAGE_CODE_TABLE, type PackageCode } from "./codes";
+import { RESOURCE_LIMITS, RESOURCE_LIMIT_REASONS } from "./limits";
 import { RECONSTRUCTION_PACKAGE_SCHEMA } from "./packageSchema";
 
 /** Lo que el sistema de ficheros contesta sobre un artifact ya resuelto. */
@@ -99,6 +100,16 @@ export const PACKAGE_CODES = {
   SIZE_MISMATCH: "SS-PKG-012",
   HASH_MISMATCH: "SS-PKG-013",
   HASH_MALFORMED: "SS-PKG-014",
+  // El espacio de lectura: topes de recurso y ficheros que no se pueden
+  // interpretar. Los cinco primeros los proyecta el código de salida 23, que D13
+  // reservaba y hasta ahora no devolvía nadie.
+  MANIFEST_TOO_LARGE: "SS-IO-001",
+  ARTIFACT_TOO_LARGE: "SS-IO-002",
+  TOO_MANY_ARTIFACTS: "SS-IO-003",
+  PLY_HEADER_TOO_LONG: "SS-IO-004",
+  PLY_COUNT_EXCEEDS_LIMIT: "SS-IO-005",
+  PLY_TRUNCATED: "SS-IO-006",
+  UNREADABLE: "SS-IO-007",
 } as const satisfies Record<string, PackageCode>;
 
 /**
@@ -212,6 +223,19 @@ export function ingestPackage(
     return { ...empty, packageId: document.packageId };
   }
 
+  // El recuento antes del recorrido: cada artifact cuesta una resolución de
+  // enlace y una lectura entera para hashear, así que un manifest generado en
+  // bucle se para aquí y no tras cien mil llamadas al sistema.
+  if (document.artifacts.length > RESOURCE_LIMITS.packageArtifacts.value) {
+    issues.push(
+      issue(
+        PACKAGE_CODES.TOO_MANY_ARTIFACTS,
+        `el manifest declara ${document.artifacts.length} artifacts y el tope son ${RESOURCE_LIMITS.packageArtifacts.value}`,
+      ),
+    );
+    return { ...empty, packageId: document.packageId };
+  }
+
   const artifacts: IngestResult["artifacts"] = [];
   for (const artifact of document.artifacts) {
     const where = `artifact ${artifact.id}`;
@@ -225,6 +249,20 @@ export function ingestPackage(
         issue(
           PACKAGE_CODES.HASH_MALFORMED,
           `${where}: sha256 no es hexadecimal de 64 caracteres en minúscula`,
+        ),
+      );
+      continue;
+    }
+
+    // Sobre lo **declarado** y antes de `stat`, que abre el fichero entero para
+    // hashearlo: comprobarlo después sería haberlo leído ya, que es justo lo que
+    // el tope existe para evitar. Lo declarado y lo real no pueden separarse,
+    // porque el tamaño se compara unas líneas más abajo.
+    if (artifact.bytes > RESOURCE_LIMITS.artifactBytes.value) {
+      issues.push(
+        issue(
+          PACKAGE_CODES.ARTIFACT_TOO_LARGE,
+          `${where}: declara ${artifact.bytes} bytes y el tope son ${RESOURCE_LIMITS.artifactBytes.value}`,
         ),
       );
       continue;
@@ -280,6 +318,10 @@ export function ingestPackage(
  */
 export function exitCodeFor(result: IngestResult): number {
   if (result.execution === "COMPLETE") return 0;
+  // Antes que el 20: un paquete que no cabe **no es un paquete inválido**. Puede
+  // estar perfecto y no caber, y quien automatiza reacciona distinto —dar más
+  // memoria, partir la entrega— que ante un manifest mal escrito.
+  if (result.issues.some((entry) => RESOURCE_LIMIT_REASONS.includes(entry.reason))) return 23;
   if (result.execution !== "UNSUPPORTED") return 20;
   // 21 y 22 son cosas distintas: una es «este contrato no lo leo» y la otra «este
   // fichero no lo leo». Quien automatiza reacciona distinto —actualizar el

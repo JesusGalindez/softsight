@@ -471,6 +471,15 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     NOT_RUN el escalón de 5M sin `SOFTSIGHT_HEAVY=1`. Ningún hash se movió: el
     pliego del dron sigue en `46228b7c`. El árbol de triángulos, que va después,
     **no se llama `bvh.ts`**: ese nombre ya es de la captura de movimiento.
+    Y **la ingesta dejó de leer a ciegas el 2026-09-13**: cinco topes de recurso
+    en `limits.ts` con su unidad y su porqué, el espacio de identificadores
+    `SS-IO`, y el código de salida 23 que D13 reservaba y no devolvía nadie. Lo
+    que ataja el caso no es el tope sino contar filas —un elemento no puede
+    declarar más entradas de las que el fichero trae—: rechazar una cabecera que
+    promete cinco millones de vértices en un fichero de tres líneas **crece 0
+    bytes de memoria de arrays**, cuando antes reservaba 60 MB para morir con un
+    `TypeError` ajeno. Cierra el hueco (o) de
+    [`plan-reconstruccion.md`](plan-reconstruccion.md) §86.3.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

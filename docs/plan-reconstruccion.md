@@ -3658,11 +3658,24 @@ el borde de fuga de cualquier perfil aerodinámico. Un test triángulo/triángul
 con epsilon sigue siendo candidato. O predicados exactos, o el estado se llama
 `LIKELY` y publica su epsilon.
 
-**o) Sin límites de recurso en la ingesta.**
+**o) Sin límites de recurso en la ingesta. HECHO el 2026-09-13.**
 SoftSight va a leer ficheros producidos por terceros. El §13 lista errores de PLY
-—bien— pero no hay `maxVertices`, `maxFileSize`, `maxElementCount` ni tope de
-cabecera. Un PLY que declare `element vertex 4000000000` reserva memoria antes de
-leer un solo dato.
+—bien— pero no había `maxVertices`, `maxFileSize`, `maxElementCount` ni tope de
+cabecera. Un PLY que declare `element vertex 4000000000` reservaba memoria antes
+de leer un solo dato.
+
+Los cinco topes viven en `src/soft/agent/reconstruction/limits.ts` con su unidad y
+**por qué ese número**, el informe los publica, y el espacio `SS-IO` les da
+identificador. El código de salida **23 —límite de recursos— lo reservaba D13 y no
+lo devolvía nadie**; ahora lo devuelven los dos lados de la proyección.
+
+Lo que de verdad ataja el caso no es el tope sino **contar filas**: un elemento no
+puede declarar más entradas de las que el fichero trae, y eso se decide sin
+reservar nada. Medido en la puerta: rechazar una cabecera que promete cinco
+millones de vértices en un fichero de tres líneas **hace crecer la memoria de
+arrays en 0 bytes**; sin la comprobación reservaba 60 MB y moría con
+`TypeError: Cannot read properties of undefined (reading 'split')`, que no dice
+nada de lo que pasó.
 
 ## 86.4 — Orden de trabajo
 

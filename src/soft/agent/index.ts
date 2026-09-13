@@ -258,6 +258,12 @@ export {
   PROPOSED_PACKAGE_CODES,
 } from "./reconstruction/codes";
 export type { CodeStatus, PackageCode, PackageCodeEntry } from "./reconstruction/codes";
+export {
+  RESOURCE_LIMITS,
+  RESOURCE_LIMIT_LIST,
+  RESOURCE_LIMIT_REASONS,
+} from "./reconstruction/limits";
+export type { ResourceLimit, ResourceLimitName } from "./reconstruction/limits";
 export { projectPoint } from "./reconstruction/camera";
 export {
   parseColmapCameras,

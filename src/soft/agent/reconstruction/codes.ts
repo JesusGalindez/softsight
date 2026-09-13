@@ -117,6 +117,57 @@ export const PACKAGE_CODE_TABLE = {
     status: "PROPUESTO",
     decision: "D5 y D13 nombran el caso, sin número",
   },
+
+  // El espacio `SS-IO`: leer ficheros de otro. Son los topes de `limits.ts` y la
+  // lectura que no se puede completar, y se separan de `SS-PKG` porque no dicen
+  // que el paquete esté mal: un paquete perfecto puede no caber. Por eso los
+  // proyecta el código de salida 23 y no el 20.
+  "SS-IO-001": {
+    reason: "MANIFEST_TOO_LARGE",
+    cause: "el manifest pasa del tope de bytes antes de leerlo",
+    status: "PROPUESTO",
+    decision: "D13 reserva el código de salida 23, sin número de identificador",
+  },
+  "SS-IO-002": {
+    reason: "ARTIFACT_TOO_LARGE",
+    cause: "el artifact declara más bytes que el tope",
+    status: "PROPUESTO",
+    decision: "D13 reserva el código de salida 23, sin número de identificador",
+  },
+  "SS-IO-003": {
+    reason: "PACKAGE_TOO_MANY_ARTIFACTS",
+    cause: "el manifest declara más artifacts que el tope",
+    status: "PROPUESTO",
+    decision: "D13 reserva el código de salida 23, sin número de identificador",
+  },
+  "SS-IO-004": {
+    reason: "PLY_HEADER_TOO_LONG",
+    cause: "la cabecera del PLY no termina dentro del tope de líneas",
+    status: "PROPUESTO",
+    decision: "D13 reserva el código de salida 23, sin número de identificador",
+  },
+  "SS-IO-005": {
+    reason: "PLY_ELEMENT_COUNT_EXCEEDS_LIMIT",
+    cause: "un elemento del PLY declara más entradas que el tope",
+    status: "PROPUESTO",
+    decision: "D13 reserva el código de salida 23, sin número de identificador",
+  },
+  "SS-IO-006": {
+    // Separado del anterior a propósito, igual que 013 y 014: «no cabe» lo
+    // arregla quien produce el fichero y «declara más de lo que trae» lo arregla
+    // su escritor. Y es el que de verdad ataja la cabecera mentirosa, porque se
+    // decide contando filas y sin reservar nada.
+    reason: "PLY_TRUNCATED",
+    cause: "un elemento del PLY declara más entradas de las que el fichero trae",
+    status: "PROPUESTO",
+    decision: "D13 reserva el código de salida 23, sin número de identificador",
+  },
+  "SS-IO-007": {
+    reason: "ARTIFACT_UNREADABLE",
+    cause: "el artifact está admitido pero no se puede interpretar, y no es un formato que se rechace por su nombre",
+    status: "PROPUESTO",
+    decision: "D7 nombra la lectura, sin número",
+  },
 } as const satisfies Record<string, PackageCodeEntry>;
 
 export type PackageCode = keyof typeof PACKAGE_CODE_TABLE;
