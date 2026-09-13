@@ -9,10 +9,19 @@ reglas de trabajo**. Si algo de aquí contradice a esos dos, mandan ellos.
 Escrito el 2026-09-13, sobre `main` en `bae4463`, con la suite en verde:
 28 puertas, 143 comprobaciones, 65,3 s, 5 declaradas NOT_RUN con motivo.
 
-**A0 a A6 están hechas el mismo día**, de `88f8b90` a `fd73398`. Qué quedó de
-cada una lo lleva [`mapa-del-proyecto.md`](mapa-del-proyecto.md) §5 y el registro
-de decisiones lleva su cuenta; aquí no se repite. El bloque A sigue abierto por
-**A7**.
+**Del bloque A queda solo A10.** A0–A9 y A11 están hechas el 2026-09-13, de
+`88f8b90` en adelante. Qué quedó de cada una lo lleva
+[`mapa-del-proyecto.md`](mapa-del-proyecto.md) §5 y el registro de decisiones
+lleva su cuenta; aquí no se repite.
+
+**A10 está parada a propósito y necesita una decisión.** Cerrarla como la manda
+el §86.2 (f) —extender `WarningSeverity` con `aproximacion-determinista`— cambia
+un vocabulario que **el editor consume**, y el campo `severity` decide además el
+código de salida. Medido antes de parar: el predicado de cruce da determinante no
+nulo en **884 de 2.200 puntos que están sobre la recta**, con magnitud peor de
+2,7e-16 respecto al cuadrado de la coordenada. Ése es el epsilon que habría que
+publicar. Es decisión de criterio y afecta a otro repositorio, así que no la toma
+un lado solo.
 
 ---
 
