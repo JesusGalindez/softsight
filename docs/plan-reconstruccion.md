@@ -2621,6 +2621,42 @@ Gate:
 known geometry defects detected exactly
 ```
 
+**Hecho el 2026-09-13 salvo la autointersección**, en
+`reconstruction/meshTopology.ts` con puerta `test:mesh-topology`.
+
+Lo que faltaba no era medir más, era **dar estructura a lo que ya se contaba**.
+`auditMesh` decía cuántas aristas de borde hay, y con eso no se decide nada:
+
+```text
+148 aristas de borde   ¿un agujero grande, o treinta y siete pequeños?
+84.000 triángulos      ¿una pieza, o doce islas flotando?
+```
+
+Las dos preguntas cambian la reparación entera. Ahora salen los **bucles** con su
+perímetro y su extensión, y los **componentes** con su área. Y con ellos
+`largestComponentAreaRatio`, que es el número que el recuento no da: una pieza con
+una mota y una nube de siete trozos tienen 2 y 7 componentes, pero 0,99 y 0,14 de
+ratio, y solo el segundo es una reconstrucción rota.
+
+**Todo sobre posiciones soldadas**, y es lo que decide si el módulo sirve: un cubo
+con los vértices partidos por cara —como viene cualquier malla con UVs o normales
+duras— tiene 36 posiciones y *parece* doce triángulos sueltos. Sin soldar, casi
+todo modelo real se reportaría hecho pedazos.
+
+**Lo ambiguo se cuenta, no se reparte.** Cuando un vértice tiene más de dos aristas
+de borde —dos agujeros que se tocan en un punto— el camino no es único, y elegir
+uno sería inventar. Esas aristas van a `unresolvedBoundaryEdges`, y la puerta
+comprueba sobre cuatro cubos que **bucles + irresolubles == `boundaryEdges`**: sin
+esa igualdad, el módulo podría perder aristas por el camino sin que nadie lo
+notara.
+
+Medido sobre el dron real: **296 piezas, ninguna con más de un componente, 32 con
+agujeros, 46 bucles en total, 0,16 s de CPU** para las 296.
+
+**La autointersección sigue fuera y con su motivo**: en coma flotante no existe el
+confirmado (§86.3 n), así que solo cabe como `aproximacion-determinista` con su
+epsilon, igual que el perfil 2D. La puerta lo declara NOT_RUN.
+
 ---
 
 ## R5 — Geometry diff

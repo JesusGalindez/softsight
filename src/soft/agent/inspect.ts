@@ -161,7 +161,7 @@ function countEdgeUses(
  * cada grupo sigue apuntando a su **primer** vértice en orden de índice, que es
  * lo que hace determinista todo lo que cuelga de `map`.
  */
-function weldPositions(positions: Float32Array): { map: Int32Array; unique: number } {
+export function weldPositions(positions: Float32Array): { map: Int32Array; unique: number } {
   const vertexCount = positions.length / 3;
   const map = new Int32Array(vertexCount);
   let unique = 0;

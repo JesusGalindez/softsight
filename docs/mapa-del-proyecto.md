@@ -564,6 +564,17 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     `samples` y **su suelo de ruido publicado**, relativo a la diagonal: cero
     exacto no es alcanzable porque la muestra se construye en doble y el árbol
     busca en `Float32`.
+    Y **R4 salvo la autointersección**: lo que faltaba no era medir más sino dar
+    estructura a lo que ya se contaba. «148 aristas de borde» no dice si es un
+    agujero grande o treinta y siete pequeños, y la reparación no es la misma;
+    ahora salen los bucles con su perímetro y los componentes con su área, más
+    `largestComponentAreaRatio`, que es lo que separa una pieza con una mota (0,99)
+    de una nube de siete trozos (0,14) cuando el recuento solo dice 2 y 7. Todo
+    **sobre posiciones soldadas**, que es lo que decide si sirve: un cubo con los
+    vértices partidos parece doce triángulos sueltos. Lo ambiguo se cuenta y no se
+    reparte, y la puerta exige que bucles + irresolubles == `boundaryEdges`. Sobre
+    el dron: 296 piezas, 32 con agujeros, 46 bucles, 0,16 s de CPU. La
+    autointersección queda fuera con su motivo, que es el mismo §86.3 (n).
     Y **la severidad gana un tercer valor**, `aproximacion-determinista`, que es
     el hueco (n): el determinante de orientación da un valor no nulo en **884 de
     2.200 puntos que están sobre la recta**, así que llamar `certeza` a lo que
