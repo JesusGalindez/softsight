@@ -145,6 +145,24 @@ export const PACKAGE_CODE_TABLE = {
     status: "PROPUESTO",
     decision: "D9 fija la regla, sin número",
   },
+  "SS-RECON-003": {
+    reason: "FRAME_TRANSFORM_MALFORMED",
+    cause: "una arista del FrameGraph que no son dieciséis números finitos, o que va de un marco a sí mismo, o que está declarada dos veces",
+    status: "PROPUESTO",
+    decision: "D11 exige registrar cada transformación, sin número",
+  },
+  "SS-RECON-004": {
+    reason: "FRAME_TRANSFORM_NOT_RIGID",
+    cause: "una transformación entre marcos cuya última fila no es [0, 0, 0, 1]",
+    status: "PROPUESTO",
+    decision: "D11 y D32 fijan la forma, sin número",
+  },
+  "SS-RECON-005": {
+    reason: "FRAME_UNREACHABLE",
+    cause: "un marco declarado al que no hay camino desde el marco en el que se mide",
+    status: "PROPUESTO",
+    decision: "D11 exige registrar cada transformación, sin número",
+  },
 
   // El espacio `SS-CAM`: la cámara y los píxeles que dice describir.
   "SS-CAM-001": {
@@ -164,6 +182,12 @@ export const PACKAGE_CODE_TABLE = {
     cause: "unos intrínsecos declarados sobre imagen rectificada traen coeficientes de distorsión",
     status: "PROPUESTO",
     decision: "D10 nombra el caso, sin número",
+  },
+  "SS-CAM-005": {
+    reason: "CAMERA_POSE_NOT_RIGID",
+    cause: "una pose de cámara cuya última fila no es [0, 0, 0, 1]",
+    status: "PROPUESTO",
+    decision: "D32 fija la forma de la matriz, sin número",
   },
   "SS-CAM-004": {
     reason: "CAMERA_GRID_MISMATCH",

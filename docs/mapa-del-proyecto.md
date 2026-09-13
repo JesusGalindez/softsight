@@ -524,6 +524,15 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     ausencia**, como `column * 4 + row`, porque usarlo no rompe ninguna prueba: da
     una imagen girada que sigue siendo una imagen. Con eso el registro va por
     **17 implementadas** de 34, la mitad justa.
+    Y **D11, el FrameGraph**, que era el caso más claro de decisión que parecía
+    cumplida: el grafo estaba en el esquema desde R0-A y **nadie lo miraba**, así
+    que un paquete con cero aristas salía `COMPLETE + PASS`. Lo que lo convierte en
+    registro no es que haya transformaciones declaradas —eso se cumple rellenando
+    una lista— sino que **un marco al que no hay camino desde `RECONSTRUCTION` se
+    rechaza**; y desde ahí porque es donde están los números. `resolveFrame` no
+    devuelve la identidad cuando no hay camino: suponer que dos marcos sin arista
+    son el mismo es el error, no el arreglo. Una pose de cámara pasa por la misma
+    auditoría que una arista, no por una segunda parecida. **18 de 34.**
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

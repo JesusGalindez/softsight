@@ -90,11 +90,11 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-09-13:
 
 ```text
-ACORDADAS       17   D1, D2, D4, D5, D8, D11, D15, D18, D20, D22, D23, D26–D29,
+ACORDADAS       16   D1, D2, D4, D5, D8, D15, D18, D20, D22, D23, D26–D29,
                      D32, D34
 PROPUESTAS       0
-IMPLEMENTADAS   17   D3, D6, D7, D9, D10, D12, D13, D14, D16, D17, D19, D21,
-                     D24, D25, D30, D31, D33
+IMPLEMENTADAS   18   D3, D6, D7, D9, D10, D11, D12, D13, D14, D16, D17, D19,
+                     D21, D24, D25, D30, D31, D33
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -389,10 +389,41 @@ paquete se rechaza por esquema, que es mejor que inventarlo. Y declara
 `ORIGINAL`, porque los coeficientes que trae describen precisamente lo que hay
 que corregir.
 
-### D11 — FrameGraph
+### D11 — FrameGraph — IMPLEMENTADA (2026-09-13)
 CAMERA, RECONSTRUCTION, ASSET_CANONICAL, PRODUCTION, con cada transformación
 guardando marco origen, marco destino, matriz, motivo y productor. Ninguna se
 hornea sin registrarla.
+
+**El grafo estaba en el esquema desde R0-A y nadie lo miraba.** Un paquete podía
+declarar cero aristas y salir `COMPLETE + PASS`: el campo se rellenaba por
+educación, que es la forma que tiene una decisión de parecer cumplida.
+
+Lo que la convierte en registro no es «hay transformaciones declaradas» —eso se
+cumple rellenando una lista— sino **que un marco al que no hay camino se
+rechaza**:
+
+```text
+arista con la última fila distinta de [0,0,0,1]    FRAME_TRANSFORM_NOT_RIGID
+arista de un marco a sí mismo, o duplicada         FRAME_TRANSFORM_MALFORMED
+marco declarado sin camino desde RECONSTRUCTION    FRAME_UNREACHABLE
+```
+
+**Desde `RECONSTRUCTION` porque es donde están los números**: las cajas y los
+volúmenes salen del PLY, que viene en él. El informe lo publica —`frames.measuredIn`
+y `measurements[].frame`— para que el consumidor sepa que una caja de aquí y una
+de producción no se pueden comparar sin pasar por el grafo.
+
+**`resolveFrame` no devuelve la identidad cuando no hay camino.** Suponer que dos
+marcos sin arista son el mismo es el error que la decisión describe, no su
+arreglo. Recorre las aristas en los dos sentidos, porque una transformación rígida
+tiene inversa exacta y declarar las dos direcciones sería el mismo dato dos veces
+esperando a dejar de cuadrar; la puerta comprueba que ida y vuelta dan la
+identidad **exacta**.
+
+**Una pose de cámara es una transformación entre marcos**, así que se le aplica
+`auditTransforms` en vez de una segunda regla parecida: una matriz con la última
+fila distinta de `[0,0,0,1]` lleva proyección dentro y no es una pose, aunque los
+dieciséis números sigan ahí.
 **Prueba:** sin escribir.
 
 ### D12 — Versiones y capabilities — IMPLEMENTADA a medias (2026-09-13)

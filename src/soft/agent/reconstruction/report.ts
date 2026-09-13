@@ -21,6 +21,7 @@
 import type { MeshAudit } from "../inspect";
 import type { ObjectSchema } from "../schema";
 import { CONTRACT_VERSIONS, CURRENT_VERSION_PAIRS } from "../versions";
+import { resolveFrame, type Frame, type FrameTransform } from "./frameGraph";
 import { CAPABILITY_POLICY, EXTENSION_POLICY } from "./ingest";
 import type { IngestIssue, IngestResult } from "./ingest";
 import { RESOURCE_LIMIT_LIST } from "./limits";
@@ -145,10 +146,23 @@ export interface ReconstructionReport {
     signedVolume: number;
     boundingBoxMin: [number, number, number];
     boundingBoxMax: [number, number, number];
+    /**
+     * En qué marco están estos números (D11). Es `RECONSTRUCTION` porque salen
+     * del PLY, que viene en él; decirlo es lo que permite al consumidor saber
+     * que una caja de aquí y una de producción **no se pueden comparar** sin
+     * pasar por el grafo.
+     */
+    frame: "RECONSTRUCTION";
     /** Los dos ejes de D28: qué clase de medida es y con qué reproducibilidad. */
     measurementClass: "EXACT";
     reproducibility: "BITWISE_EXACT";
   }>;
+  /**
+   * El grafo de marcos que rigió (D11). No es una copia del manifest: `reachable`
+   * es lo que se comprobó, y publicarlo evita que el consumidor tenga que
+   * recorrer el grafo otra vez para saber si podía fiarse.
+   */
+  frames: { measuredIn: "RECONSTRUCTION"; declared: string[]; reachable: string[]; transforms: number };
   /**
    * La escala tal y como rigió, más lo que D9 exige que el informe diga de ella.
    *
@@ -215,6 +229,10 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
   const admitted = new Set(ingest.artifacts.map((artifact) => artifact.id));
   const missing = required.filter((id) => !admitted.has(id));
 
+  const transforms = ((manifest.frameGraph ?? {}) as { transforms?: FrameTransform[] }).transforms ?? [];
+  // Ordenados para que el informe sea idéntico byte a byte entre dos ejecuciones:
+  // el orden de un `Set` es el de inserción, y ése es el de escritura del grafo.
+  const declaredFrames = [...new Set(transforms.flatMap((t) => [t.from, t.to]))].sort();
   const declaredScale = (manifest.scale ?? {}) as {
     status?: string;
     source?: string;
@@ -244,6 +262,7 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
     signedVolume: mesh.audit.signedVolume,
     boundingBoxMin: mesh.audit.boundingBoxMin,
     boundingBoxMax: mesh.audit.boundingBoxMax,
+    frame: "RECONSTRUCTION" as const,
     measurementClass: "EXACT" as const,
     reproducibility: "BITWISE_EXACT" as const,
   }));
@@ -304,6 +323,14 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
       missingEvidence: missing,
     },
     measurements,
+    frames: {
+      measuredIn: "RECONSTRUCTION",
+      declared: declaredFrames,
+      reachable: declaredFrames.filter(
+        (frame) => resolveFrame(transforms, "RECONSTRUCTION", frame as Frame) !== null,
+      ),
+      transforms: transforms.length,
+    },
     scale: {
       status: declaredScale.status ?? "UNKNOWN",
       source: declaredScale.source ?? "NONE",
@@ -494,6 +521,7 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
       signedVolume: { type: "number", required: true, description: "Volumen firmado; negativo es del revés." },
       boundingBoxMin: { type: "number[3]", required: true, description: "Esquina mínima de la caja." },
       boundingBoxMax: { type: "number[3]", required: true, description: "Esquina máxima." },
+      frame: { type: "string", required: true, description: "Marco en el que están estos números (D11)." },
       measurementClass: {
         type: '"EXACT"|"DETERMINISTIC_APPROXIMATION"|"EXTERNAL_MEASUREMENT"',
         required: true,
@@ -504,6 +532,19 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
         required: true,
         description: "Con qué reproducibilidad. Nace BITWISE_EXACT y moverla exige medida.",
       },
+    },
+  },
+  frames: {
+    type: "object",
+    required: true,
+    description:
+      "El grafo de marcos que rigió (D11): dónde se midió, qué marcos declara el paquete y a cuáles " +
+      "hay camino. Un declarado que no esté en `reachable` es un salto que nadie registró.",
+    fields: {
+      measuredIn: { type: "string", required: true, description: "Marco de los números de `measurements`." },
+      declared: { type: "string[]", required: true, description: "Marcos que nombra el grafo." },
+      reachable: { type: "string[]", required: true, description: "De ellos, a los que hay camino." },
+      transforms: { type: "number", required: true, description: "Aristas declaradas." },
     },
   },
   scale: {

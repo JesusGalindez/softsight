@@ -280,6 +280,8 @@ export {
 } from "./reconstruction/limits";
 export type { ResourceLimit, ResourceLimitName } from "./reconstruction/limits";
 export { projectPoint } from "./reconstruction/camera";
+export { FRAMES, auditTransforms, resolveFrame } from "./reconstruction/frameGraph";
+export type { Frame, FrameTransform } from "./reconstruction/frameGraph";
 export {
   parseColmapCameras,
   parseColmapImages,

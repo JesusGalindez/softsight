@@ -48,6 +48,7 @@ import { fileURLToPath } from "node:url";
 import {
   PACKAGE_CODES,
   buildReconstructionReport,
+  resolveFrame,
   RESOURCE_LIMITS,
   RESOURCE_LIMIT_LIST,
   RECONSTRUCTION_PACKAGE_SCHEMA,
@@ -896,6 +897,156 @@ function sha256Of(path) {
   console.log(
     "reconstrucción: ok (sourceOrientation solo aparece donde se declara y donde se prueba: nada " +
       "aguas abajo interpreta píxeles a partir de esa metadata)",
+  );
+}
+
+// D11: el FrameGraph deja de ser un campo que se rellena por educación.
+//
+// Estaba en el esquema desde R0-A y **nadie lo miraba**: un paquete podía
+// declarar cero aristas y salir COMPLETE + PASS. El criterio que lo convierte en
+// registro no es «hay transformaciones declaradas» —eso se cumple rellenando una
+// lista— sino que **un marco al que no hay camino se rechaza**. Es el riesgo R7,
+// malla en otro marco, y no lo desmiente ninguna imagen: la geometría sale bien
+// colocada respecto a sí misma y mal respecto a todo lo demás.
+{
+  const cases = fixture("package-integrity-v1");
+  const reader = {
+    root: cases.root,
+    stat: () => {
+      throw new Error("el grafo se decide antes de tocar un artifact");
+    },
+  };
+  const conGrafo = (transforms) => ({
+    ...cases.base,
+    artifacts: [],
+    frameGraph: { transforms },
+  });
+  const identidad = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  const arista = (from, to, matrix = identidad) => ({
+    from,
+    to,
+    matrix,
+    reason: "prueba",
+    producer: "test",
+  });
+
+  // Lo que antes pasaba y ahora no: un marco nombrado sin camino desde donde se
+  // mide. `PRODUCTION` cuelga de `ASSET_CANONICAL`, que nadie ata a
+  // `RECONSTRUCTION`.
+  const suelto = ingestPackage(conGrafo([arista("ASSET_CANONICAL", "PRODUCTION")]), reader);
+  assert.deepEqual(
+    suelto.issues.map((entry) => entry.code).sort(),
+    [PACKAGE_CODES.FRAME_UNREACHABLE, PACKAGE_CODES.FRAME_UNREACHABLE],
+    `los dos marcos quedan sueltos: ${JSON.stringify(suelto.issues)}`,
+  );
+
+  // Con la arista que falta, los mismos dos marcos entran: el camino se compone
+  // por dos saltos y por eso la regla no es «declara todo con todo».
+  assert.deepEqual(
+    ingestPackage(
+      conGrafo([arista("RECONSTRUCTION", "ASSET_CANONICAL"), arista("ASSET_CANONICAL", "PRODUCTION")]),
+      reader,
+    ).issues,
+    [],
+  );
+
+  // Una arista mal formada se dice por lo que es, no por «falló».
+  const noRigida = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1];
+  assert.deepEqual(
+    ingestPackage(conGrafo([arista("RECONSTRUCTION", "ASSET_CANONICAL", noRigida)]), reader).issues.map(
+      (entry) => entry.code,
+    ),
+    [PACKAGE_CODES.FRAME_TRANSFORM_NOT_RIGID],
+  );
+  assert.deepEqual(
+    ingestPackage(conGrafo([arista("RECONSTRUCTION", "RECONSTRUCTION")]), reader).issues.map(
+      (entry) => entry.code,
+    ),
+    [PACKAGE_CODES.FRAME_TRANSFORM_MALFORMED],
+  );
+  // Duplicada: componer dependería de cuál se coja, y nadie ha dicho cuál manda.
+  assert.deepEqual(
+    ingestPackage(
+      conGrafo([arista("RECONSTRUCTION", "ASSET_CANONICAL"), arista("RECONSTRUCTION", "ASSET_CANONICAL")]),
+      reader,
+    ).issues.map((entry) => entry.code),
+    [PACKAGE_CODES.FRAME_TRANSFORM_MALFORMED],
+  );
+
+  console.log(
+    "reconstrucción: ok (D11: un marco sin camino desde donde se mide se rechaza, dos saltos componen, " +
+      "y la arista no rígida, la de un marco a sí mismo y la duplicada se dicen por su nombre)",
+  );
+}
+
+// Y el que compone: `resolveFrame` es la única vía, y **no devuelve la identidad**
+// cuando no hay camino. Suponer que dos marcos sin arista son el mismo es el
+// error que D11 describe, no su arreglo.
+{
+  const desplazamiento = [1, 0, 0, 2, 0, 1, 0, 3, 0, 0, 1, 5, 0, 0, 0, 1];
+  const arista = (from, to, matrix) => ({ from, to, matrix, reason: "prueba", producer: "test" });
+  const grafo = [arista("RECONSTRUCTION", "ASSET_CANONICAL", desplazamiento)];
+
+  assert.equal(resolveFrame(grafo, "RECONSTRUCTION", "PRODUCTION"), null, "sin camino es null, no identidad");
+  assert.deepEqual(resolveFrame(grafo, "RECONSTRUCTION", "ASSET_CANONICAL"), desplazamiento);
+
+  // La inversa se recorre sola: una transformación rígida la tiene exacta, y
+  // declarar las dos direcciones sería el mismo dato dos veces esperando a dejar
+  // de cuadrar. Ida y vuelta tiene que dar la identidad **exacta**, no casi.
+  const vuelta = resolveFrame(grafo, "ASSET_CANONICAL", "RECONSTRUCTION");
+  assert.deepEqual(vuelta.slice(3, 4).concat(vuelta[7], vuelta[11]), [-2, -3, -5]);
+  const ida = resolveFrame(
+    [...grafo, arista("ASSET_CANONICAL", "PRODUCTION", vuelta)],
+    "RECONSTRUCTION",
+    "PRODUCTION",
+  );
+  assert.deepEqual(ida, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], "ida y vuelta tiene que ser exacta");
+
+  console.log(
+    "reconstrucción: ok (resolveFrame compone por el camino declarado, recorre la inversa sin " +
+      "declararla, da identidad exacta en ida y vuelta, y sin camino devuelve null y no la identidad)",
+  );
+}
+
+// Y una pose de cámara es una transformación entre marcos: la misma regla, no una
+// segunda parecida.
+{
+  const sandbox = realpathSync(mkdtempSync(join(tmpdir(), "softsight-marco-")));
+  const root = join(sandbox, "cube-v1");
+  writeCubePackage(root);
+  const manifestPath = join(root, "manifest.json");
+  const base = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+  // El informe dice en qué marco están sus números y a qué marcos hay camino.
+  const sano = inspectPackage(manifestPath);
+  assert.equal(sano.report.frames.measuredIn, "RECONSTRUCTION");
+  assert.deepEqual(sano.report.frames.declared, ["ASSET_CANONICAL", "RECONSTRUCTION"]);
+  assert.deepEqual(sano.report.frames.reachable, sano.report.frames.declared);
+  assert.equal(sano.report.measurements[0].frame, "RECONSTRUCTION");
+
+  // Quitarle la única arista al grafo: hoy eso deja de pasar desapercibido, que
+  // es exactamente lo que D11 pedía.
+  const torcida = [...base.cameras[0].worldFromCamera];
+  torcida[15] = 2;
+  writeFileSync(
+    manifestPath,
+    JSON.stringify(
+      { ...base, cameras: base.cameras.map((c, i) => (i === 0 ? { ...c, worldFromCamera: torcida } : c)) },
+      null,
+      2,
+    ),
+  );
+  const mala = inspectPackage(manifestPath);
+  assert.deepEqual(
+    mala.report.warnings.map((entry) => entry.code),
+    [PACKAGE_CODES.CAMERA_POSE_NOT_RIGID],
+  );
+  assert.equal(mala.exitCode, 20);
+
+  rmSync(sandbox, { recursive: true, force: true });
+  console.log(
+    "reconstrucción: ok (el informe publica el marco de sus números y los marcos alcanzables, y una " +
+      "pose de cámara con proyección dentro se rechaza por la misma regla que una arista)",
   );
 }
 

@@ -19,6 +19,7 @@
 
 import { validate } from "../schema";
 import { PACKAGE_CODE_TABLE, type PackageCode } from "./codes";
+import { auditTransforms, resolveFrame, type Frame, type FrameTransform } from "./frameGraph";
 import { RESOURCE_LIMITS, RESOURCE_LIMIT_REASONS } from "./limits";
 import { RECONSTRUCTION_PACKAGE_SCHEMA } from "./packageSchema";
 
@@ -176,6 +177,10 @@ export const PACKAGE_CODES = {
   CAPABILITY_REQUIRED_UNSUPPORTED: "SS-PKG-024",
   ABSOLUTE_BUDGET_WITHOUT_SCALE: "SS-RECON-001",
   BUDGET_UNIT_MISDECLARED: "SS-RECON-002",
+  FRAME_TRANSFORM_MALFORMED: "SS-RECON-003",
+  FRAME_TRANSFORM_NOT_RIGID: "SS-RECON-004",
+  FRAME_UNREACHABLE: "SS-RECON-005",
+  CAMERA_POSE_NOT_RIGID: "SS-CAM-005",
   CAMERA_IMAGE_HASH_MISMATCH: "SS-CAM-001",
   CAMERA_IMAGE_MISSING: "SS-CAM-002",
   RECTIFIED_WITH_DISTORTION: "SS-CAM-003",
@@ -283,8 +288,10 @@ export function ingestPackage(
       imageArtifactId: string;
       imageArtifactHash: string;
       imageSpace: string;
+      worldFromCamera: number[];
       distortion?: Record<string, number>;
     }>;
+    frameGraph?: { transforms: FrameTransform[] };
     budgets?: Array<{ name: string; units: string; unit?: string; max: number }>;
     extensions?: Record<string, { required?: boolean }>;
     state: string;
@@ -530,11 +537,67 @@ export function ingestPackage(
     // a sí mismos: si la imagen ya está rectificada, no queda distorsión que
     // corregir. Es el caso que D10 nombra, y no se ve mirando la imagen porque
     // tiene el mismo tamaño y el mismo aspecto que la original.
+    // La pose de una cámara **es** una transformación entre marcos, así que se le
+    // aplica la misma regla que a una arista del grafo en vez de una segunda
+    // parecida: una matriz con la última fila distinta de [0, 0, 0, 1] lleva
+    // proyección dentro y no es una pose, aunque los dieciséis números sigan ahí.
+    const poseProblem = auditTransforms([
+      {
+        from: "RECONSTRUCTION",
+        to: "CAMERA",
+        matrix: camera.worldFromCamera,
+        reason: "pose declarada por la cámara",
+        producer: camera.id,
+      },
+    ]);
+    if (poseProblem.length > 0) {
+      issues.push(
+        issue(PACKAGE_CODES.CAMERA_POSE_NOT_RIGID, `${where}: ${poseProblem[0].message.split(": ")[1]}`),
+      );
+      continue;
+    }
     if (camera.imageSpace === "RECTIFIED" && Object.keys(camera.distortion ?? {}).length > 0) {
       issues.push(
         issue(
           PACKAGE_CODES.RECTIFIED_WITH_DISTORTION,
           `${where}: imageSpace RECTIFIED con ${Object.keys(camera.distortion ?? {}).join(", ")}`,
+        ),
+      );
+    }
+  }
+
+  // D11. El grafo estaba en el esquema desde R0-A y **nadie lo miraba**: un
+  // paquete podía declarar cero aristas y salir PASS, porque el campo se rellenaba
+  // por educación. Las dos comprobaciones que lo convierten en registro de verdad:
+  // que cada arista sea una transformación rígida bien formada, y que **todo marco
+  // declarado se alcance desde aquel en el que se mide**.
+  const transforms = document.frameGraph?.transforms ?? [];
+  for (const problem of auditTransforms(transforms)) {
+    issues.push(
+      issue(
+        problem.reason === "FRAME_TRANSFORM_NOT_RIGID"
+          ? PACKAGE_CODES.FRAME_TRANSFORM_NOT_RIGID
+          : PACKAGE_CODES.FRAME_TRANSFORM_MALFORMED,
+        problem.message,
+      ),
+    );
+  }
+  // Desde `RECONSTRUCTION` porque es el marco en el que se mide: las cajas y los
+  // volúmenes del informe salen del PLY, que viene en él. Un marco declarado al
+  // que no hay camino es un salto que alguien da sin decir cómo, y es justo lo
+  // que el riesgo R7 describe —malla en otro marco— y lo que ninguna imagen
+  // desmiente.
+  const declaredFrames = new Set<Frame>();
+  for (const transform of transforms) {
+    declaredFrames.add(transform.from);
+    declaredFrames.add(transform.to);
+  }
+  for (const frame of declaredFrames) {
+    if (resolveFrame(transforms, "RECONSTRUCTION", frame) === null) {
+      issues.push(
+        issue(
+          PACKAGE_CODES.FRAME_UNREACHABLE,
+          `${frame} se declara en el grafo y no hay camino desde RECONSTRUCTION, que es donde se mide`,
         ),
       );
     }

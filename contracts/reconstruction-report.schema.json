@@ -368,6 +368,10 @@
             "maxItems": 3,
             "description": "Esquina máxima."
           },
+          "frame": {
+            "type": "string",
+            "description": "Marco en el que están estos números (D11)."
+          },
           "measurementClass": {
             "type": "string",
             "enum": [
@@ -401,11 +405,47 @@
           "signedVolume",
           "boundingBoxMin",
           "boundingBoxMax",
+          "frame",
           "measurementClass",
           "reproducibility"
         ]
       },
       "description": "Una entrada por malla medida, cada una atada a su artifact."
+    },
+    "frames": {
+      "type": "object",
+      "properties": {
+        "measuredIn": {
+          "type": "string",
+          "description": "Marco de los números de `measurements`."
+        },
+        "declared": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Marcos que nombra el grafo."
+        },
+        "reachable": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "De ellos, a los que hay camino."
+        },
+        "transforms": {
+          "type": "number",
+          "description": "Aristas declaradas."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "measuredIn",
+        "declared",
+        "reachable",
+        "transforms"
+      ],
+      "description": "El grafo de marcos que rigió (D11): dónde se midió, qué marcos declara el paquete y a cuáles hay camino. Un declarado que no esté en `reachable` es un salto que nadie registró."
     },
     "scale": {
       "type": "object",
@@ -521,6 +561,7 @@
     "versions",
     "evidence",
     "measurements",
+    "frames",
     "scale",
     "cameras",
     "warnings"
