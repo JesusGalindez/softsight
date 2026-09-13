@@ -3715,12 +3715,36 @@ Lo que sigue sin existir es la reducción en coma flotante que el hueco teme
 puerta lo declara NOT_RUN con su motivo, y está escrita ahora porque escribirla
 después es escribirla sobre el código que ya se equivocó.
 
-**n) `SELF_INTERSECTION_CONFIRMED` no existe en coma flotante.**
-La lección ya está escrita en `src/soft/agent/geometryAudit.ts`: `segmentsCross`
+**n) `SELF_INTERSECTION_CONFIRMED` no existe en coma flotante. HECHO el 2026-09-13.**
+La lección ya estaba escrita en `src/soft/agent/geometryAudit.ts`: `segmentsCross`
 es **estricto** a propósito, porque admitir el caso colineal convertiría en aviso
-el borde de fuga de cualquier perfil aerodinámico. Un test triángulo/triángulo
-con epsilon sigue siendo candidato. O predicados exactos, o el estado se llama
-`LIKELY` y publica su epsilon.
+el borde de fuga de cualquier perfil aerodinámico.
+
+**Medido antes de decidir nada.** El determinante de orientación da un valor no
+nulo en **884 de 2.200 puntos que están sobre la recta**, con magnitud peor
+2,7e-16 respecto al cuadrado de la coordenada. Por debajo de ese suelo su signo
+no distingue, así que llamar `certeza` a lo que sale de ahí era una afirmación
+más fuerte que la aritmética que la sostiene.
+
+La salida no es `LIKELY` sino la que manda el §86.2 (f): **extender el enum de
+severidad**, no abrir un segundo eje. `PERFIL_AUTOINTERSECADO` y
+`BARRIDO_AUTOINTERSECADO` pasan a `aproximacion-determinista`, y una entrada con
+esa severidad **está obligada a declarar su epsilon** —con respecto a qué y cómo
+se midió—; las otras dos lo tienen prohibido, porque un epsilon en un aviso
+exacto invita a leerlo como tolerancia.
+
+**Y sigue contando como defecto.** El eje del enum es *medida contra intención*,
+no *exacto contra aproximado*: un perfil que se cruza consigo mismo rompe el
+recorte de orejas tanto si el determinante se calculó exacto como si no.
+Comprobado: el ejemplar de geometría sigue saliendo 0 y un perfil cruzado sigue
+saliendo 1.
+
+De paso salió que el criterio vivía como `severity === "certeza"` **dentro del
+CLI**, así que añadir un valor al enum habría cambiado el código de salida en
+silencio. Ahora es `isDefect`, en la tabla, con su puerta.
+
+`externo`, que esa misma sección nombra, **no entra**: no hay un solo proveedor
+externo y un valor que nadie emite es una promesa vacía.
 
 **o) Sin límites de recurso en la ingesta. HECHO el 2026-09-13.**
 SoftSight va a leer ficheros producidos por terceros. El §13 lista errores de PLY

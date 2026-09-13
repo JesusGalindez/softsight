@@ -29,6 +29,8 @@ import {
   PROPOSED_PACKAGE_CODES,
   WARNING_CODES,
   WARNING_CODE_LIST,
+  DEFECT_SEVERITIES,
+  isDefect,
 } from "../dist-node/agent3d.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -51,6 +53,55 @@ function sources(directory) {
     else if (entry.name.endsWith(".ts")) found.push(path);
   }
   return found;
+}
+
+/**
+ * El vocabulario de severidad, y **qué exige cada valor**.
+ *
+ * `aproximacion-determinista` obliga a declarar el epsilon: sin él la severidad
+ * diría «esto es aproximado» sin decir cuánto, que no le sirve a nadie para
+ * decidir. Y las otras dos lo tienen **prohibido**, porque un epsilon en un aviso
+ * exacto invita a leerlo como tolerancia.
+ */
+const SEVERITIES = ["certeza", "candidato", "aproximacion-determinista"];
+
+// Lo que cada severidad exige, y lo que decide el código de salida.
+{
+  for (const entry of WARNING_CODE_LIST) {
+    if (entry.severity === "aproximacion-determinista") {
+      assert.ok(entry.epsilon !== undefined, `${entry.code}: aproximado y sin declarar su epsilon`);
+      assert.ok(entry.epsilon.value > 0, `${entry.code}: epsilon no positivo`);
+      assert.ok(
+        entry.epsilon.relativeTo.length > 0 && entry.epsilon.measured.length > 0,
+        `${entry.code}: un epsilon sin decir respecto a qué ni cómo se midió no significa nada`,
+      );
+    } else {
+      assert.equal(
+        entry.epsilon,
+        undefined,
+        `${entry.code}: un epsilon en un aviso exacto invita a leerlo como tolerancia`,
+      );
+    }
+  }
+
+  // El eje es medida contra intención, no exacto contra aproximado: un perfil que
+  // se cruza consigo mismo rompe el recorte de orejas tanto si el determinante se
+  // calculó exacto como si no. Las tres están clasificadas, y la nueva **cuenta**:
+  // sin esto, añadir un valor al enum haría que un defecto dejara de mover el
+  // código de salida sin que nadie tocara el CLI.
+  assert.equal(isDefect("certeza"), true);
+  assert.equal(isDefect("aproximacion-determinista"), true);
+  assert.equal(isDefect("candidato"), false);
+  for (const severity of SEVERITIES) {
+    assert.equal(typeof isDefect(severity), "boolean", `${severity}: sin clasificar`);
+  }
+  assert.deepEqual([...DEFECT_SEVERITIES].sort(), ["aproximacion-determinista", "certeza"]);
+
+  const aproximados = WARNING_CODE_LIST.filter((entry) => entry.severity === "aproximacion-determinista");
+  console.log(
+    `códigos: ok (${aproximados.length} aproximaciones deterministas, cada una con su epsilon y su ` +
+      `medida; las tres severidades clasificadas y las dos que cuentan como defecto son las de la lista)`,
+  );
 }
 
 const emitted = new Map();
@@ -94,7 +145,7 @@ for (const entry of WARNING_CODE_LIST) {
   assert.equal(entry.fixOp, table.fixOp);
   assert.equal(entry.hasFix, table.fixOp !== undefined, `${entry.code}: hasFix contradice a fixOp`);
   assert.ok(
-    entry.severity === "certeza" || entry.severity === "candidato",
+    SEVERITIES.includes(entry.severity),
     `${entry.code}: severity fuera del vocabulario`,
   );
   assert.ok(entry.cause.length > 0 && !entry.cause.endsWith("."), `${entry.code}: cause de una línea`);

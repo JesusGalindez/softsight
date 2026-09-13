@@ -929,7 +929,7 @@ console.log("geometria: ok (barrido recto ≡ ½·n·r²·sin(2π/n)·L, dos res
   assert.equal(gordo[0].part, "codo");
   assert.match(gordo[0].message, /en la estación \d+ el radio es 0\.9000/);
   assert.match(gordo[0].message, /Cabe hasta \d+\.\d+/);
-  assert.match(gordo[0].message, /certeza, no candidato/);
+  assert.match(gordo[0].message, /aproximación determinista/);
   assert.equal(auditGeometry(codo(0.05)).length, 0, "con radio pequeño no debe avisar");
   // Y un aviso por pieza, no uno por estación.
   assert.equal(auditGeometry(codo(2)).length, 1);
@@ -1495,7 +1495,7 @@ const PALA = { primitive: "box", parameters: [0.1, 0.4, 1.2] };
   assert.equal(cruzado[0].code, "PERFIL_AUTOINTERSECADO");
   assert.equal(cruzado[0].part, "tapa");
   assert.match(cruzado[0].message, /los lados \d+ y \d+ se cruzan/);
-  assert.match(cruzado[0].message, /certeza, no candidato/);
+  assert.match(cruzado[0].message, /aproximación determinista/);
   assert.equal(auditGeometry({ objects: [{ geometry: { extrude: cuadrado } }] }).length, 0);
 
   // Ninguno de los cuatro generadores se cruza consigo mismo, a varias

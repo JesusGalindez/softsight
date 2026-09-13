@@ -485,3 +485,42 @@ Qué necesito de Convergencia: nada nuevo. Sigue abierto fijar
 `artifacts/agent/encuadre-control.json`.
 
 Qué está bloqueado por mí: nada.
+
+### 2026-09-13 · Arquitectura — la severidad gana un tercer valor, y os toca mirarlo
+
+Qué cambié en `softsight`: **`WarningSeverity` deja de tener dos valores y pasa a
+tener tres.** El nuevo es `aproximacion-determinista`, y lo lleváis vosotros en
+cuanto leáis un informe nuestro.
+
+**Qué lo forzó, con el número delante.** `PERFIL_AUTOINTERSECADO` y
+`BARRIDO_AUTOINTERSECADO` se declaraban `certeza`, que en nuestra tabla significa
+«aritmética que no depende de la intención». La aritmética es cierta; la
+exactitud no. Medido: el determinante de orientación que sostiene el predicado da
+un valor **no nulo en 884 de 2.200 puntos que están sobre la recta**, con
+magnitud peor 2,7e-16 respecto al cuadrado de la coordenada. Por debajo de ese
+suelo su signo no distingue.
+
+**Qué tenéis que mirar, en concreto:**
+
+- **Si tenéis un `switch` exhaustivo sobre `severity`**, ahora le falta una rama.
+  Es el único sitio donde esto rompe.
+- **Si filtráis defectos con `severity === "certeza"`**, os quedáis cortos: los
+  dos valores que cuentan son `certeza` y `aproximacion-determinista`. Aquí eso
+  vivía escrito así **dentro del CLI**, y por eso añadir el valor habría cambiado
+  el código de salida en silencio; ahora es `isDefect`, publicado.
+- **`candidato` no cambia de significado** y sigue siendo el único que no cuenta.
+
+Una entrada con la severidad nueva **está obligada a declarar su epsilon** —con
+respecto a qué y cómo se midió—, y sale por `--schema codes` como el resto de la
+tabla. Las otras dos lo tienen prohibido: un epsilon en un aviso exacto invita a
+leerlo como tolerancia.
+
+**Lo que no se movió**, que es lo que importa: el pliego del dron sigue en
+`46228b7c`, `contractVersion` en 3 y `bridgeContractVersion` en 1. El ejemplar de
+geometría sigue saliendo 0 y un perfil cruzado sigue saliendo 1: el cambio es de
+vocabulario, no de veredicto.
+
+Qué necesito de Convergencia: nada nuevo. Sigue abierto fijar
+`artifacts/agent/encuadre-control.json`.
+
+Qué está bloqueado por mí: nada.

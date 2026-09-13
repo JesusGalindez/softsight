@@ -196,8 +196,9 @@ function sweepWarnings(name: string, spec: SweepSpec): Finding[] {
           `${name}: en la estación ${index} el radio es ${station.radius.toFixed(4)} y el radio de ` +
           `curvatura del recorrido es ${maximum.toFixed(4)}, así que el barrido se corta a sí mismo. ` +
           `Cabe hasta ${maximum.toFixed(4)}; por encima, la malla sale cerrada y con volumen ` +
-          "plausible pero con la superficie plegada. Es certeza, no candidato: es aritmética del " +
-          "recorrido declarado.",
+          "plausible pero con la superficie plegada. Es aproximación determinista: la conclusión no " +
+          "depende de qué pretendías, pero compara dos reales calculados y el empate exacto no se " +
+          "distingue del roce.",
       },
     ];
   }
@@ -225,8 +226,9 @@ export function auditGeometry(spec: SceneSpec): Finding[] {
         message:
           `${name}: en ${where}, los lados ${crossing[0]} y ${crossing[1]} se cruzan. El recorte de ` +
           "orejas supone un polígono simple, así que con este produce tapas basura y el volumen " +
-          "firmado sale plausible sin serlo. Es certeza, no candidato: es una intersección de " +
-          "segmentos.",
+          "firmado sale plausible sin serlo. Es aproximación determinista: la conclusión no depende " +
+          "de qué pretendías, pero el signo del determinante de orientación no distingue por debajo " +
+          "de su epsilon, publicado en la tabla de códigos.",
       });
       break; // Uno por pieza: el segundo cruce no le dice nada nuevo al agente.
     }

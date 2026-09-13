@@ -25,20 +25,70 @@
  * - **`candidato`**: la medida es firme y la conclusión no. El solape de dos
  *   cajas es condición necesaria y no suficiente para que dos mallas se corten;
  *   una pieza asimétrica solo está mal si tenía que ser simétrica.
+ * - **`aproximacion-determinista`**: la conclusión no depende de la intención
+ *   —como `certeza`— pero **la aritmética que la sostiene no es exacta**. Sale
+ *   igual en las dos ejecuciones y en las dos máquinas, que es lo que la separa
+ *   de un número al azar, y tiene un suelo por debajo del cual no distingue. Ese
+ *   suelo se publica: una entrada con esta severidad **declara su epsilon**, y
+ *   una puerta lo exige.
  *
  * Un agente que se lo salta y trata los dos igual acaba «arreglando» cosas que
  * estaban bien, y por eso la distinción se publica en vez de quedarse en la
  * redacción de cada mensaje.
+ *
+ * ## Por qué tres valores y no dos ejes
+ *
+ * El §86.2 (f) del plan de reconstrucción lo decide así: extender este enum en
+ * vez de añadir un segundo eje de «exactness». Dos ejes que casi dicen lo mismo
+ * divergen al tercer código, y ya hay precedente de eso en este repositorio.
+ *
+ * **`externo` no está todavía**, aunque esa misma sección lo nombra: no hay un
+ * solo proveedor externo —el validador de Khronos no está integrado— y un valor
+ * que nadie emite es una promesa vacía. Entra con el primero que lo use.
+ *
+ * ## Qué cuenta como defecto
+ *
+ * `certeza` y `aproximacion-determinista` **cuentan**; `candidato` no. El eje es
+ * *medida contra intención*, no *exacto contra aproximado*: un perfil que se
+ * cruza consigo mismo rompe el recorte de orejas tanto si el determinante se
+ * calculó exacto como si no. Lo dice `isDefect` y no un `===` repartido por el
+ * CLI, que es donde estaba.
  */
 
 import type { Edit } from "./model";
 
-export type WarningSeverity = "certeza" | "candidato";
+export type WarningSeverity = "certeza" | "candidato" | "aproximacion-determinista";
+
+/**
+ * Las severidades que cuentan como defecto, y por tanto mueven el código de
+ * salida. Una lista y no una comparación suelta: estaba escrita como
+ * `severity === "certeza"` dentro del CLI, así que **añadir un valor al enum
+ * cambiaba el comportamiento en silencio**.
+ */
+export const DEFECT_SEVERITIES: readonly WarningSeverity[] = ["certeza", "aproximacion-determinista"];
+
+/** Si un aviso con esta severidad es un defecto. */
+export function isDefect(severity: WarningSeverity): boolean {
+  return DEFECT_SEVERITIES.includes(severity);
+}
 
 export interface WarningCodeEntry {
   severity: WarningSeverity;
   /** Qué lo provoca, en una línea. */
   cause: string;
+  /**
+   * El suelo por debajo del cual la aritmética no distingue. **Obligatorio con
+   * `aproximacion-determinista`** y prohibido con las otras dos: sin él la
+   * severidad diría «esto es aproximado» sin decir cuánto, que no le sirve a
+   * nadie para decidir.
+   */
+  epsilon?: {
+    /** Respecto a qué es relativo el número: un valor suelto no significa nada. */
+    relativeTo: string;
+    value: number;
+    /** Cómo se midió, para que se pueda volver a medir. */
+    measured: string;
+  };
   /**
    * Si el aviso **puede** traer `fix`. No promete que lo traiga siempre: la
    * pieza flotante solo se puede alinear si hay una pieza próxima a la que
@@ -169,12 +219,26 @@ export const WARNING_CODES = {
 
   // Geometría declarativa: geometryAudit.ts, antes de generar la malla.
   PERFIL_AUTOINTERSECADO: {
-    severity: "certeza",
+    severity: "aproximacion-determinista",
     cause: "dos lados del perfil se cruzan, y el recorte de orejas supone un polígono simple",
+    epsilon: {
+      relativeTo: "el cuadrado de la magnitud de las coordenadas del perfil",
+      value: 2.8e-16,
+      measured:
+        "el determinante de orientación da un valor no nulo en 884 de 2.200 puntos que están sobre la " +
+        "recta, con magnitud peor 2,7e-16·s²; por debajo de ese suelo su signo no distingue",
+    },
   },
   BARRIDO_AUTOINTERSECADO: {
-    severity: "certeza",
+    severity: "aproximacion-determinista",
     cause: "el radio del perfil pasa del radio de curvatura del recorrido: el barrido se pliega sobre sí mismo",
+    epsilon: {
+      relativeTo: "el radio de curvatura del recorrido",
+      value: 2.8e-16,
+      measured:
+        "compara dos reales calculados —radio del perfil y radio de curvatura— y el empate exacto no " +
+        "se distingue del roce por debajo del epsilon del doble",
+    },
   },
   SECCIONES_INCOMPATIBLES: {
     severity: "candidato",

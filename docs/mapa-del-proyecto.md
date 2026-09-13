@@ -551,6 +551,15 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     demostraba la integración en R9/R15, tras unos cincuenta items: la rebanada
     vertical es `cube-v1` recorriendo el camino entero, y está hecha. Lo que le
     falta no es código nuestro sino **el segundo productor**, R0-B.
+    Y **la severidad gana un tercer valor**, `aproximacion-determinista`, que es
+    el hueco (n): el determinante de orientación da un valor no nulo en **884 de
+    2.200 puntos que están sobre la recta**, así que llamar `certeza` a lo que
+    sale de ahí afirmaba más de lo que la aritmética sostiene. Una entrada con esa
+    severidad **declara su epsilon**; las otras dos lo tienen prohibido. Sigue
+    contando como defecto —el eje es medida contra intención, no exacto contra
+    aproximado— y eso destapó que el criterio vivía como `severity === "certeza"`
+    dentro del CLI, donde añadir un valor al enum lo habría cambiado en silencio.
+    El pliego del dron sigue en `46228b7c` y `contractVersion` en 3.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

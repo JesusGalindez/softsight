@@ -235,7 +235,13 @@ export {
 } from "./storyAudit";
 export type { SceneReading, StoryAudit, StoryAuditOptions, StoryWarning } from "./storyAudit";
 export { SUMMARY_KEYS, projectFields, summarize } from "./reportView";
-export { WARNING_CODES, WARNING_CODE_LIST, withSeverity } from "./warningCodes";
+export {
+  DEFECT_SEVERITIES,
+  WARNING_CODES,
+  WARNING_CODE_LIST,
+  isDefect,
+  withSeverity,
+} from "./warningCodes";
 export type { WarningCode, WarningCodeEntry, WarningSeverity } from "./warningCodes";
 export {
   SCENE_SCHEMA,

@@ -39,6 +39,7 @@ import {
   STAGING_SCHEMA,
   STORY_SCHEMA,
   WARNING_CODE_LIST,
+  isDefect,
   withSeverity,
   applyPatch,
   auditMesh,
@@ -1073,7 +1074,9 @@ function emitReport(report, options) {
  * repositorio, `artifacts/agent/pieza-geometria.json`: 14 avisos, los 14
  * candidatos, y salía 1. Los candidatos siguen enteros en el informe.
  */
-const hasDefect = (warnings) => warnings.some((warning) => warning.severity === "certeza");
+// El criterio vive en `warningCodes.ts`, no aquí: escrito como un `===` contra
+// "certeza", añadir un valor al enum cambiaba el código de salida en silencio.
+const hasDefect = (warnings) => warnings.some((warning) => isDefect(warning.severity));
 
 /**
  * Ejecuta una orden y **devuelve** su código de salida en vez de escribirlo en
