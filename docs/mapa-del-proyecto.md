@@ -547,6 +547,10 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     suavizado, cero en las cuatro particiones. Queda **acotado, no tapado**:
     arreglarlo es pedirle al suavizado una fila de cortesía al vecino, que toca el
     rasterizador y la puerta de paridad del editor. Abierto y con su medida.
+    Y **R1.5 queda declarado** en el §71 del plan, que era horizontal y solo
+    demostraba la integración en R9/R15, tras unos cincuenta items: la rebanada
+    vertical es `cube-v1` recorriendo el camino entero, y está hecha. Lo que le
+    falta no es código nuestro sino **el segundo productor**, R0-B.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

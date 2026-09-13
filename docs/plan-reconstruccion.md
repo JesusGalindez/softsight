@@ -2536,6 +2536,35 @@ PLY point cloud and mesh load deterministically
 
 ---
 
+## R1.5 — Rebanada vertical, y el contrato probado antes de construir encima
+
+Insertada el 2026-09-13 por el §86.4 (p): el roadmap era horizontal y la
+integración solo se demostraba en R9/R15, tras unos cincuenta items. Si el
+contrato está mal, se descubre al final.
+
+Implementar:
+
+```text
+cube-v1 generado aquí: malla, nube, cuatro imágenes renderizadas y su CameraSet
+el recorrido entero: esquema → sandbox → hashes → PLY → CameraSet → escala
+                     → FrameGraph → auditoría → informe
+```
+
+Gate:
+
+```text
+COMPLETE + PASS con salida 0, informe válido contra su esquema publicado
+e idéntico byte a byte entre dos ejecuciones
+```
+
+**Hecha.** Es R0-A más lo que el bloque de decisiones le cerró encima: topes de
+recurso, coherencia de escala, la cámara atada a sus píxeles y el FrameGraph
+comprobado. Lo que queda del escalón no es código nuestro sino **el segundo
+productor**: R0-B, con el `cube-v1` de VideoMesh. El contrato no se congela hasta
+que dos productores distintos lo hayan llenado (§86.4 q y D26).
+
+---
+
 ## R2 — High-poly substrate
 
 Implementar:
