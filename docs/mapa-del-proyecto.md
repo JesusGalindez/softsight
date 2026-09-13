@@ -471,127 +471,56 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     NOT_RUN el escalón de 5M sin `SOFTSIGHT_HEAVY=1`. Ningún hash se movió: el
     pliego del dron sigue en `46228b7c`. El árbol de triángulos, que va después,
     **no se llama `bvh.ts`**: ese nombre ya es de la captura de movimiento.
-    Y **la ingesta dejó de leer a ciegas el 2026-09-13**: cinco topes de recurso
-    en `limits.ts` con su unidad y su porqué, el espacio de identificadores
-    `SS-IO`, y el código de salida 23 que D13 reservaba y no devolvía nadie. Lo
-    que ataja el caso no es el tope sino contar filas —un elemento no puede
-    declarar más entradas de las que el fichero trae—: rechazar una cabecera que
-    promete cinco millones de vértices en un fichero de tres líneas **crece 0
-    bytes de memoria de arrays**, cuando antes reservaba 60 MB para morir con un
-    `TypeError` ajeno. Cierra el hueco (o) de
-    [`plan-reconstruccion.md`](plan-reconstruccion.md) §86.3.
-    Y **D30 se cerró entera el mismo día**: el espacio `extensions` existe, con
-    `entries` —vocabulario nuevo del esquema, claves libres con patrón, como D21
-    trajo `variants`— para que la clave la elija el productor sin que la puerta se
-    abra. Una extensión requerida que no se entienda deja el paquete UNSUPPORTED
-    con salida 21; una opcional **se preserva y se declara**, que es la política
-    que la decisión dejaba abierta, porque ignorarla en silencio deja al productor
-    creyendo que mandó algo que se usó. `test:contracts` sale de las puertas no
-    ejecutadas: quedan cuatro, todas por fixture privado o por `SOFTSIGHT_HEAVY`.
-    Y **la mitad de versiones de D12**: eran siete números en cinco ficheros sin
-    tabla que dijera cuáles van juntos, y ahora viven en `versions.ts` con qué
-    versionan y quién los lee, el informe los publica en un bloque, y
-    `contracts/versions.json` se genera de ahí. La puerta rechaza una versión
-    subida sin declarar y un bloque incompleto. Queda escrito fuera del registro
-    el número del puente, y por un motivo: `agent3d --serve` importa de
-    `bridge.mjs`, así que importar allí el artefacto cerraría un ciclo; la puerta
-    compara los dos números.
-    Y **D31, la negociación de capabilities**, que comparte con D30 la función
-    que decide porque la forma es la misma: `requires` para el consumo si hay una
-    que no sabemos hacer, `provides` desconocida se preserva y se nombra, y
-    `supports` viaja siempre. La lista de lo que sabemos hacer no está vacía
-    —`mesh-audit`, `camera-projection`, `ply-ascii`— y **`coverage` y `confidence`
-    no están a propósito**: siguen bloqueadas por D34, y un paquete que las pida
-    sale UNSUPPORTED diciendo qué sí se sabe hacer, en vez de un informe sobre
-    otra cosa.
-    Y **D9, el modelo de escala**: los tres campos ya viajaban, lo que faltaba era
-    qué rechazan. Sin un sitio donde declarar un presupuesto la regla no tenía qué
-    rechazar, así que el paquete gana `budgets` —y R0 solo comprueba que sean
-    coherentes con la escala; evaluarlos es R9—. Metros sobre una escala que nadie
-    fijó salen 20 con el número y el estado en el mensaje, y una fracción de
-    diagonal con unidad también, porque ponerle una es declarar una escala por la
-    puerta de atrás. El informe publica el denominador del fallback —√3 en el cubo
-    unidad— y `claimsAbsolutePrecision`, que exige **las dos cosas**: escala
-    absoluta y un modelo de incertidumbre que no sea `NONE`.
-    Y **D10 y D33**, que cierran la cámara: `imageArtifactHash` ata la calibración
-    a los píxeles y no a un nombre —un id se reapunta a otro fichero sin que nada
-    chille—, e `imageSpace` impide unos intrínsecos rectificados con coeficientes
-    de distorsión, que es el caso que la decisión nombra y que no se ve mirando la
-    imagen. `transformConvention` **no** se declara por cámara: D32 ya la fija para
-    todo el repositorio, y repetirla sería un segundo original. De D33, las
-    dimensiones se comparan con la rejilla real abriendo el PNG —lo hace el CLI,
-    porque en `ingest.ts` no hay IO— y `sourceOrientation` se vigila **por
-    ausencia**, como `column * 4 + row`, porque usarlo no rompe ninguna prueba: da
-    una imagen girada que sigue siendo una imagen. Con eso el registro va por
-    **17 implementadas** de 34, la mitad justa.
-    Y **D11, el FrameGraph**, que era el caso más claro de decisión que parecía
-    cumplida: el grafo estaba en el esquema desde R0-A y **nadie lo miraba**, así
-    que un paquete con cero aristas salía `COMPLETE + PASS`. Lo que lo convierte en
-    registro no es que haya transformaciones declaradas —eso se cumple rellenando
-    una lista— sino que **un marco al que no hay camino desde `RECONSTRUCTION` se
-    rechaza**; y desde ahí porque es donde están los números. `resolveFrame` no
-    devuelve la identidad cuando no hay camino: suponer que dos marcos sin arista
-    son el mismo es el error, no el arreglo. Una pose de cámara pasa por la misma
-    auditoría que una arista, no por una segunda parecida.
-    Y **D20**, donde el campo estaba desde R0-A y lo que faltaba era el número:
-    confundir la coordenada sobre el eje óptico con la longitud del rayo cuesta
-    **0 % exacto en el centro y 12,5 % en la esquina** de la cámara de `cube-v1`.
-    Un mapa de profundidad declara ahora su cámara, porque sin pose ni intrínsecos
-    detrás su número no significa nada. Leer los píxeles sigue sin poder hacerse:
-    D5 —EXR— no está escrita, y comprobar que la profundidad cuadre es R8.
-    **19 de 34.**
-    Y la puerta `test:bands`, que escribe la regla del hueco (m) —reducción por
-    índice de bloque, nunca por orden de llegada— y **al escribirla destapó una
-    costura**: con suavizado, partir 240×180 en dos bandas cambia 15 píxeles, los
-    15 en las filas 89 y 90, porque la pasada lee filas que la banda no posee. Sin
-    suavizado, cero en las cuatro particiones. **Arreglado el mismo día**: no era
-    que se suavizaran mal, es que no se suavizaban —el bucle salta la primera y la
-    última fila de la banda, que con una sola es el borde de la imagen y partida
-    es su interior—, así que cada banda renderiza una fila de cortesía por cada
-    lado con vecino y la descarta al volcar. La puerta exige igualdad byte a byte
-    con suavizado y sin él, y que el recuento de suavizados no dependa del
-    reparto: 1.017 en las cuatro particiones.
-    Y **R1.5 queda declarado** en el §71 del plan, que era horizontal y solo
-    demostraba la integración en R9/R15, tras unos cincuenta items: la rebanada
-    vertical es `cube-v1` recorriendo el camino entero, y está hecha. Lo que le
-    falta no es código nuestro sino **el segundo productor**, R0-B.
-    Y **R5, el diff geométrico**, que es lo que convierte «la reparación parece
-    mejor» en un número. Lo desbloqueaba R3 sin que nadie lo anotara: el
-    `nearestPoint` del árbol es la primitiva que hacía falta. **Las dos direcciones
-    no son la misma medida** —A → B no ve lo que a B le sobra, y con un cubo al que
-    se le añade otro aparte da ruido mientras B → A da 2,700—, así que se publican
-    separadas y no se promedian. `APPROXIMATE` y `BITWISE_EXACT` a la vez, con sus
-    `samples` y **su suelo de ruido publicado**, relativo a la diagonal: cero
-    exacto no es alcanzable porque la muestra se construye en doble y el árbol
-    busca en `Float32`.
-    Y **R4 salvo la autointersección**: lo que faltaba no era medir más sino dar
-    estructura a lo que ya se contaba. «148 aristas de borde» no dice si es un
-    agujero grande o treinta y siete pequeños, y la reparación no es la misma;
-    ahora salen los bucles con su perímetro y los componentes con su área, más
-    `largestComponentAreaRatio`, que es lo que separa una pieza con una mota (0,99)
-    de una nube de siete trozos (0,14) cuando el recuento solo dice 2 y 7. Todo
-    **sobre posiciones soldadas**, que es lo que decide si sirve: un cubo con los
-    vértices partidos parece doce triángulos sueltos. Lo ambiguo se cuenta y no se
-    reparte, y la puerta exige que bucles + irresolubles == `boundaryEdges`. Sobre
-    el dron: 296 piezas, 32 con agujeros, 46 bucles, 0,16 s de CPU. La
-    autointersección entra el mismo día y como manda el §86.3 (n): **candidato con
-    su epsilon**, nunca confirmado. Los vecinos se excluyen por posición soldada
-    —por índice no valdría, un cubo con vértices partidos no comparte ninguno—, lo
-    coplanar se cuenta sin afirmarse, y el epsilon es relativo con origen medido en
-    la rejilla de `Float32`: 2,3e-8 de la coordenada, estable entre 1 y 10⁶.
-    Escribir la puerta destapó un error de libro: la versión que busca «qué vértice
-    queda solo» divide por cero con los signos `(0, +, +)`, y con eso **un cubo
-    cerrado salía con cuatro autointersecciones**. Sobre el dron, 71.556 pares en
-    0,59 s de CPU. **R4 queda cerrado.**
-    Y **la severidad gana un tercer valor**, `aproximacion-determinista`, que es
-    el hueco (n): el determinante de orientación da un valor no nulo en **884 de
-    2.200 puntos que están sobre la recta**, así que llamar `certeza` a lo que
-    sale de ahí afirmaba más de lo que la aritmética sostiene. Una entrada con esa
-    severidad **declara su epsilon**; las otras dos lo tienen prohibido. Sigue
-    contando como defecto —el eje es medida contra intención, no exacto contra
-    aproximado— y eso destapó que el criterio vivía como `severity === "certeza"`
-    dentro del CLI, donde añadir un valor al enum lo habría cambiado en silencio.
-    El pliego del dron sigue en `46228b7c` y `contractVersion` en 3.
+    **Jornada del 2026-09-13, resumida.** El detalle de cada pieza vive donde le
+    toca y aquí no se repite: las decisiones en
+    [`contrato-videomesh.md`](contrato-videomesh.md), los escalones y los huecos en
+    [`plan-reconstruccion.md`](plan-reconstruccion.md) §71 y §86. Lo que cambió el
+    estado:
+
+    - **Ocho decisiones pasan a IMPLEMENTADAS** —D9, D10, D11, D12, D20, D30, D31 y
+      D33—, así que el registro va por **19 de 34**. `test:contracts` sale de las
+      puertas bloqueadas por falta de fixture.
+    - **R1.5 declarado, y R4 y R5 cerrados.** Con ellos entran cuatro puertas
+      nuevas: `test:bands`, `test:mesh-diff`, `test:mesh-topology` y
+      `test:self-intersection`.
+    - **Tres huecos del §86.3 cerrados** —(m), (n) y (o)— y con el de la reducción
+      apareció y se arregló una costura del suavizado entre bandas.
+    - **La severidad gana un tercer valor**, `aproximacion-determinista`, que el
+      editor lee: avisado en [`coordinacion.md`](coordinacion.md).
+    - Nada de esto movió un hash: el pliego del dron sigue en `46228b7c`,
+      `contractVersion` en 3 y `bridgeContractVersion` en 1.
+
+20. **Qué queda, y de quién es.** Del lado de este repositorio **no queda nada
+    que no dependa de otro**, y conviene que esté dicho en un sitio en vez de
+    deducirse.
+
+    **Del dueño, y bloquean lo demás:**
+
+    - **Mandar el envío 02.** Está redactado en
+      [`envio-videomesh-02.md`](envio-videomesh-02.md) y no se ha enviado. Desde el
+      01 —que sigue sin respuesta— han cambiado dos esquemas, hay cuatro campos
+      obligatorios nuevos y **28 identificadores en PROPUESTO**.
+    - **El idioma de los códigos nuevos.** Es lo único que queda de las tres cosas
+      que el punto 19 daba por abiertas, y lo paga cada código que se escribe.
+    - **De dónde sale un COLMAP real.** Sin él D4 no pasa de MEDIO HECHA y
+      `test:colmap` sigue declarándose no ejecutada.
+
+    **De VideoMesh:**
+
+    - **R0-B**, con su `cube-v1` y su `expected.json`. D34 es explícita: mientras
+      no pase, no avanza nada que dependa del contrato compartido — y eso incluye
+      **R6 entero**, porque cobertura y confianza están bloqueadas ahí.
+    - **Confirmar o cambiar los 28 identificadores.** Aquí cambiarlos cuesta un
+      sitio; después de que los graben, dos repositorios.
+
+    **Del editor:** la mitad de E1 —comparar sus cajas contra
+    `artifacts/agent/encuadre-control.json`—, Ω6.4 y F1 del plan del motor.
+
+    **Sin dueño y anotado:** el §86.4 (r) sigue sin aplicarse —cada item que toque
+    el informe o el rasterizador debería declarar si mueve `contractVersion` y si
+    obliga a subir el pin del editor—, y el §86.2 (f) deja pendiente el valor
+    `externo` de la severidad, que no entra hasta que exista un proveedor externo
+    que lo emita.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

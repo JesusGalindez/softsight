@@ -9,13 +9,20 @@ reglas de trabajo**. Si algo de aquí contradice a esos dos, mandan ellos.
 Escrito el 2026-09-13, sobre `main` en `bae4463`, con la suite en verde:
 28 puertas, 143 comprobaciones, 65,3 s, 5 declaradas NOT_RUN con motivo.
 
-**El bloque A está cerrado el 2026-09-13**, de `88f8b90` a la punta. Qué quedó de
-cada tarea lo lleva [`mapa-del-proyecto.md`](mapa-del-proyecto.md) §5 y el
-registro de decisiones lleva su cuenta; aquí no se repite.
+**Este encargo está terminado.** El bloque A se cerró el 2026-09-13, y con él
+cayeron además el bloque D en sus dos primeros escalones —R4 y R5— y la costura
+del suavizado que el bloque A destapó. Qué quedó de cada tarea lo lleva
+[`mapa-del-proyecto.md`](mapa-del-proyecto.md) §5 y el registro de decisiones
+lleva su cuenta; aquí no se repite.
 
-Lo que sigue abierto y **no es del bloque A**: el bloque B espera un COLMAP real,
-el C sigue bloqueado fuera, y quedan dos cosas con su medida y sin dueño —la
-costura del suavizado entre bandas y el idioma de los códigos nuevos—.
+**Lo que queda no es trabajo de este repositorio**, y está en el §5.20 del mapa
+con su dueño al lado: mandar el envío 02, decidir el idioma de los códigos y
+conseguir un COLMAP real son del dueño; R0-B y los 28 identificadores son de
+VideoMesh; E1, Ω6.4 y F1 viven en el editor.
+
+El documento se queda **como plantilla**: las reglas de §1 y la forma de §2 valen
+para el encargo siguiente, que empezará por donde el §5.20 diga que se ha
+desbloqueado.
 
 ---
 
@@ -120,7 +127,14 @@ hecha**, y si mueve `contractVersion`.
 
 ---
 
-### Bloque A — lo que no depende de nadie
+### Bloque A — lo que no depende de nadie · **cerrado el 2026-09-13**
+
+Las doce tareas están hechas. Se dejan escritas porque el **criterio de
+aceptación** de cada una es lo que la puerta correspondiente sigue exigiendo, y
+porque tres de ellas descubrieron algo que su enunciado no preveía: A1 encontró
+que lo que ataja una cabecera mentirosa es contar filas y no el tope, A9 destapó
+la costura del suavizado, y A10 tuvo que medir el predicado antes de poder
+decidir su severidad.
 
 #### A0 · El mapa §5.19 dice que faltan tres cosas y faltan dos
 
@@ -368,7 +382,7 @@ algo**.
 
 ---
 
-### Bloque B — necesita datos que hoy no existen
+### Bloque B — necesita datos que hoy no existen · **sigue abierto**
 
 #### B1 · Un COLMAP real, fuera del repositorio
 
@@ -395,14 +409,17 @@ dueño, no del agente.
 
 ---
 
-### Bloque C — bloqueado fuera, el agente no lo toca
+### Bloque C — bloqueado fuera · **sigue bloqueado, y ha crecido**
 
 Esto **no se trabaja**. Está aquí para que nadie lo empiece por error.
 
 - **El envío 01 lleva un mes sin respuesta.** `docs/envio-videomesh-01.md` salió
   el 2026-08-12 pidiendo dos cosas y no hay entrada de respuesta en
-  `coordinacion.md`. De ahí cuelga todo lo siguiente.
-- **Los cinco identificadores en PROPUESTO** —`SS-PKG-010`…`014`— siguen sin
+  `coordinacion.md`. De ahí cuelga todo lo siguiente. **El envío 02 está
+  redactado y sin mandar** —`docs/envio-videomesh-02.md`—, con dos esquemas
+  cambiados y cuatro campos obligatorios nuevos.
+- **Los identificadores en PROPUESTO han pasado de cinco a 28**, en cuatro
+  espacios —`SS-PKG`, `SS-IO`, `SS-RECON` y `SS-CAM`—, y siguen sin
   número acordado. Están marcados en `codes.ts` con su estado, y `test:codes`
   comprueba que ninguno se cuele como fijado. **No se fijan por nuestra cuenta**:
   cambiarlos aquí cuesta un sitio, cambiarlos después de que VideoMesh los grabe
@@ -416,21 +433,33 @@ Esto **no se trabaja**. Está aquí para que nadie lo empiece por error.
 
 ---
 
-### Bloque D — lo que viene después, sin asignar
+### Bloque D — R4 y R5 hechos; el resto choca con D34
 
-No se empieza sin cerrar A y sin que R0-B haya pasado. Se apunta para que el
-orden no se pierda: **R4 (Geometry Audit V2), R5 (diff A↔B), R6 (inteligencia de
-reconstrucción), R7 (informe), R8 (residuales multivista)** y el resto hasta R16,
-tal como los describe `plan-reconstruccion.md` §71 — con dos avisos ya escritos
-que se aplican desde el primer día:
+**R4 y R5 se cerraron el 2026-09-13**, y los dos por el mismo motivo: no
+dependían del contrato compartido, que es lo que D34 deja avanzar en paralelo.
+R5 estaba desbloqueado desde R3 sin que nadie lo hubiera anotado —el
+`nearestPoint` del árbol es la primitiva que un diff de superficie necesita—.
+
+**R6 en adelante no se puede empezar.** Cobertura y confianza son exactamente lo
+que D34 bloquea hasta que R0-B pase, y `SUPPORTED_CAPABILITIES` lo dice en código:
+un paquete que las pida sale UNSUPPORTED.
+
+Lo que sigue anotado para cuando se desbloquee:
+
+**R6 (inteligencia de reconstrucción), R7 (informe), R8 (residuales
+multivista)** y el resto hasta R16, tal como los describe
+`plan-reconstruccion.md` §71 — con dos avisos que se aplican desde el primer día:
 
 - **§86.3 (k):** una cobertura muestreada publica **N, si está ponderada por área
   y su varianza**. Un PASS/FAIL contra un estimador de varianza desconocida cerca
   del umbral es una moneda al aire. Si el intervalo cruza el umbral, el veredicto
-  es inconcluso.
-- **§86.2 (f):** las «exactness classes» del §27 **no se implementan**. Se extiende
-  el enum que ya existe en `warningCodes.ts` con `aproximacion-determinista` y
-  `externo`. Mismo campo, misma tabla, misma puerta.
+  es inconcluso. Lo primero ya está hecho en `meshDiff.ts`, que publica sus
+  `samples`: R6 lo hereda en vez de inventarse otra forma de decirlo.
+- **§86.2 (f):** las «exactness classes» del §27 **no se implementan**; se extiende
+  el enum de `warningCodes.ts`. `aproximacion-determinista` entró con A10.
+  **`externo` sigue sin entrar** y es deliberado: no hay un solo proveedor externo
+  —el validador de Khronos no está integrado— y un valor que nadie emite es una
+  promesa vacía. Entra con el primero que lo use.
 
 ---
 
