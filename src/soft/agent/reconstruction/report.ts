@@ -149,7 +149,27 @@ export interface ReconstructionReport {
     measurementClass: "EXACT";
     reproducibility: "BITWISE_EXACT";
   }>;
-  scale: Record<string, unknown>;
+  /**
+   * La escala tal y como rigió, más lo que D9 exige que el informe diga de ella.
+   *
+   * No es una copia del manifest: `boundingBoxDiagonal` es el **denominador del
+   * fallback** —con escala no absoluta, un presupuesto va en fracción de
+   * diagonal—, y publicarlo es lo que permite al otro lado reproducir el número
+   * en vez de recalcular una caja que podría no ser la misma.
+   */
+  scale: {
+    status: string;
+    source: string;
+    uncertainty?: { model: string; value: number };
+    /** Diagonal de la caja de todo lo medido; `null` si no se midió nada. */
+    boundingBoxDiagonal: number | null;
+    /**
+     * Si este informe se permite hablar en unidades absolutas. Falso con escala
+     * no absoluta o con la incertidumbre en `NONE`: reportar milímetros sobre una
+     * escala que nadie fijó es la precisión que D9 prohíbe.
+     */
+    claimsAbsolutePrecision: boolean;
+  };
   cameras: { declared: number; withImage: number };
   warnings: IngestIssue[];
 }
@@ -168,6 +188,26 @@ function runIdFor(manifestSha256: string): string {
   return `run-${REPORT_VERSION}-${manifestSha256.slice(0, 16)}`;
 }
 
+/**
+ * Diagonal de la caja que contiene todo lo medido.
+ *
+ * De la unión y no de la primera malla: un paquete con dos mallas tiene una sola
+ * pieza, y usar la caja de una de ellas daría un denominador que cambia según el
+ * orden en que vengan declaradas.
+ */
+function diagonalOf(measurements: ReconstructionReport["measurements"]): number | null {
+  if (measurements.length === 0) return null;
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (const measurement of measurements) {
+    for (let axis = 0; axis < 3; axis += 1) {
+      min[axis] = Math.min(min[axis], measurement.boundingBoxMin[axis]);
+      max[axis] = Math.max(max[axis], measurement.boundingBoxMax[axis]);
+    }
+  }
+  return Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
+}
+
 export function buildReconstructionReport(input: ReportInput): ReconstructionReport {
   const { manifest, manifestSha256, ingest, meshes, softsightVersion } = input;
   const declared = (manifest.artifacts ?? []) as Array<Record<string, unknown>>;
@@ -175,6 +215,11 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
   const admitted = new Set(ingest.artifacts.map((artifact) => artifact.id));
   const missing = required.filter((id) => !admitted.has(id));
 
+  const declaredScale = (manifest.scale ?? {}) as {
+    status?: string;
+    source?: string;
+    uncertainty?: { model: string; value: number };
+  };
   const cameras = (manifest.cameras ?? []) as Array<Record<string, unknown>>;
   const imageIds = new Set(
     declared.filter((artifact) => artifact.type === "IMAGE").map((artifact) => artifact.id as string),
@@ -259,7 +304,16 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
       missingEvidence: missing,
     },
     measurements,
-    scale: (manifest.scale ?? {}) as Record<string, unknown>,
+    scale: {
+      status: declaredScale.status ?? "UNKNOWN",
+      source: declaredScale.source ?? "NONE",
+      ...(declaredScale.uncertainty === undefined ? {} : { uncertainty: declaredScale.uncertainty }),
+      boundingBoxDiagonal: diagonalOf(measurements),
+      claimsAbsolutePrecision:
+        declaredScale.status === "ABSOLUTE" &&
+        declaredScale.uncertainty !== undefined &&
+        declaredScale.uncertainty.model !== "NONE",
+    },
     cameras: {
       declared: cameras.length,
       withImage: cameras.filter((camera) => imageIds.has(camera.imageArtifactId as string)).length,
@@ -455,7 +509,9 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
   scale: {
     type: "object",
     required: true,
-    description: "La escala declarada por el paquete, copiada tal cual: con status != ABSOLUTE, nada absoluto se certifica.",
+    description:
+      "La escala que rigió, con lo que D9 exige decir de ella: con status != ABSOLUTE nada absoluto " +
+      "se certifica, y el informe publica el denominador del fallback relativo.",
     fields: {
       status: { type: '"UNKNOWN"|"RELATIVE"|"ABSOLUTE"', required: true, description: "Estado de la escala." },
       source: { type: "string", required: true, description: "De dónde sale." },
@@ -466,6 +522,22 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
           model: { type: "string", required: true, description: "Qué modelo describe el valor." },
           value: { type: "number", required: true, description: "Magnitud en la unidad de la escala." },
         },
+      },
+      boundingBoxDiagonal: {
+        type: "number",
+        required: true,
+        description:
+          "Diagonal de la caja de todo lo medido, y denominador de un presupuesto relativo (D9). " +
+          "Se publica para que el otro lado reproduzca el número en vez de recalcular una caja " +
+          "que podría no ser la misma. Nulo si no se midió nada.",
+      },
+      claimsAbsolutePrecision: {
+        type: "boolean",
+        required: true,
+        description:
+          "Si este informe se permite hablar en unidades absolutas. Falso con escala no absoluta o " +
+          "con la incertidumbre en NONE: reportar milímetros sobre una escala que nadie fijó es la " +
+          "precisión que D9 prohíbe.",
       },
     },
   },

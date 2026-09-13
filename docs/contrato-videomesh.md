@@ -90,11 +90,11 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-09-13:
 
 ```text
-ACORDADAS       20   D1, D2, D4, D5, D8–D11, D15, D18, D20, D22, D23, D26–D29,
-                     D32–D34
+ACORDADAS       19   D1, D2, D4, D5, D8, D10, D11, D15, D18, D20, D22, D23,
+                     D26–D29, D32–D34
 PROPUESTAS       0
-IMPLEMENTADAS   14   D3, D6, D7, D12, D13, D14, D16, D17, D19, D21, D24, D25,
-                     D30, D31
+IMPLEMENTADAS   15   D3, D6, D7, D9, D12, D13, D14, D16, D17, D19, D21, D24,
+                     D25, D30, D31
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -306,13 +306,48 @@ falta evidencia que el contrato no usa     → irrelevante
 ```
 **Prueba:** casos A y B.
 
-### D9 — Modelo de escala
+### D9 — Modelo de escala — IMPLEMENTADA (2026-09-13)
 `status` (UNKNOWN | RELATIVE | ABSOLUTE), `source` (NONE | KNOWN_DISTANCE |
 MARKER | CAMERA_PRIOR | EXTERNAL_MEASUREMENT | MANUAL) e incertidumbre con su
 modelo y valor. Con `status != ABSOLUTE` se rechazan presupuestos absolutos;
 fallback relativo a la diagonal. No se reporta precisión más fina de la que la
 incertidumbre justifica.
-**Prueba:** `unknown-scale-v1`, caso C.
+**Prueba:** `test:reconstruction`, con el manifest base y tres listas en vez del
+`unknown-scale-v1` que la decisión preveía.
+
+**Los tres campos ya viajaban; lo que faltaba era qué rechazan.** Sin un sitio
+donde declarar un presupuesto, la regla no tenía qué rechazar y la contradicción
+que la decisión ataja —metros sobre una escala que nadie ha fijado— se colaba
+entera. Así que el paquete gana `budgets`, con `units` de `ABSOLUTE` o
+`RELATIVE_TO_DIAGONAL`. **R0 solo comprueba que sean coherentes con la escala;
+evaluarlos contra lo medido es R9**, y decirlo así evita que alguien lea un
+paquete aceptado como un paquete aprobado.
+
+```text
+ABSOLUTE + scale.status != ABSOLUTE     SS-RECON-001, salida 20
+ABSOLUTE sin unidad                     SS-RECON-002
+RELATIVE_TO_DIAGONAL con unidad         SS-RECON-002
+```
+
+La tercera fila no es simetría decorativa: **una fracción de diagonal no tiene
+unidad**, y ponerle una es declarar una escala por la puerta de atrás — el
+consumidor leería «0,01 m» donde el productor quiso decir «el 1 % de la pieza».
+
+El mensaje trae el número, la unidad y el estado, porque sin los tres el productor
+no sabe si arreglar la escala o el presupuesto. Y es **salida 20**: el fichero
+está bien y el hash cuadra; lo que falla es que dos campos suyos no pueden ser
+ciertos a la vez. De ahí el espacio `SS-RECON`, que es nuevo.
+
+**Las dos mitades que el informe tenía que decir, y no decía:**
+
+- `scale.boundingBoxDiagonal`, **el denominador del fallback**, de la unión de
+  todo lo medido y no de la primera malla. Publicarlo es lo que permite al otro
+  lado reproducir un presupuesto relativo en vez de recalcular una caja que
+  podría no ser la misma. En `cube-v1` sale √3, la del cubo unidad.
+- `scale.claimsAbsolutePrecision`, y es **de dos cosas a la vez**: escala
+  `ABSOLUTE` **y** un modelo de incertidumbre que no sea `NONE`. Con escala
+  fijada a mano y sin modelo, el informe no promete nada, que es exactamente lo
+  que la última frase de la decisión pide.
 
 ### D10 — Convenciones de espacio de imagen
 `imageSpace`, `pixelOrigin`, `pixelCenter`, `transformConvention`, handedness y

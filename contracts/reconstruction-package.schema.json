@@ -476,6 +476,41 @@
       },
       "description": "Identidades de artifact que el contrato exige para certificar. Faltar una da INCONCLUSIVE; faltar evidencia que nadie usa es irrelevante (D8)."
     },
+    "budgets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Qué se presupuesta; identifica, así que es único."
+          },
+          "units": {
+            "type": "string",
+            "enum": [
+              "ABSOLUTE",
+              "RELATIVE_TO_DIAGONAL"
+            ],
+            "description": "En qué se expresa el máximo. Absoluto exige `scale.status` ABSOLUTE; relativo va sobre la diagonal de la caja envolvente, que es el fallback de D9."
+          },
+          "unit": {
+            "type": "string",
+            "description": "La unidad cuando es absoluto, como `m` o `mm`. Prohibida con `RELATIVE_TO_DIAGONAL`: una fracción de diagonal no tiene unidad, y ponerle una es declarar una escala por la puerta de atrás."
+          },
+          "max": {
+            "type": "number",
+            "description": "Máximo admitido, en las unidades declaradas."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "units",
+          "max"
+        ]
+      },
+      "description": "Presupuestos que el paquete declara. R0 solo comprueba que sean coherentes con la escala (D9); evaluarlos contra lo medido es R9."
+    },
     "requires": {
       "type": "array",
       "items": {

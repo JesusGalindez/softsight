@@ -179,6 +179,39 @@ const SCALE_FIELDS: ObjectSchema = {
   },
 };
 
+/**
+ * Un presupuesto, y la razón por la que existe ya en R0 aunque nadie lo evalúe
+ * todavía.
+ *
+ * D9 dice que **con `scale.status != ABSOLUTE` un presupuesto absoluto se
+ * rechaza**, y sin un sitio donde declararlo esa regla no tiene qué rechazar: la
+ * contradicción que la decisión quiere atajar —presupuestos en metros sobre una
+ * escala que nadie ha fijado— se colaba entera. Aquí solo se comprueba esa
+ * coherencia; **evaluar el presupuesto contra lo medido es R9**, y decirlo así
+ * evita que alguien lea un paquete aceptado como un paquete aprobado.
+ *
+ * El fallback que la decisión fija cuando la escala no es absoluta es
+ * `RELATIVE_TO_DIAGONAL`: la diagonal de la caja envolvente, que el informe
+ * publica para que el otro lado pueda reproducir el número.
+ */
+const BUDGET_FIELDS: ObjectSchema = {
+  name: { type: "string", required: true, description: "Qué se presupuesta; identifica, así que es único." },
+  units: {
+    type: '"ABSOLUTE"|"RELATIVE_TO_DIAGONAL"',
+    required: true,
+    description:
+      "En qué se expresa el máximo. Absoluto exige `scale.status` ABSOLUTE; relativo va sobre la " +
+      "diagonal de la caja envolvente, que es el fallback de D9.",
+  },
+  unit: {
+    type: "string",
+    description:
+      "La unidad cuando es absoluto, como `m` o `mm`. Prohibida con `RELATIVE_TO_DIAGONAL`: una " +
+      "fracción de diagonal no tiene unidad, y ponerle una es declarar una escala por la puerta de atrás.",
+  },
+  max: { type: "number", required: true, description: "Máximo admitido, en las unidades declaradas." },
+};
+
 /** Una transformación del FrameGraph (D11): ninguna se hornea sin registrarla. */
 const TRANSFORM_FIELDS: ObjectSchema = {
   from: {
@@ -273,6 +306,13 @@ export const RECONSTRUCTION_PACKAGE_SCHEMA: ObjectSchema = {
     description:
       "Identidades de artifact que el contrato exige para certificar. " +
       "Faltar una da INCONCLUSIVE; faltar evidencia que nadie usa es irrelevante (D8).",
+  },
+  budgets: {
+    type: "object[]",
+    description:
+      "Presupuestos que el paquete declara. R0 solo comprueba que sean coherentes con la escala " +
+      "(D9); evaluarlos contra lo medido es R9.",
+    fields: BUDGET_FIELDS,
   },
   requires: {
     type: "string[]",

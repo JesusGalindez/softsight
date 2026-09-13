@@ -441,14 +441,24 @@
             "value"
           ],
           "description": "Incertidumbre, si la hay; copiada del paquete con su modelo."
+        },
+        "boundingBoxDiagonal": {
+          "type": "number",
+          "description": "Diagonal de la caja de todo lo medido, y denominador de un presupuesto relativo (D9). Se publica para que el otro lado reproduzca el número en vez de recalcular una caja que podría no ser la misma. Nulo si no se midió nada."
+        },
+        "claimsAbsolutePrecision": {
+          "type": "boolean",
+          "description": "Si este informe se permite hablar en unidades absolutas. Falso con escala no absoluta o con la incertidumbre en NONE: reportar milímetros sobre una escala que nadie fijó es la precisión que D9 prohíbe."
         }
       },
       "additionalProperties": false,
       "required": [
         "status",
-        "source"
+        "source",
+        "boundingBoxDiagonal",
+        "claimsAbsolutePrecision"
       ],
-      "description": "La escala declarada por el paquete, copiada tal cual: con status != ABSOLUTE, nada absoluto se certifica."
+      "description": "La escala que rigió, con lo que D9 exige decir de ella: con status != ABSOLUTE nada absoluto se certifica, y el informe publica el denominador del fallback relativo."
     },
     "cameras": {
       "type": "object",

@@ -3642,12 +3642,21 @@ N publicado en el informe
 si el intervalo cruza el umbral, el veredicto es inconcluso
 ```
 
-**l) Escala y presupuestos se contradicen.**
-El §58 dice «nunca asumir metros» y da tres estados. Los §45 y §80 dan
-presupuestos en metros. Falta la regla: **con `scale != ABSOLUTE` los
+**l) Escala y presupuestos se contradicen. HECHO el 2026-09-13.**
+El §58 decía «nunca asumir metros» y daba tres estados. Los §45 y §80 daban
+presupuestos en metros. La regla que faltaba —**con `scale != ABSOLUTE` los
 presupuestos absolutos se rechazan**, y el fallback es relativo a la diagonal de
-la caja envolvente. Nota adjunta: `auditMesh` ya redondea `signedVolume` con
-`.toFixed(6)`; con escala desconocida eso puede ser el número entero.
+la caja envolvente— es ahora `budgets` en el paquete, dos códigos del espacio
+`SS-RECON` y `scale.boundingBoxDiagonal` publicado en el informe. Ver D9.
+
+Y lo que faltaba para que la regla tuviera qué rechazar era **un sitio donde
+declarar un presupuesto**: sin él la contradicción se colaba entera. R0 solo
+comprueba la coherencia; evaluarlos es R9.
+
+Nota adjunta, que sigue abierta: `auditMesh` redondea `signedVolume` con
+`.toFixed(6)`, y con escala desconocida eso puede ser el número entero. El
+informe ya dice si se permite hablar en absoluto —`claimsAbsolutePrecision`—,
+pero el redondeo del volumen no lo mira todavía.
 
 **m) Determinismo con paralelo, sin resolver.**
 El §57 pide semilla fija y orden estable, y no dice nada de la reducción. El

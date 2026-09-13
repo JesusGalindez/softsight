@@ -503,7 +503,17 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     —`mesh-audit`, `camera-projection`, `ply-ascii`— y **`coverage` y `confidence`
     no están a propósito**: siguen bloqueadas por D34, y un paquete que las pida
     sale UNSUPPORTED diciendo qué sí se sabe hacer, en vez de un informe sobre
-    otra cosa. Con eso el registro va por **14 implementadas** de 34.
+    otra cosa.
+    Y **D9, el modelo de escala**: los tres campos ya viajaban, lo que faltaba era
+    qué rechazan. Sin un sitio donde declarar un presupuesto la regla no tenía qué
+    rechazar, así que el paquete gana `budgets` —y R0 solo comprueba que sean
+    coherentes con la escala; evaluarlos es R9—. Metros sobre una escala que nadie
+    fijó salen 20 con el número y el estado en el mensaje, y una fracción de
+    diagonal con unidad también, porque ponerle una es declarar una escala por la
+    puerta de atrás. El informe publica el denominador del fallback —√3 en el cubo
+    unidad— y `claimsAbsolutePrecision`, que exige **las dos cosas**: escala
+    absoluta y un modelo de incertidumbre que no sea `NONE`. Con eso el registro
+    va por **15 implementadas** de 34.
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un

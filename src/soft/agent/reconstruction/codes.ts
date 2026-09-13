@@ -130,6 +130,22 @@ export const PACKAGE_CODE_TABLE = {
     decision: "D31 nombra el desenlace UNSUPPORTED, sin número",
   },
 
+  // El espacio `SS-RECON`: lo que el paquete se contradice a sí mismo diciendo.
+  // No es un fallo de lectura ni de integridad —el fichero está bien y el hash
+  // cuadra—, es que dos campos suyos no pueden ser ciertos a la vez.
+  "SS-RECON-001": {
+    reason: "ABSOLUTE_BUDGET_WITHOUT_ABSOLUTE_SCALE",
+    cause: "un presupuesto en unidades absolutas sobre una escala que no es ABSOLUTE",
+    status: "PROPUESTO",
+    decision: "D9 fija la regla, sin número",
+  },
+  "SS-RECON-002": {
+    reason: "BUDGET_UNIT_MISDECLARED",
+    cause: "un presupuesto absoluto sin unidad, o uno relativo con ella",
+    status: "PROPUESTO",
+    decision: "D9 fija la regla, sin número",
+  },
+
   // El espacio `SS-IO`: leer ficheros de otro. Son los topes de `limits.ts` y la
   // lectura que no se puede completar, y se separan de `SS-PKG` porque no dicen
   // que el paquete esté mal: un paquete perfecto puede no caber. Por eso los

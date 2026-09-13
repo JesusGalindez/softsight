@@ -174,6 +174,8 @@ export const PACKAGE_CODES = {
   HASH_MALFORMED: "SS-PKG-014",
   EXTENSION_REQUIRED_UNSUPPORTED: "SS-PKG-023",
   CAPABILITY_REQUIRED_UNSUPPORTED: "SS-PKG-024",
+  ABSOLUTE_BUDGET_WITHOUT_SCALE: "SS-RECON-001",
+  BUDGET_UNIT_MISDECLARED: "SS-RECON-002",
   // El espacio de lectura: topes de recurso y ficheros que no se pueden
   // interpretar. Los cinco primeros los proyecta el código de salida 23, que D13
   // reservaba y hasta ahora no devolvía nadie.
@@ -268,6 +270,8 @@ export function ingestPackage(
     contractSchemaSha256?: string;
     requires?: string[];
     provides?: string[];
+    scale?: { status?: string };
+    budgets?: Array<{ name: string; units: string; unit?: string; max: number }>;
     extensions?: Record<string, { required?: boolean }>;
     state: string;
     artifacts: Array<{ id: string; type: string; path: string; bytes: number; sha256: string }>;
@@ -358,6 +362,44 @@ export function ingestPackage(
     );
     return { ...empty, execution: "UNSUPPORTED", packageId: document.packageId };
   }
+
+  // D9: un presupuesto en metros sobre una escala que nadie ha fijado no es un
+  // presupuesto exigente, es una afirmación sin sentido. Se comprueba aquí y no
+  // al evaluarlo —eso es R9— porque la contradicción está en el propio manifest y
+  // no depende de haber medido nada.
+  const absoluteScale = document.scale?.status === "ABSOLUTE";
+  for (const budget of document.budgets ?? []) {
+    const where = `presupuesto ${budget.name}`;
+    if (budget.units === "ABSOLUTE") {
+      if (budget.unit === undefined) {
+        issues.push(issue(PACKAGE_CODES.BUDGET_UNIT_MISDECLARED, `${where}: absoluto y sin unidad`));
+        continue;
+      }
+      if (!absoluteScale) {
+        issues.push(
+          issue(
+            PACKAGE_CODES.ABSOLUTE_BUDGET_WITHOUT_SCALE,
+            `${where}: ${budget.max} ${budget.unit} con scale.status ` +
+              `${JSON.stringify(document.scale?.status ?? "ausente")}; con escala no absoluta el ` +
+              `presupuesto va en RELATIVE_TO_DIAGONAL`,
+          ),
+        );
+      }
+      continue;
+    }
+    if (budget.unit !== undefined) {
+      // Una fracción de diagonal no tiene unidad, y ponerle una es declarar una
+      // escala por la puerta de atrás: el consumidor leería «0,01 m» donde el
+      // productor quiso decir «el 1 % de la pieza».
+      issues.push(
+        issue(
+          PACKAGE_CODES.BUDGET_UNIT_MISDECLARED,
+          `${where}: relativo a la diagonal y con unidad ${JSON.stringify(budget.unit)}`,
+        ),
+      );
+    }
+  }
+  if (issues.length > 0) return { ...empty, packageId: document.packageId };
 
   // El recuento antes del recorrido: cada artifact cuesta una resolución de
   // enlace y una lectura entera para hashear, así que un manifest generado en

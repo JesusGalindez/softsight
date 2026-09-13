@@ -46,6 +46,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   PACKAGE_CODES,
+  buildReconstructionReport,
   RESOURCE_LIMITS,
   RESOURCE_LIMIT_LIST,
   RECONSTRUCTION_PACKAGE_SCHEMA,
@@ -696,6 +697,110 @@ function sha256Of(path) {
   }
   rmSync(sandbox, { recursive: true, force: true });
   console.log(`reconstrucción: ok (el informe publica los ${report.limits.length} topes con su unidad y su por qué)`);
+}
+
+// D9: la escala manda sobre lo que un presupuesto puede decir.
+//
+// Un presupuesto en metros sobre una escala que nadie ha fijado no es exigente:
+// es una afirmación sin sentido, y aceptarla convierte «0,5 mm de tolerancia» en
+// medio milímetro de nada. La contradicción está en el manifest, así que se caza
+// sin haber medido un solo triángulo.
+{
+  const cases = fixture("package-integrity-v1");
+  const reader = {
+    root: cases.root,
+    stat: () => {
+      throw new Error("la coherencia de escala se decide antes de tocar un artifact");
+    },
+  };
+  const conEscala = (scale, budgets) => ({ ...cases.base, artifacts: [], scale, budgets });
+  const relativa = { status: "RELATIVE", source: "NONE" };
+  const absoluta = { status: "ABSOLUTE", source: "KNOWN_DISTANCE", uncertainty: { model: "GAUSSIAN", value: 0.002 } };
+  const enMetros = [{ name: "desviación", units: "ABSOLUTE", unit: "m", max: 0.0005 }];
+
+  const mal = ingestPackage(conEscala(relativa, enMetros), reader);
+  assert.deepEqual(
+    mal.issues.map((entry) => entry.code),
+    [PACKAGE_CODES.ABSOLUTE_BUDGET_WITHOUT_SCALE],
+  );
+  // El mensaje trae el número, la unidad y el estado: sin los tres, el productor
+  // no sabe si arreglar la escala o el presupuesto.
+  assert.match(mal.issues[0].message, /0\.0005 m con scale\.status "RELATIVE"/);
+  assert.equal(exitCodeFor(mal), 20, "un paquete que se contradice es un paquete inválido");
+
+  // El mismo presupuesto con la escala fijada pasa: sin este caso, rechazar todo
+  // presupuesto absoluto también aprobaría la puerta.
+  assert.deepEqual(ingestPackage(conEscala(absoluta, enMetros), reader).issues, []);
+
+  // Y la unidad no puede ir por libre en ninguna de las dos direcciones.
+  const sinUnidad = ingestPackage(
+    conEscala(absoluta, [{ name: "desviación", units: "ABSOLUTE", max: 0.0005 }]),
+    reader,
+  );
+  assert.deepEqual(
+    sinUnidad.issues.map((entry) => entry.code),
+    [PACKAGE_CODES.BUDGET_UNIT_MISDECLARED],
+  );
+  const relativaConUnidad = ingestPackage(
+    conEscala(relativa, [{ name: "desviación", units: "RELATIVE_TO_DIAGONAL", unit: "m", max: 0.01 }]),
+    reader,
+  );
+  assert.deepEqual(
+    relativaConUnidad.issues.map((entry) => entry.code),
+    [PACKAGE_CODES.BUDGET_UNIT_MISDECLARED],
+  );
+
+  console.log(
+    "reconstrucción: ok (D9: metros sobre escala RELATIVE rechazados con el número y el estado en el " +
+      "mensaje, los mismos metros con ABSOLUTE pasan, y la unidad no va por libre en ninguna dirección)",
+  );
+}
+
+// Y lo que el informe tiene que decir de la escala: el denominador del fallback
+// y si se permite hablar en unidades absolutas.
+{
+  const sandbox = realpathSync(mkdtempSync(join(tmpdir(), "softsight-escala-")));
+  const root = join(sandbox, "cube-v1");
+  writeCubePackage(root);
+  const { report } = inspectPackage(join(root, "manifest.json"));
+
+  // El cubo es de lado 1 y su escala no es absoluta, así que el informe no puede
+  // prometer milímetros y sí tiene que publicar contra qué se mide un presupuesto
+  // relativo: la diagonal del cubo unidad, √3.
+  assert.equal(report.scale.claimsAbsolutePrecision, false, "sin escala absoluta no se promete precisión");
+  assert.ok(
+    Math.abs(report.scale.boundingBoxDiagonal - Math.sqrt(3)) < 1e-6,
+    `la diagonal del cubo unidad es √3 y salió ${report.scale.boundingBoxDiagonal}`,
+  );
+
+  // Y la promesa es de las dos cosas a la vez: con la escala fijada pero sin
+  // modelo de incertidumbre, tampoco se promete nada.
+  const conEscala = (scale) =>
+    buildReconstructionReport({
+      manifest: { ...JSON.parse(readFileSync(join(root, "manifest.json"), "utf8")), scale },
+      manifestSha256: "0".repeat(64),
+      ingest: { execution: "COMPLETE", issues: [], packageId: "cube-v1", artifacts: [], extensions: { honoured: [], ignored: [] }, capabilities: { required: [], provided: [], supports: [], unknownProvided: [] } },
+      meshes: [],
+      softsightVersion: "0",
+    });
+  assert.equal(
+    conEscala({ status: "ABSOLUTE", source: "MANUAL", uncertainty: { model: "NONE", value: 0 } }).scale
+      .claimsAbsolutePrecision,
+    false,
+    "escala absoluta sin modelo de incertidumbre no justifica precisión",
+  );
+  assert.equal(
+    conEscala({ status: "ABSOLUTE", source: "MARKER", uncertainty: { model: "INTERVAL", value: 0.001 } }).scale
+      .claimsAbsolutePrecision,
+    true,
+  );
+  assert.equal(conEscala({ status: "RELATIVE", source: "NONE" }).scale.boundingBoxDiagonal, null);
+
+  rmSync(sandbox, { recursive: true, force: true });
+  console.log(
+    "reconstrucción: ok (el informe publica la diagonal del fallback —√3 en el cubo unidad— y solo " +
+      "promete precisión absoluta con escala ABSOLUTE y un modelo de incertidumbre que no sea NONE)",
+  );
 }
 
 // 7. Lo que sigue fuera, dicho en voz alta.
