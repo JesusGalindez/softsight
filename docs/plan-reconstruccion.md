@@ -2641,6 +2641,35 @@ Gate:
 repair can be quantitatively compared with raw mesh
 ```
 
+**Hecho el 2026-09-13**, en `reconstruction/meshDiff.ts` con puerta
+`test:mesh-diff`. Lo desbloqueaba R3 sin que nadie lo hubiera anotado: el
+`nearestPoint` del árbol, ya juzgado contra la fuerza bruta, es exactamente la
+primitiva que un diff de superficie necesita.
+
+**Vértice contra vértice no sirve** —soldar, simplificar y tapar los cambian
+todos—, así que se muestrea la superficie, ponderando por área y con semilla fija.
+
+**Las dos direcciones no son la misma medida, y es la razón de que sean dos.**
+Muestrear A y buscar en B no ve lo que B tiene de más: si la reparación rellenó un
+agujero con una cúpula inventada, cada punto de A sigue teniendo el suyo en B y el
+informe diría que son idénticas. Medido en la puerta con un cubo al que se le
+añade otro aparte: **A → B se queda en el ruido y B → A da 2,700**. Por eso se
+publican separadas y **no se promedian**: 1,35 no describiría nada.
+
+Es `APPROXIMATE` y `BITWISE_EXACT` a la vez, que son los dos ejes de D28 y la
+razón de que sean dos: el muestreo no visita toda la superficie, pero visita
+siempre los mismos puntos. Publica sus `samples`, que es lo que el §86.3 (k)
+exige.
+
+**Y publica su suelo de ruido**, relativo a la diagonal: una malla contra sí misma
+da 2,0e-16 sobre el cubo unidad y 3,2e-13 sobre uno de lado 1000. No es cero **y
+no puede serlo** —el punto de muestra se construye con baricéntricas en doble y el
+árbol busca sobre posiciones en `Float32`—, así que afirmar cero exacto sería
+afirmar más de lo que la aritmética sostiene. La misma lección que
+`aproximacion-determinista`.
+
+Contra un presupuesto **no compara**: eso es R9 y necesita la escala (D9).
+
 ---
 
 ## R6 — Reconstruction intelligence

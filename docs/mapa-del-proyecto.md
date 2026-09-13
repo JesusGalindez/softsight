@@ -555,6 +555,15 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     demostraba la integración en R9/R15, tras unos cincuenta items: la rebanada
     vertical es `cube-v1` recorriendo el camino entero, y está hecha. Lo que le
     falta no es código nuestro sino **el segundo productor**, R0-B.
+    Y **R5, el diff geométrico**, que es lo que convierte «la reparación parece
+    mejor» en un número. Lo desbloqueaba R3 sin que nadie lo anotara: el
+    `nearestPoint` del árbol es la primitiva que hacía falta. **Las dos direcciones
+    no son la misma medida** —A → B no ve lo que a B le sobra, y con un cubo al que
+    se le añade otro aparte da ruido mientras B → A da 2,700—, así que se publican
+    separadas y no se promedian. `APPROXIMATE` y `BITWISE_EXACT` a la vez, con sus
+    `samples` y **su suelo de ruido publicado**, relativo a la diagonal: cero
+    exacto no es alcanzable porque la muestra se construye en doble y el árbol
+    busca en `Float32`.
     Y **la severidad gana un tercer valor**, `aproximacion-determinista`, que es
     el hueco (n): el determinante de orientación da un valor no nulo en **884 de
     2.200 puntos que están sobre la recta**, así que llamar `certeza` a lo que

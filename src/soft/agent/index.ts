@@ -286,6 +286,8 @@ export {
 } from "./reconstruction/limits";
 export type { ResourceLimit, ResourceLimitName } from "./reconstruction/limits";
 export { bandWithHalo } from "../postprocess";
+export { DIFF_NOISE_FLOOR, diffMeshes } from "./reconstruction/meshDiff";
+export type { MeshDiff, MeshDiffOptions, SurfaceDistance, TopologyDelta } from "./reconstruction/meshDiff";
 export { projectPoint } from "./reconstruction/camera";
 export { FRAMES, auditTransforms, resolveFrame } from "./reconstruction/frameGraph";
 export type { Frame, FrameTransform } from "./reconstruction/frameGraph";

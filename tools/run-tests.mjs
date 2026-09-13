@@ -56,6 +56,7 @@ const GATES = [
   "summary.test.mjs", // 4,3 s — renderiza el dron entero para medir el recorte
   "rig-spec.test.mjs", // 1,3 s
   "framing.test.mjs", // 4,1 s — renderiza cuatro fixtures para reproducir sus cajas
+  "mesh-diff.test.mjs", // 0,5 s de CPU — el diff contra casos de resultado conocido
   "bands.test.mjs", // 1,0 s — la misma escena en 1, 2, 3 y 4 franjas, byte a byte
   "bounds-tree.test.mjs", // 1,6 s — el árbol contra la fuerza bruta; 1M y 5M piden SOFTSIGHT_HEAVY=1
   "reconstruction.test.mjs", // 0,6 s — esquema del paquete de R0-A e ingesta
