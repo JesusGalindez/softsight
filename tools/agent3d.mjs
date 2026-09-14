@@ -33,6 +33,7 @@ import {
   CURRENT_VERSION_PAIRS,
   DEMO_SCENE,
   PATCH_SCHEMA,
+  diffMeshes,
   ROLE_REQUIRED_DATA,
   SAMPLE_REFERENCE_SCHEMA,
   SCENE_SCHEMA,
@@ -337,6 +338,120 @@ async function loadMeshoptDecoder() {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Carga un modelo y lo aplana a **una sola malla en espacio de mundo**.
+ *
+ * De mundo y no de objeto: cada pieza trae su matriz, y comparar posiciones
+ * locales diría que dos modelos son idénticos cuando uno tiene el brazo girado.
+ *
+ * Aplanado y no pieza a pieza porque lo que se compara son **dos versiones de lo
+ * mismo**, y entre una versión y la siguiente las piezas se parten, se funden y
+ * cambian de nombre. Emparejarlas por nombre daría un diff que se cae en cuanto
+ * un pase renombre algo, y callar ese caso sería peor que no mirarlo. Lo que sí
+ * se publica es cuántas piezas tenía cada lado: si ese número cambia, el diff
+ * sigue siendo cierto y además se ve por qué.
+ */
+async function loadFlattenedMesh(path) {
+  const isBinary = path.toLowerCase().endsWith(".glb");
+  const raw = await readFile(path);
+  const data = isBinary
+    ? raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)
+    : raw.toString("utf8");
+  const model = loadModel(path, data, isBinary ? await loadMeshoptDecoder() : undefined);
+
+  let vertices = 0;
+  let indices = 0;
+  for (const part of model.parts) {
+    vertices += part.mesh.positions.length;
+    indices += part.mesh.indices.length;
+  }
+  const positions = new Float32Array(vertices);
+  const merged = new Uint32Array(indices);
+  let vertexCursor = 0;
+  let indexCursor = 0;
+  for (const part of model.parts) {
+    const m = part.matrix;
+    const base = vertexCursor / 3;
+    for (let offset = 0; offset < part.mesh.positions.length; offset += 3) {
+      const x = part.mesh.positions[offset];
+      const y = part.mesh.positions[offset + 1];
+      const z = part.mesh.positions[offset + 2];
+      // `Mat4` es row-major y los vectores multiplican por la derecha: la
+      // traslación vive en 3, 7 y 11. Confundirlo da un modelo transpuesto que a
+      // veces parece correcto (AGENTS.md, invariante 1).
+      positions[vertexCursor] = m[0] * x + m[1] * y + m[2] * z + m[3];
+      positions[vertexCursor + 1] = m[4] * x + m[5] * y + m[6] * z + m[7];
+      positions[vertexCursor + 2] = m[8] * x + m[9] * y + m[10] * z + m[11];
+      vertexCursor += 3;
+    }
+    for (let index = 0; index < part.mesh.indices.length; index += 1) {
+      merged[indexCursor + index] = part.mesh.indices[index] + base;
+    }
+    indexCursor += part.mesh.indices.length;
+  }
+
+  return {
+    parts: model.parts.length,
+    mesh: {
+      positions,
+      indices: merged,
+      normals: new Float32Array(0),
+      uvs: new Float32Array(0),
+      boundingRadius: 0,
+    },
+  };
+}
+
+/**
+ * `--model a --diff b`: cuánto se movió la superficie entre dos versiones.
+ *
+ * **No lleva veredicto propio.** Una distancia sin escala declarada no dice si es
+ * mucho o poco (D9), así que el umbral lo pone quien lo sabe, con `--diff-max`, y
+ * va en **fracción de la diagonal** — la misma unidad que el fallback relativo de
+ * esa decisión. Sin la bandera, el informe sale y la orden vale 0.
+ */
+async function diffModelFiles(options) {
+  const uno = await loadFlattenedMesh(resolve(options.get("model")));
+  const otro = await loadFlattenedMesh(resolve(options.get("diff")));
+
+  const number = (flag) => {
+    const value = options.get(flag);
+    return value === undefined || value === "true" ? undefined : Number(value);
+  };
+  const diff = diffMeshes(uno.mesh, otro.mesh, {
+    samples: number("diff-samples"),
+    seed: number("diff-seed"),
+  });
+
+  const budget = number("diff-max");
+  const worst = Math.max(diff.aToB.maximum, diff.bToA.maximum);
+  const relative = diff.boundingBoxDiagonal > 0 ? worst / diff.boundingBoxDiagonal : 0;
+  const warnings = [];
+  if (budget !== undefined && relative > budget) {
+    warnings.push({
+      code: "DIFERENCIA_SOBRE_EL_PRESUPUESTO",
+      severity: "certeza",
+      part: null,
+      message:
+        `la superficie se movió ${relative.toExponential(3)} de la diagonal y el presupuesto es ` +
+        `${budget}: ${worst.toFixed(6)} sobre una diagonal de ${diff.boundingBoxDiagonal.toFixed(6)}. ` +
+        `El peor lado es ${diff.aToB.maximum >= diff.bToA.maximum ? "a→b, superficie que falta" : "b→a, superficie que sobra"}`,
+    });
+  }
+
+  return {
+    contractVersion: CONTRACT_VERSIONS.report.value,
+    documentType: "softsight.mesh-diff",
+    from: { path: options.get("model"), parts: uno.parts },
+    to: { path: options.get("diff"), parts: otro.parts },
+    diff,
+    /** El peor de los dos lados, en fracción de la diagonal: lo que juzga `--diff-max`. */
+    worstRelative: relative,
+    budget: budget ?? null,
+    warnings,
+  };
 }
 
 async function reviewModelFile(options, outputPath) {
@@ -724,6 +839,18 @@ Todas estas opciones valen igual con --scene que con --model.
 Escala
   --expect-size <m>       tamaño plausible del objeto en metros; sin esto solo se
                           avisa fuera del rango 1 cm - 100 m, suponiendo metros
+
+Diferencia entre dos versiones del mismo objeto
+  --model a.glb --diff b.glb
+                          cuánto se movió la superficie de a a b, en las dos
+                          direcciones: a→b no ve lo que b tiene de más. Las dos
+                          se publican y no se promedian
+  --diff-samples <n>      muestras por dirección; 20000
+  --diff-seed <n>         semilla del muestreo; 1
+  --diff-max <f>          presupuesto en **fracción de la diagonal**, no en
+                          unidades: una distancia sin escala declarada no dice si
+                          es mucho o poco (D9). Pasarse es un defecto y salida 1;
+                          sin la bandera no hay veredicto y la orden vale 0
 
 Presupuesto (cada bandera es una cláusula; incumplirla es un aviso y salida 1)
   --max-triangles <n>     triángulos del modelo entero
@@ -1113,6 +1240,13 @@ async function main(argv) {
   // El BVH va antes que todo lo demás porque no es un modelo: no tiene malla, así
   // que no hay nada que encuadrar, rasterizar ni auditar. Es una conversión, y
   // lo que produce sí entra después por --model como cualquier GLB.
+  // El diff no audita un modelo: compara dos. Va antes que `--model` porque
+  // comparte la bandera y si no, el informe de uno solo se lo comería.
+  if (options.has("diff")) {
+    const report = await diffModelFiles(options);
+    emitReport(report, options);
+    return hasDefect(report.warnings) ? 1 : 0;
+  }
   if (options.has("bvh")) {
     const report = await convertBvhFile(options);
     emitReport(report, options);

@@ -56,6 +56,17 @@ import { auditMesh } from "../inspect";
  * coordenadas baricéntricas en doble, y el árbol busca sobre las posiciones en
  * `Float32`. Afirmar cero exacto sería afirmar más de lo que la aritmética
  * sostiene, que es la misma lección de `aproximacion-determinista`.
+ *
+ * **Es el suelo de las mallas tal y como llegan, no de una escena.** Medido sobre
+ * el dron —296 piezas, cada una con su matriz, aplanadas a espacio de mundo por
+ * el CLI—, comparar el modelo consigo mismo da entre **1e-14 y 1e-13 de la
+ * diagonal**, dos o tres órdenes por encima de este número. Crece con el número
+ * de muestras, porque más muestras encuentran peores casos: con 2.000 sale 2,8e-14
+ * y con 4.000, 2,2e-13. No es un defecto — componer una transformación por pieza
+ * añade su redondeo, y una malla densa da más candidatos coincidentes al buscar
+ * el más próximo—, pero **el suelo de aquí no sirve de tolerancia allí**. Por eso
+ * el CLI publica `worstRelative`: el consumidor compara contra lo que mide, no
+ * contra una constante que se midió en otro sitio.
  */
 export const DIFF_NOISE_FLOOR = 4e-16;
 

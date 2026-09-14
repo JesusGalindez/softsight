@@ -2731,6 +2731,25 @@ afirmar más de lo que la aritmética sostiene. La misma lección que
 
 Contra un presupuesto **no compara**: eso es R9 y necesita la escala (D9).
 
+**Alcanzable desde fuera desde el 2026-09-13**: `--model a --diff b` en el CLI y
+el comando `diff` en el puente. Cada lado se aplana a **una sola malla en espacio
+de mundo** —de mundo porque cada pieza trae su matriz, y aplanado porque entre dos
+versiones las piezas se parten, se funden y cambian de nombre, así que
+emparejarlas por nombre daría un diff que se cae en cuanto un pase renombre algo—.
+Lo que sí se publica es el recuento de piezas de cada lado.
+
+`--diff-max` va en **fracción de la diagonal** y no en unidades, que es la unidad
+del fallback de D9; sin la bandera no hay veredicto y la orden vale 0. El aviso
+dice **qué lado** es el peor, que es lo que separa «le falta superficie» de «le
+sobra».
+
+Y quedó medido que el suelo de ruido publicado es el de una malla tal y como
+llega, **no el de una escena**: el dron contra sí mismo por el CLI da entre 1e-14
+y 1e-13 de la diagonal, y crece con el número de muestras porque más muestras
+encuentran peores casos. Componer una matriz por pieza añade su redondeo. Por eso
+el informe publica `worstRelative`: el consumidor compara contra lo que mide, no
+contra una constante medida en otro sitio.
+
 ---
 
 ## R6 — Reconstruction intelligence

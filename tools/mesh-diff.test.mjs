@@ -19,6 +19,12 @@
  */
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(here, "..");
 
 import { DIFF_NOISE_FLOOR, diffMeshes } from "../dist-node/agent3d.mjs";
 
@@ -253,6 +259,58 @@ const SAMPLES = 4_000;
   console.log(
     `diff: ok (mismo documento byte a byte con la misma semilla; con otra, la media pasa de ` +
       `${uno.aToB.mean.toFixed(6)} a ${otra.aToB.mean.toFixed(6)})`,
+  );
+}
+
+// 6. El camino del CLI, que es el que va a usar un pipeline: dos ficheros y un
+// presupuesto. Añade lo que los bloques de arriba no tienen —296 piezas, cada una
+// con su matriz, aplanadas a espacio de mundo— y por eso su suelo es otro.
+{
+  const correr = (extra) => {
+    const salida = spawnSync(
+      process.execPath,
+      [
+        resolve(here, "agent3d.mjs"),
+        "--model", "artifacts/export/drone.glb",
+        "--diff", "artifacts/export/drone.glb",
+        "--diff-samples", "2000",
+        ...extra,
+      ],
+      { cwd: projectRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+    );
+    return { code: salida.status, report: JSON.parse(salida.stdout) };
+  };
+
+  const igual = correr([]);
+  assert.equal(igual.code, 0, "sin presupuesto no hay veredicto y la orden vale 0");
+  assert.equal(igual.report.from.parts, 296, "las dos mitades declaran sus piezas");
+  assert.equal(igual.report.to.parts, 296);
+  assert.deepEqual(igual.report.warnings, []);
+
+  // **Dos o tres órdenes por encima del suelo publicado, y no es un defecto**:
+  // componer una matriz por pieza añade su redondeo. El valor crece con las
+  // muestras —más muestras encuentran peores casos— así que la cota se pone
+  // holgada a propósito: lo que se exige es que siga siendo indistinguible de cero
+  // para cualquier uso geométrico, no que baje al suelo de una malla suelta.
+  assert.ok(
+    igual.report.worstRelative < 1e-11,
+    `un modelo contra sí mismo da ${igual.report.worstRelative} de la diagonal`,
+  );
+  assert.ok(igual.report.worstRelative > 0, "si diera cero exacto, el muestreo no estaría midiendo");
+
+  // Y el presupuesto muerde, con la unidad que D9 fija: fracción de la diagonal.
+  const exigente = correr(["--diff-max", "1e-15"]);
+  assert.equal(exigente.code, 1, "pasarse del presupuesto es un defecto");
+  assert.equal(exigente.report.warnings[0].code, "DIFERENCIA_SOBRE_EL_PRESUPUESTO");
+  // El mensaje dice **qué lado** es el peor, que es lo que decide si al modelo le
+  // falta superficie o le sobra.
+  assert.match(exigente.report.warnings[0].message, /superficie que (falta|sobra)/);
+
+  console.log(
+    `diff: ok (por el CLI, 296 piezas contra sí mismas dan ${igual.report.worstRelative.toExponential(1)} ` +
+      "de la diagonal, órdenes por encima del suelo de una malla suelta porque componer matrices " +
+      "redondea, y muy por debajo de cualquier diferencia geométrica; y el " +
+      "presupuesto en fracción de diagonal muerde con salida 1)",
   );
 }
 

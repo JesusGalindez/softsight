@@ -10,7 +10,7 @@
  * Petición:
  *
  *   { "bridgeContractVersion": 1,
- *     "command": "inspect"|"render"|"patch"|"sample"|"scene"|"bvh"|"story"|"staging"|"schema",
+ *     "command": "inspect"|"render"|"patch"|"sample"|"scene"|"bvh"|"story"|"staging"|"diff"|"schema",
  *     "files": { "model": { "name": "drone.glb", "data": "<base64>" }, ... },
  *     "options": { ... } }
  *
@@ -102,7 +102,9 @@ const MODEL_CACHE_DIR = process.env.SOFTSIGHT_BRIDGE_MODEL_CACHE ?? "";
 const MODEL_CACHE_MAX_BYTES = Number(process.env.SOFTSIGHT_BRIDGE_MODEL_CACHE_MAX_MB ?? 256) * 1024 * 1024;
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-const COMMANDS = new Set(["inspect", "render", "patch", "sample", "scene", "bvh", "story", "staging", "schema"]);
+const COMMANDS = new Set([
+  "inspect", "render", "patch", "sample", "scene", "bvh", "story", "staging", "diff", "schema",
+]);
 
 // Opciones del CLI que el puente acepta, con su tipo. Todo lo demás se rechaza:
 // el puente no expande variables ni patrones, y solo ejecuta con argumentos fijos.
@@ -135,9 +137,14 @@ export const PASSTHROUGH = {
   // `story`.
   summary: "boolean",
   fields: "string",
+  // El diff. `diffMax` va en fracción de la diagonal y no en unidades, porque una
+  // distancia sin escala declarada no dice si es mucho o poco (D9).
+  diffSamples: "number",
+  diffSeed: "number",
+  diffMax: "number",
 };
 
-const OPTION_TO_FLAG = {
+export const OPTION_TO_FLAG = {
   tile: "--tile",
   ground: "--ground",
   select: "--select",
@@ -163,6 +170,9 @@ const OPTION_TO_FLAG = {
   parity: "--parity",
   summary: "--summary",
   fields: "--fields",
+  diffSamples: "--diff-samples",
+  diffSeed: "--diff-seed",
+  diffMax: "--diff-max",
 };
 
 // Ficheros que admite cada comando: los opcionales solo se escriben si vienen.
@@ -175,6 +185,10 @@ const FILE_SLOTS = {
   // una escena declarativa en vez de un fichero 3D.
   scene: { scene: false, patches: true },
   bvh: { bvh: false },
+  // El único que recibe **dos** modelos: compara dos versiones de lo mismo. El
+  // segundo no pasa por la caché de modelos —es el que cambia en cada pase de
+  // quien llama, así que cachearlo sería llenar el disco de versiones muertas—.
+  diff: { model: false, other: false },
   // El guion no trae geometría ni produce fichero: entra texto y salen hechos.
   story: { story: false },
   // La puesta en escena tampoco: entran medidas del editor y salen hechos.
@@ -319,11 +333,16 @@ function buildArgs(request, workDir) {
       files[slot] = payload.map((entry, index) => writeFilePayload(workDir, `patches[${index}]`, entry));
       continue;
     }
-    if (slot === "model" && MODEL_CACHE_DIR && MODEL_CACHE_MAX_BYTES > 0 && request.options?.noCache !== true) {
+    if (slot === "model" && request.command !== "diff" && MODEL_CACHE_DIR && MODEL_CACHE_MAX_BYTES > 0 && request.options?.noCache !== true) {
       files[slot] = writeFileModelCached(slot, payload);
       continue;
     }
     files[slot] = writeFilePayload(workDir, slot, payload);
+  }
+
+  if (request.command === "diff") {
+    // Sin `--out` ni `--export`: comparar no produce artefacto, produce números.
+    return ["--model", files.model, "--diff", files.other, ...parseOptions(request.options)];
   }
 
   if (request.command === "bvh") {

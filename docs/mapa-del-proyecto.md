@@ -482,7 +482,11 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       `test:colmap` salen de las puertas bloqueadas por falta de fixture.
     - **R1.5 declarado, y R4 y R5 cerrados.** Con ellos entran cuatro puertas
       nuevas: `test:bands`, `test:mesh-diff`, `test:mesh-topology` y
-      `test:self-intersection`.
+      `test:self-intersection`. El diff de R5 se alcanza además desde fuera
+      —`--model a --diff b` y el comando `diff` del puente—, que es lo que
+      necesita un pipeline de generación para preguntar «¿este pase mejoró o
+      derivó?» en vez de mirarlo. El veredicto lo pone quien llama, con
+      `--diff-max` en fracción de la diagonal.
     - **Tres huecos del §86.3 cerrados** —(m), (n) y (o)— y con el de la reducción
       apareció y se arregló una costura del suavizado entre bandas.
     - **La severidad gana un tercer valor**, `aproximacion-determinista`, que el

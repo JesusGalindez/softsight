@@ -14,6 +14,8 @@ import { execFile, spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+
+import { OPTION_TO_FLAG, PASSTHROUGH } from "./bridge.mjs";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
@@ -343,3 +345,20 @@ await rm("/tmp/softsight-bridge-patch.json", { force: true });
 await rm("/tmp/softsight-bridge-baseline-report.json", { force: true });
 await rm("/tmp/softsight-bridge-undo.json", { force: true });
 await rm("/tmp/softsight-bridge-patched.png", { force: true });
+
+// Las dos tablas de opciones dicen lo mismo, o no dicen nada.
+//
+// `PASSTHROUGH` declara el tipo y `OPTION_TO_FLAG` el nombre de la bandera: son
+// dos originales del mismo dato y ya divergieron una vez —tres opciones del diff
+// entraron en la primera y no en la segunda, y el puente las tiró en silencio
+// porque `flags.push(undefined, valor)` no falla—. Mientras vivan separadas, esto
+// es lo que impide que vuelva a pasar.
+{
+  const conTipo = Object.keys(PASSTHROUGH).sort();
+  const conBandera = Object.keys(OPTION_TO_FLAG).sort();
+  assert.deepEqual(conTipo, conBandera, "una opción sin bandera se descarta sin decirlo");
+  for (const [nombre, bandera] of Object.entries(OPTION_TO_FLAG)) {
+    assert.ok(bandera.startsWith("--"), `${nombre}: la bandera no empieza por --`);
+  }
+  console.log(`puente: ok (${conTipo.length} opciones con tipo y bandera, las dos tablas de acuerdo)`);
+}
