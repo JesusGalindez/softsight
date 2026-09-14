@@ -355,7 +355,10 @@ const OPAQUE = new Set([
 
   // Requerida desconocida: no se mide nada. Y el mensaje dice qué sabemos hacer,
   // porque «no soportada» a secas manda al productor a adivinar el nombre.
-  const pide = ingestPackage(withCapabilities({ requires: ["coverage"] }), reader);
+  // `confidence` y no `coverage`: la segunda entró el 2026-09-13 cuando el módulo
+  // existió, y el caso vivo tiene que ser una capacidad que de verdad no
+  // tengamos. Usar una ya soportada convertiría la prueba en adorno.
+  const pide = ingestPackage(withCapabilities({ requires: ["confidence"] }), reader);
   assert.equal(pide.execution, "UNSUPPORTED");
   assert.deepEqual(
     pide.issues.map((entry) => entry.code),
@@ -364,14 +367,15 @@ const OPAQUE = new Set([
   assert.match(pide.issues[0].message, /sabe hacer .*mesh-audit/);
   assert.equal(exitCodeFor(pide), 21);
 
-  // `coverage` y `confidence` no están a propósito: siguen bloqueadas por D34, y
-  // es justo el caso que la negociación existe para contestar bien. Si alguien
-  // las añade a la lista sin que existan, esto se pone rojo.
-  assert.equal(SUPPORTED_CAPABILITIES.includes("coverage"), false);
+  // `coverage` entró cuando R0-B dejó de estar pendiente y el módulo existió.
+  // `confidence` sigue fuera y es el caso vivo: necesita los residuales
+  // multivista de R8. Si alguien la añade sin que exista, esto se pone rojo —
+  // prometer una capacidad que no se tiene es peor que no tenerla.
+  assert.equal(SUPPORTED_CAPABILITIES.includes("coverage"), true);
   assert.equal(SUPPORTED_CAPABILITIES.includes("confidence"), false);
 
   // Requerida conocida: entra.
-  const conocida = ingestPackage(withCapabilities({ requires: ["mesh-audit"] }), reader);
+  const conocida = ingestPackage(withCapabilities({ requires: ["mesh-audit", "coverage"] }), reader);
   assert.equal(conocida.execution, "COMPLETE");
   assert.deepEqual(conocida.issues, []);
 

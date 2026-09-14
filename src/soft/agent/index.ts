@@ -293,6 +293,9 @@ export type { SelfIntersectionPair, SelfIntersectionReport } from "./reconstruct
 export type { BoundaryLoop, MeshComponent, MeshTopology } from "./reconstruction/meshTopology";
 export type { MeshDiff, MeshDiffOptions, SurfaceDistance, TopologyDelta } from "./reconstruction/meshDiff";
 export { projectPoint } from "./reconstruction/camera";
+export { COVERAGE_RAY_OFFSET, computeCoverage, coverageVerdict } from "./reconstruction/coverage";
+export type { Coverage, CoverageOptions, CoverageRegions } from "./reconstruction/coverage";
+export { sampleMesh } from "./reconstruction/surfaceSampling";
 export { FRAMES, auditTransforms, resolveFrame } from "./reconstruction/frameGraph";
 export type { Frame, FrameTransform } from "./reconstruction/frameGraph";
 export {

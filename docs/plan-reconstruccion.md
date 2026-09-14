@@ -2770,6 +2770,48 @@ Gate:
 SoftSight can identify observed/weak/unobserved regions
 ```
 
+**Hecha la cobertura el 2026-09-13**, en `reconstruction/coverage.ts` con puerta
+`test:coverage`. Estaba bloqueada por D34 hasta que R0-B pasara, y R0-B lo cumple
+`producers/colmap/` desde el mismo día.
+
+Es **la pregunta para la que existe la capa de certificación**: una malla puede
+estar impecable en topología y describir una trasera que nadie fotografió.
+Ninguna imagen lo desmiente y ninguna métrica de geometría lo detecta, porque la
+geometría está bien.
+
+**Tres regiones, y la del medio es la que justifica que sean tres:**
+
+```text
+sin observar   ninguna cámara la ve        no hay evidencia
+débil          la ve exactamente una       hay evidencia y no triangula
+observada      la ven dos o más            hay evidencia suficiente
+```
+
+Meter lo débil en «observada» infla el número justo donde la reconstrucción es
+más frágil. Medido sobre `cube-v1`: con las cuatro vistas sale **49,5 %
+observada, 50,5 % sin ver y cero débil** —cada cara alcanzada cae en el campo de
+dos cámaras—, y con una sola vista **el 16,7 % observado es todo débil**, que es
+una cara de seis exacta.
+
+**El §86.3 (k) está hecho prueba.** Se publica `samples`, se declara que va
+ponderado por área, y se acompaña del error estándar con su intervalo.
+`coverageVerdict` devuelve **INCONCLUSIVE cuando el umbral cae dentro del
+intervalo**: ahí la medida no distingue, y decir PASS o FAIL sería echar una
+moneda. El intervalo se estrecha con las muestras —0,0158 con mil, 0,0035 con
+veinte mil—, que es lo que separa un error de muestreo de una constante
+decorativa.
+
+Y D21 se respeta: `provenanceAware: false`, y sobre malla que no es puramente
+reconstruida el número **se reporta y no certifica**, con su motivo.
+
+**`coverage` pasa a ser una capacidad declarada** en `SUPPORTED_CAPABILITIES`.
+`confidence` sigue fuera y es ahora el caso vivo de la negociación de D31:
+necesita los residuales multivista de R8, que piden profundidad y máscaras.
+
+**Lo que falta de R6**: confianza, provenance por región y el cruce sobre datos
+reales — un SfM disperso no tiene superficie que cubrir, así que eso espera a un
+productor que entregue malla.
+
 ---
 
 ## R7 — Reconstruction report

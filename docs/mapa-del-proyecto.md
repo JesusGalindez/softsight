@@ -484,6 +484,16 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       exigía y no existía: escribe un paquete desde la salida de COLMAP sin
       importar nada del verificador, y sus ocho poses coinciden con las del
       adaptador **exactas a 0**. Ver el §5.20.
+    - **Con R0-B cumplido se desbloquea R6 y entra la cobertura**, que es la
+      pregunta para la que existe esta capa: una malla puede estar impecable y
+      describir una trasera que nadie fotografió. Tres regiones —sin observar,
+      débil, observada—, y la del medio justifica que sean tres: lo que ve una
+      sola cámara tiene evidencia y no triangula. Sobre `cube-v1`, 49,5 % y 50,5 %
+      con cuatro vistas y cero débil; con una sola, el 16,7 % observado es todo
+      débil, una cara de seis exacta. El veredicto sale **INCONCLUSIVE cuando el
+      umbral cae dentro del intervalo**, que es el §86.3 (k) hecho prueba.
+      `coverage` pasa a capacidad declarada; `confidence` sigue fuera y es el caso
+      vivo de D31.
     - **R1.5 declarado, y R4 y R5 cerrados.** Con ellos entran cuatro puertas
       nuevas: `test:bands`, `test:mesh-diff`, `test:mesh-topology` y
       `test:self-intersection`. El diff de R5 se alcanza además desde fuera

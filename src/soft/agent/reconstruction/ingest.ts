@@ -71,13 +71,20 @@ export const EXTENSION_POLICY = "preservar-y-declarar" as const;
  * se hace sería prometerlo, y un productor que lo pidiera recibiría un PASS sobre
  * algo que nadie midió.
  *
- * `coverage` y `confidence` **no están** a propósito: siguen bloqueadas por D34,
- * y es justo el caso que la negociación existe para contestar bien.
+ * `confidence` **sigue fuera** a propósito: necesita los residuales multivista de
+ * R8, que piden profundidad y máscaras. Un paquete que la requiera sale
+ * UNSUPPORTED, que es justo el caso que la negociación existe para contestar
+ * bien. `coverage` estuvo ahí hasta que R0-B dejó de estar pendiente.
  */
 export const SUPPORTED_CAPABILITIES: readonly string[] = [
   "mesh-audit",
   "camera-projection",
   "ply-ascii",
+  // Entra el 2026-09-13, cuando R0-B deja de estar pendiente y `coverage.ts`
+  // existe. Antes estaba fuera **a propósito** y era el caso que la negociación
+  // existía para contestar bien: un paquete que la pidiera salía UNSUPPORTED en
+  // vez de recibir un informe que no hablaba de cobertura.
+  "coverage",
 ];
 
 /**
