@@ -13,6 +13,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
+import { decodePng } from "./agent3d.mjs";
 import {
   PRODUCTION_ASSET_SCHEMA,
   buildProductionReport,
@@ -53,6 +54,7 @@ export function inspectAsset(manifestPath) {
   }
 
   const meshes = new Map();
+  const images = new Map();
   const uvPresence = new Map();
   const fatales = [];
   for (const artifact of documento.artifacts) {
@@ -68,6 +70,15 @@ export function inspectAsset(manifestPath) {
     }
     if (artifact.role !== "LOD" && artifact.level !== undefined) {
       fatales.push(`${artifact.id}: solo un LOD lleva nivel`);
+      continue;
+    }
+    // Y lo mismo con `usage`: es de la textura y de nadie más.
+    if (artifact.role === "TEXTURE" && artifact.usage === undefined) {
+      fatales.push(`${artifact.id}: una textura tiene que declarar qué canal alimenta`);
+      continue;
+    }
+    if (artifact.role !== "TEXTURE" && artifact.usage !== undefined) {
+      fatales.push(`${artifact.id}: solo una textura lleva usage`);
       continue;
     }
 
@@ -92,6 +103,18 @@ export function inspectAsset(manifestPath) {
       fatales.push(`${artifact.id}: el hash no coincide`);
       continue;
     }
+    if (artifact.role === "TEXTURE") {
+      let png = null;
+      try {
+        png = decodePng(bytes);
+      } catch (error) {
+        fatales.push(`${artifact.id}: la imagen no se pudo abrir (${error.message})`);
+        continue;
+      }
+      images.set(artifact.id, { width: png.width, height: png.height, pixels: png.pixels });
+      continue;
+    }
+
     if ((artifact.format ?? "PLY") === "GLB") {
       let leido;
       try {
@@ -151,7 +174,7 @@ export function inspectAsset(manifestPath) {
     return { report: null, exitCode: 20, fatal: fatales.join("; ") };
   }
 
-  const report = buildProductionReport({ manifest: documento, meshes, uvPresence });
+  const report = buildProductionReport({ manifest: documento, meshes, images, uvPresence });
   const exitCode = report.certification === "PASS" ? 0 : report.certification === "FAIL" ? 1 : 11;
   return { report, exitCode, fatal: null };
 }
@@ -221,6 +244,38 @@ export function renderProduction(report) {
             `${(c.triangleRatio * 100).toFixed(1)} % de sus triángulos`
         : `colisión    no comprobada · ${c.reason}`,
     );
+  }
+
+  if (report.textures.length > 0) {
+    lineas.push("");
+    for (const textura of report.textures) {
+      lineas.push(
+        `textura     ${textura.artifactId} (${textura.usage}): ${textura.width}×${textura.height}` +
+          `${textura.powerOfTwo ? "" : " · no potencia de dos"}` +
+          `${textura.alphaConstant ? " · alfa constante" : ""}` +
+          (textura.normalLike
+            ? ` · azul ${textura.normalLike.meanBlue.toFixed(2)} norma ` +
+              `${textura.normalLike.meanLength.toFixed(2)} bajo horizonte ` +
+              `${(textura.normalLike.belowHorizonRatio * 100).toFixed(1)} %`
+            : "") +
+          (textura.reason ? ` · ${textura.reason}` : ""),
+      );
+    }
+    for (const medida of report.measurements) {
+      if (medida.texelDensity === undefined) continue;
+      lineas.push(
+        `            ${medida.appliesTo.artifactId}: ${medida.texelDensity.median.toFixed(0)} téxeles ` +
+          `por unidad (p05 ${medida.texelDensity.p05.toFixed(0)}, textura de ${medida.texelDensity.textureSide})`,
+      );
+    }
+  }
+
+  if (report.materialIssues.length > 0) {
+    lineas.push("");
+    lineas.push(`materiales  ${report.materialIssues.length} contradicciones`);
+    for (const problema of report.materialIssues) {
+      lineas.push(`  ${problema.reason}  ${problema.message}`);
+    }
   }
 
   if (report.budgets.length > 0) {

@@ -17,6 +17,7 @@ import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { serializeGlb } from "../dist-node/agent3d.mjs";
+import { encodePng } from "./agent3d.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -150,6 +151,14 @@ function sphericalNormals(mesh) {
   return normals;
 }
 
+/** UV multiplicadas: por encima de uno, se salen del cuadrado a propósito. */
+function escalarUvs(uvs, factor) {
+  if (factor === 1) return uvs;
+  const salida = new Float32Array(uvs.length);
+  for (let index = 0; index < uvs.length; index += 1) salida[index] = uvs[index] * factor;
+  return salida;
+}
+
 /** GLB de una sola pieza, con las UV que se le pasen. */
 export function writeGlbOnePart(mesh, uvs) {
   const modelo = {
@@ -178,10 +187,50 @@ export function writeGlbOnePart(mesh, uvs) {
   return Buffer.from(serializeGlb(modelo));
 }
 
+/** Damero de color base. Alfa constante a propósito: es lo que se mide. */
+export function checkerPng(width = 256, height = 256) {
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let fila = 0; fila < height; fila += 1) {
+    for (let columna = 0; columna < width; columna += 1) {
+      const claro = (Math.floor(fila / 32) + Math.floor(columna / 32)) % 2 === 0;
+      const slot = (fila * width + columna) * 4;
+      pixels[slot] = claro ? 220 : 40;
+      pixels[slot + 1] = claro ? 200 : 60;
+      pixels[slot + 2] = claro ? 180 : 80;
+      pixels[slot + 3] = 255;
+    }
+  }
+  return encodePng(pixels, width, height);
+}
+
+/**
+ * Mapa de normales plano: `(128, 128, 255)` es el vector sin perturbar.
+ *
+ * Con una ondulación suave en x e y para que no sea literalmente constante — un
+ * mapa plano perfecto pasaría la comprobación por la puerta de atrás, y lo que se
+ * quiere probar es que un mapa de normales **de verdad** la pasa.
+ */
+export function normalPng(width = 256, height = 256) {
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let fila = 0; fila < height; fila += 1) {
+    for (let columna = 0; columna < width; columna += 1) {
+      const x = Math.sin((columna / width) * Math.PI * 4) * 0.3;
+      const y = Math.sin((fila / height) * Math.PI * 4) * 0.3;
+      const z = Math.sqrt(Math.max(0, 1 - x * x - y * y));
+      const slot = (fila * width + columna) * 4;
+      pixels[slot] = Math.round((x * 0.5 + 0.5) * 255);
+      pixels[slot + 1] = Math.round((y * 0.5 + 0.5) * 255);
+      pixels[slot + 2] = Math.round((z * 0.5 + 0.5) * 255);
+      pixels[slot + 3] = 255;
+    }
+  }
+  return encodePng(pixels, width, height);
+}
+
 /**
  * Escribe el asset. `cambios` permite a la puerta torcer una pieza sin reescribir
  * el fixture entero: un proxy encogido, un LOD que no simplifica, un presupuesto
- * imposible.
+ * imposible, una textura que no es lo que dice ser.
  */
 export function writeProductionAsset(destination, cambios = {}) {
   const piezas = [
@@ -195,17 +244,16 @@ export function writeProductionAsset(destination, cambios = {}) {
   rmSync(temp, { recursive: true, force: true });
   mkdirSync(temp, { recursive: true });
 
+  const texturas = cambios.texturas ?? [];
   const artifacts = [];
   for (const pieza of piezas) {
     // En GLB cuando el asset quiere coordenadas de textura: **un PLY no las puede
     // expresar**, así que el formato decide qué preguntas admite el artifact.
     const enGlb = (cambios.glb ?? []).includes(pieza.id);
-    const contenido = enGlb
-      ? writeGlbOnePart(
-          pieza.mesh,
-          (cambios.sinUvs ?? []).includes(pieza.id) ? undefined : sphericalUvs(pieza.mesh),
-        )
-      : writeMeshPly(pieza.mesh);
+    const uvs = (cambios.sinUvs ?? []).includes(pieza.id)
+      ? undefined
+      : escalarUvs(sphericalUvs(pieza.mesh), cambios.uvScale ?? 1);
+    const contenido = enGlb ? writeGlbOnePart(pieza.mesh, uvs) : writeMeshPly(pieza.mesh);
     const nombre = `${pieza.id}.${enGlb ? "glb" : "ply"}`;
     writeFileSync(join(temp, nombre), contenido);
     artifacts.push({
@@ -219,6 +267,23 @@ export function writeProductionAsset(destination, cambios = {}) {
     });
   }
 
+  for (const textura of texturas) {
+    const bytes =
+      textura.usage === "NORMAL" && textura.contenido !== "damero"
+        ? normalPng(textura.width ?? 256, textura.height ?? 256)
+        : checkerPng(textura.width ?? 256, textura.height ?? 256);
+    const nombre = `${textura.id}.png`;
+    writeFileSync(join(temp, nombre), bytes);
+    artifacts.push({
+      id: textura.id,
+      path: nombre,
+      bytes: bytes.length,
+      sha256: sha256(bytes),
+      role: "TEXTURE",
+      usage: textura.usage,
+    });
+  }
+
   const manifest = {
     documentType: "softsight.production-asset",
     contractVersion: "0.1",
@@ -226,6 +291,7 @@ export function writeProductionAsset(destination, cambios = {}) {
     state: "SEALED",
     producer: { name: "softsight/productionAsset", version: "0.1.0" },
     artifacts,
+    ...(cambios.materials === undefined ? {} : { materials: cambios.materials }),
     target: cambios.target ?? {
       preset: "escritorio-medio",
       budgets: [

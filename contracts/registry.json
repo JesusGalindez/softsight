@@ -11,8 +11,8 @@
     },
     {
       "name": "production-asset",
-      "sha256": "57d49cb7bea4cc081ce449623ba6f239f55173c8570126f6386b946f438b276b",
-      "bytes": 9118
+      "sha256": "394671404a44fd91f41bce372b26582c6b0cc1810e58e4c25a7f03110ef10175",
+      "bytes": 13180
     },
     {
       "name": "reconstruction-package",

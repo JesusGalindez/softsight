@@ -303,6 +303,14 @@ export type { SurfaceVisibility } from "./reconstruction/coverage";
 export { PRODUCTION_ASSET_SCHEMA } from "./production/manifest";
 export { SILHOUETTE_RESOLUTION, SILHOUETTE_VIEWS, compareSilhouettes } from "./production/silhouette";
 export { UV_DEGENERATE_AREA, UV_GRID, auditUvs } from "./production/uv";
+export { NORMAL_MAX_BELOW_HORIZON, NORMAL_MIN_BLUE, NORMAL_MIN_LENGTH, auditMaterials, auditTexture } from "./production/texture";
+export type {
+  DeclaredMaterial,
+  MaterialIssue,
+  TextureAudit,
+  TextureImage,
+  TextureUsage,
+} from "./production/texture";
 export type { UvAudit } from "./production/uv";
 export type { SilhouetteComparison, SilhouetteView } from "./production/silhouette";
 export { CONTAINMENT_SAMPLES, buildProductionReport } from "./production/report";

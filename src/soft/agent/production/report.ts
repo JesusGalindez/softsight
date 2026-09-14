@@ -40,6 +40,15 @@ import { evaluateBudgets, type BudgetResult, type DeclaredBudget } from "../reco
 import { sampleMesh } from "../reconstruction/surfaceSampling";
 import { compareSilhouettes, type SilhouetteComparison } from "./silhouette";
 import { auditUvs, type UvAudit } from "./uv";
+import {
+  auditMaterials,
+  auditTexture,
+  type DeclaredMaterial,
+  type MaterialIssue,
+  type TextureAudit,
+  type TextureImage,
+  type TextureUsage,
+} from "./texture";
 
 /** Muestras con las que se juzga la contención. */
 export const CONTAINMENT_SAMPLES = 4_000;
@@ -51,12 +60,14 @@ export const CONTAINMENT_SAMPLES = 4_000;
  */
 export const CONTAINMENT_OFFSET = 2.3e-7;
 
-export type ProductionRole = "MASTER" | "LOD" | "COLLISION";
+export type ProductionRole = "MASTER" | "LOD" | "COLLISION" | "TEXTURE";
 
 export interface ProductionArtifact {
   id: string;
   role: ProductionRole;
   level?: number;
+  /** Qué canal alimenta la imagen. Solo con `role: TEXTURE`. */
+  usage?: TextureUsage;
   sha256: string;
 }
 
@@ -68,6 +79,12 @@ export interface ProductionMeasurement extends MeshAudit {
   uv: UvAudit;
   /** Un veredicto por criterio de UV, contra lo que el destino declare. */
   uvVerdicts: { present: LodVerdict; overlap: LodVerdict; density: LodVerdict; outside: LodVerdict };
+  /**
+   * Densidad en **téxeles** por unidad de mundo, cuando un material ata esta
+   * malla a una textura de color. Ausente si no lo hace: sin saber cuánto mide la
+   * imagen, la densidad solo es relativa a sí misma.
+   */
+  texelDensity?: { median: number; p05: number; textureSide: number };
 }
 
 export interface LodDerivation {
@@ -140,6 +157,10 @@ export interface ProductionReport {
   lods: LodDerivation[];
   collision?: CollisionCheck;
   budgets: BudgetResult[];
+  /** R13: una entrada por imagen declarada. Vacío si el asset no trae texturas. */
+  textures: TextureAudit[];
+  /** R13: lo que los materiales se contradicen diciendo. Sin abrir una imagen. */
+  materialIssues: MaterialIssue[];
   issues: Array<{ reason: string; message: string }>;
 }
 
@@ -152,6 +173,9 @@ export interface ProductionInput {
       budgets?: Array<DeclaredBudget & { role?: ProductionRole }>;
       collisionTolerance?: number;
       lodDeviationMax?: number;
+      textureMaxSize?: number;
+      texturePowerOfTwo?: boolean;
+      texelDensityMin?: number;
       uvRequired?: boolean;
       uvOverlapMax?: number;
       uvDensitySpreadMax?: number;
@@ -161,9 +185,12 @@ export interface ProductionInput {
       lodBoundsMax?: number;
     };
     artifacts?: ProductionArtifact[];
+    materials?: DeclaredMaterial[];
   };
   /** Las mallas ya leídas, por identidad de artifact. */
   meshes: ReadonlyMap<string, Mesh>;
+  /** Las imágenes ya decodificadas, por identidad de artifact. El IO vive fuera. */
+  images?: ReadonlyMap<string, TextureImage>;
   /**
    * Si cada malla traía coordenadas de textura, leído de donde todavía se
    * distingue. Sin esto, «sin UV» y «todas las UV en cero» serían el mismo array.
@@ -219,6 +246,8 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
 
   const measurements: ProductionMeasurement[] = [];
   for (const artifact of artifacts) {
+    // Una textura no es una malla y no se mide como tal. Va aparte, abajo.
+    if (artifact.role === "TEXTURE") continue;
     const mesh = meshes.get(artifact.id);
     if (mesh === undefined) continue;
     const uv = auditUvs(mesh, input.uvPresence?.get(artifact.id) === true);
@@ -469,6 +498,55 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
     budgets.push({ ...resultado, name: budget.role === undefined ? budget.name : `${budget.name}@${budget.role}` });
   }
 
+  // R13: las imágenes declaradas, y lo que los materiales se contradicen.
+  const textures: TextureAudit[] = [];
+  for (const artifact of artifacts) {
+    if (artifact.role !== "TEXTURE") continue;
+    const image = input.images?.get(artifact.id);
+    if (image === undefined || artifact.usage === undefined) continue;
+    textures.push(auditTexture(artifact.id, artifact.usage as TextureUsage, image));
+  }
+
+  const materialIssues = auditMaterials(manifest.materials ?? [], {
+    roles: new Map(artifacts.map((artifact) => [artifact.id, artifact.role])),
+    uvPresence: new Map(
+      measurements.map((medida) => [medida.appliesTo.artifactId, medida.uv.present]),
+    ),
+    outsideUnitSquare: new Map(
+      measurements.map((medida) => [medida.appliesTo.artifactId, medida.uv.outsideUnitSquare ?? 0]),
+    ),
+  });
+
+  // **La densidad de téxel de verdad**, ahora que se sabe cuánto mide la imagen.
+  // La de la auditoría de UV es por unidad de mundo y solo compara una parte de
+  // la pieza con otra; multiplicada por el lado de su textura, el número sale en
+  // téxeles y se puede comparar con un destino.
+  const texturaDe = new Map<string, TextureAudit>();
+  for (const material of manifest.materials ?? []) {
+    const baseColor = material.textures?.baseColor;
+    if (baseColor === undefined) continue;
+    const auditoria = textures.find((textura) => textura.artifactId === baseColor);
+    if (auditoria === undefined) continue;
+    for (const mallaId of material.appliesTo) texturaDe.set(mallaId, auditoria);
+  }
+  for (const medida of measurements) {
+    const textura = texturaDe.get(medida.appliesTo.artifactId);
+    if (textura === undefined || medida.uv.texelDensity === undefined) continue;
+    medida.texelDensity = {
+      median: medida.uv.texelDensity.median * textura.maxSide,
+      p05: medida.uv.texelDensity.p05 * textura.maxSide,
+      textureSide: textura.maxSide,
+    };
+    medida.uvVerdicts.density =
+      manifest.target?.texelDensityMin === undefined
+        ? medida.uvVerdicts.density
+        : medida.texelDensity.p05 >= manifest.target.texelDensityMin
+          ? medida.uvVerdicts.density === "FAIL"
+            ? "FAIL"
+            : "PASS"
+          : "FAIL";
+  }
+
   let certification: ProductionReport["certification"] = "PASS";
   let reason: string | undefined;
   if (issues.length > 0) {
@@ -477,6 +555,25 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
   } else if (collision?.verdict === "FAIL") {
     certification = "FAIL";
     reason = "LA_MAESTRA_ASOMA_DE_LA_COLISION";
+  } else if (materialIssues.length > 0) {
+    // Se contradice el manifest consigo mismo: no hace falta abrir nada.
+    certification = "FAIL";
+    reason = materialIssues[0].reason;
+  } else if (
+    manifest.target?.textureMaxSize !== undefined &&
+    textures.some((textura) => textura.maxSide > manifest.target!.textureMaxSize!)
+  ) {
+    certification = "FAIL";
+    reason = "TEXTURA_DEMASIADO_GRANDE";
+  } else if (
+    manifest.target?.texturePowerOfTwo === true &&
+    textures.some((textura) => !textura.powerOfTwo)
+  ) {
+    certification = "FAIL";
+    reason = "TEXTURA_NO_POTENCIA_DE_DOS";
+  } else if (textures.some((textura) => textura.reason !== undefined)) {
+    certification = "FAIL";
+    reason = textures.find((textura) => textura.reason !== undefined)!.reason!;
   } else if (measurements.some((medida) => Object.values(medida.uvVerdicts).includes("FAIL"))) {
     certification = "FAIL";
     const culpable = measurements.find((medida) =>
@@ -520,6 +617,8 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
     lods,
     ...(collision === undefined ? {} : { collision }),
     budgets,
+    textures,
+    materialIssues,
     issues,
   };
 }

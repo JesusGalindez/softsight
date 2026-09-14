@@ -80,6 +80,17 @@ export interface UvAudit {
   overlapRatio?: number;
   /** Fracción del cuadrado unidad que las islas ocupan: cuánto atlas se aprovecha. */
   utilization?: number;
+  /**
+   * Fracción de triángulos cuyo bobinado en UV va al revés que el de la mayoría:
+   * **islas espejadas**.
+   *
+   * No es un defecto — espejar media pieza para ahorrar atlas es una técnica
+   * corriente— pero **obliga a que la tangente lleve signo**, y un pipeline que
+   * lo ignore pinta el relieve al revés en esa mitad. Es la auditoría de
+   * tangentes que R13 pide, reducida a lo único que se puede afirmar sin
+   * tangentes declaradas: cuánta superficie las necesita con signo.
+   */
+  mirroredRatio?: number;
   gridResolution?: number;
 }
 
@@ -128,6 +139,8 @@ export function auditUvs(mesh: Mesh, hasUvs: boolean, grid = UV_GRID): UvAudit {
   const triangleCount = indices.length / 3;
 
   let degenerate = 0;
+  let positivos = 0;
+  let negativos = 0;
   const densities: number[] = [];
   const min: [number, number] = [Infinity, Infinity];
   const max: [number, number] = [-Infinity, -Infinity];
@@ -154,11 +167,14 @@ export function auditUvs(mesh: Mesh, hasUvs: boolean, grid = UV_GRID): UvAudit {
     const a = indices[triangle * 3];
     const b = indices[triangle * 3 + 1];
     const c = indices[triangle * 3 + 2];
-    const area = Math.abs(uvArea(uvs, a, b, c));
+    const firmada = uvArea(uvs, a, b, c);
+    const area = Math.abs(firmada);
     if (area <= UV_DEGENERATE_AREA) {
       degenerate += 1;
       continue;
     }
+    if (firmada > 0) positivos += 1;
+    else negativos += 1;
     areaSumada += area;
     const mundo = worldArea(positions, a, b, c);
     // Téxeles por unidad de mundo: la raíz porque las dos áreas son cuadradas y
@@ -233,6 +249,11 @@ export function auditUvs(mesh: Mesh, hasUvs: boolean, grid = UV_GRID): UvAudit {
             spread: quantile(densities, 0.05) === 0 ? 0 : quantile(densities, 0.95) / quantile(densities, 0.05),
           },
     overlapRatio: solape,
+    // Contra la mayoría y no contra un signo fijo: qué sentido es «el derecho»
+    // depende del bobinado de la malla, y fijarlo aquí llamaría espejada a una
+    // pieza entera que simplemente se desplegó al revés.
+    mirroredRatio:
+      positivos + negativos === 0 ? 0 : Math.min(positivos, negativos) / (positivos + negativos),
     utilization: ocupadas / (grid * grid),
     gridResolution: grid,
   };

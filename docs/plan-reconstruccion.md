@@ -3311,9 +3311,42 @@ barren la textura entera.
 el destino; **no se le exige al proxy de colisión**, que no se pinta. Los otros
 tres son topes sin defecto, como los de R12.
 
-**Lo que falta de R13**: tangentes, textura y material. Los tres necesitan **la
-imagen como fichero**, que el manifest todavía no declara — y medir densidad de
-téxel en téxeles de verdad, no por unidad de mundo, pide saber su tamaño.
+**Y el resto de R13, el mismo día.** El manifest gana artifacts con
+`role: TEXTURE` y su `usage`, y un bloque `materials` que ata imagen a malla con
+su modo de repetición.
+
+**Eso cierra un hueco que quedó escrito.** La auditoría de UV publicaba vértices
+fuera del cuadrado unidad y decía que no podía juzgarlos: «depende del modo de
+repetición del material, que este documento todavía no describe». Ahora lo
+describe, y con `wrap: CLAMP` una UV en 1,7 es una contradicción del manifest
+consigo mismo — cazada **sin abrir una sola imagen**, como las de `SS-RECON`. Con
+`REPEAT` las mismas UV son un mosaico, que es una técnica.
+
+**El tamaño de la imagen desbloquea la densidad de verdad.** La de la auditoría de
+UV es por unidad de mundo y solo compara la pieza consigo misma; multiplicada por
+el lado de su textura sale en téxeles y ya significa algo fuera del asset: 63
+téxeles por unidad con una textura de 256. Sin material que ate una textura, el
+número está **ausente y no a cero**.
+
+**La comprobación de normales se cayó y hubo que rehacerla.** Un mapa de color
+enchufado en el canal de normales se lee sin error y el motor lo usa; lo que sale
+es relieve absurdo. La primera medida fue azul medio y norma media, y **un damero
+corriente las pasó** —0,51 y 0,98, las dos por los pelos—: promediar un canal que
+salta entre dos extremos da justo el centro, que es donde estaba el umbral. Lo que
+sí distingue es que una normal en espacio tangente **nunca apunta hacia dentro**,
+así que su z es siempre positivo; el damero tiene el 50 % de sus píxeles por
+debajo. Sigue sin ser una prueba —un degradado azul pasaría— y por eso el informe
+publica los tres números y no solo el veredicto.
+
+La auditoría de tangentes se reduce a lo único que se puede afirmar sin tangentes
+declaradas: **cuánta superficie está espejada**. No es un defecto —espejar media
+pieza para ahorrar atlas es corriente— pero obliga a que la tangente lleve signo,
+y un pipeline que lo ignore pinta el relieve al revés en esa mitad.
+
+**Lo que falta de R13**: nada de lo que el manifest declara. Queda medir contra
+tangentes **escritas en el fichero** —comparar las declaradas con las derivadas—,
+que pide leerlas del GLB, y la compresión de la imagen, que pide decodificar
+formatos que no son PNG.
 
 ---
 

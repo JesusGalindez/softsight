@@ -654,10 +654,19 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       en el lector, donde todavía se distingue. Y el solape hubo que rehacerlo:
       contando celdas daba 1,0000 sobre cualquier malla, porque dos triángulos
       vecinos comparten las celdas de su arista y la adyacencia no es solape.
-    - Diez puertas nuevas, `test:masks`, `test:producer-superficie`,
+    - **Y el resto de R13: textura y material.** El manifest gana artifacts
+      `TEXTURE` y un bloque `materials`, y con ellos **se cierra un hueco que
+      quedó escrito**: la auditoría de UV decía que no podía juzgar una UV fuera
+      del cuadrado «porque el documento no describe el modo de repetición». Ahora
+      lo describe, y con `CLAMP` es una contradicción del manifest consigo mismo.
+      El tamaño de la imagen convierte la densidad relativa en téxeles de verdad.
+      Y la comprobación de normales se cayó y hubo que rehacerla: azul medio y
+      norma media **las pasaba un damero corriente**, y lo que sí distingue es que
+      una normal tangente nunca apunta hacia dentro.
+    - Once puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
-      `test:repair`, `test:production`, `test:lod-qa` y `test:uv-qa`, y un
-      identificador nuevo,
+      `test:repair`, `test:production`, `test:lod-qa`, `test:uv-qa` y
+      `test:texture-qa`, y un identificador nuevo,
       `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a los que esperan
       respuesta. Ningún hash del rasterizador se movió.
 
