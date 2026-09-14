@@ -296,6 +296,10 @@ export { projectPoint } from "./reconstruction/camera";
 export { COVERAGE_RAY_OFFSET, computeCoverage, coverageVerdict } from "./reconstruction/coverage";
 export type { Coverage, CoverageOptions, CoverageRegions } from "./reconstruction/coverage";
 export { sampleMesh } from "./reconstruction/surfaceSampling";
+export { computeVisibility, seesPoint } from "./reconstruction/coverage";
+export type { SurfaceVisibility } from "./reconstruction/coverage";
+export { DEFAULT_PARALLAX_DEGREES, computeConfidence } from "./reconstruction/confidence";
+export type { Confidence, ConfidenceOptions, SupportClass, SupportDistribution } from "./reconstruction/confidence";
 export { FRAMES, auditTransforms, resolveFrame } from "./reconstruction/frameGraph";
 export type { Frame, FrameTransform } from "./reconstruction/frameGraph";
 export {

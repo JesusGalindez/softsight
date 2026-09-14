@@ -114,6 +114,8 @@ export interface CoverageOptions {
   purelyReconstructed?: boolean;
   /** Árbol ya construido, para no rehacerlo cuando quien llama ya lo tiene. */
   tree?: TriangleBoundsTree;
+  /** Visibilidad ya calculada: es el grueso del coste y se comparte con R6. */
+  visibility?: SurfaceVisibility;
 }
 
 /**
@@ -129,7 +131,7 @@ export interface CoverageOptions {
  * 3. **Nada se interpone.** Un rayo desde el punto hasta la cámara que choque
  *    antes de llegar dice que hay superficie en medio.
  */
-function seesPoint(
+export function seesPoint(
   camera: PackageCamera,
   tree: TriangleBoundsTree,
   point: readonly number[],
@@ -167,11 +169,30 @@ function seesPoint(
   return hit === null;
 }
 
-export function computeCoverage(
+/**
+ * Qué cámaras ven cada muestra de la superficie.
+ *
+ * Se calcula **una vez** y lo leen las dos medidas de R6: la cobertura cuenta
+ * cuántas, y la confianza mira desde dónde. Calcularlo dos veces no sería solo
+ * el doble de rayos —que ya es el grueso del coste— sino dos implementaciones de
+ * «la cámara ve el punto», que es exactamente la clase de dato que acaba
+ * divergiendo y dando dos informes que no se pueden cruzar.
+ */
+export interface SurfaceVisibility {
+  points: Float64Array;
+  normals: Float64Array;
+  count: number;
+  /** Índices de cámara que ven cada muestra, en orden de cámara. */
+  seenBy: number[][];
+  /** Magnitud mayor de coordenada: la escala a la que van los epsilon. */
+  magnitude: number;
+}
+
+export function computeVisibility(
   mesh: Mesh,
   cameras: readonly PackageCamera[],
   options: CoverageOptions = {},
-): Coverage {
+): SurfaceVisibility {
   const samples = options.samples ?? 20_000;
   const seed = options.seed ?? 1;
   const tree = options.tree ?? buildTriangleBoundsTree(mesh);
@@ -183,28 +204,41 @@ export function computeCoverage(
   }
   const offset = COVERAGE_RAY_OFFSET * (magnitude || 1);
 
+  const seenBy: number[][] = [];
+  for (let sample = 0; sample < set.count; sample += 1) {
+    const point = [set.points[sample * 3], set.points[sample * 3 + 1], set.points[sample * 3 + 2]];
+    const normal = [set.normals[sample * 3], set.normals[sample * 3 + 1], set.normals[sample * 3 + 2]];
+    const visible: number[] = [];
+    // En orden de cámara y no según convenga: la lista tiene que ser la misma en
+    // dos ejecuciones, que es la regla del reparto (§86.3 m).
+    for (let index = 0; index < cameras.length; index += 1) {
+      if (seesPoint(cameras[index], tree, point, normal, offset)) visible.push(index);
+    }
+    seenBy.push(visible);
+  }
+
+  return { points: set.points, normals: set.normals, count: set.count, seenBy, magnitude };
+}
+
+export function computeCoverage(
+  mesh: Mesh,
+  cameras: readonly PackageCamera[],
+  options: CoverageOptions = {},
+): Coverage {
+  const visibility = options.visibility ?? computeVisibility(mesh, cameras, options);
+
   // Histograma por número de cámaras que ven la muestra. Se publica entero: el
   // reparto dice si la cobertura viene de muchas vistas flojas o de pocas buenas,
   // y los tres ratios solos no lo distinguen.
   const bySeenBy = new Array<number>(cameras.length + 1).fill(0);
-  for (let sample = 0; sample < set.count; sample += 1) {
-    const point = [set.points[sample * 3], set.points[sample * 3 + 1], set.points[sample * 3 + 2]];
-    const normal = [set.normals[sample * 3], set.normals[sample * 3 + 1], set.normals[sample * 3 + 2]];
-    let seen = 0;
-    // En orden de cámara y no según convenga: la suma tiene que ser la misma en
-    // dos ejecuciones, que es la regla del reparto (§86.3 m).
-    for (const camera of cameras) {
-      if (seesPoint(camera, tree, point, normal, offset)) seen += 1;
-    }
-    bySeenBy[seen] += 1;
-  }
+  for (const visible of visibility.seenBy) bySeenBy[visible.length] += 1;
 
   // Cada ratio se cuenta del histograma y **ninguno se deriva de otro**: con
   // `observada = 1 − sin ver` las identidades dejan de ser exactas por el último
   // bit, y entonces «lo débil es todo lo observado» —que con una sola cámara es
   // cierto por construcción— sale falso por 4e-17. Son cocientes de enteros; que
   // cuadren es gratis si se calculan así.
-  const total = set.count || 1;
+  const total = visibility.count || 1;
   const unobserved = bySeenBy[0] / total;
   const weak = (bySeenBy[1] ?? 0) / total;
   const observed = (total - bySeenBy[0]) / total;
@@ -218,8 +252,8 @@ export function computeCoverage(
   return {
     measurementClass: "APPROXIMATE",
     reproducibility: "BITWISE_EXACT",
-    seed,
-    samples: set.count,
+    seed: options.seed ?? 1,
+    samples: visibility.count,
     areaWeighted: true,
     observedAreaRatio: observed,
     triangulatedAreaRatio: triangulated,

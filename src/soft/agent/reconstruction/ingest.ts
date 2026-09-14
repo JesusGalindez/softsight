@@ -71,10 +71,11 @@ export const EXTENSION_POLICY = "preservar-y-declarar" as const;
  * se hace sería prometerlo, y un productor que lo pidiera recibiría un PASS sobre
  * algo que nadie midió.
  *
- * `confidence` **sigue fuera** a propósito: necesita los residuales multivista de
- * R8, que piden profundidad y máscaras. Un paquete que la requiera sale
- * UNSUPPORTED, que es justo el caso que la negociación existe para contestar
- * bien. `coverage` estuvo ahí hasta que R0-B dejó de estar pendiente.
+ * `confidence` a secas **sigue fuera** a propósito, y `confidence-geometric` es lo
+ * que hay: el segundo dice desde dónde se miró y el primero diría si lo que se ve
+ * encaja con las fotos, que son los residuales de R8. Un paquete que pida
+ * `confidence` sale UNSUPPORTED, que es justo el caso que la negociación existe
+ * para contestar bien en vez de devolver un informe que contesta otra pregunta.
  */
 export const SUPPORTED_CAPABILITIES: readonly string[] = [
   "mesh-audit",
@@ -85,6 +86,14 @@ export const SUPPORTED_CAPABILITIES: readonly string[] = [
   // existía para contestar bien: un paquete que la pidiera salía UNSUPPORTED en
   // vez de recibir un informe que no hablaba de cobertura.
   "coverage",
+  // **`confidence-geometric` y no `confidence`.** Lo que existe dice desde dónde
+  // se miró —ángulo de triangulación, oblicuidad, muestreo en el suelo—, y eso se
+  // deduce de la malla y el CameraSet. Lo que un productor pide cuando escribe
+  // `confidence` a secas es lo otro: si la superficie **coincide con lo que las
+  // fotos muestran**, que son los residuales de R8 y piden profundidad y
+  // máscaras. Declarar `confidence` aquí sería el sobreanuncio que D31 existe
+  // para impedir.
+  "confidence-geometric",
 ];
 
 /**

@@ -492,8 +492,16 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       con cuatro vistas y cero débil; con una sola, el 16,7 % observado es todo
       débil, una cara de seis exacta. El veredicto sale **INCONCLUSIVE cuando el
       umbral cae dentro del intervalo**, que es el §86.3 (k) hecho prueba.
-      `coverage` pasa a capacidad declarada; `confidence` sigue fuera y es el caso
-      vivo de D31.
+      Y con ella **la confianza geométrica**, que corrige una afirmación que duró
+      unas horas: no necesita entera los residuales de R8. La pregunta «¿desde
+      dónde se miró?» sale de la malla y el CameraSet; la que los necesita es
+      «¿coincide con lo que las fotos muestran?». Hace falta aparte de la
+      cobertura porque **dos cámaras casi juntas triangulan para ella y no para
+      la geometría**: medido, 16,7 % triangulado y el 100 % de eso con paralaje
+      de 0,73°. No sale un número entre 0 y 1 a propósito —sería el riesgo R8,
+      confianza tratada como exacta— sino fracciones de área por clase. Se
+      declaran `coverage` y `confidence-geometric`; **`confidence` a secas sigue
+      fuera**, porque quien la pide está pidiendo los residuales.
     - **R1.5 declarado, y R4 y R5 cerrados.** Con ellos entran cuatro puertas
       nuevas: `test:bands`, `test:mesh-diff`, `test:mesh-topology` y
       `test:self-intersection`. El diff de R5 se alcanza además desde fuera

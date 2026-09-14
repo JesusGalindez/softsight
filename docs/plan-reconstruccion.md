@@ -2808,9 +2808,41 @@ reconstruida el número **se reporta y no certifica**, con su motivo.
 `confidence` sigue fuera y es ahora el caso vivo de la negociación de D31:
 necesita los residuales multivista de R8, que piden profundidad y máscaras.
 
-**Lo que falta de R6**: confianza, provenance por región y el cruce sobre datos
-reales — un SfM disperso no tiene superficie que cubrir, así que eso espera a un
-productor que entregue malla.
+**Y la confianza geométrica, el mismo día**, en `reconstruction/confidence.ts` con
+puerta `test:confidence`. Corrige de paso una afirmación que este documento tuvo
+durante unas horas: **la confianza no necesita entera los residuales de R8**. Lo
+que los necesita es la pregunta «¿la superficie coincide con lo que las fotos
+muestran?». La pregunta «¿desde dónde se miró?» sale de la malla y del CameraSet.
+
+**Por qué hace falta aparte de la cobertura**, y es el caso que la puerta ejerce:
+dos cámaras separadas un 1 % de su distancia ven el mismo punto las dos, así que
+la cobertura lo cuenta como triangulado y da un número espléndido. Medido: **16,7 %
+triangulado según la cobertura, y el 100 % de eso es paralaje corto**, con una
+mediana de 0,73°. Un paquete puede salir observado y estar sostenido por aire.
+
+```text
+SIN_EVIDENCIA     ninguna cámara
+SIN_TRIANGULAR    una
+PARALAJE_CORTO    dos o más, y el mayor ángulo no llega al suelo
+SOSTENIDA         dos o más con ángulo suficiente
+```
+
+**No sale un número entre 0 y 1**, y es deliberado: emitir `confidence: 0.87`
+invita a leerlo como una probabilidad que nadie aquí puede sostener — es el riesgo
+R8 del contrato, «confianza tratada como exacta». Salen fracciones de área por
+clase y los percentiles del ángulo, que son medidas.
+
+El suelo de paralaje va **declarado y sustituible**: cinco grados es la frontera
+práctica de la fotogrametría, pero una pieza pequeña de cerca y un edificio de
+lejos no toleran lo mismo. Es criterio sobre la pieza, como el presupuesto de D9.
+
+La capacidad se declara **`confidence-geometric` y no `confidence`**: quien pide
+la segunda está pidiendo los residuales, y decir que sí sería el sobreanuncio que
+D31 existe para impedir.
+
+**Lo que falta de R6**: la confianza por residuales (R8), provenance por región, y
+el cruce sobre datos reales — un SfM disperso no tiene superficie que cubrir, así
+que eso espera a un productor que entregue malla.
 
 ---
 
