@@ -222,6 +222,12 @@ export const PACKAGE_CODE_TABLE = {
     status: "PROPUESTO",
     decision: "D33 fija que las dimensiones describen la rejilla real, sin número",
   },
+  "SS-CAM-007": {
+    reason: "MASCARA_NO_APLICABLE",
+    cause: "una máscara declarada no describe el encuadre de su cámara, o apunta a algo que no está, o no se puede leer; no se aplica y se dice en vez de medir con media silueta",
+    status: "PROPUESTO",
+    decision: "D30 abre el espacio de lo experimental, sin número",
+  },
 
   // El espacio `SS-IO`: leer ficheros de otro. Son los topes de `limits.ts` y la
   // lectura que no se puede completar, y se separan de `SS-PKG` porque no dicen

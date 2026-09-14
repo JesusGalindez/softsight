@@ -73,6 +73,7 @@ export function imageGrid(bytes) {
   throw new Error("IMAGEN_NO_SOPORTADA: no es un PNG ni un JPEG con cabecera legible");
 }
 import {
+  MASK_EXTENSION,
   PACKAGE_CODES,
   PACKAGE_CODE_TABLE,
   RESOURCE_LIMITS,
@@ -80,8 +81,10 @@ import {
   auditMesh,
   buildReconstructionReport,
   ingestPackage,
+  maskMismatch,
   parsePlyAscii,
 } from "../dist-node/agent3d.mjs";
+import { decodePng } from "./agent3d.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
@@ -240,6 +243,13 @@ export function inspectPackage(manifestPath, { samples } = {}) {
     }
   }
 
+  // Las siluetas, que aquí sí se abren. La ingesta ya comprobó el reparto —qué
+  // cámara y qué artifact—, y lo que falta es lo que exige decodificar: que la
+  // máscara describa **este** encuadre. Una que no lo haga no se aplica y se
+  // dice, porque medir con media silueta daría un número que nadie podría
+  // interpretar y que nada delataría.
+  const masks = loadMasks(manifest, ingest);
+
   // La superficie que se cruza con las cámaras (R6). La primera malla admitida y
   // el CameraSet: si el paquete trae varias, cruzar la primera y callar las demás
   // sería peor que no cruzar ninguna, así que se dice cuál.
@@ -254,6 +264,7 @@ export function inspectPackage(manifestPath, { samples } = {}) {
             (manifest.artifacts ?? []).find((artifact) => artifact.id === primeraMalla.artifactId)
               ?.purelyReconstructed === true,
           samples: samples,
+          masks,
         };
 
   const report = buildReconstructionReport({
@@ -292,6 +303,67 @@ function plyErrorCode(message) {
  * será el bonito. Aquí todo sale del JSON ya construido — si un campo no está en
  * el informe, tampoco aparece abajo.
  */
+/**
+ * Las siluetas declaradas por la extensión, abiertas y comprobadas.
+ *
+ * El canal lo decide el tipo de PNG y no una heurística: **un gris es la propia
+ * máscara** —lo que un segmentador escribe cuando escribe una máscara— y **un
+ * RGBA es un recorte**, donde lo que dice qué es pieza es el alfa. Adivinarlo
+ * mirando los datos fallaría justo en los casos raros: una máscara toda blanca y
+ * un recorte todo opaco son indistinguibles por contenido.
+ *
+ * Lo que no se puede aplicar se cuenta como incidencia con `MASCARA_NO_APLICABLE`
+ * y se deja fuera. El resto se aplica igual: una silueta rota no es motivo para
+ * tirar las que sí están.
+ */
+function loadMasks(manifest, ingest) {
+  const entry = (manifest.extensions ?? {})[MASK_EXTENSION];
+  if (entry === undefined) return undefined;
+
+  const rutas = new Map(ingest.artifacts.map((artifact) => [artifact.id, artifact.realPath]));
+  const camaras = new Map((manifest.cameras ?? []).map((camera) => [camera.id, camera]));
+  const masks = new Map();
+  const fallo = (mensaje) => {
+    ingest.issues.push({
+      code: PACKAGE_CODES.MASCARA_NO_APLICABLE,
+      reason: PACKAGE_CODE_TABLE[PACKAGE_CODES.MASCARA_NO_APLICABLE].reason,
+      message: mensaje,
+    });
+  };
+
+  for (const [cameraId, artifactId] of Object.entries(entry.data?.porCamara ?? {})) {
+    const camera = camaras.get(cameraId);
+    const ruta = rutas.get(artifactId);
+    // La ingesta ya avisó de los dos casos: aquí solo se salta.
+    if (camera === undefined || ruta === undefined) continue;
+
+    let png = null;
+    try {
+      png = decodePng(readFileSync(ruta));
+    } catch (error) {
+      fallo(`cámara ${cameraId}: su máscara ${artifactId} no se puede abrir (${error.message})`);
+      continue;
+    }
+    const canal = png.colorType === 0 ? 0 : 3;
+    const coverage = new Uint8Array(png.width * png.height);
+    for (let index = 0; index < coverage.length; index += 1) {
+      coverage[index] = png.pixels[index * 4 + canal];
+    }
+    const mask = { width: png.width, height: png.height, coverage };
+
+    const problema = maskMismatch(mask, camera);
+    if (problema !== null) {
+      fallo(
+        `cámara ${cameraId}: su máscara ${artifactId} es ${png.width}×${png.height} sobre una imagen ` +
+          `de ${camera.width}×${camera.height} (${problema})`,
+      );
+      continue;
+    }
+    masks.set(cameraId, mask);
+  }
+  return masks.size === 0 ? undefined : masks;
+}
+
 export function renderHuman(report) {
   const pct = (value) => `${(value * 100).toFixed(1)} %`;
   const lineas = [];
@@ -333,6 +405,14 @@ export function renderHuman(report) {
         `(${pct(c.interval[0])}–${pct(c.interval[1])}, ${c.samples} muestras por área)`,
     );
     lineas.push(`            ${pct(c.unobservedAreaRatio)} sin ver · ${pct(c.weakAreaRatio)} sin triangular`);
+    // Con siluetas y sin ellas se miden cosas distintas, y el número solo no lo
+    // dice. Sin ninguna se escribe también: el silencio se leería como que las
+    // había.
+    lineas.push(
+      c.maskedCameras > 0
+        ? `            siluetas aplicadas en ${c.maskedCameras} de ${report.cameras.declared} cámaras`
+        : "            sin siluetas: lo que proyecta sobre el fondo cuenta como visto",
+    );
     if (!c.certificationEligible) lineas.push(`            no certifica: ${c.reason}`);
   }
   if (report.confidence) {

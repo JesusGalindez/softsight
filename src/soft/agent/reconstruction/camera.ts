@@ -43,6 +43,14 @@ export interface CameraDistortion {
 }
 
 export interface PackageCamera {
+  /**
+   * Identidad de la cámara en el paquete. Opcional porque la proyección no la
+   * usa —es geometría pura— y obligatoria de hecho para quien reparta datos por
+   * cámara, como las máscaras: sin ella, el reparto solo puede ir por posición,
+   * y una posición desplazada aplica la silueta de una foto a otra sin que nada
+   * falle.
+   */
+  id?: string;
   width: number;
   height: number;
   pixelOrigin: "TOP_LEFT" | "BOTTOM_LEFT";

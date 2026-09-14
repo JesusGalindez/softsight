@@ -17,14 +17,14 @@ abierto, y por definición: está bloqueado fuera. Qué quedó de cada tarea lo 
 [`mapa-del-proyecto.md`](mapa-del-proyecto.md) §5 y el registro de decisiones
 lleva su cuenta; aquí no se repite.
 
-**Lo que queda no es trabajo de este repositorio**, y está en el §5.20 del mapa
+**Lo que queda no es trabajo de este repositorio**, y está en el §5.21 del mapa
 con su dueño al lado. Las tres cosas del dueño se cerraron el 2026-09-13 —el
 envío 02 mandado, el idioma de los códigos decidido en español, y el COLMAP real
 descargado y con D4 cerrada—, así que **del dueño no queda nada**. R0-B y los 28
 identificadores son de VideoMesh; E1, Ω6.4 y F1 viven en el editor.
 
 El documento se queda **como plantilla**: las reglas de §1 y la forma de §2 valen
-para el encargo siguiente, que empezará por donde el §5.20 diga que se ha
+para el encargo siguiente, que empezará por donde el §5.21 diga que se ha
 desbloqueado.
 
 ---

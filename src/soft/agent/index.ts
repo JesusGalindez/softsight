@@ -270,6 +270,7 @@ export {
   EXTENSION_POLICY,
   PACKAGE_CODES,
   SUPPORTED_CAPABILITIES,
+  MASK_EXTENSION,
   SUPPORTED_EXTENSIONS,
   exitCodeFor,
   ingestPackage,
@@ -299,6 +300,8 @@ export type { Coverage, CoverageOptions, CoverageRegions } from "./reconstructio
 export { sampleMesh } from "./reconstruction/surfaceSampling";
 export { computeVisibility, seesPoint } from "./reconstruction/coverage";
 export type { SurfaceVisibility } from "./reconstruction/coverage";
+export { MASK_THRESHOLD, MASK_ASPECT_TOLERANCE, maskAllows, maskMismatch } from "./reconstruction/masks";
+export type { CameraMask, MaskSet } from "./reconstruction/masks";
 export { DEFAULT_PARALLAX_DEGREES, computeConfidence } from "./reconstruction/confidence";
 export type { Confidence, ConfidenceOptions, SupportClass, SupportDistribution } from "./reconstruction/confidence";
 export { FRAMES, auditTransforms, resolveFrame } from "./reconstruction/frameGraph";

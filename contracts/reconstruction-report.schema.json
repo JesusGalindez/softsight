@@ -506,6 +506,10 @@
           },
           "description": "Muestras por número de cámaras que las ven."
         },
+        "maskedCameras": {
+          "type": "number",
+          "description": "De cuántas cámaras se aplicó la silueta. Cero significa que el número es puramente geométrico y **cuenta como observada la superficie que proyecta sobre el fondo**; no significa que no hubiera fondo."
+        },
         "provenanceAware": {
           "type": "boolean",
           "description": "Falso en v1, y se dice (D21)."
@@ -533,6 +537,7 @@
         "standardError",
         "interval",
         "bySeenBy",
+        "maskedCameras",
         "provenanceAware",
         "certificationEligible"
       ],

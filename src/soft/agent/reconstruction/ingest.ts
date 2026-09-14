@@ -43,14 +43,36 @@ export interface ArtifactStat {
 export const SUPPORTED_CONTRACT_VERSIONS = ["0.1"] as const;
 
 /**
- * Qué extensiones entiende este binario. **Hoy ninguna**, y decirlo así es la
- * respuesta honesta: una lista con nombres inventados para que la prueba
- * discrimine sería declarar frontera un experimento que nadie ha escrito.
+ * La extensión de las siluetas: qué píxeles de cada imagen son la pieza.
+ *
+ * Va por el espacio experimental de D30 y **no por el contrato** a propósito.
+ * Añadir un tipo de artifact `MASK` al esquema publicado sería declarar frontera
+ * algo que nadie de fuera ha confirmado todavía; por aquí un productor puede
+ * mandarlas hoy, este binario las honra, y el día que se acuerden suben al
+ * contrato sin que nadie haya tenido que adivinar su forma mientras tanto.
+ *
+ * Su carga es un mapa de identidad de cámara a identidad de artifact:
+ *
+ * ```json
+ * "org.softsight.mascaras": {
+ *   "required": false,
+ *   "data": { "porCamara": { "img-1": "mascara-1" } }
+ * }
+ * ```
+ *
+ * `required: false` es lo sensato: una cobertura sin siluetas es una medida
+ * distinta, no una medida rota, y un consumidor que no las entienda tiene que
+ * poder seguir midiendo lo que sí entiende.
+ */
+export const MASK_EXTENSION = "org.softsight.mascaras";
+
+/**
+ * Qué extensiones entiende este binario.
  *
  * Se puede sustituir por parámetro, igual que `schemaHashes`, porque quien sabe
  * qué entiende un despliegue concreto no es este módulo.
  */
-export const SUPPORTED_EXTENSIONS: readonly string[] = [];
+export const SUPPORTED_EXTENSIONS: readonly string[] = [MASK_EXTENSION];
 
 /**
  * La política de D30 para la extensión **opcional** desconocida, que la decisión
@@ -212,6 +234,7 @@ export const PACKAGE_CODES = {
   HASH_DE_IMAGEN_NO_COINCIDE: "SS-CAM-001",
   IMAGEN_DE_CAMARA_AUSENTE: "SS-CAM-002",
   RECTIFICADA_CON_DISTORSION: "SS-CAM-003",
+  MASCARA_NO_APLICABLE: "SS-CAM-007",
   // Lo emite el CLI y no este módulo: comprobarlo exige **decodificar la
   // imagen**, y aquí no hay IO a propósito. El identificador vive igual en la
   // tabla, que es lo que el otro lado parsea.
@@ -326,7 +349,7 @@ export function ingestPackage(
     }>;
     frameGraph?: { transforms: FrameTransform[] };
     budgets?: Array<{ name: string; units: string; unit?: string; max: number }>;
-    extensions?: Record<string, { required?: boolean }>;
+    extensions?: Record<string, { required?: boolean; data?: Record<string, unknown> }>;
     state: string;
     artifacts: Array<{
       id: string;
@@ -625,6 +648,39 @@ export function ingestPackage(
           `${where}: imageSpace RECTIFIED con ${Object.keys(camera.distortion ?? {}).join(", ")}`,
         ),
       );
+    }
+  }
+
+  // Las siluetas, ahora que las cámaras y los artifacts ya están admitidos. Se
+  // comprueba **el reparto**, no el contenido: que cada clave sea una cámara
+  // declarada y cada valor un artifact que existe. Si la silueta describe o no
+  // el encuadre exige abrir el fichero, y aquí no hay IO — eso lo dice el CLI
+  // con este mismo identificador.
+  const maskEntry = (document.extensions ?? {})[MASK_EXTENSION] as
+    | { data?: { porCamara?: Record<string, string> } }
+    | undefined;
+
+  if (maskEntry !== undefined) {
+    const cameraIds = new Set((document.cameras ?? []).map((camera) => camera.id));
+    const artifactIds = new Set(artifacts.map((artifact) => artifact.id));
+    for (const [cameraId, artifactId] of Object.entries(maskEntry.data?.porCamara ?? {})) {
+      if (!cameraIds.has(cameraId)) {
+        issues.push(
+          issue(
+            PACKAGE_CODES.MASCARA_NO_APLICABLE,
+            `la extensión de siluetas reparte una máscara a ${cameraId}, que no es una cámara declarada`,
+          ),
+        );
+        continue;
+      }
+      if (!artifactIds.has(artifactId)) {
+        issues.push(
+          issue(
+            PACKAGE_CODES.MASCARA_NO_APLICABLE,
+            `cámara ${cameraId}: su máscara ${artifactId} no es un artifact admitido`,
+          ),
+        );
+      }
     }
   }
 

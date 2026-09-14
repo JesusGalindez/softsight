@@ -2840,9 +2840,26 @@ La capacidad se declara **`confidence-geometric` y no `confidence`**: quien pide
 la segunda está pidiendo los residuales, y decir que sí sería el sobreanuncio que
 D31 existe para impedir.
 
+**El cruce sobre datos reales, cerrado el 2026-09-14.** Lo que faltaba no era
+densidad sino **superficie**: `producers/superficie` la fabrica en CPU a partir de
+la nube dispersa —normales por PCA orientadas hacia la cámara más cercana, campo
+con signo y surface nets—, y con ella `south-building` mide 72,7 % observada,
+27,4 % que nadie miró y 48,4 % sostenida con paralaje mediano de 36,2°, sobre
+ocho vistas reales. La malla sale abierta donde no hubo evidencia, que es la
+diferencia con Poisson y la respuesta honesta para esta pregunta.
+
+**Y las siluetas, el mismo día.** Las tres condiciones de `seesPoint` son
+geométricas y ninguna mira la foto, así que una muestra que proyecta sobre el
+cielo salía observada — justo en el borde de la silueta, donde el mallador
+extiende superficie más allá de la evidencia. Con máscara, el contorno recorta;
+`coverage.maskedCameras` declara de cuántas cámaras se aplicó, porque un ratio
+medido con siluetas y otro sin ellas **no son comparables**. Entran por
+`org.softsight.mascaras`, el espacio experimental de D30, y no por el contrato.
+
 **Lo que falta de R6**: la confianza por residuales (R8), provenance por región, y
-el cruce sobre datos reales — un SfM disperso no tiene superficie que cubrir, así
-que eso espera a un productor que entregue malla.
+siluetas sobre datos reales — segmentarlas pide SAM2, que exige Python 3.10 y
+torch 2.3, y esta máquina tiene 3.9 y torch se quedó en 2.2.2 para macOS Intel.
+Lo que falta ahí es el fichero, no el camino.
 
 ---
 

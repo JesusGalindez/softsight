@@ -27,6 +27,7 @@ import { resolveFrame, type Frame, type FrameTransform } from "./frameGraph";
 import { CAPABILITY_POLICY, EXTENSION_POLICY, PACKAGE_CODES } from "./ingest";
 import { PACKAGE_CODE_TABLE } from "./codes";
 import { computeCoverage, computeVisibility, type Coverage } from "./coverage";
+import type { MaskSet } from "./masks";
 import { computeConfidence, type Confidence } from "./confidence";
 import type { IngestIssue, IngestResult } from "./ingest";
 import { RESOURCE_LIMIT_LIST } from "./limits";
@@ -64,7 +65,14 @@ export interface ReportInput {
    * Malla y cámaras para cruzar la superficie con la evidencia (R6). Las pasa
    * quien leyó el paquete: aquí no hay IO.
    */
-  surface?: { mesh: Mesh; cameras: PackageCamera[]; purelyReconstructed: boolean; samples?: number };
+  surface?: {
+    mesh: Mesh;
+    cameras: PackageCamera[];
+    purelyReconstructed: boolean;
+    samples?: number;
+    /** Siluetas por identidad de cámara, si el paquete las declaró. */
+    masks?: MaskSet;
+  };
 }
 
 /**
@@ -336,7 +344,7 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
     const samples = input.surface.samples ?? 8_000;
     // Una sola pasada de visibilidad para las dos medidas: es el grueso del coste
     // y, sobre todo, dos recorridos darían dos fronteras que no se pueden cruzar.
-    const visibility = computeVisibility(mesh, cameras, { samples });
+    const visibility = computeVisibility(mesh, cameras, { samples, masks: input.surface.masks });
     coverage = computeCoverage(mesh, cameras, { visibility, purelyReconstructed, samples });
     confidence = computeConfidence(mesh, cameras, { visibility, purelyReconstructed, samples });
 
@@ -663,6 +671,7 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
       standardError: { type: "number", required: true, description: "Error estándar del ratio observado." },
       interval: { type: "number[2]", required: true, description: "Dos sigmas, recortado a [0,1]." },
       bySeenBy: { type: "number[]", required: true, description: "Muestras por número de cámaras que las ven." },
+      maskedCameras: { type: "number", required: true, description: "De cuántas cámaras se aplicó la silueta. Cero significa que el número es puramente geométrico y **cuenta como observada la superficie que proyecta sobre el fondo**; no significa que no hubiera fondo." },
       provenanceAware: { type: "boolean", required: true, description: "Falso en v1, y se dice (D21)." },
       certificationEligible: { type: "boolean", required: true, description: "Si el número certifica o solo se reporta." },
       reason: { type: "string", description: "Motivo cuando no certifica; ausente cuando sí." },

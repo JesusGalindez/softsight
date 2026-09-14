@@ -1151,10 +1151,19 @@ extensions["foo"]                          clave sin espacio de nombres → erro
 **La política que la decisión dejaba abierta se elige: preservar y declarar.**
 Ignorar en silencio tiene el mismo problema que aceptar un campo desconocido —el
 productor cree que mandó algo que se usó—, así que el informe publica `policy`,
-`honoured` e `ignored`. Lo que este binario entiende hoy es **nada**, y decirlo
-así es la respuesta honesta: `SUPPORTED_EXTENSIONS` está vacía y se sustituye por
-parámetro, como `schemaHashes`. El último caso de la puerta existe por eso: sin
-él, un binario que declarase todo desconocido también la aprobaría.
+`honoured` e `ignored`. `SUPPORTED_EXTENSIONS` se sustituye por parámetro, igual
+que `schemaHashes`, porque quién entiende qué es cosa de cada despliegue. El
+último caso de la puerta existe por eso: sin él, un binario que declarase todo
+desconocido también la aprobaría.
+
+**Y el 2026-09-14 el espacio dejó de estar vacío.** `org.softsight.mascaras`
+—las siluetas: qué píxeles de cada foto son la pieza— es la primera extensión que
+este binario honra, y entró por aquí y no por el contrato a propósito: añadir un
+tipo de artifact `MASK` al esquema publicado sería declarar frontera algo que
+nadie de fuera ha confirmado. Por el espacio experimental un productor puede
+mandarlas hoy, y el día que se acuerden suben al contrato sin que nadie haya
+tenido que adivinar su forma mientras tanto. Eso es exactamente para lo que D30
+abrió el espacio, y hasta hoy no lo usaba nadie.
 
 Un tercer objeto opaco entra en la lista de la puerta, y **su opacidad es la
 decisión**: la carga de una extensión es del productor. Lo que no es libre es su

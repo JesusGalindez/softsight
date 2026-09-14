@@ -52,6 +52,7 @@
 import { buildTriangleBoundsTree, raycast, type TriangleBoundsTree } from "../boundsTree";
 import type { Mesh } from "../../mesh";
 import { projectPoint, type PackageCamera } from "./camera";
+import { maskAllows, type CameraMask, type MaskSet } from "./masks";
 import { sampleMesh } from "./surfaceSampling";
 
 /**
@@ -95,6 +96,12 @@ export interface Coverage extends CoverageRegions {
   interval: [number, number];
   /** Cuántas muestras ve cada número de cámaras: `[0 cámaras, 1, 2, …]`. */
   bySeenBy: number[];
+  /**
+   * De cuántas cámaras se aplicó la silueta. Cero significa que el número es
+   * puramente geométrico y **cuenta como observada la superficie que proyecta
+   * sobre el fondo**; no significa que no hubiera fondo.
+   */
+  maskedCameras: number;
   /** D21: coverage v1 no sabe de provenance, y lo dice en vez de callarlo. */
   provenanceAware: false;
   /** Si el número puede certificar, o solo reportarse (D21). */
@@ -116,6 +123,12 @@ export interface CoverageOptions {
   tree?: TriangleBoundsTree;
   /** Visibilidad ya calculada: es el grueso del coste y se comparte con R6. */
   visibility?: SurfaceVisibility;
+  /**
+   * Siluetas por identidad de cámara. Las cámaras que no aparezcan se miden como
+   * siempre: ausente es «no hay información», no «no aparece nada» (ver
+   * `masks.ts`).
+   */
+  masks?: MaskSet;
 }
 
 /**
@@ -130,6 +143,10 @@ export interface CoverageOptions {
  *    una esfera saldría observada al 100 % desde una sola cámara.
  * 3. **Nada se interpone.** Un rayo desde el punto hasta la cámara que choque
  *    antes de llegar dice que hay superficie en medio.
+ * 4. **La foto tiene pieza en ese píxel**, si hay máscara que lo diga. Las tres
+ *    de arriba son geometría y ninguna mira la fotografía, así que una muestra
+ *    que proyecta sobre el cielo sale observada. Sin máscara no hay información
+ *    y manda la geometría; con ella, el contorno recorta.
  */
 export function seesPoint(
   camera: PackageCamera,
@@ -137,12 +154,16 @@ export function seesPoint(
   point: readonly number[],
   normal: readonly number[],
   offset: number,
+  mask?: CameraMask,
 ): boolean {
   const projected = projectPoint(camera, point);
   if (projected.depth <= 0) return false;
   if (projected.x < 0 || projected.y < 0 || projected.x >= camera.width || projected.y >= camera.height) {
     return false;
   }
+  // Antes que el rayo: un píxel fuera de la silueta no necesita que se compruebe
+  // qué hay en medio, y el rayo es el grueso del coste.
+  if (!maskAllows(mask, projected.x, projected.y, camera)) return false;
 
   // Posición de la cámara en el mundo: la traslación de `worldFromCamera`, que va
   // en 3, 7 y 11 porque la matriz es por filas (D32).
@@ -186,6 +207,12 @@ export interface SurfaceVisibility {
   seenBy: number[][];
   /** Magnitud mayor de coordenada: la escala a la que van los epsilon. */
   magnitude: number;
+  /**
+   * Cuántas de las cámaras traían silueta. Se publica porque un ratio medido con
+   * máscaras y otro sin ellas **no son comparables**, y desde el número solo no
+   * se distinguen.
+   */
+  maskedCameras: number;
 }
 
 export function computeVisibility(
@@ -204,6 +231,16 @@ export function computeVisibility(
   }
   const offset = COVERAGE_RAY_OFFSET * (magnitude || 1);
 
+  // Se resuelven una vez y por identidad: buscar por índice aplicaría la silueta
+  // de una foto a otra sin que nada fallara.
+  // Una cámara sin identidad no puede recibir silueta: repartirlas por posición
+  // es el fallo que nada delata.
+  const masks = cameras.map((camera) =>
+    camera.id === undefined ? undefined : options.masks?.get(camera.id),
+  );
+  let maskedCameras = 0;
+  for (const mask of masks) if (mask !== undefined) maskedCameras += 1;
+
   const seenBy: number[][] = [];
   for (let sample = 0; sample < set.count; sample += 1) {
     const point = [set.points[sample * 3], set.points[sample * 3 + 1], set.points[sample * 3 + 2]];
@@ -212,12 +249,12 @@ export function computeVisibility(
     // En orden de cámara y no según convenga: la lista tiene que ser la misma en
     // dos ejecuciones, que es la regla del reparto (§86.3 m).
     for (let index = 0; index < cameras.length; index += 1) {
-      if (seesPoint(cameras[index], tree, point, normal, offset)) visible.push(index);
+      if (seesPoint(cameras[index], tree, point, normal, offset, masks[index])) visible.push(index);
     }
     seenBy.push(visible);
   }
 
-  return { points: set.points, normals: set.normals, count: set.count, seenBy, magnitude };
+  return { points: set.points, normals: set.normals, count: set.count, seenBy, magnitude, maskedCameras };
 }
 
 export function computeCoverage(
@@ -267,6 +304,7 @@ export function computeCoverage(
       Math.min(1, observed + 2 * standardError),
     ],
     bySeenBy,
+    maskedCameras: visibility.maskedCameras,
     provenanceAware: false,
     certificationEligible: purely,
     ...(purely ? {} : { reason: "MALLA_NO_PURAMENTE_RECONSTRUIDA" }),

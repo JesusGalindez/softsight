@@ -483,7 +483,7 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     - **Y aparece el segundo productor**, `producers/colmap/`, que es lo que D26
       exigía y no existía: escribe un paquete desde la salida de COLMAP sin
       importar nada del verificador, y sus ocho poses coinciden con las del
-      adaptador **exactas a 0**. Ver el §5.20.
+      adaptador **exactas a 0**. Ver el §5.21.
     - **Con R0-B cumplido se desbloquea R6 y entra la cobertura**, que es la
       pregunta para la que existe esta capa: una malla puede estar impecable y
       describir una trasera que nadie fotografió. Tres regiones —sin observar,
@@ -523,7 +523,54 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     - Nada de esto movió un hash: el pliego del dron sigue en `46228b7c`,
       `contractVersion` en 3 y `bridgeContractVersion` en 1.
 
-20. **Qué queda, y de quién es.** Del lado de este repositorio **no queda nada
+20. **Jornada del 2026-09-14 — la superficie, y las siluetas.** Dos piezas, y
+    las dos salen de la misma respuesta: la reconstrucción densa exige CUDA en
+    los dos caminos que existen —`patch_match_stereo` de COLMAP y el nodo
+    `DepthMap` de Meshroom, cuyos desarrolladores han dicho que no piensan
+    portarlo— y esta máquina no tiene GPU NVIDIA. Así que se hizo lo que sí corre
+    en CPU y desbloquea más.
+
+    - **`producers/superficie`: la nube dispersa se hace superficie.** Normales
+      por PCA sobre los k vecinos, orientadas **hacia la cámara más cercana** —el
+      paquete trae las cámaras, así que el lado de fuera no se propaga por un
+      árbol de expansión, se sabe—, campo con signo por distancia al plano
+      tangente y surface nets. **No es Poisson y no se llama Poisson:** Poisson
+      cierra la superficie aunque no haya datos, y esto deja agujero donde no hay
+      evidencia, que para lo que R6 mide es la respuesta honesta.
+    - **Y con ella, R6 deja de medir solo sobre el cubo.** `south-building`, ocho
+      vistas, 16.210 puntos → 8.214 triángulos: **72,7 % observada, 27,4 % que
+      nadie miró, 48,4 % sostenida** con paralaje mediano de 36,2°. Ninguna
+      imagen renderizada habría delatado ese 27,4 %. La puerta juzga con una
+      esfera, que corre sin el fixture pesado: área 12,587 contra 4π = 12,566,
+      cerrada, y las 21.640 caras hacia fuera —esa última caza el orden de los
+      quads invertido, que no se ve en ninguna otra medida—.
+    - **Las siluetas, y el falso positivo que matan.** Las tres condiciones de
+      `seesPoint` son geométricas y **ninguna mira la foto**, así que una muestra
+      que proyecta sobre el cielo salía observada. Eso pasa en el borde de la
+      silueta, donde el mallador extiende superficie más allá de donde hubo
+      evidencia: la cobertura se inflaba **donde más engaña**. Ahora el contorno
+      recorta, y `coverage.maskedCameras` lo declara —cero no significa que no
+      hubiera fondo, significa que el número es puramente geométrico—.
+    - **Ausente no es vacía**, y es la distinción que decide el módulo: sin
+      máscara no hay información y manda la geometría; con máscara vacía, esa
+      cámara no ve nada. Las dos igualdades que lo prueban salen **exactas**:
+      llena en todas ≡ medir sin máscaras, y vacía en la k ≡ quitar la cámara k
+      del CameraSet.
+    - **La primera extensión que este binario honra.** Las siluetas entran por
+      `org.softsight.mascaras`, el espacio experimental de D30, y **no por el
+      contrato**: añadir un tipo de artifact `MASK` al esquema publicado sería
+      declarar frontera algo que nadie de fuera ha confirmado. `SUPPORTED_EXTENSIONS`
+      llevaba vacía desde que se escribió.
+    - **Lo que no se pudo hacer, y por qué.** Segmentar de verdad —SAM2, que
+      `img2threejs` ya integra— pide Python 3.10 y torch 2.3; esta máquina tiene
+      3.9 y torch se quedó en 2.2.2 para macOS Intel. Lo que falta es **el
+      fichero, no el camino**: el paquete que traiga siluetas se mide con lo que
+      ya está puesto.
+    - Dos puertas nuevas, `test:masks` y `test:producer-superficie`, y un
+      identificador nuevo, `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a
+      los que esperan respuesta. Ningún hash del rasterizador se movió.
+
+21. **Qué queda, y de quién es.** Del lado de este repositorio **no queda nada
     que no dependa de otro**, y conviene que esté dicho en un sitio en vez de
     deducirse.
 
@@ -558,8 +605,10 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       desde el 2026-09-13**, que es un segundo productor de verdad: no importa
       nada del verificador y coincide con el adaptador exacta a 0 en las ocho
       poses. Lo que le falta para promover el contrato a 1.0 es **superficie**: un
-      SfM disperso no entrega malla, así que las comparaciones de recuentos y caja
-      de D23 no tienen qué comparar. Llegan con Meshroom o con el denso de COLMAP.
+      SfM disperso no entrega malla. **Desde el 2026-09-14 la superficie existe**
+      —`producers/superficie` la fabrica en CPU—, así que las comparaciones de
+      recuentos y caja de D23 ya tienen qué comparar; lo que les falta ahora son
+      **valores dorados**, que es otra cosa y más pequeña.
     - **Los 28 identificadores siguen sin fijar**, y sigue estando bien: se fijan
       cuando un segundo productor los grabe en sus pruebas, venga de donde venga.
 

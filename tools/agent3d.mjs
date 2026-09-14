@@ -161,6 +161,11 @@ export function encodePng(pixels, width, height) {
  * es sumar la predicción, en orden, porque cada fila se apoya en la ya
  * reconstruida. Paeth elige entre los tres el que menos se desvía de `a+b-c`.
  *
+ * Lee RGBA de 8 bits y **gris de 8 bits**, que es como salen las siluetas de un
+ * segmentador. El gris se expande a RGBA con alfa opaco: así todo lo de abajo
+ * trabaja sobre una sola forma, y quien necesite saber de cuál venía lo tiene en
+ * `colorType`, que se devuelve porque en una máscara decide qué canal manda.
+ *
  * No pretende leer cualquier PNG: entrelazado, paleta o 16 bits fallan con un
  * mensaje que lo dice. Un decodificador general aquí sería código sin uso.
  */
@@ -173,6 +178,11 @@ export function decodePng(buffer) {
   let offset = 8;
   let width = 0;
   let height = 0;
+  // Bytes por píxel en el fichero, que no son los de la salida: el gris ocupa
+  // uno y sale expandido a cuatro. El filtro de fila predice sobre **los del
+  // fichero**, así que el paso hacia la izquierda es este y no cuatro.
+  let channels = 4;
+  let kind = 6;
   const parts = [];
   while (offset < buffer.length) {
     const length = buffer.readUInt32BE(offset);
@@ -185,11 +195,13 @@ export function decodePng(buffer) {
       const bitDepth = buffer[start + 8];
       const colorType = buffer[start + 9];
       const interlace = buffer[start + 12];
-      if (bitDepth !== 8 || colorType !== 6 || interlace !== 0) {
+      if (bitDepth !== 8 || (colorType !== 6 && colorType !== 0) || interlace !== 0) {
         throw new Error(
-          `solo se leen PNG RGBA de 8 bits sin entrelazar; este es ${bitDepth} bits, tipo de color ${colorType}, entrelazado ${interlace}`,
+          `solo se leen PNG RGBA o gris de 8 bits sin entrelazar; este es ${bitDepth} bits, tipo de color ${colorType}, entrelazado ${interlace}`,
         );
       }
+      channels = colorType === 0 ? 1 : 4;
+      kind = colorType;
     } else if (type === "IDAT") {
       parts.push(buffer.subarray(start, start + length));
     } else if (type === "IEND") {
@@ -200,17 +212,19 @@ export function decodePng(buffer) {
   }
 
   const raw = inflateSync(Buffer.concat(parts));
-  const stride = width * 4;
-  const pixels = new Uint8ClampedArray(stride * height);
+  const stride = width * channels;
+  // Se deshace el filtro sobre una copia de los bytes del fichero y **después**
+  // se expande: hacerlo al revés metería los ceros del relleno en la predicción.
+  const plain = new Uint8ClampedArray(stride * height);
 
   for (let row = 0; row < height; row += 1) {
     const filter = raw[row * (stride + 1)];
     const source = row * (stride + 1) + 1;
     const target = row * stride;
     for (let index = 0; index < stride; index += 1) {
-      const left = index >= 4 ? pixels[target + index - 4] : 0;
-      const up = row > 0 ? pixels[target - stride + index] : 0;
-      const upLeft = row > 0 && index >= 4 ? pixels[target - stride + index - 4] : 0;
+      const left = index >= channels ? plain[target + index - channels] : 0;
+      const up = row > 0 ? plain[target - stride + index] : 0;
+      const upLeft = row > 0 && index >= channels ? plain[target - stride + index - channels] : 0;
       const value = raw[source + index];
       let prediction = 0;
       if (filter === 1) prediction = left;
@@ -230,11 +244,21 @@ export function decodePng(buffer) {
       } else if (filter !== 0) {
         throw new Error(`filtro de fila desconocido (${filter}) en la fila ${row}`);
       }
-      pixels[target + index] = (value + prediction) & 0xff;
+      plain[target + index] = (value + prediction) & 0xff;
     }
   }
 
-  return { pixels, width, height };
+  if (channels === 4) return { pixels: plain, width, height, colorType: kind };
+
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let index = 0; index < width * height; index += 1) {
+    const grey = plain[index];
+    pixels[index * 4] = grey;
+    pixels[index * 4 + 1] = grey;
+    pixels[index * 4 + 2] = grey;
+    pixels[index * 4 + 3] = 255;
+  }
+  return { pixels, width, height, colorType: kind };
 }
 
 /**
