@@ -19,6 +19,7 @@
 
 import { validate } from "../schema";
 import { PACKAGE_CODE_TABLE, type PackageCode } from "./codes";
+import { budgetCarriesScale } from "./budgets";
 import { auditTransforms, resolveFrame, type Frame, type FrameTransform } from "./frameGraph";
 import { RESOURCE_LIMITS, RESOURCE_LIMIT_REASONS } from "./limits";
 import { RECONSTRUCTION_PACKAGE_SCHEMA } from "./packageSchema";
@@ -455,6 +456,14 @@ export function ingestPackage(
   // presupuesto exigente, es una afirmación sin sentido. Se comprueba aquí y no
   // al evaluarlo —eso es R9— porque la contradicción está en el propio manifest y
   // no depende de haber medido nada.
+  //
+  // **La regla ata a lo que lleva escala dentro**, y desde R9 eso se sabe: la
+  // tabla de términos dice de cada uno si la lleva. Mil triángulos son mil en
+  // cualquier escala, así que exigir `scale.status` ABSOLUTE para presupuestar un
+  // recuento sería pedir un dato que no hace falta — y dejaría sin presupuestos a
+  // todo paquete de SfM, que nunca sabe a qué escala reconstruyó. Lo desconocido
+  // **sigue tratándose como si llevara escala**: no sabemos qué es, y suponer que
+  // no la lleva sería suponer a favor.
   const absoluteScale = document.scale?.status === "ABSOLUTE";
   for (const budget of document.budgets ?? []) {
     const where = `presupuesto ${budget.name}`;
@@ -463,7 +472,7 @@ export function ingestPackage(
         issues.push(issue(PACKAGE_CODES.UNIDAD_DE_PRESUPUESTO_MAL_DECLARADA, `${where}: absoluto y sin unidad`));
         continue;
       }
-      if (!absoluteScale) {
+      if (!absoluteScale && budgetCarriesScale(budget.name)) {
         issues.push(
           issue(
             PACKAGE_CODES.PRESUPUESTO_ABSOLUTO_SIN_ESCALA,

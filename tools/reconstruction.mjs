@@ -429,6 +429,24 @@ export function renderHuman(report) {
     }
   }
 
+  if (report.budgets.length > 0) {
+    lineas.push("");
+    lineas.push(`presupuestos ${report.budgets.length} declarados`);
+    for (const budget of report.budgets) {
+      const limite =
+        budget.units === "RELATIVE_TO_DIAGONAL"
+          ? `${budget.max} de diagonal`
+          : `${budget.max}${budget.unit ? ` ${budget.unit}` : ""}`;
+      // Lo medido **al lado del límite**: un veredicto sin el número obliga a
+      // recalcularlo para saber si se pasó por poco o por diez veces.
+      const medido = budget.observed === undefined ? "sin medir" : `${budget.observed}`;
+      lineas.push(
+        `  ${budget.name}  ${medido} de ${limite} · ${budget.verdict}` +
+          (budget.reason ? ` (${budget.reason})` : ""),
+      );
+    }
+  }
+
   if (report.captureAdvice && report.captureAdvice.suggestions.length > 0) {
     const a = report.captureAdvice;
     lineas.push("");

@@ -388,6 +388,20 @@ ABSOLUTE sin unidad                     SS-RECON-002
 RELATIVE_TO_DIAGONAL con unidad         SS-RECON-002
 ```
 
+**La primera fila se afinó el 2026-09-14, cuando R9 los evaluó de verdad.** La
+regla ata a lo que **lleva escala dentro**: medio metro de desviación sobre una
+reconstrucción sin escala no significa nada, pero mil triángulos son mil en
+cualquier escala. Aplicarla a un recuento obligaba a fijar la escala para poder
+presupuestar algo que no la usa — y dejaba sin presupuestos a **todo paquete de
+SfM**, que nunca sabe a qué escala reconstruyó. Ahora la magnitud la declara el
+vocabulario de R9, y la fila se lee «ABSOLUTE de una magnitud con escala».
+
+Lo **desconocido sigue rechazándose**, y se intentó al revés: un nombre fuera del
+vocabulario se trata como si llevara escala, porque no sabemos qué es y suponer
+que no la lleva sería suponer a favor. Quien lo probó permisivo se topó con la
+prueba de esta misma decisión —`desviación` en metros sobre escala RELATIVE—, que
+es una contradicción de verdad con un nombre que el vocabulario no tiene.
+
 La tercera fila no es simetría decorativa: **una fracción de diagonal no tiene
 unidad**, y ponerle una es declarar una escala por la puerta de atrás — el
 consumidor leería «0,01 m» donde el productor quiso decir «el 1 % de la pieza».

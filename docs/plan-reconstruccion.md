@@ -3001,9 +3001,32 @@ Medido sobre `south-building`: ocho fotos llevan la cobertura del 72,7 % al
 región del 5,3 % y gana más que otra del 10,2 %, que es lo que prueba que el orden
 lo pone la ganancia medida y no el tamaño de la carencia.
 
-**Lo que falta de R9**: el presupuesto de reconstrucción, el PASS/FAIL sobre él, y
-la comparación de candidatos —que se apoya en el diff de R5, ya alcanzable desde
-el CLI y desde el puente—.
+**Los presupuestos, el mismo día.** `budgets` estaba en el esquema desde R0 y
+**nadie lo leía**: la ingesta comprobaba que fueran coherentes con la escala y ahí
+se acababa, así que un paquete podía declarar `triangulos ≤ 5`, entregar doce y
+salir PASS con salida 0. Es el tercer campo del contrato que se rellenaba por
+educación, después del FrameGraph y de la provenance, y los tres se encontraron
+con la misma pregunta: **¿quién lee esto?**
+
+Ahora se evalúan contra lo medido y **uno excedido suspende**, con salida 1: el
+límite lo puso el productor, y aprobar por encima de él es lo que convertía el
+campo en decoración.
+
+El vocabulario es **cerrado** —nueve términos: cinco recuentos, un volumen y tres
+fracciones de R6—, porque `name` es texto libre y contra `suavidad` no se puede
+evaluar nada. La alternativa a cerrarlo no era «evaluar cualquier cosa», era
+callar y aprobar. Un nombre fuera se declara `NO_EVALUADO` con su motivo y **no
+toca el veredicto**; un término que sí se entiende y cuya medida falta deja el
+paquete **INCONCLUSIVE**, que no es ninguna de las dos cosas anteriores.
+
+Y se afinó D9: la regla de la escala ata a lo que **lleva escala dentro**. Mil
+triángulos son mil en cualquier escala, y exigir `scale.status` ABSOLUTE para
+presupuestarlos dejaba sin presupuestos a todo paquete de SfM. Lo desconocido
+sigue rechazándose, y no por prudencia abstracta: probarlo permisivo puso roja la
+puerta de D9, que presupuesta `desviación` en metros sobre escala RELATIVE.
+
+**Lo que falta de R9**: la comparación de candidatos —que se apoya en el diff de
+R5, ya alcanzable desde el CLI y desde el puente—.
 
 ---
 

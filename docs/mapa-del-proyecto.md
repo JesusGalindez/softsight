@@ -594,8 +594,21 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       superficie que pasa a estar sostenida—: sin ella, una sugerencia de base no
       ganaba nada y el consejo no sabía decir «sepárate». Se declara
       `capture-advice` y no `capture-plan`: no sabe de obstáculos ni de batería.
-    - Cuatro puertas nuevas, `test:masks`, `test:producer-superficie`,
-      `test:parity` y `test:capture-advice`, y un identificador nuevo,
+    - **Y los presupuestos dejan de ser decoración.** `budgets` estaba en el
+      esquema desde R0 y nadie lo leía: un paquete podía declarar `triangulos ≤ 5`,
+      entregar doce y salir PASS con salida 0. Tercer campo del contrato que se
+      rellenaba por educación, después del FrameGraph y de la provenance. Ahora se
+      evalúan contra lo medido y **uno excedido suspende**, con salida 1. El
+      vocabulario es cerrado —nueve términos— porque `name` es texto libre y
+      contra `suavidad` no se evalúa nada; lo que queda fuera sale `NO_EVALUADO` y
+      no toca el veredicto, y lo que se entiende pero no se pudo medir deja el
+      paquete INCONCLUSIVE. De paso se afinó D9: la regla de la escala ata a lo que
+      lleva escala dentro, porque mil triángulos son mil en cualquier escala.
+      **Aflojarla también para los nombres desconocidos duró media hora**: puso
+      roja la puerta de D9, que es donde vive el caso que la regla existe para
+      cazar.
+    - Cinco puertas nuevas, `test:masks`, `test:producer-superficie`,
+      `test:parity`, `test:capture-advice` y `test:budgets`, y un identificador nuevo,
       `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a los que esperan
       respuesta. Ningún hash del rasterizador se movió.
 

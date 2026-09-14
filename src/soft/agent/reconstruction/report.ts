@@ -28,6 +28,7 @@ import { CAPABILITY_POLICY, EXTENSION_POLICY, PACKAGE_CODES } from "./ingest";
 import { PACKAGE_CODE_TABLE } from "./codes";
 import { computeCoverage, computeVisibility, type Coverage } from "./coverage";
 import { computeCaptureAdvice, type CaptureAdvice } from "./captureAdvice";
+import { evaluateBudgets, type BudgetResult, type DeclaredBudget } from "./budgets";
 import type { MaskSet } from "./masks";
 import { computeConfidence, type Confidence } from "./confidence";
 import type { IngestIssue, IngestResult } from "./ingest";
@@ -212,6 +213,8 @@ export interface ReconstructionReport {
   confidence?: Confidence;
   /** R9: desde dónde disparar la próxima foto. Ausente por lo mismo que los dos de arriba. */
   captureAdvice?: CaptureAdvice;
+  /** R9: los presupuestos del paquete contra lo medido. Vacío si no declaró ninguno. */
+  budgets: BudgetResult[];
   scale: {
     status: string;
     source: string;
@@ -396,6 +399,37 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
     );
   }
 
+  // R9: los presupuestos, ya con todo medido. Van **después** de la cobertura
+  // porque tres de los términos salen de ella, y antes del veredicto porque lo
+  // pueden mover.
+  const budgets = evaluateBudgets((manifest.budgets ?? []) as DeclaredBudget[], {
+    measurements,
+    coverage,
+    confidence,
+  });
+
+  // Un presupuesto excedido **suspende**: es el productor quien puso el límite, y
+  // aprobar por encima de él convertiría el campo en decoración — que es lo que
+  // era hasta hoy. Va al final y no antes: los INCONCLUSIVE de arriba ganan,
+  // porque juzgar un presupuesto sobre un paquete que no se pudo leer sería
+  // afirmar algo de una geometría que nadie ha medido.
+  if (certification === "PASS") {
+    if (budgets.some((budget) => budget.verdict === "FAIL")) {
+      certification = "FAIL";
+      reason = "PRESUPUESTO_EXCEDIDO";
+    } else if (
+      // El término se entiende y la medida falta: ni se aprueba ni se suspende.
+      // Un término **desconocido** no llega aquí a propósito — suspender o dejar
+      // inconcluso a quien usa un vocabulario más nuevo que el nuestro sería
+      // castigarle por nuestra versión, la misma política que D30 elige para las
+      // extensiones opcionales.
+      budgets.some((budget) => budget.reason === "METRICA_REQUERIDA_NO_DISPONIBLE")
+    ) {
+      certification = "INCONCLUSIVE";
+      reason = "METRICA_REQUERIDA_NO_DISPONIBLE";
+    }
+  }
+
   return {
     documentType: "softsight.reconstruction-report",
     contractVersion: (manifest.contractVersion as string) ?? "0.0",
@@ -457,6 +491,7 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
       withImage: cameras.filter((camera) => imageIds.has(camera.imageArtifactId as string)).length,
     },
     ...(coverage === undefined ? {} : { coverage, confidence, captureAdvice }),
+    budgets,
     // Los de la superficie **detrás** de los de la ingesta: primero por qué el
     // paquete no se pudo leer, y solo después qué le falta a lo que sí se leyó.
     warnings: [...ingest.issues, ...surfaceWarnings],
@@ -734,6 +769,39 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
       provenanceAware: { type: "boolean", required: true, description: "Falso en v1 (D21)." },
       certificationEligible: { type: "boolean", required: true, description: "Si certifica o solo se reporta." },
       reason: { type: "string", description: "Motivo cuando no certifica." },
+    },
+  },
+  budgets: {
+    type: "object[]",
+    required: true,
+    description:
+      "Los presupuestos que el paquete declaró, evaluados contra lo medido (R9), en el orden en que " +
+      "los escribió. **Uno excedido suspende**: el límite lo puso el productor, y aprobar por encima " +
+      "de él convertiría el campo en decoración. Vacío cuando el paquete no declaró ninguno.",
+    fields: {
+      name: { type: "string", required: true, description: "El nombre declarado, tal cual." },
+      max: { type: "number", required: true, description: "El máximo declarado." },
+      units: { type: '"ABSOLUTE"|"RELATIVE_TO_DIAGONAL"', required: true, description: "Cómo se expresa el máximo." },
+      unit: { type: "string", description: "La unidad, cuando es absoluto." },
+      observed: { type: "number", description: "Lo medido en el paquete. Ausente cuando no se pudo evaluar." },
+      measures: { type: "string", description: "Qué mide el término, copiado del vocabulario: leer el informe no obliga a buscarlo." },
+      verdict: {
+        type: '"PASS"|"FAIL"|"NO_EVALUADO"',
+        required: true,
+        description:
+          "`NO_EVALUADO` **no es aprobado**: el informe dice término a término cuál se juzgó y cuál no.",
+      },
+      reason: {
+        type: "string",
+        required: false,
+        description:
+          "`PRESUPUESTO_EXCEDIDO` cuando suspende. `TERMINO_DESCONOCIDO` cuando el nombre no está en " +
+          "el vocabulario cerrado — y ese **no toca el veredicto**, porque suspender a quien usa un " +
+          "vocabulario más nuevo que el nuestro sería castigarle por nuestra versión. " +
+          "`METRICA_REQUERIDA_NO_DISPONIBLE` cuando el término se entiende y el dato falta, y ese sí " +
+          "deja el paquete inconcluso. `UNIDAD_DE_PRESUPUESTO_MAL_DECLARADA` cuando un recuento o una " +
+          "fracción se declaran relativos a la diagonal.",
+      },
     },
   },
   captureAdvice: {

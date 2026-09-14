@@ -688,6 +688,63 @@
       ],
       "description": "Desde dónde se miró cada región (R6). Ausente por lo mismo que `coverage`."
     },
+    "budgets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "El nombre declarado, tal cual."
+          },
+          "max": {
+            "type": "number",
+            "description": "El máximo declarado."
+          },
+          "units": {
+            "type": "string",
+            "enum": [
+              "ABSOLUTE",
+              "RELATIVE_TO_DIAGONAL"
+            ],
+            "description": "Cómo se expresa el máximo."
+          },
+          "unit": {
+            "type": "string",
+            "description": "La unidad, cuando es absoluto."
+          },
+          "observed": {
+            "type": "number",
+            "description": "Lo medido en el paquete. Ausente cuando no se pudo evaluar."
+          },
+          "measures": {
+            "type": "string",
+            "description": "Qué mide el término, copiado del vocabulario: leer el informe no obliga a buscarlo."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "FAIL",
+              "NO_EVALUADO"
+            ],
+            "description": "`NO_EVALUADO` **no es aprobado**: el informe dice término a término cuál se juzgó y cuál no."
+          },
+          "reason": {
+            "type": "string",
+            "description": "`PRESUPUESTO_EXCEDIDO` cuando suspende. `TERMINO_DESCONOCIDO` cuando el nombre no está en el vocabulario cerrado — y ese **no toca el veredicto**, porque suspender a quien usa un vocabulario más nuevo que el nuestro sería castigarle por nuestra versión. `METRICA_REQUERIDA_NO_DISPONIBLE` cuando el término se entiende y el dato falta, y ese sí deja el paquete inconcluso. `UNIDAD_DE_PRESUPUESTO_MAL_DECLARADA` cuando un recuento o una fracción se declaran relativos a la diagonal."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "max",
+          "units",
+          "verdict"
+        ]
+      },
+      "description": "Los presupuestos que el paquete declaró, evaluados contra lo medido (R9), en el orden en que los escribió. **Uno excedido suspende**: el límite lo puso el productor, y aprobar por encima de él convertiría el campo en decoración. Vacío cuando el paquete no declaró ninguno."
+    },
     "captureAdvice": {
       "type": "object",
       "properties": {
@@ -1088,6 +1145,7 @@
     "evidence",
     "measurements",
     "frames",
+    "budgets",
     "scale",
     "cameras",
     "warnings"
