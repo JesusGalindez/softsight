@@ -30,7 +30,48 @@ import { readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { decodePng } from "./agent3d.mjs";
+/**
+ * Ancho y alto de una imagen, **sin decodificarla**.
+ *
+ * D33 pide comparar las dimensiones que declara la cámara con la rejilla real, y
+ * para eso no hacen falta los píxeles: hacen falta dos números que viven en la
+ * cabecera. Antes esto llamaba a `decodePng`, que descomprime la imagen entera
+ * para leer dos enteros — y además **no sabía leer JPEG**, así que cualquier
+ * paquete de fotogrametría real salía UNSUPPORTED por sus propias fotos.
+ *
+ * PNG los pone en el IHDR, siempre en el mismo sitio. JPEG los lleva en el
+ * marcador SOF, que hay que buscar saltando segmentos: es el formato el que
+ * obliga, no el lector.
+ */
+export function imageGrid(bytes) {
+  if (
+    bytes.length > 24 &&
+    bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+  ) {
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  }
+  if (bytes.length > 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 9 < bytes.length) {
+      if (bytes[offset] !== 0xff) {
+        offset += 1;
+        continue;
+      }
+      const marker = bytes[offset + 1];
+      // Los SOF llevan las dimensiones. Se excluyen 0xC4, 0xC8 y 0xCC porque
+      // comparten el rango y no son SOF: son tablas de Huffman y extensiones.
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return { height: bytes.readUInt16BE(offset + 5), width: bytes.readUInt16BE(offset + 7) };
+      }
+      if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+        offset += 2;
+        continue;
+      }
+      offset += 2 + bytes.readUInt16BE(offset + 2);
+    }
+  }
+  throw new Error("IMAGEN_NO_SOPORTADA: no es un PNG ni un JPEG con cabecera legible");
+}
 import {
   PACKAGE_CODES,
   PACKAGE_CODE_TABLE,
@@ -167,8 +208,7 @@ export function inspectPackage(manifestPath) {
     if (path === undefined) continue;
     let grid = null;
     try {
-      const decoded = decodePng(readFileSync(path));
-      grid = { width: decoded.width, height: decoded.height };
+      grid = imageGrid(readFileSync(path));
     } catch {
       // Un formato de imagen que no sabemos abrir no es una cámara mal
       // declarada: se dice por su nombre y se sigue, igual que con el PLY.

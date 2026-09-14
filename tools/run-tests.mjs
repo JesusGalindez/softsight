@@ -56,6 +56,7 @@ const GATES = [
   "summary.test.mjs", // 4,3 s — renderiza el dron entero para medir el recorte
   "rig-spec.test.mjs", // 1,3 s
   "framing.test.mjs", // 4,1 s — renderiza cuatro fixtures para reproducir sus cajas
+  "producer-colmap.test.mjs", // 2,5 s de CPU con el fixture — R0-B: el segundo productor
   "self-intersection.test.mjs", // 0,2 s de CPU — cruces y, sobre todo, dónde calla
   "mesh-topology.test.mjs", // 0,2 s de CPU — componentes y bucles contra casos conocidos
   "mesh-diff.test.mjs", // 0,5 s de CPU — el diff contra casos de resultado conocido

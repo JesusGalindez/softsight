@@ -477,9 +477,13 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     [`plan-reconstruccion.md`](plan-reconstruccion.md) §71 y §86. Lo que cambió el
     estado:
 
-    - **Nueve decisiones pasan a IMPLEMENTADAS** —D4, D9, D10, D11, D12, D20, D30,
-      D31 y D33—, así que el registro va por **20 de 34**. `test:contracts` y
+    - **Diez decisiones pasan a IMPLEMENTADAS** —D4, D8, D9, D10, D11, D12, D20,
+      D30, D31 y D33—, así que el registro va por **21 de 34**. `test:contracts` y
       `test:colmap` salen de las puertas bloqueadas por falta de fixture.
+    - **Y aparece el segundo productor**, `producers/colmap/`, que es lo que D26
+      exigía y no existía: escribe un paquete desde la salida de COLMAP sin
+      importar nada del verificador, y sus ocho poses coinciden con las del
+      adaptador **exactas a 0**. Ver el §5.20.
     - **R1.5 declarado, y R4 y R5 cerrados.** Con ellos entran cuatro puertas
       nuevas: `test:bands`, `test:mesh-diff`, `test:mesh-topology` y
       `test:self-intersection`. El diff de R5 se alcanza además desde fuera
@@ -520,13 +524,19 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       medio de reproyección da 0,49697 px donde COLMAP declara 0,49703, sobre
       61.514 puntos. Con esto **del dueño no queda nada**.
 
-    **De VideoMesh:**
+    **De VideoMesh, que no existe.** Conviene que esté dicho: el contrato se
+    diseñó contra un consumidor que nunca se construyó, y los envíos 01 y 02
+    fueron a nadie. Eso no los invalida —siguen siendo la especificación de qué
+    tiene que hacer un segundo productor— pero cambia quién los cumple.
 
-    - **R0-B**, con su `cube-v1` y su `expected.json`. D34 es explícita: mientras
-      no pase, no avanza nada que dependa del contrato compartido — y eso incluye
-      **R6 entero**, porque cobertura y confianza están bloqueadas ahí.
-    - **Confirmar o cambiar los 28 identificadores.** Aquí cambiarlos cuesta un
-      sitio; después de que los graben, dos repositorios.
+    - ~~R0-B con el `cube-v1` de VideoMesh.~~ **Lo cumple `producers/colmap/`
+      desde el 2026-09-13**, que es un segundo productor de verdad: no importa
+      nada del verificador y coincide con el adaptador exacta a 0 en las ocho
+      poses. Lo que le falta para promover el contrato a 1.0 es **superficie**: un
+      SfM disperso no entrega malla, así que las comparaciones de recuentos y caja
+      de D23 no tienen qué comparar. Llegan con Meshroom o con el denso de COLMAP.
+    - **Los 28 identificadores siguen sin fijar**, y sigue estando bien: se fijan
+      cuando un segundo productor los grabe en sus pruebas, venga de donde venga.
 
     **Del editor:** la mitad de E1 —comparar sus cajas contra
     `artifacts/agent/encuadre-control.json`—, Ω6.4 y F1 del plan del motor.

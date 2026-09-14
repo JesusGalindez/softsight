@@ -90,10 +90,10 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-09-13:
 
 ```text
-ACORDADAS       14   D1, D2, D5, D8, D15, D18, D22, D23, D26–D29, D32, D34
+ACORDADAS       13   D1, D2, D5, D15, D18, D22, D23, D26–D29, D32, D34
 PROPUESTAS       0
-IMPLEMENTADAS   20   D3, D4, D6, D7, D9, D10, D11, D12, D13, D14, D16, D17,
-                     D19, D20, D21, D24, D25, D30, D31, D33
+IMPLEMENTADAS   21   D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14, D16,
+                     D17, D19, D20, D21, D24, D25, D30, D31, D33
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -339,12 +339,31 @@ lo ata al informe. Y `packageId` es la identidad canónica: **SoftSight nunca
 infiere identidad del nombre del directorio**, que es comodidad humana.
 **Prueba:** `hash-mismatch-v1`.
 
-### D8 — `requiredEvidence` por contrato
+### D8 — `requiredEvidence` por contrato — IMPLEMENTADA (2026-09-13)
 ```text
 falta evidencia requerida por el contrato  → INCONCLUSIVE
 falta evidencia que el contrato no usa     → irrelevante
 ```
 **Prueba:** casos A y B.
+
+
+**Cerrada el 2026-09-13, y lo que faltaba era la segunda fila.** La primera
+—falta evidencia requerida → INCONCLUSIVE— llevaba tiempo hecha. La segunda
+—falta evidencia que el contrato no usa → irrelevante— **estaba incumplida sin
+que nadie lo notara**: el informe daba INCONCLUSIVE en cuanto no había medidas,
+sin mirar si el paquete había declarado una malla.
+
+Una reconstrucción de SfM entrega **nube de puntos y cámaras y no promete
+superficie**. Declararla inconclusa por no traer malla es reprocharle algo que
+nunca dijo, y es exactamente lo que la decisión separa.
+
+```text
+declara malla y no se puede medir    INCONCLUSIVE, salida 11
+no declara malla y nadie la pidió    PASS, salida 0
+```
+
+Lo destapó intentar empaquetar un COLMAP real: el primer paquete de
+`producers/colmap/` salía INCONCLUSIVE por no tener una malla que nunca prometió.
 
 ### D9 — Modelo de escala — IMPLEMENTADA (2026-09-13)
 `status` (UNKNOWN | RELATIVE | ABSOLUTE), `source` (NONE | KNOWN_DISTANCE |
@@ -932,12 +951,35 @@ Las estructuras que lo sustituyen: tabla de dispersión abierta en dos
 `buildPositionGrid`— para las aristas. `edgeKey` desaparece: la nueva estructura
 indexa por vértice y no empaqueta nada.
 
-### D26 — El contrato está en DRAFT
+### D26 — El contrato está en DRAFT — el segundo productor ya existe (2026-09-13)
 `0.x` mientras `contractMaturity = DRAFT`. Promoción a `1.0` cuando **dos
 productores reales distintos** produzcan paquetes válidos.
 
 **`cube-v1` no promueve el contrato:** es sintético. Sigue en DRAFT después de
 R0-B. La promoción la traen COLMAP y VideoMesh sobre datos reales.
+
+
+**`producers/colmap/` es el segundo productor**, desde el 2026-09-13. Escribe un
+paquete de reconstrucción a partir de la salida de COLMAP y **no importa ni una
+línea de `src/`, `tools/` ni `dist-node/`** — una puerta lo comprueba por
+ausencia, que es la única forma: un import de más no rompe nada, solo convierte al
+segundo productor en el primero disfrazado.
+
+Lo que eso prueba, y `tools/cubeV1.mjs` no podía probar: **que el contrato es
+escribible por quien solo leyó el JSON Schema publicado**. La conversión de
+COLMAP —cuaternión a matriz, inversión rígida de la pose, intrínsecos
+posicionales a campos con nombre— está reescrita allí desde la documentación del
+formato, y coincide con la del adaptador **exacta a 0 en los dieciséis números de
+las ocho poses**. Compartir código habría anulado la prueba.
+
+`colmap-v1` sale `COMPLETE + PASS` con salida 0: ocho vistas, 16.210 puntos, nueve
+artifacts, escala `UNKNOWN`. Y sus poses reproyectan 21.425 observaciones con un
+error peor de 3,96 px sobre una rejilla de 3072×2304.
+
+**Lo que aún no promueve el contrato a 1.0**: este productor entrega nube de
+puntos, no superficie, así que las comparaciones de recuentos y caja de D23 no
+tienen qué comparar. Llegan con un productor que entregue malla — Meshroom o el
+denso de COLMAP—, y entonces sí.
 
 ### D27 — Un repositorio, con frontera modular estricta
 `reconstruction/` y `production/` bajo `src/soft/agent/`. Esos módulos consumen

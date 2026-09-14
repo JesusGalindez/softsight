@@ -70,6 +70,7 @@ abierta—; tratarlos igual lleva a «arreglar» piezas que estaban bien.
 | `npm run agent3d` | `vite build --config vite.node.config.ts --logLevel error 1>&2 && node tools/agent3d.mjs` |
 | `npm run bridge` | `node tools/bridge.mjs` |
 | `npm run colmap-small-v1` | `node tools/colmapSmall.mjs` |
+| `npm run colmap-v1` | `node producers/colmap/build.mjs` |
 | `npm run cube-v1` | `npm run build:agent3d && node tools/cubeV1.mjs` |
 | `npm run filmstrip` | `npm run build:agent3d --silent && node tools/filmstrip.mjs` |
 | `npm run reconstruction` | `npm run build:agent3d && node tools/reconstruction.mjs` |
@@ -83,7 +84,7 @@ dan el mismo número. `npm run test:animation` las corre todas menos `test:deter
 `test:worker` y `test:model-cache`; sueltas sirven para iterar sobre una.
 
 <!-- generado: puertas -->
-`npm run test:agents-md` · `npm run test:bands` · `npm run test:bind` · `npm run test:blend-contract` · `npm run test:bounds-tree` · `npm run test:bridge` · `npm run test:bvh` · `npm run test:codes` · `npm run test:colmap` · `npm run test:contracts` · `npm run test:determinism` · `npm run test:framing` · `npm run test:geometry` · `npm run test:glb-writer` · `npm run test:gltf-frame` · `npm run test:incremental` · `npm run test:mcp` · `npm run test:mesh-diff` · `npm run test:mesh-topology` · `npm run test:model-cache` · `npm run test:reconstruction` · `npm run test:resources` · `npm run test:rig` · `npm run test:screen` · `npm run test:self-intersection` · `npm run test:story` · `npm run test:summary` · `npm run test:text` · `npm run test:text-plan` · `npm run test:worker`
+`npm run test:agents-md` · `npm run test:bands` · `npm run test:bind` · `npm run test:blend-contract` · `npm run test:bounds-tree` · `npm run test:bridge` · `npm run test:bvh` · `npm run test:codes` · `npm run test:colmap` · `npm run test:contracts` · `npm run test:determinism` · `npm run test:framing` · `npm run test:geometry` · `npm run test:glb-writer` · `npm run test:gltf-frame` · `npm run test:incremental` · `npm run test:mcp` · `npm run test:mesh-diff` · `npm run test:mesh-topology` · `npm run test:model-cache` · `npm run test:producer-colmap` · `npm run test:reconstruction` · `npm run test:resources` · `npm run test:rig` · `npm run test:screen` · `npm run test:self-intersection` · `npm run test:story` · `npm run test:summary` · `npm run test:text` · `npm run test:text-plan` · `npm run test:worker`
 <!-- /generado: puertas -->
 
 Cinco de ellas leen el fixture certificado del editor, que vive en un repositorio privado.

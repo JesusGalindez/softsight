@@ -1107,6 +1107,88 @@ function sha256Of(path) {
   );
 }
 
+// D8: no medir nada no es lo mismo que no poder medir.
+//
+// Una reconstrucción de SfM entrega **nube de puntos y cámaras** y no promete
+// superficie. Declararla inconclusa por no traer malla es reprocharle algo que
+// nunca dijo, y es justo la distinción que la decisión pide: falta evidencia que
+// el contrato pide → INCONCLUSIVE; falta evidencia que el contrato no usa →
+// irrelevante.
+{
+  const sandbox = realpathSync(mkdtempSync(join(tmpdir(), "softsight-d8-")));
+  const root = join(sandbox, "sfm-v1");
+  mkdirSync(root);
+
+  const nube = ["ply", "format ascii 1.0", "element vertex 3", "property float x",
+    "property float y", "property float z", "end_header", "0 0 0", "1 0 0", "0 1 0"].join("\n") + "\n";
+  writeFileSync(join(root, "puntos.ply"), nube);
+  const sha = createHash("sha256").update(nube).digest("hex");
+
+  const manifest = {
+    documentType: "videomesh.reconstruction-package",
+    contractVersion: "0.1",
+    packageId: "sfm-v1",
+    state: "SEALED",
+    producer: { name: "prueba", version: "0.1.0" },
+    artifacts: [
+      {
+        id: "puntos",
+        type: "POINT_CLOUD",
+        path: "puntos.ply",
+        bytes: Buffer.byteLength(nube),
+        sha256: sha,
+      },
+    ],
+    // Y lo declara: lo que el contrato pide es la nube, no una malla.
+    requiredEvidence: ["puntos"],
+    scale: { status: "UNKNOWN", source: "NONE" },
+    frameGraph: { transforms: [] },
+  };
+  const manifestPath = join(root, "manifest.json");
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+  const { report, exitCode } = inspectPackage(manifestPath);
+  assert.equal(report.execution, "COMPLETE");
+  assert.equal(
+    report.certification,
+    "PASS",
+    `una nube sin malla que nadie pidió tenía que pasar y sale ${report.certification} ` +
+      `por ${report.certificationReason}`,
+  );
+  assert.equal(exitCode, 0);
+  assert.deepEqual(report.measurements, [], "no hay malla, así que no hay medidas que publicar");
+
+  // Y la otra fila sigue mordiendo: si **sí** declara una malla y no se pudo
+  // medir, eso es inconcluso. Sin este caso, la regla se habría relajado a «nunca
+  // inconcluso por falta de medidas».
+  const conMalla = {
+    ...manifest,
+    artifacts: [
+      ...manifest.artifacts,
+      {
+        id: "malla",
+        type: "TRIANGLE_MESH",
+        path: "malla.ply",
+        bytes: Buffer.byteLength(nube),
+        sha256: sha,
+        purelyReconstructed: true,
+      },
+    ],
+  };
+  writeFileSync(join(root, "malla.ply"), nube);
+  writeFileSync(manifestPath, JSON.stringify(conMalla, null, 2));
+  const conMallaSalida = inspectPackage(manifestPath);
+  assert.equal(conMallaSalida.report.certification, "INCONCLUSIVE");
+  assert.equal(conMallaSalida.report.certificationReason, "METRICA_REQUERIDA_NO_DISPONIBLE");
+  assert.equal(conMallaSalida.exitCode, 11);
+
+  rmSync(sandbox, { recursive: true, force: true });
+  console.log(
+    "reconstrucción: ok (D8: una nube de puntos sin malla que nadie pidió sale PASS con salida 0; " +
+      "declarar una malla que no se puede medir sigue siendo INCONCLUSIVE con salida 11)",
+  );
+}
+
 // 7. Lo que sigue fuera, dicho en voz alta.
 console.log(
   "reconstrucción: no ejecutada — el criterio de certificación de R0 no tiene decisión con número: " +

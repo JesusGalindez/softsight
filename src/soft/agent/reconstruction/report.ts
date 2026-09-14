@@ -243,6 +243,10 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
     declared.filter((artifact) => artifact.type === "IMAGE").map((artifact) => artifact.id as string),
   );
 
+  // Mallas que el paquete **declara**, admitidas o no: es lo que separa «no había
+  // nada que medir» de «no se pudo medir lo que había».
+  const declaredMeshes = declared.filter((artifact) => artifact.type === "TRIANGLE_MESH").length;
+
   const provenanceOf = (artifactId: string): boolean =>
     declared.find((artifact) => artifact.id === artifactId)?.purelyReconstructed === true;
 
@@ -277,7 +281,13 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
   } else if (missing.length > 0) {
     certification = "INCONCLUSIVE";
     reason = "EVIDENCIA_INSUFICIENTE";
-  } else if (measurements.length === 0) {
+  } else if (declaredMeshes > 0 && measurements.length === 0) {
+    // **Solo si el paquete declaraba una malla.** Antes bastaba con que no
+    // hubiera medidas, y eso confunde las dos filas de D8: «falta evidencia que
+    // el contrato pide» no es lo mismo que «el contrato no pidió nada que
+    // medir». Una reconstrucción de SfM entrega nube de puntos y cámaras y no
+    // promete superficie; declararla inconclusa por no tener malla es reprocharle
+    // algo que nunca dijo.
     certification = "INCONCLUSIVE";
     reason = "METRICA_REQUERIDA_NO_DISPONIBLE";
   } else if (measurements.some((measurement) => measurement.triangles === 0)) {

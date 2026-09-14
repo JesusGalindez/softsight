@@ -32,6 +32,8 @@
     "reconstruction": "npm run build:agent3d && node tools/reconstruction.mjs",
     "colmap-small-v1": "node tools/colmapSmall.mjs",
     "cube-v1": "npm run build:agent3d && node tools/cubeV1.mjs",
+    "test:producer-colmap": "npm run build:agent3d && node tools/producer-colmap.test.mjs",
+    "colmap-v1": "node producers/colmap/build.mjs",
     "test:self-intersection": "npm run build:agent3d && node tools/self-intersection.test.mjs",
     "test:mesh-topology": "npm run build:agent3d && node tools/mesh-topology.test.mjs",
     "test:mesh-diff": "npm run build:agent3d && node tools/mesh-diff.test.mjs",
