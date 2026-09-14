@@ -300,6 +300,15 @@ export type { Coverage, CoverageOptions, CoverageRegions } from "./reconstructio
 export { sampleMesh } from "./reconstruction/surfaceSampling";
 export { computeVisibility, seesPoint } from "./reconstruction/coverage";
 export type { SurfaceVisibility } from "./reconstruction/coverage";
+export { compareCandidates } from "./reconstruction/candidates";
+export type {
+  CandidateComparison,
+  CandidateReport,
+  CriterionComparison,
+  CriterionDirection,
+  CriterionValue,
+  ExcludedCandidate,
+} from "./reconstruction/candidates";
 export { BUDGET_NAMES, BUDGET_TERMS, budgetCarriesScale, evaluateBudgets } from "./reconstruction/budgets";
 export type { BudgetMagnitude, BudgetName, BudgetResult, BudgetTerm, DeclaredBudget } from "./reconstruction/budgets";
 export { MASK_THRESHOLD, MASK_ASPECT_TOLERANCE, maskAllows, maskMismatch } from "./reconstruction/masks";

@@ -39,6 +39,7 @@
     "test:parity": "npm run build:agent3d && node tools/parity.test.mjs",
     "test:capture-advice": "npm run build:agent3d && node tools/capture-advice.test.mjs",
     "test:budgets": "npm run build:agent3d && node tools/budgets.test.mjs",
+    "test:candidates": "npm run build:agent3d && node tools/candidates.test.mjs",
     "test:producer-colmap": "npm run build:agent3d && node tools/producer-colmap.test.mjs",
     "test:producer-superficie": "npm run build:agent3d && node tools/producer-superficie.test.mjs",
     "colmap-v1": "node producers/colmap/build.mjs",

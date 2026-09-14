@@ -3025,8 +3025,39 @@ presupuestarlos dejaba sin presupuestos a todo paquete de SfM. Lo desconocido
 sigue rechazándose, y no por prudencia abstracta: probarlo permisivo puso roja la
 puerta de D9, que presupuesta `desviación` en metros sobre escala RELATIVE.
 
-**Lo que falta de R9**: la comparación de candidatos —que se apoya en el diff de
-R5, ya alcanzable desde el CLI y desde el puente—.
+**La comparación de candidatos, el mismo día, y con ella R9 cierra.** El escalón
+lo pedía así —«VideoMesh manda varios candidatos y recibe informes comparables»—
+y la trampa está en **comparables**, que no es lo mismo que producidos con el
+mismo binario:
+
+```text
+cobertura con siluetas contra cobertura sin ellas   SILUETAS_DISTINTAS
+0,727 contra 0,731 con ocho mil muestras            INTERVALOS_SOLAPADOS
+un paquete que no se pudo leer                      PAQUETE_NO_CONSUMIBLE
+otra versión de contrato                            CONTRATO_DISTINTO
+```
+
+Los dos primeros son los que engañan. Un ratio medido con siluetas y otro sin
+ellas contestan preguntas distintas y los dos son un número entre cero y uno con
+el mismo nombre; ponerlos en dos columnas invita a restarlos. Y dos coberturas
+cuyos intervalos se solapan no son dos números distintos — es el §86.3 (k), que se
+escribió para un umbral y vale igual entre dos candidatos.
+
+**Y no sale una nota.** Lo que sale es dominancia: gana quien es mejor en todos
+los criterios que se pudieron decidir. Si nadie domina, el informe lo dice y
+enseña los criterios cruzados, porque los pesos que resolverían el compromiso
+—¿cuánto vale un punto de cobertura contra mil aristas de borde?— no los conoce
+quien mide. Medido sobre dos mallados de `south-building`, rejilla 128 contra 96:
+el fino cubre más y sostiene más, el basto cierra mejor, y **nadie domina**.
+
+`compare` entra en el CLI al lado de `inspect`, y **cada candidato se consume por
+el mismo camino que si llegara solo**: si el cruce midiera aparte, sus informes
+dejarían de ser los que el productor recibiría por separado.
+
+**Lo que R9 no hace**: comparar **geometría**. Dos candidatos pueden ser dos
+reconstrucciones de piezas distintas y el cruce los ordenaría igual. Lo contesta
+el diff de R5, que existe; atarlo aquí pide decidir a partir de qué distancia dos
+candidatos dejan de ser el mismo objeto, que es criterio y no código.
 
 ---
 

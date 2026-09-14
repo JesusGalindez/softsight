@@ -607,8 +607,19 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       **Aflojarla también para los nombres desconocidos duró media hora**: puso
       roja la puerta de D9, que es donde vive el caso que la regla existe para
       cazar.
-    - Cinco puertas nuevas, `test:masks`, `test:producer-superficie`,
-      `test:parity`, `test:capture-advice` y `test:budgets`, y un identificador nuevo,
+    - **Y R9 cierra con la comparación de candidatos.** La trampa del escalón
+      está en «comparables», que no es lo mismo que producidos con el mismo
+      binario: una cobertura medida con siluetas y otra sin ellas contestan
+      preguntas distintas y las dos son un número entre cero y uno con el mismo
+      nombre. Se declara indecidible en vez de ordenarse, igual que dos ratios
+      cuyos intervalos se solapan. **Y no sale una nota**: sale dominancia, y
+      cuando nadie domina se enseñan los criterios cruzados, porque los pesos que
+      resolverían el compromiso no los conoce quien mide. Entra `compare` en el
+      CLI al lado de `inspect`. Con esto **las cuatro piezas de R9 están**:
+      presupuesto, PASS/FAIL, consejo de captura y comparación.
+    - Seis puertas nuevas, `test:masks`, `test:producer-superficie`,
+      `test:parity`, `test:capture-advice`, `test:budgets` y `test:candidates`,
+      y un identificador nuevo,
       `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a los que esperan
       respuesta. Ningún hash del rasterizador se movió.
 

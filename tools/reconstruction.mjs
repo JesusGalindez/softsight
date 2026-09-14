@@ -74,6 +74,7 @@ export function imageGrid(bytes) {
 }
 import {
   MASK_EXTENSION,
+  compareCandidates,
   PACKAGE_CODES,
   PACKAGE_CODE_TABLE,
   RESOURCE_LIMITS,
@@ -364,6 +365,55 @@ function loadMasks(manifest, ingest) {
   return masks.size === 0 ? undefined : masks;
 }
 
+/**
+ * Varios paquetes, un cruce. R9: «VideoMesh manda varios candidatos y recibe
+ * informes comparables».
+ *
+ * Cada uno se consume por su cuenta y con el mismo camino de siempre —el cruce no
+ * puede tener su propia forma de medir, o los dos informes dejarían de ser los que
+ * el productor recibiría por separado—. Lo único que añade esto es la comparación.
+ */
+export function comparePackages(paths) {
+  const informes = paths.map((path) => inspectPackage(path).report);
+  const comparison = compareCandidates(informes);
+  // Salida 1 cuando ninguno domina: no es un error del binario, es que la
+  // pregunta «¿cuál me llevo?» no tiene respuesta desde aquí, y un cero invitaría
+  // a leer el primero de la lista como el ganador.
+  return { comparison, reports: informes, exitCode: comparison.verdict === null ? 1 : 0 };
+}
+
+/** El cruce para una persona, derivado del mismo objeto. */
+export function renderComparison(comparison) {
+  const lineas = [];
+  lineas.push(
+    comparison.verdict === null
+      ? `sin ganador — ${comparison.reason}`
+      : `gana ${comparison.verdict}: mejor en todos los criterios que se pudieron decidir`,
+  );
+  lineas.push("");
+  lineas.push(`candidatos  ${comparison.compared.join(", ") || "ninguno"}`);
+  for (const fuera of comparison.excluded) {
+    lineas.push(`  fuera     ${fuera.candidate} · ${fuera.reason}`);
+  }
+  lineas.push("");
+  for (const criterio of comparison.criteria) {
+    const flecha = criterio.direction === "MAYOR_MEJOR" ? "↑" : "↓";
+    lineas.push(
+      `${criterio.name} ${flecha}  ${criterio.best ?? `sin decidir (${criterio.reason})`}`,
+    );
+    for (const valor of criterio.values) {
+      // El intervalo **al lado del valor** y no en una nota: es lo que impide
+      // leer 0,727 contra 0,731 como una diferencia.
+      const rango =
+        valor.interval === undefined
+          ? ""
+          : ` (${valor.interval[0].toFixed(4)}–${valor.interval[1].toFixed(4)})`;
+      lineas.push(`    ${valor.candidate}  ${valor.value}${rango}`);
+    }
+  }
+  return `${lineas.join("\n")}\n`;
+}
+
 export function renderHuman(report) {
   const pct = (value) => `${(value * 100).toFixed(1)} %`;
   const lineas = [];
@@ -492,9 +542,25 @@ export function exitCodeForReport(report) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [command, target, ...rest] = process.argv.slice(2);
+  if (command === "compare") {
+    const humano = rest.includes("--human") || process.argv.includes("--human");
+    const rutas = [target, ...rest].filter((entrada) => entrada !== undefined && !entrada.startsWith("--"));
+    if (rutas.length < 2) {
+      process.stderr.write(
+        "uso: node tools/reconstruction.mjs compare <manifest.json> <manifest.json> [...] [--human]\n",
+      );
+      process.exit(2);
+    }
+    const { comparison, exitCode } = comparePackages(rutas.map((ruta) => resolve(ruta)));
+    process.stdout.write(
+      humano ? renderComparison(comparison) : `${JSON.stringify(comparison, null, 2)}\n`,
+    );
+    process.exit(exitCode);
+  }
   if (command !== "inspect" || target === undefined) {
     process.stderr.write(
       "uso: node tools/reconstruction.mjs inspect <manifest.json> [--out informe.json] [--human]\n" +
+        "     node tools/reconstruction.mjs compare <a.json> <b.json> [...] [--human]\n" +
         "  --human   el mismo informe para una persona, derivado del JSON y no escrito aparte\n",
     );
     process.exit(2);
