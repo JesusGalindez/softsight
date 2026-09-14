@@ -3141,6 +3141,54 @@ Gate:
 production package can be inspected
 ```
 
+**Hecho el 2026-09-14.** Es **otro documento**, no el paquete de reconstrucción
+con campos de más: un asset de producción no tiene cámaras, ni escala que
+estimar, ni cobertura que medir. Lo que tiene son piezas **derivadas**, y la
+pregunta que importa es si cada una sigue siendo fiel a su maestra.
+
+```text
+MASTER      la malla de la que sale todo. Exactamente una
+LOD         un nivel de detalle, con su número. Cero o más
+COLLISION   el proxy con el que el motor calcula choques. Cero o una
+```
+
+Las tres son mallas de triángulos: el tipo no las distingue, **el papel sí**, y el
+papel decide qué se les mide.
+
+**Un LOD tiene que diferir**, así que la desviación no es el defecto: lo es
+pasarse del tope. Va en las dos direcciones y sin promediar, como en R5 — lo que
+el LOD perdió y lo que añadió son dos problemas distintos.
+
+**Y la colisión no se mide con una distancia.** Un proxy que envuelve con holgura
+y otro que corta la pieza por la mitad pueden dar el mismo máximo. Lo que importa
+es de qué lado queda la superficie, así que se cuenta **paridad de cruces** y se
+publica qué fracción de la maestra queda fuera. Eso exige el proxy cerrado: con
+una malla abierta «dentro» no está definido, y la comprobación se declara no
+ejecutada en vez de devolver un número que parecería una respuesta.
+
+**La asimetría de los dos topes está a propósito:**
+
+```text
+collisionTolerance   defecto CERO, y se defiende: un proxy que no contiene la
+                     pieza deja que la atraviesen por ahí
+lodDeviationMax      sin declarar NO SE JUZGA: lo que un nivel puede perder
+                     depende de a qué distancia se mira, y eso no lo sabe quien
+                     mide
+```
+
+Elegir un defecto para el LOD habría sido inventarse el criterio de otro; no
+elegirlo para la colisión habría dejado pasar un proxy que se come la pieza.
+
+El fixture es `esfera-v1`, un cubo esferificado: **todos sus vértices caen
+exactamente a distancia uno del centro**, así que la desviación de un nivel es la
+flecha de su cuerda y se calcula a mano. Medido: lod-1 desvía el 0,71 % de la
+diagonal con el 25 % de los triángulos, lod-2 el 2,71 % con el 6,3 %, y la caja de
+semilado 1,02 contiene la esfera al cien por cien; encogida a 0,8 asoma el 58,3 %
+y suspende.
+
+**Lo que no describe**: materiales, UV ni texturas. Eso es R12 y R13, y meterlo
+aquí habría hecho un documento que describe mal las dos cosas.
+
 ---
 
 ## R12 — LOD QA

@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JesusGalindez/softsight/contracts/production-asset.schema.json",
+  "title": "production-asset",
+  "type": "object",
+  "properties": {
+    "documentType": {
+      "type": "string",
+      "enum": [
+        "softsight.production-asset"
+      ],
+      "description": "Qué documento es. Nunca un nombre suelto y ambiguo como `asset` (D14)."
+    },
+    "contractVersion": {
+      "type": "string",
+      "description": "Versión del contrato de frontera; 0.x mientras esté en DRAFT."
+    },
+    "assetId": {
+      "type": "string",
+      "description": "Identidad del asset."
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "SEALED"
+      ],
+      "description": "Solo se consume SEALED, por lo mismo que D29: un asset a medio escribir con el manifest ya puesto describe ficheros que todavía están cambiando."
+    },
+    "producer": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Nombre del productor."
+        },
+        "version": {
+          "type": "string",
+          "description": "Su versión."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "description": "Quién lo escribió y con qué versión."
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identidad dentro del asset."
+          },
+          "path": {
+            "type": "string",
+            "description": "Ruta relativa a la raíz. Absoluta o con `..` se rechaza, como en D6."
+          },
+          "bytes": {
+            "type": "number",
+            "description": "Tamaño en bytes."
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Hash del contenido, hexadecimal minúscula."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "MASTER",
+              "LOD",
+              "COLLISION"
+            ],
+            "description": "Qué papel juega la malla. Las tres son triángulos; lo que cambia es qué se les mide."
+          },
+          "level": {
+            "type": "number",
+            "description": "Nivel del LOD, desde 1. Obligatorio con `role: LOD` y prohibido en los otros dos: un nivel sobre la maestra no significa nada, y sin nivel dos LOD no se pueden ordenar."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "path",
+          "bytes",
+          "sha256",
+          "role"
+        ]
+      },
+      "description": "Las mallas que se publican, cada una con su papel."
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "preset": {
+          "type": "string",
+          "description": "Nombre del destino, para citarlo."
+        },
+        "budgets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Término del vocabulario de R9."
+              },
+              "role": {
+                "type": "string",
+                "enum": [
+                  "MASTER",
+                  "LOD",
+                  "COLLISION"
+                ],
+                "description": "A qué papel se le aplica. Ausente lo aplica **al conjunto**: `triangulos ≤ 50000` sin papel presupuesta todo lo que se publica, que casi nunca es lo que se quiere decir."
+              },
+              "units": {
+                "type": "string",
+                "enum": [
+                  "ABSOLUTE",
+                  "RELATIVE_TO_DIAGONAL"
+                ],
+                "description": "Igual que en el paquete, y con la misma regla de escala de D9."
+              },
+              "unit": {
+                "type": "string",
+                "description": "La unidad cuando es absoluto."
+              },
+              "max": {
+                "type": "number",
+                "description": "Máximo admitido."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "units",
+              "max"
+            ]
+          },
+          "description": "Los límites del destino, con el vocabulario cerrado de R9."
+        },
+        "collisionTolerance": {
+          "type": "number",
+          "description": "Fracción de la superficie maestra que puede asomar del proxy. **Sin declarar es cero**, y ese defecto se puede defender: un proxy que no contiene la pieza deja que la atraviesen por ahí. Se declara para los casos en que asomar es a propósito — una alambrada, un adorno fino que nadie quiere en la colisión."
+        },
+        "lodDeviationMax": {
+          "type": "number",
+          "description": "Cuánto puede desviarse un LOD de la maestra, en fracción de la diagonal. **Sin declarar no se juzga**: la desviación se publica y no decide. No hay defecto defendible — lo que un LOD puede perder depende de a qué distancia se mira, y eso lo sabe quien publica. Es la asimetría con `collisionTolerance`, y está a propósito."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "preset",
+        "budgets"
+      ],
+      "description": "El destino contra el que se juzga. **El preset viaja con sus presupuestos**: solo con el nombre, este binario tendría que saber qué significa «mobile-low», y eso lo sabe quien publica."
+    },
+    "derivation": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Con qué se simplificó."
+        },
+        "note": {
+          "type": "string",
+          "description": "Lo que el productor quiera dejar dicho."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Lo que el productor afirma sobre cómo salió cada derivada de la maestra. Opcional y **no se cree**: se mide. Está para que el informe pueda decir en qué discrepa de lo declarado."
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "documentType",
+    "contractVersion",
+    "assetId",
+    "state",
+    "producer",
+    "artifacts",
+    "target"
+  ]
+}

@@ -10,6 +10,11 @@
       "bytes": 33541
     },
     {
+      "name": "production-asset",
+      "sha256": "608710b00485ac569e97777aa9cb0023d608d5107995b0152b3721394ac04e0b",
+      "bytes": 6426
+    },
+    {
       "name": "reconstruction-package",
       "sha256": "ec74ea6de28096848da8374a27c78954639aaa7b6fb5cee5f49275df26dacccb",
       "bytes": 20545

@@ -627,9 +627,19 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       `breaksPurelyReconstructed` dice qué pierde el paquete, porque con ella D21
       deja de certificar. Sobre `south-building`, **61 a revisar y 4 inseguras**,
       las cuatro agujeros pequeños donde ninguna de las ocho cámaras miró.
-    - Siete puertas nuevas, `test:masks`, `test:producer-superficie`,
-      `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates` y
-      `test:repair`, y un identificador nuevo,
+    - **Y R11: el manifest de producción**, que es **otro documento** y no el
+      paquete de reconstrucción con campos de más. Tres papeles —maestra, niveles
+      de detalle, proxy de colisión—, y el papel decide qué se mide: a un LOD,
+      cuánto se desvía de su maestra en las dos direcciones sin promediar; al
+      proxy, **de qué lado queda la superficie**, por paridad de cruces y no por
+      una distancia. Los dos topes son asimétricos a propósito: la colisión tiene
+      defecto cero —un proxy que no contiene la pieza deja que la atraviesen— y la
+      desviación del LOD **no se juzga sin tope declarado**, porque lo que un
+      nivel puede perder depende de a qué distancia se mira. Con esto el contrato
+      publicado pasa de siete esquemas a ocho.
+    - Ocho puertas nuevas, `test:masks`, `test:producer-superficie`,
+      `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
+      `test:repair` y `test:production`, y un identificador nuevo,
       `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a los que esperan
       respuesta. Ningún hash del rasterizador se movió.
 

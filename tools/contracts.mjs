@@ -28,6 +28,7 @@ import {
   CURRENT_VERSION_PAIRS,
   PATCH_SCHEMA,
   RECONSTRUCTION_PACKAGE_SCHEMA,
+  PRODUCTION_ASSET_SCHEMA,
   RECONSTRUCTION_REPORT_SCHEMA,
   SAMPLE_REFERENCE_SCHEMA,
   SCENE_SCHEMA,
@@ -41,7 +42,7 @@ const projectRoot = resolve(here, "..");
 const CONTRACTS = resolve(projectRoot, "contracts");
 
 /**
- * Los cinco esquemas que hoy son frontera: los que un agente de fuera necesita
+ * Los esquemas que hoy son frontera: los que un agente de fuera necesita
  * para escribir una entrada válida. Lo que no se publica aquí no es frontera, y
  * añadirlo a esta lista es la decisión de que pase a serlo.
  */
@@ -53,6 +54,10 @@ export const PUBLISHED = {
   "sample-reference": SAMPLE_REFERENCE_SCHEMA,
   "reconstruction-package": RECONSTRUCTION_PACKAGE_SCHEMA,
   "reconstruction-report": RECONSTRUCTION_REPORT_SCHEMA,
+  // R11: el asset de producción es el **otro** documento que entra. No es un
+  // paquete de reconstrucción con campos de más: no tiene cámaras, ni escala, ni
+  // cobertura, y sí tiene papeles y un destino contra el que juzgarse.
+  "production-asset": PRODUCTION_ASSET_SCHEMA,
 };
 
 /** El documento tal y como se commitea: con salto final, para que `diff` no chille. */

@@ -300,6 +300,16 @@ export type { Coverage, CoverageOptions, CoverageRegions } from "./reconstructio
 export { sampleMesh } from "./reconstruction/surfaceSampling";
 export { computeVisibility, seesPoint } from "./reconstruction/coverage";
 export type { SurfaceVisibility } from "./reconstruction/coverage";
+export { PRODUCTION_ASSET_SCHEMA } from "./production/manifest";
+export { CONTAINMENT_SAMPLES, buildProductionReport } from "./production/report";
+export type {
+  CollisionCheck,
+  LodDerivation,
+  ProductionArtifact,
+  ProductionMeasurement,
+  ProductionReport,
+  ProductionRole,
+} from "./production/report";
 export { REPAIR_NEIGHBOURHOOD_RATIO, classifyRepairs } from "./reconstruction/repair";
 export type { RepairAssessment, RepairBoundary, RepairInputs, RepairRisk } from "./reconstruction/repair";
 export { compareCandidates } from "./reconstruction/candidates";
