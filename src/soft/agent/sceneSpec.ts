@@ -850,6 +850,9 @@ export function modelFromScene(spec: SceneSpec, source = "escena"): Model {
       materialName: null,
       baseColor: [...entry.node.material.albedo] as [number, number, number],
       visible: true,
+      // Las primitivas declarativas se generan sin coordenadas de textura: la
+      // escena describe forma, y el material va por color.
+      hasUvs: false,
     })),
   };
 }

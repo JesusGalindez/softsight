@@ -302,6 +302,8 @@ export { computeVisibility, seesPoint } from "./reconstruction/coverage";
 export type { SurfaceVisibility } from "./reconstruction/coverage";
 export { PRODUCTION_ASSET_SCHEMA } from "./production/manifest";
 export { SILHOUETTE_RESOLUTION, SILHOUETTE_VIEWS, compareSilhouettes } from "./production/silhouette";
+export { UV_DEGENERATE_AREA, UV_GRID, auditUvs } from "./production/uv";
+export type { UvAudit } from "./production/uv";
 export type { SilhouetteComparison, SilhouetteView } from "./production/silhouette";
 export { CONTAINMENT_SAMPLES, buildProductionReport } from "./production/report";
 export type {

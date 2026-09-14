@@ -54,6 +54,14 @@ const PRODUCTION_ARTIFACT: ObjectSchema = {
   bytes: { type: "number", required: true, description: "Tamaño en bytes." },
   sha256: { type: "string", required: true, description: "Hash del contenido, hexadecimal minúscula." },
   role: ROLE,
+  format: {
+    type: '"PLY"|"GLB"',
+    description:
+      "En qué formato viene la malla. Ausente es `PLY`, que es lo que había. **No es un detalle de " +
+      "lectura**: un PLY no puede expresar coordenadas de textura ni materiales, así que el formato " +
+      "decide qué preguntas se le pueden hacer al artifact. Lo que no se puede medir se declara no " +
+      "ejecutado con su motivo, nunca aprobado por ausencia.",
+  },
   level: {
     type: "number",
     description:
@@ -144,6 +152,32 @@ export const PRODUCTION_ASSET_SCHEMA: ObjectSchema = {
           "ese defecto se puede defender: un proxy que no contiene la pieza deja que la atraviesen " +
           "por ahí. Se declara para los casos en que asomar es a propósito — una alambrada, un " +
           "adorno fino que nadie quiere en la colisión.",
+      },
+      uvRequired: {
+        type: "boolean",
+        description:
+          "Si el destino exige coordenadas de textura en las mallas que se pintan —maestra y niveles, " +
+          "nunca el proxy de colisión—. **Es el único criterio de UV con disparador defendible**, y " +
+          "aun así lo declara el destino: un asset de color plano no las necesita.",
+      },
+      uvOverlapMax: {
+        type: "number",
+        description:
+          "Cuánta área UV puede pisarse, sobre la que ocupan las islas. Sin declarar no se juzga: en " +
+          "un atlas de color, solapar dos mitades simétricas es una técnica; en uno de luz, imposible.",
+      },
+      uvDensitySpreadMax: {
+        type: "number",
+        description:
+          "Dispersión de densidad de téxel admitida, p95 entre p05. Una pieza uniforme da 1. **La " +
+          "dispersión y no la mediana**: dos partes a densidades distintas se ven a resoluciones " +
+          "distintas y eso salta a la vista, con la misma mediana.",
+      },
+      uvOutsideMax: {
+        type: "number",
+        description:
+          "Fracción de vértices con UV fuera del cuadrado unidad. Sin declarar no se juzga: depende " +
+          "del modo de repetición del material, que este documento todavía no describe.",
       },
       lodSilhouetteMax: {
         type: "number",

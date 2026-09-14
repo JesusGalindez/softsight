@@ -16,6 +16,7 @@ import { dirname, join, resolve } from "node:path";
 import {
   PRODUCTION_ASSET_SCHEMA,
   buildProductionReport,
+  parseGlb,
   parsePlyAscii,
   validate,
 } from "../dist-node/agent3d.mjs";
@@ -52,6 +53,7 @@ export function inspectAsset(manifestPath) {
   }
 
   const meshes = new Map();
+  const uvPresence = new Map();
   const fatales = [];
   for (const artifact of documento.artifacts) {
     if (artifact.path.startsWith("/") || artifact.path.split("/").includes("..")) {
@@ -90,24 +92,66 @@ export function inspectAsset(manifestPath) {
       fatales.push(`${artifact.id}: el hash no coincide`);
       continue;
     }
+    if ((artifact.format ?? "PLY") === "GLB") {
+      let leido;
+      try {
+        leido = parseGlb(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+      } catch (error) {
+        fatales.push(`${artifact.id}: el GLB no se pudo leer (${error.message})`);
+        continue;
+      }
+      // Una pieza por artifact. Un GLB con varias mallas describe **varias
+      // cosas**, y fundirlas aquí borraría de cuál son las UV de cada una —que es
+      // justo lo que R13 va a preguntar—. Se rechaza con su nombre en vez de
+      // medir una mezcla.
+      if (leido.parts.length !== 1) {
+        fatales.push(
+          `${artifact.id}: el GLB trae ${leido.parts.length} piezas y un artifact describe una`,
+        );
+        continue;
+      }
+      const pieza = leido.parts[0];
+      // La matriz del nodo, aplicada: un GLB puede colocar su malla con una
+      // transformación, y medir las posiciones crudas mediría otra pieza.
+      const m = pieza.matrix;
+      const positions = new Float32Array(pieza.mesh.positions.length);
+      for (let vertex = 0; vertex < positions.length / 3; vertex += 1) {
+        const [x, y, z] = [
+          pieza.mesh.positions[vertex * 3],
+          pieza.mesh.positions[vertex * 3 + 1],
+          pieza.mesh.positions[vertex * 3 + 2],
+        ];
+        positions[vertex * 3] = m[0] * x + m[4] * y + m[8] * z + m[12];
+        positions[vertex * 3 + 1] = m[1] * x + m[5] * y + m[9] * z + m[13];
+        positions[vertex * 3 + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+      }
+      meshes.set(artifact.id, { ...pieza.mesh, positions });
+      uvPresence.set(artifact.id, pieza.hasUvs);
+      continue;
+    }
+
     const leido = parsePlyAscii(bytes.toString("utf8"));
     if (leido.mesh === null) {
       fatales.push(`${artifact.id}: el PLY no trae triángulos`);
       continue;
     }
+    // Un PLY no puede expresar coordenadas de textura, y eso **no es que no las
+    // tenga**: es que el formato no las admite. R13 lo dice con ese motivo en
+    // vez de auditar unas UV que nadie escribió.
     meshes.set(artifact.id, {
       ...leido.mesh,
       normals: new Float32Array(0),
       uvs: new Float32Array(0),
       boundingRadius: 0,
     });
+    uvPresence.set(artifact.id, false);
   }
 
   if (fatales.length > 0) {
     return { report: null, exitCode: 20, fatal: fatales.join("; ") };
   }
 
-  const report = buildProductionReport({ manifest: documento, meshes });
+  const report = buildProductionReport({ manifest: documento, meshes, uvPresence });
   const exitCode = report.certification === "PASS" ? 0 : report.certification === "FAIL" ? 1 : 11;
   return { report, exitCode, fatal: null };
 }
@@ -125,6 +169,14 @@ export function renderProduction(report) {
     lineas.push(
       `${papel.padEnd(11)} ${medida.appliesTo.artifactId}: ${medida.triangles} triángulos, ` +
         `${medida.watertight ? "cerrada" : `${medida.boundaryEdges} aristas de borde`}`,
+    );
+    const uv = medida.uv;
+    lineas.push(
+      uv.present
+        ? `            uv: solape ${(uv.overlapRatio * 100).toFixed(1)} % · ` +
+            `uso ${(uv.utilization * 100).toFixed(0)} % · dispersión ${uv.texelDensity.spread.toFixed(2)} · ` +
+            `${uv.degenerateTriangles} degenerados · ${uv.outsideUnitSquare} fuera del cuadrado`
+        : `            uv: ${uv.reason}`,
     );
   }
 

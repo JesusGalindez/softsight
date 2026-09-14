@@ -26,6 +26,8 @@ interface Group {
   /** Terna "p/t/n" -> índice de vértice ya emitido, para no duplicar. */
   lookup: Map<string, number>;
   hasNormals: boolean;
+  /** Si alguna cara citó una coordenada de textura. Mismo papel que `hasNormals`. */
+  hasUvs: boolean;
 }
 
 function createGroup(name: string, materialName: string | null): Group {
@@ -38,6 +40,7 @@ function createGroup(name: string, materialName: string | null): Group {
     indices: [],
     lookup: new Map(),
     hasNormals: false,
+    hasUvs: false,
   };
 }
 
@@ -127,6 +130,7 @@ export function parseObj(text: string): { parts: ModelPart[]; notes: string[] } 
             if (rawUv) {
               const uvIndex = resolveIndex(Number(rawUv), uvs.length / 2);
               current.uvs.push(uvs[uvIndex * 2], uvs[uvIndex * 2 + 1]);
+              current.hasUvs = true;
             } else {
               current.uvs.push(0, 0);
             }
@@ -182,6 +186,7 @@ export function parseObj(text: string): { parts: ModelPart[]; notes: string[] } 
       materialName: group.materialName,
       baseColor: null,
       visible: true,
+      hasUvs: group.hasUvs,
     });
   }
 

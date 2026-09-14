@@ -368,6 +368,9 @@ export function parseGlb(buffer: ArrayBuffer, decoder?: MeshoptDecoderLike): Glb
             : undefined;
 
         parts.push({
+          // El dato que el relleno de ceros borraba: se lee del atributo, que es
+          // el único sitio donde «no venía» sigue siendo distinguible.
+          hasUvs: primitive.attributes.TEXCOORD_0 !== undefined,
           name: gltfMesh?.primitives.length && gltfMesh.primitives.length > 1
             ? `${name}#${primitiveIndex}`
             : name,

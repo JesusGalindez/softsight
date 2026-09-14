@@ -3271,6 +3271,50 @@ Gate:
 web/game-ready material constraints measurable
 ```
 
+**La auditoría de UV, el 2026-09-14. El resto sigue abierto.**
+
+Lo primero que hubo que resolver no era de diseño sino de formato: **un PLY no
+puede expresar coordenadas de textura**, y el manifest de producción solo
+referenciaba PLY. Así que el artifact gana `format` —`PLY` o `GLB`—, y el lector
+de GLB que ya existía desde hace meses pasa a alimentar R13. No hace falta un
+segundo documento: partirlo habría dejado la malla declarada en uno y su material
+en el otro, y el día que discrepen nadie sabría cuál manda.
+
+**Ausente no es cero, y aquí casi se pierde.** Los lectores rellenan `uvs` con
+ceros cuando el atributo no viene, así que «esta malla no tiene UV» y «todas sus
+UV están en el mismo punto» llegaban como el mismo array. El dato se recupera en
+el lector —`hasUvs` en `ModelPart`, leído del atributo— porque adivinarlo mirando
+los números habría acertado casi siempre y fallado en el único caso que importa:
+sin él, **un asset en PLY salía con densidad cero, solape cero e impecable**.
+
+```text
+fuera del rango    una UV en 1,7 depende del modo de repetición del material
+área nula          un triángulo con UV degeneradas no recibe textura
+densidad de téxel  lo que importa es la DISPERSIÓN, no la mediana: dos partes a
+                   escalas distintas se ven a resoluciones distintas
+solape             cuánta área UV se pisa, sobre la que ocupan las islas
+```
+
+**El solape hubo que tirarlo y rehacerlo.** Se midió primero contando celdas
+tocadas por dos o más triángulos, y daba **1,0000 sobre cualquier malla**: dos
+triángulos vecinos comparten las celdas de su arista común, así que en una malla
+densa todas salen repetidas. La adyacencia no es solape. Medido por área —la suma
+de las áreas UV contra la unión— dos vecinos aportan cero, y dos caras sobre la
+misma UV dan el 99 %.
+
+Y sale un hallazgo real del fixture: la proyección esférica da **100 % de solape
+con cero UV fuera del cuadrado**. Un despliegue puede estar entero dentro de rango
+y pisarse consigo mismo — los triángulos de la costura cruzan de u≈1 a u≈0 y
+barren la textura entera.
+
+`uvRequired` es el único criterio con disparador defendible, y aun así lo declara
+el destino; **no se le exige al proxy de colisión**, que no se pinta. Los otros
+tres son topes sin defecto, como los de R12.
+
+**Lo que falta de R13**: tangentes, textura y material. Los tres necesitan **la
+imagen como fichero**, que el manifest todavía no declara — y medir densidad de
+téxel en téxeles de verdad, no por unidad de mundo, pide saber su tamaño.
+
 ---
 
 ## R14 — Collision QA

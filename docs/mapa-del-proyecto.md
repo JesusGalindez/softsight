@@ -645,9 +645,19 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       ortográfica —un asset no declara desde dónde se le mirará— y desde catorce
       vistas, porque media esfera pierde el 50 % de silueta en la peor vista y el
       0 % en la mejor. Lo que pierde y lo que gana van separados, como en R5.
-    - Nueve puertas nuevas, `test:masks`, `test:producer-superficie`,
+    - **Y la auditoría de UV, primera pieza de R13.** El fork no era «un documento
+      u otro» sino el **formato**: un PLY no puede expresar coordenadas de
+      textura, así que el artifact gana `format` y el lector de GLB que ya existía
+      pasa a alimentar R13. Lo que casi se pierde por el camino es que **ausente
+      no es cero**: los lectores rellenan `uvs` con ceros, así que un asset en PLY
+      salía con solape cero y densidad cero, o sea impecable. El dato se recupera
+      en el lector, donde todavía se distingue. Y el solape hubo que rehacerlo:
+      contando celdas daba 1,0000 sobre cualquier malla, porque dos triángulos
+      vecinos comparten las celdas de su arista y la adyacencia no es solape.
+    - Diez puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
-      `test:repair`, `test:production` y `test:lod-qa`, y un identificador nuevo,
+      `test:repair`, `test:production`, `test:lod-qa` y `test:uv-qa`, y un
+      identificador nuevo,
       `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a los que esperan
       respuesta. Ningún hash del rasterizador se movió.
 

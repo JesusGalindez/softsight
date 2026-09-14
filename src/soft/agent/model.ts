@@ -37,6 +37,16 @@ export interface ModelPart {
   materialName: string | null;
   baseColor: [number, number, number] | null;
   visible: boolean;
+  /**
+   * Si la malla traía coordenadas de textura.
+   *
+   * Hace falta porque los lectores **rellenan `uvs` con ceros** cuando el
+   * atributo no viene, y entonces «sin UV» y «todas las UV en el mismo punto» son
+   * el mismo array. Son dos cosas distintas: la primera es un asset que no se
+   * puede texturizar y la segunda una malla rota. Sin este campo, R13 tendría que
+   * adivinarlo mirando los datos.
+   */
+  hasUvs: boolean;
 }
 
 export interface Model {
@@ -428,6 +438,8 @@ function partFromSpec(object: ObjectSpec, index: number): ModelPart {
   }
   const resolved = resolveObject(object, index);
   return {
+    // Una primitiva declarativa no trae coordenadas de textura: describe forma.
+    hasUvs: false,
     name: resolved.name,
     path: resolved.name,
     mesh: resolved.node.mesh,

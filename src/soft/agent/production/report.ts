@@ -39,6 +39,7 @@ import { diffMeshes, type MeshDiff } from "../reconstruction/meshDiff";
 import { evaluateBudgets, type BudgetResult, type DeclaredBudget } from "../reconstruction/budgets";
 import { sampleMesh } from "../reconstruction/surfaceSampling";
 import { compareSilhouettes, type SilhouetteComparison } from "./silhouette";
+import { auditUvs, type UvAudit } from "./uv";
 
 /** Muestras con las que se juzga la contención. */
 export const CONTAINMENT_SAMPLES = 4_000;
@@ -63,6 +64,10 @@ export interface ProductionMeasurement extends MeshAudit {
   appliesTo: { artifactId: string; sha256: string };
   role: ProductionRole;
   level?: number;
+  /** R13: las coordenadas de textura, o por qué no se pudieron auditar. */
+  uv: UvAudit;
+  /** Un veredicto por criterio de UV, contra lo que el destino declare. */
+  uvVerdicts: { present: LodVerdict; overlap: LodVerdict; density: LodVerdict; outside: LodVerdict };
 }
 
 export interface LodDerivation {
@@ -147,6 +152,10 @@ export interface ProductionInput {
       budgets?: Array<DeclaredBudget & { role?: ProductionRole }>;
       collisionTolerance?: number;
       lodDeviationMax?: number;
+      uvRequired?: boolean;
+      uvOverlapMax?: number;
+      uvDensitySpreadMax?: number;
+      uvOutsideMax?: number;
       lodSilhouetteMax?: number;
       lodNormalMaxDegrees?: number;
       lodBoundsMax?: number;
@@ -155,6 +164,11 @@ export interface ProductionInput {
   };
   /** Las mallas ya leídas, por identidad de artifact. */
   meshes: ReadonlyMap<string, Mesh>;
+  /**
+   * Si cada malla traía coordenadas de textura, leído de donde todavía se
+   * distingue. Sin esto, «sin UV» y «todas las UV en cero» serían el mismo array.
+   */
+  uvPresence?: ReadonlyMap<string, boolean>;
   samples?: number;
   seed?: number;
 }
@@ -192,15 +206,47 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
   const artifacts = manifest.artifacts ?? [];
   const issues: Array<{ reason: string; message: string }> = [];
 
+  /**
+   * Un criterio de UV contra su tope. Sin medida **no se aprueba**: el término se
+   * entiende y el dato falta, que es lo que deja un veredicto inconcluso y no
+   * intacto — la misma distinción que los presupuestos de R9.
+   */
+  const juzgarUv = (valor: number | undefined, tope: number | undefined): LodVerdict => {
+    if (tope === undefined) return "NO_JUZGADO";
+    if (valor === undefined) return "FAIL";
+    return valor <= tope ? "PASS" : "FAIL";
+  };
+
   const measurements: ProductionMeasurement[] = [];
   for (const artifact of artifacts) {
     const mesh = meshes.get(artifact.id);
     if (mesh === undefined) continue;
+    const uv = auditUvs(mesh, input.uvPresence?.get(artifact.id) === true);
+    const uvVertices = mesh.uvs.length / 2;
     measurements.push({
       appliesTo: { artifactId: artifact.id, sha256: artifact.sha256 },
       role: artifact.role,
       ...(artifact.level === undefined ? {} : { level: artifact.level }),
       ...auditMesh(mesh),
+      uv,
+      uvVerdicts: {
+        // La colisión no se pinta, así que exigirle UV sería exigirle algo que
+        // no usa. Es el único sitio donde el papel cambia qué se le pide.
+        present:
+          manifest.target?.uvRequired !== true || artifact.role === "COLLISION"
+            ? "NO_JUZGADO"
+            : uv.present
+              ? "PASS"
+              : "FAIL",
+        overlap: juzgarUv(uv.overlapRatio, manifest.target?.uvOverlapMax),
+        density: juzgarUv(uv.texelDensity?.spread, manifest.target?.uvDensitySpreadMax),
+        outside: juzgarUv(
+          uv.outsideUnitSquare === undefined || uvVertices === 0
+            ? undefined
+            : uv.outsideUnitSquare / uvVertices,
+          manifest.target?.uvOutsideMax,
+        ),
+      },
     });
   }
 
@@ -431,6 +477,15 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
   } else if (collision?.verdict === "FAIL") {
     certification = "FAIL";
     reason = "LA_MAESTRA_ASOMA_DE_LA_COLISION";
+  } else if (measurements.some((medida) => Object.values(medida.uvVerdicts).includes("FAIL"))) {
+    certification = "FAIL";
+    const culpable = measurements.find((medida) =>
+      Object.values(medida.uvVerdicts).includes("FAIL"),
+    )!;
+    const criterio = (Object.keys(culpable.uvVerdicts) as Array<keyof typeof culpable.uvVerdicts>).find(
+      (nombre) => culpable.uvVerdicts[nombre] === "FAIL",
+    );
+    reason = `UV_FUERA_DE_TOLERANCIA_${(criterio ?? "present").toUpperCase()}`;
   } else if (lods.some((lod) => Object.values(lod.verdicts).includes("FAIL"))) {
     certification = "FAIL";
     // El criterio que falló va en el motivo: «fuera de tolerancia» a secas
