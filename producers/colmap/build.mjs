@@ -69,7 +69,7 @@ const MODELS = {
   OPENCV: ["fx", "fy", "cx", "cy", "k1", "k2", "p1", "p2"],
 };
 
-function readCameras(text) {
+export function readCameras(text) {
   const cameras = new Map();
   for (const line of contentLines(text)) {
     const parts = line.split(/\s+/);
@@ -111,7 +111,7 @@ function readCameras(text) {
  * que mide 0,999998 da una matriz cuya traspuesta no es su inversa — y como la
  * pose se invierte justo después, el error entra en la posición de la cámara.
  */
-function readImages(text) {
+export function readImages(text) {
   const lines = contentLines(text);
   const images = [];
   for (let index = 0; index + 1 < lines.length; index += 2) {
@@ -155,7 +155,7 @@ function readImages(text) {
 }
 
 /** `points3D.txt` → posición y color, por identidad. */
-function readPoints(text) {
+export function readPoints(text) {
   const points = new Map();
   for (const line of contentLines(text)) {
     const parts = line.split(/\s+/);

@@ -566,9 +566,24 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       3.9 y torch se quedó en 2.2.2 para macOS Intel. Lo que falta es **el
       fichero, no el camino**: el paquete que traiga siluetas se mide con lo que
       ya está puesto.
-    - Dos puertas nuevas, `test:masks` y `test:producer-superficie`, y un
-      identificador nuevo, `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a
-      los que esperan respuesta. Ningún hash del rasterizador se movió.
+    - **Y con superficie, las tres filas que le faltaban a D23.**
+      `package-parity-v1` trae los valores dorados de recuentos, caja tras
+      normalizar el marco y cámaras registradas, con la fórmula al lado para que
+      se rehagan sin leer nuestro código — que es lo único que hace que
+      «coincidimos» signifique algo, porque dos implementaciones pueden compartir
+      el mismo error. La fila 2 era la que engañaba: sobre `cube-v1` la
+      normalización es la identidad, así que **ignorar el grafo entero acierta**.
+      Los casos dorados rotan treinta grados y uno exige componer dos aristas en
+      orden; dos mutaciones —ignorar la matriz, componer al revés— ponen la puerta
+      roja donde no la ponía nada. De las tres columnas de la decisión hay dos:
+      `colmap-small-v1` tiene la del productor y los dos lectores caen **exactos
+      a 0** en los tres centros de cámara, con el dorado en medio a 4,1e-7; de
+      `cube-v1` no hay segunda implementación, así que **D23 sigue ACORDADA** y lo
+      que le falta está dicho.
+    - Tres puertas nuevas, `test:masks`, `test:producer-superficie` y
+      `test:parity`, y un identificador nuevo, `SS-CAM-007`
+      (`MASCARA_NO_APLICABLE`), que se suma a los que esperan respuesta. Ningún
+      hash del rasterizador se movió.
 
 21. **Qué queda, y de quién es.** Del lado de este repositorio **no queda nada
     que no dependa de otro**, y conviene que esté dicho en un sitio en vez de

@@ -861,12 +861,35 @@ alineado las cajas coinciden y no se nota; la vista de tres cuartos lo delató p
 treinta píxeles. El CameraSet describía unos píxeles que no eran los suyos, y
 ningún hash lo habría visto nunca.
 
-Falta la columna de VideoMesh y la de `SoftSight ↔ VideoMesh`: las dos esperan a
-su `cube-v1`.
+**Las otras tres filas, el 2026-09-14.** `package-parity-v1` trae los valores
+dorados de recuentos, caja tras normalizar el marco y cámaras registradas, sobre
+los dos paquetes, con la fórmula escrita al lado para que se rehagan sin leer
+nuestro código. Lo que llevaban esperando no era una puerta sino **superficie**:
+hasta que `producers/superficie` existió, un SfM disperso no tenía malla que
+medir.
+
+La fila 2 era la que más engañaba. Sobre `cube-v1` la normalización es la
+identidad, así que **una implementación que ignore el grafo entero acierta**. Por
+eso los casos de `normalizacion` no la usan: rotan treinta grados y trasladan, y
+uno exige componer dos aristas en orden. Dos mutaciones lo comprueban —ignorar la
+matriz, y componer al revés— y las dos ponen la puerta roja donde no la ponía
+nada.
+
+Y el tercer caso es el hallazgo de D11 hecho dorado: **sin camino, `null` y no la
+identidad**. Un grafo incompleto no se arregla suponiendo que seguramente son el
+mismo marco.
+
+De las tres columnas hay dos. `colmap-small-v1` tiene la del productor —
+`producers/colmap` trae su propio lector, escrito desde la documentación del
+formato— y las dos lecturas caen **exactas a 0** en los tres centros de cámara,
+con el dorado en medio a 4,1e-7, que es la cota de redondear a seis decimales.
+**De `cube-v1` no hay segunda implementación**: lo escribimos nosotros y nadie
+más lo ha vuelto a escribir, así que la decisión sigue ACORDADA y lo que le falta
+está dicho en vez de supuesto.
 
 `expected.json` es el oráculo de prueba, **no parte del paquete**: SoftSight no lo
 consume en producción. La lógica vive en `tests/contracts/parity/`.
-**Prueba:** es la prueba.
+**Prueba:** es la prueba, y desde el 2026-09-14 se llama `test:parity`.
 
 ### D24 — El árbol de triángulos se llama `boundsTree.ts` — IMPLEMENTADA (2026-08-12)
 Tipo `TriangleBoundsTree`. `bvhLoader.ts` ya existe y es Biovision Hierarchy.

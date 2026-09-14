@@ -1,0 +1,176 @@
+{
+  "fixture": "package-parity-v1",
+  "decision": "D23 filas 1, 2 y 3 (recuentos, caja tras normalizar el marco, cámaras registradas), D11, D32",
+  "why": [
+    "La fila 4 —proyección— ya tenía sus valores dorados en `camera-projection-v1`",
+    "desde el 2026-08-12. Las otras tres no los tenían, y la razón estaba escrita en",
+    "la propia decisión: no había paquete con superficie que comparar. Desde que",
+    "`producers/superficie` existe, sí.",
+    "",
+    "Lo que un valor dorado añade sobre una prueba normal es que **no lo escribe el",
+    "código que lo comprueba**. Estos se derivan con la fórmula de abajo y de los",
+    "ficheros en crudo; cualquiera puede rehacerlos sin leer una línea nuestra, que",
+    "es la única forma de que `SoftSight ↔ VideoMesh` signifique algo. Dos",
+    "implementaciones que coinciden pueden compartir el mismo error; dos que",
+    "coinciden **y** caen en un número derivado aparte, no.",
+    "",
+    "La fila 2 es la que más engaña. Sobre `cube-v1` la normalización del marco es",
+    "la identidad, así que una implementación que **ignore el grafo entero** da la",
+    "respuesta correcta. Por eso los casos `normalizacion` de abajo no usan la",
+    "identidad: rotan treinta grados y trasladan, y uno de ellos exige **componer",
+    "dos aristas**. Con solo el cubo, la fila no distinguía nada."
+  ],
+  "formula": [
+    "Recuentos: se cuentan de la cabecera del PLY (`element vertex`, `element face`)",
+    "y de las líneas con contenido de los ficheros de COLMAP —las que no están",
+    "vacías ni empiezan por `#`—. Las observaciones son la segunda línea de cada",
+    "imagen, en tercias (x, y, id), contando también las de id −1.",
+    "",
+    "Caja: mínimo y máximo por eje sobre los vértices. Tras normalizar el marco, la",
+    "caja **no se transforma**: se transforman los vértices y se vuelve a medir. Una",
+    "caja rotada deja de estar alineada con los ejes, así que rotar sus dos esquinas",
+    "da otra cosa — y sobre un cubo alineado a 30° la diferencia es 0,683013 contra",
+    "0,5.",
+    "",
+    "Composición: `resolveFrame(a → c)` con aristas a→b y b→c es `M_bc · M_ab`, en",
+    "ese orden, porque el punto multiplica por la derecha (D32). Sin camino devuelve",
+    "**null**, nunca la identidad.",
+    "",
+    "Centro de cámara: C = −Rᵀt, con R del cuaternión (w, x, y, z) normalizado",
+    "antes de nada y t la traslación de COLMAP, que guarda `cameraFromWorld`."
+  ],
+
+  "recuentos": {
+    "cube-v1": {
+      "artifacts": 6,
+      "malla": { "vertices": 24, "triangulos": 12, "verticesSoldados": 8 },
+      "nube": { "puntos": 8 },
+      "imagenes": 4,
+      "comentario": "24 vértices y 8 soldados: cada esquina del cubo aparece tres veces, una por cara, porque las normales por cara no se pueden compartir. Un lector que suelde al leer daría 8 y **no estaría mal**: son dos preguntas distintas, y por eso van las dos."
+    },
+    "colmap-small-v1": {
+      "calibraciones": 3,
+      "imagenesRegistradas": 3,
+      "puntos": 12,
+      "observaciones": 36,
+      "modelos": ["PINHOLE", "SIMPLE_RADIAL", "OPENCV"]
+    }
+  },
+
+  "caja": {
+    "cube-v1": {
+      "malla": { "min": [-0.5, -0.5, -0.5], "max": [0.5, 0.5, 0.5] },
+      "nube": { "min": [-0.5, -0.5, -0.5], "max": [0.5, 0.5, 0.5] },
+      "enASSET_CANONICAL": { "min": [-0.5, -0.5, -0.5], "max": [0.5, 0.5, 0.5] },
+      "comentario": "Iguales porque el grafo de `cube-v1` declara la identidad hacia ASSET_CANONICAL. Que coincidan **no prueba** que el grafo se lea: eso lo prueban los casos de `normalizacion`."
+    },
+    "colmap-small-v1": {
+      "nube": { "min": [-0.6, -0.45, -0.5], "max": [0.35, 0.55, 0.9] },
+      "comentario": "En el marco de la reconstrucción, que es el único que COLMAP declara. Un SfM sin restricción externa no sabe hacia dónde es arriba, así que no hay nada que normalizar (D9)."
+    },
+    "normalizacion": [
+      {
+        "caso": "una arista, rotación de 30° sobre Z y traslación",
+        "de": "RECONSTRUCTION",
+        "a": "ASSET_CANONICAL",
+        "transforms": [
+          {
+            "from": "RECONSTRUCTION",
+            "to": "ASSET_CANONICAL",
+            "matrix": [
+              0.8660254037844387, -0.49999999999999994, 0, 1,
+              0.49999999999999994, 0.8660254037844387, 0, -2,
+              0, 0, 1, 0.5,
+              0, 0, 0, 1
+            ]
+          }
+        ],
+        "caja": { "min": [0.316987, -2.683013, 0.0], "max": [1.683013, -1.316987, 1.0] },
+        "comentario": "0,683013 de semilado en X e Y —0,5·(cos 30 + sen 30)— y 0,5 en Z, que no se rota. Una implementación que ignore el grafo da ±0,5 en los tres."
+      },
+      {
+        "caso": "dos aristas, que hay que componer en orden",
+        "de": "RECONSTRUCTION",
+        "a": "ASSET_CANONICAL",
+        "transforms": [
+          {
+            "from": "RECONSTRUCTION",
+            "to": "PRODUCTION",
+            "matrix": [
+              0.8660254037844387, -0.49999999999999994, 0, 1,
+              0.49999999999999994, 0.8660254037844387, 0, -2,
+              0, 0, 1, 0.5,
+              0, 0, 0, 1
+            ]
+          },
+          {
+            "from": "PRODUCTION",
+            "to": "ASSET_CANONICAL",
+            "matrix": [1, 0, 0, -0.25, 0, -1, 0, 0.5, 0, 0, -1, 2, 0, 0, 0, 1]
+          }
+        ],
+        "caja": { "min": [0.066987, 1.816987, 1.0], "max": [1.433013, 3.183013, 2.0] },
+        "comentario": "Quien componga al revés —`M_ab · M_bc`— o se quede con la primera arista no cae aquí. Los dos tramos son rígidos y ninguno conmuta con el otro."
+      },
+      {
+        "caso": "sin camino",
+        "de": "RECONSTRUCTION",
+        "a": "ASSET_CANONICAL",
+        "transforms": [
+          {
+            "from": "CAMERA",
+            "to": "PRODUCTION",
+            "matrix": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+          }
+        ],
+        "caja": null,
+        "comentario": "**null y no la identidad.** Un grafo sin camino no se completa suponiendo que seguramente son el mismo marco: esa suposición es el error, no el arreglo (D11)."
+      }
+    ]
+  },
+
+  "camaras": {
+    "cube-v1": [
+      { "id": "cam-frontal", "imageArtifactId": "img-cam-frontal", "width": 256, "height": 256, "model": "PINHOLE", "cameraAxes": "X_RIGHT_Y_UP_Z_BACKWARD", "pixelOrigin": "TOP_LEFT", "pixelCenter": "CENTER" },
+      { "id": "cam-lateral", "imageArtifactId": "img-cam-lateral", "width": 256, "height": 256, "model": "PINHOLE", "cameraAxes": "X_RIGHT_Y_UP_Z_BACKWARD", "pixelOrigin": "TOP_LEFT", "pixelCenter": "CENTER" },
+      { "id": "cam-cenital", "imageArtifactId": "img-cam-cenital", "width": 256, "height": 256, "model": "PINHOLE", "cameraAxes": "X_RIGHT_Y_UP_Z_BACKWARD", "pixelOrigin": "TOP_LEFT", "pixelCenter": "CENTER" },
+      { "id": "cam-tres-cuartos", "imageArtifactId": "img-cam-tres-cuartos", "width": 256, "height": 256, "model": "PINHOLE", "cameraAxes": "X_RIGHT_Y_UP_Z_BACKWARD", "pixelOrigin": "TOP_LEFT", "pixelCenter": "CENTER" }
+    ],
+    "colmap-small-v1": [
+      {
+        "nombre": "frame_0001.jpg",
+        "imageId": "1",
+        "cameraId": "1",
+        "width": 640,
+        "height": 480,
+        "modeloColmap": "PINHOLE",
+        "modeloContrato": "PINHOLE",
+        "distorsion": null,
+        "centro": [-0.15, -2.248582, -2.559742]
+      },
+      {
+        "nombre": "frame_0002.jpg",
+        "imageId": "2",
+        "cameraId": "2",
+        "width": 800,
+        "height": 600,
+        "modeloColmap": "SIMPLE_RADIAL",
+        "modeloContrato": "OPENCV",
+        "distorsion": { "k1": -0.021 },
+        "centro": [3.577492, -0.12, -1.603606]
+      },
+      {
+        "nombre": "frame_0003.jpg",
+        "imageId": "3",
+        "cameraId": "3",
+        "width": 1024,
+        "height": 768,
+        "modeloColmap": "OPENCV",
+        "modeloContrato": "OPENCV",
+        "distorsion": { "k1": -0.035, "k2": 0.011, "p1": 0.0004, "p2": -0.0007 },
+        "centro": [1.109111, -1.54164, -3.75842]
+      }
+    ],
+    "comentario": "`SIMPLE_RADIAL` sale como `OPENCV` con un solo coeficiente: el contrato nombra dos modelos y la distorsión viaja por campo, así que el modelo de COLMAP y el del contrato no son el mismo dato y los dos van escritos. Los centros llevan seis decimales porque a partir de ahí el cuaternión redondeado del fichero ya no los sostiene."
+  }
+}
