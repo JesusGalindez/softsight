@@ -60,6 +60,7 @@ const GATES = [
   "confidence.test.mjs", // 3,5 s de CPU — R6: desde dónde se miró, no solo si se miró
   "coverage.test.mjs", // 3,0 s de CPU — R6: cobertura sobre el cubo y sus cuatro vistas
   "producer-colmap.test.mjs", // 2,5 s de CPU con el fixture — R0-B: el segundo productor
+  "producer-superficie.test.mjs", // 10,3 s de CPU con el fixture — la nube dispersa se hace superficie, y R6 mide sobre datos reales
   "self-intersection.test.mjs", // 0,2 s de CPU — cruces y, sobre todo, dónde calla
   "mesh-topology.test.mjs", // 0,2 s de CPU — componentes y bucles contra casos conocidos
   "mesh-diff.test.mjs", // 0,5 s de CPU — el diff contra casos de resultado conocido
