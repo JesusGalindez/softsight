@@ -32,7 +32,29 @@ import {
  * llevan `role`. Compartirlo habría obligado a que uno de los dos documentos
  * tuviera campos del otro.
  */
-export function inspectAsset(manifestPath) {
+/**
+ * El informe de un validador externo, leído de su JSON.
+ *
+ * Se aceptan las dos formas que el validador de Khronos produce —el objeto con
+ * `issues.numErrors` y la lista suelta— porque su CLI y su librería no escriben
+ * lo mismo, y obligar al usuario a transformarlo sería trasladarle nuestro
+ * problema. Lo que **no** se hace es ejecutarlo: es la autoridad sobre si un GLB
+ * es un GLB, y envolverlo aquí sería reimplementar lo que ya existe.
+ */
+export function readExternalValidation(path) {
+  const documento = JSON.parse(readFileSync(path, "utf8"));
+  const issues = documento.issues ?? documento;
+  const errors = issues.numErrors ?? issues.errors ?? 0;
+  const warnings = issues.numWarnings ?? issues.warnings ?? 0;
+  return {
+    provider: documento.validatorVersion ? "khronos-gltf-validator" : (documento.provider ?? "desconocido"),
+    ...(documento.validatorVersion === undefined ? {} : { version: documento.validatorVersion }),
+    errors,
+    warnings,
+  };
+}
+
+export function inspectAsset(manifestPath, external) {
   const raiz = dirname(manifestPath);
   let documento;
   try {
@@ -174,7 +196,7 @@ export function inspectAsset(manifestPath) {
     return { report: null, exitCode: 20, fatal: fatales.join("; ") };
   }
 
-  const report = buildProductionReport({ manifest: documento, meshes, images, uvPresence });
+  const report = buildProductionReport({ manifest: documento, meshes, images, uvPresence, external });
   const exitCode = report.certification === "PASS" ? 0 : report.certification === "FAIL" ? 1 : 11;
   return { report, exitCode, fatal: null };
 }
@@ -185,6 +207,10 @@ export function renderProduction(report) {
   const veredicto = report.certification === "PASS" ? "PASA" : report.certification;
   lineas.push(`${report.assetId} — ${veredicto} · destino ${report.target.preset}`);
   if (report.certificationReason) lineas.push(`  motivo: ${report.certificationReason}`);
+  // **El veredicto único, arriba del todo.** Es lo primero que alguien busca, y
+  // es una conjunción: dice que no queda comprobación declarada sin pasar, no
+  // cuánta calidad tiene la pieza.
+  lineas.push(`  ${report.readiness.verdict}` + (report.readiness.reason ? ` — ${report.readiness.reason}` : ""));
   lineas.push("");
 
   for (const medida of report.measurements) {
@@ -307,6 +333,17 @@ export function renderProduction(report) {
     }
   }
 
+  lineas.push("");
+  lineas.push(
+    `listo       ${report.readiness.byState.PASS} pasan · ${report.readiness.byState.FAIL} fallan · ` +
+      `${report.readiness.byState.NOT_RUN} sin comprobar · ` +
+      `${report.readiness.byState.NOT_DECLARED} no aplican`,
+  );
+  for (const check of report.readiness.checks) {
+    if (check.state === "PASS") continue;
+    lineas.push(`  ${check.state.padEnd(13)} ${check.id}${check.reason ? ` · ${check.reason}` : ""}`);
+  }
+
   if (report.issues.length > 0) {
     lineas.push("");
     lineas.push(`problemas   ${report.issues.length}`);
@@ -318,10 +355,18 @@ export function renderProduction(report) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [command, target, ...rest] = process.argv.slice(2);
   if (command !== "inspect" || target === undefined) {
-    process.stderr.write("uso: node tools/production.mjs inspect <manifest.json> [--human]\n");
+    process.stderr.write(
+      "uso: node tools/production.mjs inspect <manifest.json> [--human] [--external informe.json]\n" +
+        "  --external   informe de un validador externo, ingerido y no ejecutado\n",
+    );
     process.exit(2);
   }
-  const { report, exitCode, fatal } = inspectAsset(resolve(target));
+  const externalIndex = rest.indexOf("--external");
+  const external =
+    externalIndex >= 0 && rest[externalIndex + 1] !== undefined
+      ? readExternalValidation(resolve(rest[externalIndex + 1]))
+      : undefined;
+  const { report, exitCode, fatal } = inspectAsset(resolve(target), external);
   if (fatal !== null) {
     process.stderr.write(`${fatal}\n`);
     process.exit(exitCode);

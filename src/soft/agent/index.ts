@@ -313,6 +313,14 @@ export type {
 } from "./production/texture";
 export type { UvAudit } from "./production/uv";
 export type { SilhouetteComparison, SilhouetteView } from "./production/silhouette";
+export { assessReadiness } from "./production/readiness";
+export type {
+  CheckState,
+  ExternalValidation,
+  Readiness,
+  ReadinessCheck,
+  ReadinessReport,
+} from "./production/readiness";
 export {
   COLLISION_SAMPLES,
   CONVEX_TOLERANCE,

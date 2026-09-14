@@ -3422,6 +3422,44 @@ Gate:
 PRODUCTION_READY
 ```
 
+**Hecho el 2026-09-14**, y lo primero que hay que contestar es la contradicción
+aparente: doce escalones negándose a resumir —la confianza no sale como un número
+entre cero y uno, la comparación de candidatos no da una nota— y ahora un
+veredicto de una palabra.
+
+```text
+una NOTA        pesa cosas incomparables, y los pesos los pone quien mide
+una CONJUNCIÓN  dice «todo lo que declaraste como necesario, pasó»
+```
+
+`PRODUCTION_READY` es lo segundo. **No mide calidad**: dice que no queda ninguna
+comprobación declarada sin pasar.
+
+**Y la regla que lo sostiene: no se gana con silencio.** Si algo no se pudo
+comprobar —no hay cámaras, el proxy está abierto, el validador no corrió— el
+veredicto es `UNKNOWN`, nunca aprobado. Sin eso, **el asset más vacío sería el más
+listo para producción**: sin LOD no hay desviación que medir, sin proxy no hay
+contención, sin textura no hay tamaño que exceder.
+
+Va más lejos: **tampoco se gana no declarando nada**. Un destino que no dice qué
+exige deja todos los topes en `NO_JUZGADO`, y un asset entero sin juzgar no puede
+estar listo. Y qué declaraciones hacen falta **lo decide el propio asset**: a quien
+no trae niveles de detalle no se le exige su tolerancia —eso es `NOT_DECLARED` y no
+bloquea—, y a quien los trae y no la declara, sí.
+
+Medido: el fixture con todo declarado y el informe de Khronos sin errores sale
+`PRODUCTION_READY` con ocho comprobaciones pasadas; el mismo fixture sin destino
+que exija nada sale `UNKNOWN` **con todas sus medidas en PASS**.
+
+**El validador de Khronos no se ejecuta: se ingiere.** Es la autoridad sobre si un
+GLB es un GLB, y envolverlo aquí sería reimplementar lo que ya existe. Lo que este
+escalón aporta es la ranura —quién validó, con qué versión, cuántos errores y
+cuántos avisos— y la regla de que sin ella no hay aprobación. Decir «válido» sin
+que nadie lo haya validado es el sobreanuncio que D31 impide.
+
+Un fallo manda sobre un hueco: con algo roto, el veredicto no se suaviza a «no se
+sabe».
+
 ---
 
 ## R16 — Operational maturity

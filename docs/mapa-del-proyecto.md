@@ -671,10 +671,19 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       hundida tiene los mismos doce triángulos y se sale un 32 %. Y un hallazgo
       del camino: **una esfera teselada no es convexa como malla**, porque sus
       quads no son coplanarios y una diagonal queda de valle.
-    - Doce puertas nuevas, `test:masks`, `test:producer-superficie`,
+    - **Y R15: `PRODUCTION_READY`, que no se gana con silencio.** Doce escalones
+      negándose a resumir y ahora un veredicto de una palabra — pero una **nota**
+      pesa cosas incomparables y una **conjunción** dice «todo lo que declaraste
+      como necesario, pasó». La regla que lo sostiene: si algo no se pudo
+      comprobar, el veredicto es `UNKNOWN` y nunca aprobado, porque si no **el
+      asset más vacío sería el más listo**. Y tampoco se gana no declarando nada:
+      qué exigencias aplican lo decide el propio asset. El validador de Khronos no
+      se ejecuta, **se ingiere**: sin su informe no hay aprobación.
+    - Trece puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
       `test:repair`, `test:production`, `test:lod-qa`, `test:uv-qa` y
-      `test:texture-qa` y `test:collision-qa`, y un identificador nuevo,
+      `test:texture-qa`, `test:collision-qa` y `test:readiness`, y un identificador
+      nuevo,
       `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a los que esperan
       respuesta. Ningún hash del rasterizador se movió.
 

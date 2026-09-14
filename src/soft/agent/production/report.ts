@@ -38,6 +38,11 @@ import { diffMeshes, type MeshDiff } from "../reconstruction/meshDiff";
 import { evaluateBudgets, type BudgetResult, type DeclaredBudget } from "../reconstruction/budgets";
 import { compareSilhouettes, type SilhouetteComparison } from "./silhouette";
 import { assessCollision, type CollisionQuality } from "./collision";
+import {
+  assessReadiness,
+  type ExternalValidation,
+  type ReadinessReport,
+} from "./readiness";
 import { auditUvs, type UvAudit } from "./uv";
 import {
   auditMaterials,
@@ -164,6 +169,10 @@ export interface ProductionReport {
   textures: TextureAudit[];
   /** R13: lo que los materiales se contradicen diciendo. Sin abrir una imagen. */
   materialIssues: MaterialIssue[];
+  /** R15: el veredicto único, que es una conjunción y no una nota. */
+  readiness: ReadinessReport;
+  /** R15: lo que un validador externo dijo, si alguno corrió. */
+  externalValidation?: ExternalValidation;
   issues: Array<{ reason: string; message: string }>;
 }
 
@@ -199,6 +208,12 @@ export interface ProductionInput {
   meshes: ReadonlyMap<string, Mesh>;
   /** Las imágenes ya decodificadas, por identidad de artifact. El IO vive fuera. */
   images?: ReadonlyMap<string, TextureImage>;
+  /**
+   * El informe de un validador externo, **ingerido y no ejecutado**. El validador
+   * de Khronos es la autoridad sobre si un GLB es un GLB, y envolverlo aquí sería
+   * reimplementar lo que ya existe.
+   */
+  external?: ExternalValidation;
   /**
    * Si cada malla traía coordenadas de textura, leído de donde todavía se
    * distingue. Sin esto, «sin UV» y «todas las UV en cero» serían el mismo array.
@@ -595,6 +610,32 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
     reason = "METRICA_REQUERIDA_NO_DISPONIBLE";
   }
 
+  const readiness = assessReadiness({
+    has: {
+      lods: lodArtifacts.length > 0,
+      collision: collisionArtifact !== undefined,
+      textures: textures.length > 0,
+      // «Puede llevar UV» y no «las lleva»: a un asset en PLY no se le exige
+      // declarar si las quiere, porque el formato no las admite.
+      uvCapableMeshes: measurements.some((medida) => medida.uv.present),
+    },
+    declared: {
+      lodSilhouetteMax: manifest.target?.lodSilhouetteMax,
+      collisionSlackMax: manifest.target?.collisionSlackMax,
+      textureMaxSize: manifest.target?.textureMaxSize,
+      uvRequired: manifest.target?.uvRequired,
+    },
+    results: {
+      certification,
+      ...(reason === undefined ? {} : { certificationReason: reason }),
+      ...(collision === undefined ? {} : { collision }),
+      budgetsUnevaluated: budgets
+        .filter((budget) => budget.reason === "METRICA_REQUERIDA_NO_DISPONIBLE")
+        .map((budget) => budget.name),
+    },
+    ...(input.external === undefined ? {} : { external: input.external }),
+  });
+
   return {
     documentType: "softsight.production-report",
     contractVersion: manifest.contractVersion ?? "0.0",
@@ -610,6 +651,8 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
     budgets,
     textures,
     materialIssues,
+    readiness,
+    ...(input.external === undefined ? {} : { externalValidation: input.external }),
     issues,
   };
 }
