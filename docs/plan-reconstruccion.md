@@ -3475,6 +3475,149 @@ MCP
 performance nightly
 ```
 
+**Hecho el 2026-09-14**, y lo que lo ordena todo es una pregunta que quince
+escalones habían aplazado: **cómo llega el paquete**. Trece escalones midiendo y
+un consumidor —VideoMesh— que no tenía por dónde entregar lo que se mide.
+
+### El transporte, que el §84 dejó decidido a medias
+
+El puente recibía los ficheros en base64 dentro del JSON. Para un GLB de dos
+megas es correcto y no hay alternativa: el navegador no tiene rutas que ofrecer.
+Para un `turret.vmesh` no funciona, y no por poco: 150 MB de `dense.ply` son 200
+en base64, el tope por fichero son 256 **ya codificados**, y el timeout son 120 s.
+
+Así que el paquete viaja **por ruta** y sube `bridgeContractVersion` a 2. Eso no
+es un parámetro: es abrir el puente a leer disco del anfitrión, y la regla que lo
+sostiene es una sola —**la raíz permitida la declara la configuración, nunca la
+petición**—. Si viniera en la petición, las otras cuatro serían decorado:
+cualquiera declararía `/` como su raíz.
+
+```text
+1  raíz por SOFTSIGHT_PACKAGE_ROOTS, no por la petición
+2  realpath en los dos lados antes de comparar
+3  prefijo por COMPONENTES, no por cadena
+4  ningún `..`, aunque resolviera dentro
+5  lectura solamente
+```
+
+La 3 es la que un `startsWith` deja pasar: `/datos/paquetes` **no** es prefijo de
+`/datos/paquetes-de-otro`, que es un directorio ajeno. La puerta la comprueba con
+las cuatro salidas conocidas, incluida un enlace simbólico que cae dentro de la
+raíz y apunta fuera.
+
+La versión 1 sigue valiendo entera: el editor la habla y no cambia. La respuesta
+**hace eco de la versión pedida**, no del máximo que el puente sabe.
+
+### Los cuatro comandos, y las cuatro herramientas
+
+`reconstructionInspect`, `reconstructionCoverage`, `reconstructionCompare` y
+`productionValidate` en el puente (§67), y las mismas por MCP (§68). No lanzan
+proceso ni escriben sandbox: llaman a la API pública, la misma que llama el CLI.
+La cobertura es una **proyección** del informe y no otra medida — dos números
+distintos para la misma pregunta es lo que D1 prohíbe, y la puerta lo comprueba
+por igualdad exacta.
+
+El §68 llamaba al tercero `softsight_geometry_compare`. Se queda en
+`softsight_reconstruction_compare` por D31: no compara dos geometrías —eso es
+`diff`— sino candidatos, criterio a criterio y sin nota.
+
+### La caché, y la invalidación que no es una tabla
+
+`computeVisibility` son 338 ms de los 439 que cuesta el informe de
+`south-building`, y de ella cuelgan la cobertura, la confianza y el consejo de
+captura. Se guarda, y la clave es **el contenido que la medida lee**: posiciones
+e índices, el CameraSet campo a campo, las siluetas, muestras y semilla.
+
+Nunca `path + mtime + size`. No por elegancia: dos paquetes distintos escritos en
+la misma ruta, con el mismo tamaño y el mismo `mtime` —lo que hace un script que
+regenera— habrían recibido el uno la cobertura del otro. **Eso no es lentitud, es
+un informe equivocado con el sello del bueno.** La puerta construye ese caso
+exacto.
+
+Y el §56 pide una tabla de invalidación. Aquí no la hay, y es el punto: lo que
+invalida cada cosa **es la lista de lo que entra en su clave**, así que la matriz
+sale sola y no se puede desincronizar.
+
+```text
+cambia la geometría  →  cambia el hash de la malla     →  se recalcula
+cambia una cámara    →  cambia el hash del CameraSet   →  se recalcula
+cambia un UV         →  no entra en la clave           →  NO se recalcula
+```
+
+La versión del algoritmo tampoco es un número a mano: es la huella de
+`dist-node/agent3d.mjs`. Un `ALGORITHM_VERSION = 3` que alguien olvide subir deja
+una caché sirviendo números de la versión anterior y nada lo delata. El precio se
+dice: es conservador de más, y tocar el lector de PLY invalida visibilidades que
+el lector de PLY no afecta.
+
+Escribirlo costó un rojo que vale la pena dejar escrito: `MaskSet` es un `Map`, y
+con `Object.keys` sobre un `Map` salen cero claves. La máscara no entraba en la
+huella y un paquete **con** siluetas recibía la visibilidad medida sin ellas. Lo
+cazó `test:masks`, no esta puerta.
+
+Medido: 439 ms → 279 ms de CPU por informe, mediana de nueve pases alternos.
+
+### El proxy de vista (§54)
+
+Dos geometrías, y el informe dice cuál se usó: la malla entera para **toda
+medida**, y un proxy para el pliego cuando pasa del presupuesto de 250.000
+triángulos. `renderSource` viaja **siempre**, también cuando no hubo proxy:
+ausente no es «entera», ausente es «no se sabe».
+
+El presupuesto es global y se reparte entre las piezas. Aplicar el mismo tope a
+cada una no es un presupuesto: un dron de 296 piezas de 130 triángulos no baja de
+37.950 ni pidiendo 2.000. Repartido, baja a 2.854 y ni el recuento ni el radio
+del informe se mueven.
+
+Los vértices se agrupan por celda con **representante**, no con promedio: el
+promedio de tres vértices de una esquina cae dentro de la pieza, y un proxy de
+promedios se encoge. Con representante, todo vértice del proxy está en la malla
+original.
+
+**Y no es un LOD.** R12 midió exactamente esta frontera. El proxy de la puerta
+pierde hasta el 0,9 % de la silueta en la peor vista; vale para mirar y no para
+entregar, y por eso `renderSource` existe.
+
+### El banco de rendimiento (§61, §64)
+
+`npm run bench`. El §61 dice que no se fijen promesas absolutas todavía, y tiene
+razón: un «5M en menos de 30 s» escrito hoy es una promesa sobre una máquina de
+2015 que mañana alguien leerá como requisito.
+
+Lo que sí se afirma es **la pendiente**: el coste por triángulo entre dos
+escalones. Un número suelto no distingue «esta máquina es lenta» de «este código
+es cuadrático», y son problemas distintos — el primero se arregla con otra
+máquina y el segundo no se arregla nunca. Con un solo escalón no hay veredicto, y
+lo honrado es imprimir el número y callarse.
+
+`--nightly` corre 1M, 5M y 10M, que es lo del §64 y lo que no cabe en una suite
+de 147 s. Medido el 2026-09-14 en el i5-5350U, con `--heavy`:
+
+```text
+escalón   etapa         CPU        RSS pico
+100k      auditoría     0,12 s      67 MiB
+100k      árbol         0,17 s      72 MiB
+100k      visibilidad   0,96 s      77 MiB
+1M        auditoría     0,27 s     112 MiB
+1M        árbol         0,57 s     155 MiB
+1M        visibilidad   7,28 s     166 MiB
+5M        auditoría     0,96 s     316 MiB
+5M        árbol         2,53 s     511 MiB
+5M        visibilidad  34,42 s     551 MiB
+```
+
+Las tres pendientes salen **por debajo de 1**, y eso no es magia: en el escalón
+pequeño pesa lo que no depende del tamaño —arrancar, reservar, calentar el JIT— y
+al multiplicar por cincuenta se reparte. Ninguna es cuadrática, que es lo que el
+§61 pedía comprobar, y **el escalón de 5M se atraviesa** con 551 MiB.
+
+**Lo que R16 no hace**: `parse` no está en la matriz, y no por olvido — el único
+lector de PLY es el ASCII, y un PLY ASCII de 5M de triángulos son ~400 MB de
+texto que no caben en una cadena de Node. El lector binario sigue siendo el ítem
+10 del §72. Y la opción 1 del §84 queda abierta **solo para lectura**: los
+artefactos siguen saliendo por el canal de siempre, así que un paquete que
+produjera 150 MB de salida todavía no tiene por dónde devolverlos.
+
 ---
 
 # 72. Exact implementation order

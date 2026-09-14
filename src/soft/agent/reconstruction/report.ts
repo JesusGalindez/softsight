@@ -76,8 +76,26 @@ export interface ReportInput {
     samples?: number;
     /** Siluetas por identidad de cámara, si el paquete las declaró. */
     masks?: MaskSet;
+    /**
+     * La visibilidad ya calculada, si quien leyó el paquete la tenía guardada.
+     *
+     * La caché vive **fuera** de este módulo y no por gusto: aquí no hay IO, y
+     * meter `node:fs` en `src/` rompería lo que hace que este código corra
+     * también en el navegador. Lo que entra por aquí es el resultado, no la
+     * política de cuándo vale.
+     */
+    visibility?: SurfaceVisibility;
   };
 }
+
+/**
+ * Cuántas muestras lleva la superficie cuando nadie pide otra cosa.
+ *
+ * Se exporta porque **la caché tiene que poder nombrarla**: el muestreo entra en
+ * la clave, y si quien la construye escribiera el número por su cuenta, el día
+ * que este suba habría una clave que dice 8.000 sobre una medida de 16.000.
+ */
+export const DEFAULT_SURFACE_SAMPLES = 8_000;
 
 /**
  * Qué certifica R0, que no estaba escrito en ninguna decisión.
@@ -358,10 +376,12 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
   const surfaceWarnings: IngestIssue[] = [];
   if (input.surface !== undefined && input.surface.cameras.length > 0) {
     const { mesh, cameras, purelyReconstructed } = input.surface;
-    const samples = input.surface.samples ?? 8_000;
+    const samples = input.surface.samples ?? DEFAULT_SURFACE_SAMPLES;
     // Una sola pasada de visibilidad para las dos medidas: es el grueso del coste
     // y, sobre todo, dos recorridos darían dos fronteras que no se pueden cruzar.
-    visibility = computeVisibility(mesh, cameras, { samples, masks: input.surface.masks });
+    visibility =
+      input.surface.visibility ??
+      computeVisibility(mesh, cameras, { samples, masks: input.surface.masks });
     topology = analyzeMeshTopology(mesh);
     coverage = computeCoverage(mesh, cameras, { visibility, purelyReconstructed, samples });
     confidence = computeConfidence(mesh, cameras, { visibility, purelyReconstructed, samples });

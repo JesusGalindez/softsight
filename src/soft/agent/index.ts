@@ -39,6 +39,13 @@ import {
 } from "./model";
 import { parseObj } from "./objLoader";
 import type { Edit } from "./model";
+import {
+  PREVIEW_MAX_TRIANGLES,
+  buildPreviewProxy,
+  describeRenderSource,
+  shareBudget,
+  type RenderSource,
+} from "./previewProxy";
 import type { Mat4 } from "../math";
 import type { Mesh } from "../mesh";
 import { diffSheets, type RasterImage, type RenderDiff } from "./renderDiff";
@@ -257,7 +264,7 @@ export {
 export type { SceneRole } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
 export { RECONSTRUCTION_PACKAGE_SCHEMA } from "./reconstruction/packageSchema";
-export { SUPPORT_WARNING_FLOOR } from "./reconstruction/report";
+export { DEFAULT_SURFACE_SAMPLES, SUPPORT_WARNING_FLOOR } from "./reconstruction/report";
 export {
   CONTRACT_VERSIONS,
   CONTRACT_VERSION_LIST,
@@ -302,6 +309,13 @@ export { computeVisibility, seesPoint } from "./reconstruction/coverage";
 export type { SurfaceVisibility } from "./reconstruction/coverage";
 export { PRODUCTION_ASSET_SCHEMA } from "./production/manifest";
 export { SILHOUETTE_RESOLUTION, SILHOUETTE_VIEWS, compareSilhouettes } from "./production/silhouette";
+export {
+  PREVIEW_MAX_TRIANGLES,
+  buildPreviewProxy,
+  describeRenderSource,
+  shareBudget,
+  type RenderSource,
+} from "./previewProxy";
 export { UV_DEGENERATE_AREA, UV_GRID, auditUvs } from "./production/uv";
 export { NORMAL_MAX_BELOW_HORIZON, NORMAL_MIN_BLUE, NORMAL_MIN_LENGTH, auditMaterials, auditTexture } from "./production/texture";
 export type {
@@ -851,6 +865,12 @@ export interface SceneReview {
   sheet: SheetReport | null;
   views: ViewReport[];
   renderHash: RenderHash | null;
+  /**
+   * Qué geometría se rasterizó (§54). **Viaja siempre**, también cuando fue la
+   * entera: ausente no es «entera», ausente es «no se sabe», y quien lee una
+   * medida necesita poder descartar que salga de un proxy de vista.
+   */
+  renderSource: RenderSource;
   partScreenBoxes: ScreenBoxes | null;
   /** Auditoría entre piezas: solapes y hermanos fuera de escala. */
   spatial: SpatialAudit;
@@ -871,6 +891,12 @@ export interface ReviewOptions {
    * la imagen.
    */
   inspectOnly?: boolean;
+  /**
+   * Presupuesto de triángulos para la vista (§54). Por encima, el pliego se
+   * rasteriza sobre un proxy y el informe lo dice en `renderSource`. La auditoría
+   * **no lo usa nunca**: las medidas salen de la malla entera.
+   */
+  previewMaxTriangles?: number;
   /** Pliego anterior ya decodificado, para comparar contra el que se va a renderizar. */
   baseline?: RasterImage;
   /**
@@ -1052,11 +1078,37 @@ export function reviewScene(
     ...auditMesh(entry.node.mesh),
   }));
 
+  // Geometría de vista (§54), como en la revisión de modelo. El encuadre sigue
+  // saliendo de los nodos enteros: un proxy tiene una caja envolvente algo menor
+  // —los vértices que colapsan se van al representante— y encuadrar con ella
+  // movería la cámara según el presupuesto, que es lo último que debería moverla.
+  const objectTriangles = objectNodes.reduce((total, node) => total + node.mesh.indices.length / 3, 0);
+  const previewObjectNodes = options.inspectOnly
+    ? objectNodes
+    : objectNodes.map((node) => {
+        const proxy = buildPreviewProxy(
+          node.mesh,
+          shareBudget(
+            node.mesh.indices.length / 3,
+            objectTriangles,
+            options.previewMaxTriangles ?? PREVIEW_MAX_TRIANGLES,
+          ),
+        );
+        return proxy === node.mesh ? node : { ...node, mesh: proxy };
+      });
+  const previewNodes = withGround
+    ? [nodes[0], ...previewObjectNodes]
+    : previewObjectNodes;
+  const renderSource = describeRenderSource(
+    objectTriangles,
+    previewObjectNodes.reduce((total, node) => total + node.mesh.indices.length / 3, 0),
+  );
+
   // Encuadre sobre el objeto, no sobre la escena dibujada: el suelo es contexto.
   const sheet = options.inspectOnly
     ? null
     : renderContactSheet(
-        nodes,
+        previewNodes,
         tileSize,
         undefined,
         undefined,
@@ -1107,6 +1159,7 @@ export function reviewScene(
   ]);
 
   const review: SceneReview = {
+    renderSource,
     objects,
     scene: {
       objects: objects.length,
@@ -1187,6 +1240,11 @@ export interface ModelReview {
    * responde «¿cambió algo?» sin guardar imágenes; el `diff` dice cuánto y dónde.
    */
   renderHash: RenderHash | null;
+  /**
+   * Qué geometría se rasterizó (§54). Viaja siempre, también cuando fue la
+   * entera: ausente no es «entera», ausente es «no se sabe».
+   */
+  renderSource: RenderSource;
   loaderNotes: string[];
   warnings: Warning[];
   /** Avisos nuevos, resueltos y persistentes frente al informe anterior, si se pasó. */
@@ -1272,11 +1330,36 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
   // El encuadre sigue a la selección cuando la hay: si el agente está trabajando en
   // un rotor, quiere ver el rotor, no el dron entero con el rotor de 12 píxeles.
   let sheet: ContactSheet | null = null;
+  // La geometría de vista (§54). Se calcula aunque no se renderice, porque el
+  // informe la publica igual: con `inspectOnly` no se rasterizó nada y eso es
+  // exactamente lo que dice `renderTriangles === sourceTriangles`.
+  const previewBudget = options.previewMaxTriangles ?? PREVIEW_MAX_TRIANGLES;
+  // Los recuentos van sobre el modelo y **no sobre el suelo**: el plano de
+  // referencia son dos triángulos que nadie pidió, y sumarlos dejaría un
+  // `sourceTriangles` que no cuadra con el `triangles` del mismo informe.
+  const modelTriangles = modelNodes.reduce((total, node) => total + node.mesh.indices.length / 3, 0);
+  const previewModelNodes = options.inspectOnly
+    ? modelNodes
+    : modelNodes.map((node) => {
+        const proxy = buildPreviewProxy(
+          node.mesh,
+          shareBudget(node.mesh.indices.length / 3, modelTriangles, previewBudget),
+        );
+        // Identidad y no `deepEqual`: `buildPreviewProxy` devuelve la misma malla
+        // cuando no hay nada que simplificar, así que el caso normal no copia.
+        return proxy === node.mesh ? node : { ...node, mesh: proxy };
+      });
+  const previewNodes =
+    previewModelNodes === modelNodes ? nodes : [...nodes.slice(0, nodes.length - modelNodes.length), ...previewModelNodes];
+  const renderSource = describeRenderSource(
+    modelTriangles,
+    previewModelNodes.reduce((total, node) => total + node.mesh.indices.length / 3, 0),
+  );
   if (!options.inspectOnly) {
     const framingNodes =
       selected.length > 0 ? toSceneNodes(model, { highlight, isolate: true }) : modelNodes;
     sheet = renderContactSheet(
-      nodes,
+      previewNodes,
       tileSize,
       undefined,
       undefined,
@@ -1400,6 +1483,7 @@ export function reviewModel(model: Model, options: ModelReviewOptions = {}): {
       partScreenBoxes: sheet ? screenBoxes(boxSources(audited), sheet) : null,
       spatial,
       renderHash: sheet ? hashSheet(sheet) : null,
+      renderSource,
       // La atribución mira todas las piezas aunque solo se publiquen las auditadas:
       // el cambio interesante suele estar justo fuera de la selección.
       diff:

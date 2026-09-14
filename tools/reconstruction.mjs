@@ -79,13 +79,16 @@ import {
   PACKAGE_CODE_TABLE,
   RESOURCE_LIMITS,
   RESOURCE_LIMIT_REASONS,
+  DEFAULT_SURFACE_SAMPLES,
   auditMesh,
   buildReconstructionReport,
+  computeVisibility,
   ingestPackage,
   maskMismatch,
   parsePlyAscii,
 } from "../dist-node/agent3d.mjs";
 import { decodePng } from "./agent3d.mjs";
+import { openVisibilityCache, visibilityKey } from "./reconCache.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
@@ -130,7 +133,7 @@ function schemaHashes() {
   }
 }
 
-export function inspectPackage(manifestPath, { samples } = {}) {
+export function inspectPackage(manifestPath, { samples, cache = true, cacheRoot } = {}) {
   // El primer fichero que se lee sin haber comprobado nada. Antes de `readFileSync`
   // y no después: después ya está en memoria, que es lo que el tope evita.
   const manifestBytes = statSync(manifestPath).size;
@@ -268,6 +271,38 @@ export function inspectPackage(manifestPath, { samples } = {}) {
           masks,
         };
 
+  // La visibilidad, si ya estaba medida sobre exactamente estos bytes (§55). La
+  // caché vive aquí y no en `src/`: el módulo que mide no toca disco, y lo que
+  // decide si un resultado guardado vale es política de quien lee el paquete.
+  const visibilityCache = openVisibilityCache({
+    enabled: cache,
+    // `cacheRoot` existe para las puertas: usar la del repositorio mezclaría
+    // entradas de otras ejecuciones y el recuento de aciertos dejaría de
+    // significar nada. Omitirlo es el caso normal.
+    ...(cacheRoot === undefined ? {} : { root: cacheRoot }),
+  });
+  if (surface !== undefined) {
+    const parametros = {
+      mesh: surface.mesh,
+      cameras: surface.cameras,
+      masks: surface.masks,
+      samples: surface.samples ?? DEFAULT_SURFACE_SAMPLES,
+      seed: 1,
+    };
+    const key = visibilityKey(parametros);
+    // Se mide **aquí** y se pasa hecha, en vez de dejar que el informe la mida y
+    // pedírsela luego: publicarla en el informe para poder guardarla sería meter
+    // 400 KB de muestreo en un documento que cruza una frontera, y quien lo lee
+    // no tiene nada que hacer con ellos.
+    surface.visibility =
+      visibilityCache.get(key) ??
+      computeVisibility(surface.mesh, surface.cameras, {
+        samples: parametros.samples,
+        masks: surface.masks,
+      });
+    if (visibilityCache.stats.hits === 0) visibilityCache.set(key, surface.visibility);
+  }
+
   const report = buildReconstructionReport({
     manifest,
     manifestSha256,
@@ -276,6 +311,8 @@ export function inspectPackage(manifestPath, { samples } = {}) {
     softsightVersion: version,
     surface,
   });
+
+  return { report, exitCode: exitCodeForReport(report), fatal: null, cacheStats: visibilityCache.stats };
 
   return { report, exitCode: exitCodeForReport(report), fatal: null };
 }
@@ -548,6 +585,38 @@ export function renderHuman(report) {
 }
 
 /** La proyección de D13, con los dos ejes decidiendo juntos. */
+/**
+ * El informe recortado a la pregunta de la cobertura — §69, proyección.
+ *
+ * No recalcula nada: **es el mismo informe con menos campos**. Un comando que
+ * volviera a medir tendría su propia semilla y su propio muestreo, y dos números
+ * distintos para la misma pregunta es exactamente lo que D1 prohíbe.
+ *
+ * Lo que sí lleva además de los dos bloques es la cabecera mínima para saber de
+ * qué paquete habla y con qué contrato: un bloque de cobertura suelto no se
+ * puede archivar ni comparar, y quien lo reciba acabaría volviendo a pedir el
+ * informe entero.
+ */
+export function projectCoverage(report) {
+  return {
+    documentType: report.documentType,
+    contractVersion: report.contractVersion,
+    // `versions` va entero y no recortado: D12 dice que el consumidor comprueba
+    // **la combinación**, así que un recorte que se llevara solo la suya dejaría
+    // sin comprobar lo único que hay que comprobar.
+    versions: report.versions,
+    run: report.run,
+    execution: report.execution,
+    certification: report.certification,
+    ...(report.certificationReason === undefined ? {} : { certificationReason: report.certificationReason }),
+    // Ausente y no a cero cuando no hay superficie que cubrir: sin malla la
+    // pregunta no se puede hacer, y un cero diría que no se ve nada.
+    ...(report.coverage === undefined ? {} : { coverage: report.coverage }),
+    ...(report.confidence === undefined ? {} : { confidence: report.confidence }),
+    warnings: report.warnings.filter((warning) => warning.code.startsWith("SS-COV-")),
+  };
+}
+
 export function exitCodeForReport(report) {
   // El 23 por delante de todo lo demás: un paquete que no cabe puede ser
   // impecable, y confundirlo con uno inválido manda al productor a arreglar lo
@@ -581,14 +650,20 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   if (command !== "inspect" || target === undefined) {
     process.stderr.write(
-      "uso: node tools/reconstruction.mjs inspect <manifest.json> [--out informe.json] [--human]\n" +
+      "uso: node tools/reconstruction.mjs inspect <manifest.json> [--out informe.json] [--human] [--no-cache]\n" +
         "     node tools/reconstruction.mjs compare <a.json> <b.json> [...] [--human]\n" +
-        "  --human   el mismo informe para una persona, derivado del JSON y no escrito aparte\n",
+        "  --human     el mismo informe para una persona, derivado del JSON y no escrito aparte\n" +
+        "  --no-cache  vuelve a medir la visibilidad aunque esté guardada para estos mismos bytes\n",
     );
     process.exit(2);
   }
 
-  const { report, exitCode, fatal } = inspectPackage(resolve(target));
+  // `--no-cache` como en el CLI de modelos: la invalidación manda, y quien
+  // sospecha de una medida guardada tiene que poder pedir que se vuelva a medir
+  // sin borrar nada a mano.
+  const { report, exitCode, fatal } = inspectPackage(resolve(target), {
+    cache: !rest.includes("--no-cache"),
+  });
   if (fatal !== null) {
     process.stderr.write(`${fatal}\n`);
     process.exit(exitCode);

@@ -312,6 +312,12 @@ function commonOptions(options) {
     // sin sombras, sin rótulo y sobre negro.
     parity: options.get("parity") === "true" || options.has("parity"),
     expectSize: expectSize !== undefined && expectSize !== "true" ? Number(expectSize) : undefined,
+    // §54: presupuesto de triángulos para la vista. Por encima, el pliego se
+    // rasteriza sobre un proxy y el informe lo dice en `renderSource`; la
+    // auditoría sigue leyendo la malla entera.
+    ...(options.has("preview-max-triangles")
+      ? { previewMaxTriangles: Number(options.get("preview-max-triangles")) }
+      : {}),
   };
 }
 
@@ -848,6 +854,10 @@ Selección y encuadre
   --audit-limit <n>       piezas seleccionadas a auditar en detalle (12)
   --tile <n>              lado del tile en píxeles (320)
   --ground false          sin plano de referencia
+  --preview-max-triangles <n>
+                          presupuesto de triángulos para el pliego (250.000). Por
+                          encima se rasteriza un proxy y el informe lo dice en
+                          renderSource; las medidas salen de la malla entera
   --material-colors       pinta con el color del fichero en vez de arcilla neutra
 
 Verificación

@@ -103,12 +103,16 @@ try {
       "softsight_bvh",
       "softsight_inspect",
       "softsight_patch",
+      "softsight_production_validate",
+      "softsight_reconstruction_compare",
+      "softsight_reconstruction_coverage",
+      "softsight_reconstruction_inspect",
       "softsight_render",
       "softsight_scene",
       "softsight_schema",
       "softsight_story",
     ],
-    "las siete herramientas, ni una más",
+    "las once herramientas, ni una más",
   );
   for (const tool of lista) {
     assert.ok(tool.description.length > 0, `${tool.name}: sin descripción`);
@@ -212,7 +216,7 @@ try {
   const desconocida = await server.tool("softsight_nada", {});
   assert.match(desconocida.error.message, /herramienta desconocida/);
 
-  console.log("mcp: ok (siete herramientas, todas iguales al CLI directo)");
+  console.log("mcp: ok (once herramientas; las siete de modelo, iguales al CLI directo)");
 } finally {
   server.close();
   await rm(work, { recursive: true, force: true });

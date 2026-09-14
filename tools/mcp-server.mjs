@@ -97,6 +97,13 @@ const MODEL_PROPERTY = {
   description: "Ruta del modelo GLB u OBJ en el disco.",
 };
 
+const PACKAGE_ROOT_PROPERTY = {
+  type: "string",
+  description:
+    "Directorio del paquete, con su manifest.json dentro. Tiene que caer bajo una de las raíces " +
+    "declaradas en SOFTSIGHT_PACKAGE_ROOTS; el nombre del manifest no se elige desde fuera.",
+};
+
 /**
  * Las siete herramientas. Cada una dice qué comando del puente envuelve, qué
  * parámetros admite y cómo se traducen a `files` y `options`; nada más, porque
@@ -215,6 +222,101 @@ const TOOLS = {
     },
   },
 
+  // ---------------------------------------------------------------------------
+  // Los cuatro de paquete (§68). Reciben **rutas**, no base64, y por eso no pasan
+  // por `filePayload`: un paquete de reconstrucción no cabe en un argumento.
+  // Quién puede leer qué lo decide `SOFTSIGHT_PACKAGE_ROOTS` en el entorno de
+  // este proceso, no la llamada.
+  //
+  // El §68 llamaba al tercero `softsight_geometry_compare`. Se queda en
+  // `softsight_reconstruction_compare` por D31: no compara dos geometrías —eso es
+  // `diff`, y ya existe—, compara **candidatos de reconstrucción**, criterio a
+  // criterio y sin dar una nota. Un agente que leyera el nombre del §68 esperaría
+  // una distancia entre mallas.
+  softsight_reconstruction_inspect: {
+    description:
+      "Consume un paquete de reconstrucción por ruta y devuelve el informe entero: evidencia, escala, " +
+      "cobertura, confianza y veredicto. El paquete tiene que caer bajo una raíz declarada.",
+    inputSchema: {
+      type: "object",
+      properties: { root: PACKAGE_ROOT_PROPERTY },
+      required: ["root"],
+      additionalProperties: false,
+    },
+    build({ root }) {
+      return { bridgeContractVersion: 2, command: "reconstructionInspect", package: { root } };
+    },
+  },
+
+  softsight_reconstruction_coverage: {
+    description:
+      "El mismo informe recortado a la cobertura y la confianza. No vuelve a medir: es una proyección, " +
+      "así que sus números son exactamente los de inspect.",
+    inputSchema: {
+      type: "object",
+      properties: { root: PACKAGE_ROOT_PROPERTY },
+      required: ["root"],
+      additionalProperties: false,
+    },
+    build({ root }) {
+      return { bridgeContractVersion: 2, command: "reconstructionCoverage", package: { root } };
+    },
+  },
+
+  softsight_reconstruction_compare: {
+    description:
+      "Compara dos o más candidatos criterio a criterio. No da una nota: dice qué es comparable, qué " +
+      "domina a qué y qué lo impide.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        roots: {
+          type: "array",
+          minItems: 2,
+          items: { type: "string" },
+          description: "Raíces de los paquetes a comparar, dos o más.",
+        },
+      },
+      required: ["roots"],
+      additionalProperties: false,
+    },
+    build({ roots }) {
+      return {
+        bridgeContractVersion: 2,
+        command: "reconstructionCompare",
+        packages: roots.map((root) => ({ root })),
+      };
+    },
+  },
+
+  softsight_production_validate: {
+    description:
+      "Revisa un asset de producción por ruta: LOD, UV, texturas, colisión y el veredicto " +
+      "PRODUCTION_READY. El informe de un validador externo se ingiere, no se ejecuta.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        root: PACKAGE_ROOT_PROPERTY,
+        externalValidation: {
+          type: "string",
+          description:
+            "Ruta del informe de un validador externo (Khronos). Sin él no hay PRODUCTION_READY: " +
+            "decir «válido» sin que nadie haya validado es el sobreanuncio que D31 impide.",
+        },
+      },
+      required: ["root"],
+      additionalProperties: false,
+    },
+    build({ root, externalValidation }) {
+      return {
+        bridgeContractVersion: 2,
+        command: "productionValidate",
+        package: { root },
+        ...(externalValidation === undefined ? {} : { externalValidation }),
+      };
+    },
+  },
+
   softsight_schema: {
     description:
       "La forma que valida la entrada. Sin parte devuelve todo (46 KB); con parte, solo esa.",
@@ -244,6 +346,8 @@ async function callTool(name, args) {
   if (tool === undefined) throw new BridgeError("invalid-request", `herramienta desconocida: ${name}`);
   const partial = tool.build(args ?? {});
   const response = await handleRequest(
+    // La 1 sigue siendo el defecto: los siete de modelo no cambiaron. Los cuatro
+    // de paquete traen la suya en `build`, porque hablan otro protocolo.
     { bridgeContractVersion: 1, ...partial },
     runAgent,
   );

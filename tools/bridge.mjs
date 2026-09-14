@@ -25,6 +25,22 @@
  * recibe lo que el editor midió sobre un frame ya montado —capas, cajas,
  * colores— y dice si la escena enseña algo, si el texto cabe y si se lee.
  *
+ * ## La versión 2: el paquete viaja por ruta (§67, §84)
+ *
+ * Los cuatro comandos de paquete —`reconstructionInspect`,
+ * `reconstructionCoverage`, `reconstructionCompare` y `productionValidate`— no
+ * caben en la forma de arriba: 150 MB de `dense.ply` son 200 en base64 y el tope
+ * por fichero son 256 **ya codificados**. Así que reciben rutas:
+ *
+ *   { "bridgeContractVersion": 2,
+ *     "command": "reconstructionInspect",
+ *     "package": { "root": "/ruta/declarada/turret.vmesh" } }
+ *
+ * Qué rutas se pueden leer lo decide `SOFTSIGHT_PACKAGE_ROOTS` en el entorno de
+ * este proceso y **nunca la petición** — las cinco reglas y por qué, en
+ * `packageRoot.mjs`. La 1 sigue valiendo entera para los diez comandos
+ * anteriores, y la respuesta hace eco de la versión que se pidió.
+ *
  * Respuesta:
  *
  *   { "bridgeContractVersion": 1, "command": "inspect", "exitCode": 0,
@@ -76,6 +92,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { trimDirectory } from "./lru.mjs";
+import { PackageRootError, resolveUnderRoots } from "./packageRoot.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -84,7 +101,11 @@ const execFileAsync = promisify(execFile);
 // construido desde aquí cerraría un ciclo. La fuente sigue siendo una —el
 // registro— y quien lo comprueba es `test:contracts`, que pone la puerta roja si
 // los dos números dejan de coincidir.
-const BRIDGE_CONTRACT_VERSION = 1;
+const BRIDGE_CONTRACT_VERSION = 2;
+// La 1 sigue valiendo: el editor la habla y no tiene por qué cambiar para que
+// VideoMesh pueda pedir un paquete. Lo que la 2 añade es **una forma de petición
+// nueva** —`package`, por ruta— y no toca ninguna de las diez anteriores.
+const SUPPORTED_REQUEST_VERSIONS = new Set([1, 2]);
 const here = dirname(fileURLToPath(import.meta.url));
 const AGENT3D = resolve(here, "agent3d.mjs");
 const DEFAULT_MAX_REQUEST_BYTES = 32 * 1024 * 1024;
@@ -104,6 +125,16 @@ const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 const COMMANDS = new Set([
   "inspect", "render", "patch", "sample", "scene", "bvh", "story", "staging", "diff", "schema",
+  "reconstructionInspect", "reconstructionCoverage", "reconstructionCompare", "productionValidate",
+]);
+
+/**
+ * Los cuatro que reciben **rutas** en vez de base64 (§67, §84). Piden la 2 y no
+ * aceptan `files`: mezclar las dos formas de entrada en una petición dejaría sin
+ * contestar de dónde sale el fichero cuando vienen las dos.
+ */
+const PACKAGE_COMMANDS = new Set([
+  "reconstructionInspect", "reconstructionCoverage", "reconstructionCompare", "productionValidate",
 ]);
 
 // Opciones del CLI que el puente acepta, con su tipo. Todo lo demás se rechaza:
@@ -468,7 +499,10 @@ async function runCommand(request, execute) {
       }
     }
     return {
-      bridgeContractVersion: BRIDGE_CONTRACT_VERSION,
+      // Eco de lo que pidió, no del máximo que este puente habla: un cliente de
+      // la 1 que recibiera un 2 tendría que decidir si su parseador sigue
+      // valiendo, y la respuesta es que sí porque su petición no cambió.
+      bridgeContractVersion: request.bridgeContractVersion,
       command: request.command,
       exitCode,
       report,
@@ -476,6 +510,88 @@ async function runCommand(request, execute) {
     };
   } finally {
     rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Los cuatro comandos de paquete — §67, y el transporte que §84 dejó sin decidir.
+ *
+ * No hay directorio de trabajo, no hay base64 y no se lanza un proceso: el
+ * paquete ya está en un disco que las dos partes ven, así que lo que viaja es la
+ * ruta y lo que se llama es la API pública (§66), la misma que llama el CLI.
+ * Escribir aquí una segunda forma de consumir el paquete sería el «business
+ * logic in the bridge» que §67 prohíbe, y además el segundo original del
+ * veredicto.
+ *
+ * Tampoco hay artefactos: los cuatro devuelven informe. Un paquete de 150 MB no
+ * vuelve por el mismo canal por el que no cabía entrar.
+ */
+function packageManifest(entry, slot) {
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    throw new BridgeError("invalid-request", `${slot} debe ser un objeto con { root }`);
+  }
+  const root = resolveUnderRoots(entry.root);
+  // El manifest se nombra aquí y no en la petición: dejar que el cliente
+  // eligiera el fichero convertiría la raíz declarada en un permiso de lectura
+  // sobre cualquier JSON que hubiera dentro.
+  const manifest = join(root, "manifest.json");
+  if (!existsSync(manifest)) {
+    throw new BridgeError("package-not-found", `${entry.root} no tiene manifest.json`);
+  }
+  return manifest;
+}
+
+async function runPackageCommand(request) {
+  if (request.files !== undefined) {
+    throw new BridgeError("invalid-request", `${request.command} recibe rutas, no ficheros en base64`);
+  }
+  // Importación diferida, y no por pereza: `production.mjs` lee `decodePng` del
+  // CLI, y el CLI importa este fichero para su modo residente. Con los tres
+  // `import` arriba el ciclo se cierra y `agent3d --serve` se queda colgado en su
+  // `await import` sin decir por qué. Aquí el ciclo no existe porque para cuando
+  // alguien llama a un comando de paquete los tres módulos ya están cargados.
+  const { comparePackages, inspectPackage, projectCoverage } = await import("./reconstruction.mjs");
+  const { inspectAsset, readExternalValidation } = await import("./production.mjs");
+  try {
+    if (request.command === "reconstructionCompare") {
+      const list = request.packages;
+      if (!Array.isArray(list) || list.length < 2) {
+        throw new BridgeError("invalid-request", "reconstructionCompare necesita packages con dos o más { root }");
+      }
+      const paths = list.map((entry, index) => packageManifest(entry, `packages[${index}]`));
+      const { comparison, exitCode } = comparePackages(paths);
+      return { bridgeContractVersion: 2, command: request.command, exitCode, report: comparison, artifacts: [] };
+    }
+
+    if (request.command === "productionValidate") {
+      const manifest = packageManifest(request.package, "package");
+      // El informe del validador externo también viaja por ruta y bajo la misma
+      // raíz: se ingiere, no se ejecuta (R15), y por eso es una entrada más y no
+      // una capacidad del puente.
+      const external =
+        request.externalValidation === undefined
+          ? undefined
+          : readExternalValidation(resolveUnderRoots(request.externalValidation));
+      const { report, exitCode, fatal } = inspectAsset(manifest, external);
+      if (fatal !== null) throw new BridgeError("data-error", fatal);
+      return { bridgeContractVersion: 2, command: request.command, exitCode, report, artifacts: [] };
+    }
+
+    const manifest = packageManifest(request.package, "package");
+    const { report, exitCode, fatal } = inspectPackage(manifest);
+    if (fatal !== null) throw new BridgeError("data-error", fatal);
+    return {
+      bridgeContractVersion: 2,
+      command: request.command,
+      exitCode,
+      // La cobertura es una **proyección** del mismo informe, no otra medida: dos
+      // números distintos para la misma pregunta es lo que D1 prohíbe.
+      report: request.command === "reconstructionCoverage" ? projectCoverage(report) : report,
+      artifacts: [],
+    };
+  } catch (error) {
+    if (error instanceof PackageRootError) throw new BridgeError(error.code, error.message);
+    throw error;
   }
 }
 
@@ -493,11 +609,26 @@ export async function handleRequest(request, execute = spawnAgent) {
   if (typeof request !== "object" || request === null || Array.isArray(request)) {
     throw new BridgeError("invalid-request", "la petición debe ser un objeto");
   }
-  if (request.bridgeContractVersion !== BRIDGE_CONTRACT_VERSION) {
-    throw new BridgeError("invalid-request", `bridgeContractVersion ${BRIDGE_CONTRACT_VERSION} es obligatoria`);
+  if (!SUPPORTED_REQUEST_VERSIONS.has(request.bridgeContractVersion)) {
+    throw new BridgeError(
+      "invalid-request",
+      `bridgeContractVersion tiene que ser una de ${[...SUPPORTED_REQUEST_VERSIONS].join(", ")}`,
+    );
   }
   if (typeof request.command !== "string" || !COMMANDS.has(request.command)) {
     throw new BridgeError("invalid-request", `comando desconocido: ${String(request.command)}`);
+  }
+  if (PACKAGE_COMMANDS.has(request.command)) {
+    // La versión se exige **antes** de mirar la ruta: un cliente de la 1 que
+    // acierte el nombre de un comando nuevo tiene que enterarse de que está
+    // hablando otro protocolo, no de que su ruta no vale.
+    if (request.bridgeContractVersion < 2) {
+      throw new BridgeError(
+        "invalid-request",
+        `${request.command} necesita bridgeContractVersion 2: el paquete viaja por ruta, no en base64`,
+      );
+    }
+    return runPackageCommand(request);
   }
   if (request.command === "schema") {
     // `schema` no toca ficheros ni sandbox: es leer lo que el propio CLI publica.
@@ -509,7 +640,7 @@ export async function handleRequest(request, execute = spawnAgent) {
     const { exitCode, stdout, stderr } = await execute(part === undefined ? ["--schema"] : ["--schema", part]);
     if (exitCode !== 0) throw new BridgeError("data-error", stderr.trim() || "error de datos");
     return {
-      bridgeContractVersion: BRIDGE_CONTRACT_VERSION,
+      bridgeContractVersion: request.bridgeContractVersion,
       command: "schema",
       exitCode: 0,
       report: JSON.parse(stdout),

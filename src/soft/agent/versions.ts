@@ -43,7 +43,7 @@ export const CONTRACT_VERSIONS = {
     consumer: "softsight-motion-editor, que fija el commit y compara hashes",
   },
   bridge: {
-    value: 1,
+    value: 2,
     governs: "la petición y la respuesta del puente local",
     consumer: "softsight-motion-editor, por softsight-adapter.ts",
   },

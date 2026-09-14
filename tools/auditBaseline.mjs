@@ -198,9 +198,63 @@ function measureEdge(mesh) {
   };
 }
 
+/**
+ * El muestreo de visibilidad, que es la etapa que §61 llama «coverage sample
+ * time» y la que la caché de R16 existe para no repetir.
+ *
+ * Las cámaras se fabrican aquí y no se leen de un paquete: lo que se mide es
+ * cómo escala la etapa con el tamaño de la malla, y un CameraSet real traería
+ * además su número de vistas, que es la otra variable. Ocho, en órbita, que es lo
+ * que tiene `south-building`.
+ */
+function measureCoverage(mesh, computeVisibility) {
+  const radio = 4;
+  const cameras = Array.from({ length: 8 }, (unused, index) => {
+    const angulo = (index / 8) * Math.PI * 2;
+    const x = Math.cos(angulo) * radio;
+    const z = Math.sin(angulo) * radio;
+    // Mirando al origen desde la órbita: la tercera columna de la rotación es el
+    // eje Z de la cámara, y va en 2, 6 y 10 porque la matriz es por filas (D32).
+    const fx = Math.cos(angulo + Math.PI);
+    const fz = Math.sin(angulo + Math.PI);
+    return {
+      id: `orbita-${index}`,
+      width: 1920,
+      height: 1080,
+      intrinsics: { fx: 1600, fy: 1600, cx: 960, cy: 540 },
+      worldFromCamera: [
+        -fz, 0, fx, x,
+        0, 1, 0, 0,
+        -fx, 0, -fz, z,
+        0, 0, 0, 1,
+      ],
+    };
+  });
+
+  const start = process.cpuUsage();
+  const visibility = computeVisibility(mesh, cameras, { samples: 8_000 });
+  const cpu = process.cpuUsage(start);
+  let vistas = 0;
+  for (const lista of visibility.seenBy) if (lista.length > 0) vistas += 1;
+  return {
+    cpuMs: (cpu.user + cpu.system) / 1000,
+    samples: visibility.count,
+    observed: vistas / (visibility.count || 1),
+    // Lo que ocuparía en la caché de R16: dos `Float64Array` de tres componentes
+    // más los desplazamientos y los índices de cámara.
+    cacheBytes:
+      visibility.points.byteLength +
+      visibility.normals.byteLength +
+      (visibility.count + 1) * 4 +
+      visibility.seenBy.reduce((total, lista) => total + lista.length * 4, 0),
+  };
+}
+
 async function runWorker() {
   const { triangles, measure } = workerData;
-  const { auditMesh, buildTriangleBoundsTree } = await import(resolve(projectRoot, "dist-node/agent3d.mjs"));
+  const { auditMesh, buildTriangleBoundsTree, computeVisibility } = await import(
+    resolve(projectRoot, "dist-node/agent3d.mjs")
+  );
 
   const buildStart = process.cpuUsage();
   const mesh = torusMesh(triangles);
@@ -212,9 +266,11 @@ async function runWorker() {
       ? measureAudit(mesh, auditMesh)
       : measure === "boundsTree"
         ? measureBoundsTree(mesh, buildTriangleBoundsTree)
-        : measure === "weld"
-          ? measureWeld(mesh)
-          : measureEdge(mesh);
+        : measure === "coverage"
+          ? measureCoverage(mesh, computeVisibility)
+          : measure === "weld"
+            ? measureWeld(mesh)
+            : measureEdge(mesh);
 
   const memory = process.memoryUsage();
   parentPort.postMessage({

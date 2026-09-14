@@ -679,10 +679,25 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       asset más vacío sería el más listo**. Y tampoco se gana no declarando nada:
       qué exigencias aplican lo decide el propio asset. El validador de Khronos no
       se ejecuta, **se ingiere**: sin su informe no hay aprobación.
-    - Trece puertas nuevas, `test:masks`, `test:producer-superficie`,
+    - **Y R16: el paquete cruza por ruta, y la caché que no se clava en ella.**
+      Trece escalones midiendo y un consumidor que no tenía por dónde entregar lo
+      medido: 150 MB de `dense.ply` son 200 en base64 y el tope son 256 **ya
+      codificados**. El paquete viaja por ruta y `bridgeContractVersion` sube a 2,
+      con una regla que sostiene a las otras cuatro — **la raíz la declara la
+      configuración, nunca la petición**—; si viniera en la petición, cualquiera
+      declararía `/`. Cuatro comandos en el puente y cuatro herramientas MCP, que
+      llaman a la misma API que el CLI: la cobertura es una **proyección** del
+      informe, no otra medida. La caché tiene la clave en el contenido y nunca en
+      `path + mtime + size`: dos paquetes distintos en la misma ruta, mismo tamaño
+      y mismo `mtime`, habrían recibido el uno la cobertura del otro. Y el §56 no
+      lleva tabla de invalidación a propósito — lo que invalida cada cosa es lo
+      que entra en su clave, así que la matriz sale sola. 439 ms → 279 ms de CPU
+      por informe.
+    - Dieciséis puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
       `test:repair`, `test:production`, `test:lod-qa`, `test:uv-qa` y
-      `test:texture-qa`, `test:collision-qa` y `test:readiness`, y un identificador
+      `test:texture-qa`, `test:collision-qa`, `test:readiness`,
+      `test:package-transport`, `test:recon-cache` y `test:preview-proxy`, y un identificador
       nuevo,
       `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a los que esperan
       respuesta. Ningún hash del rasterizador se movió.
