@@ -134,14 +134,26 @@ export function renderProduction(report) {
       // Las dos direcciones, **sin promediar**: lo que el LOD perdió y lo que
       // añadió son dos problemas distintos.
       const d = lod.deviation;
+      const sil = lod.silhouette;
       lineas.push(
         `lod ${lod.level}       ${(lod.triangleRatio * 100).toFixed(1)} % de los triángulos · ` +
-          `desvía ${(lod.worstRelative * 100).toFixed(2)} % de la diagonal (${lod.worstDirection}) · ` +
-          lod.verdict,
+          `superficie ${(lod.worstRelative * 100).toFixed(2)} % (${lod.verdicts.surface})`,
       );
       lineas.push(
         `            falta ${d.aToB.maximum.toFixed(4)} máx / ${d.aToB.mean.toFixed(4)} media · ` +
           `sobra ${d.bToA.maximum.toFixed(4)} máx / ${d.bToA.mean.toFixed(4)} media`,
+      );
+      // La silueta con **su vista**: sin ella, un 3 % no dice desde dónde se ve.
+      lineas.push(
+        `            silueta pierde ${(sil.worstMissing.missingRatio * 100).toFixed(2)} % ` +
+          `(vista ${sil.worstMissing.view}) y gana ` +
+          `${(sil.worstExtra.extraRatio * 100).toFixed(2)} % (vista ${sil.worstExtra.view}) · ` +
+          `${lod.verdicts.silhouette}`,
+      );
+      lineas.push(
+        `            normales ${lod.normalDeviationDegrees.mean.toFixed(2)}° media / ` +
+          `${lod.normalDeviationDegrees.maximum.toFixed(1)}° máx (${lod.verdicts.normal}) · ` +
+          `caja ${(lod.boundsDeltaRelative * 100).toFixed(2)} % (${lod.verdicts.bounds})`,
       );
     }
   }

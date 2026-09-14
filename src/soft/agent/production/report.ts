@@ -38,6 +38,7 @@ import type { Mesh } from "../../mesh";
 import { diffMeshes, type MeshDiff } from "../reconstruction/meshDiff";
 import { evaluateBudgets, type BudgetResult, type DeclaredBudget } from "../reconstruction/budgets";
 import { sampleMesh } from "../reconstruction/surfaceSampling";
+import { compareSilhouettes, type SilhouetteComparison } from "./silhouette";
 
 /** Muestras con las que se juzga la contención. */
 export const CONTAINMENT_SAMPLES = 4_000;
@@ -76,12 +77,33 @@ export interface LodDerivation {
   /** Cuánto se ahorra, que es para lo que existe un LOD. */
   triangleRatio: number;
   /**
-   * Contra el tope del destino, si lo declaró. `NO_JUZGADO` cuando no: lo que un
-   * LOD puede perder depende de a qué distancia se mira, y no hay defecto que
-   * valga para todos.
+   * R12: la silueta, medida en píxeles desde catorce vistas. Es lo que la
+   * distancia de superficie no puede contestar — el 2 % dentro de una pared no
+   * se ve y el mismo 2 % contra el cielo sí.
    */
-  verdict: "PASS" | "FAIL" | "NO_JUZGADO";
+  silhouette: SilhouetteComparison;
+  /** Desviación de normales en grados, de la comparación de superficie. */
+  normalDeviationDegrees: { maximum: number; mean: number };
+  /**
+   * Cuánto se mueve la caja envolvente, en fracción de la diagonal. Es barato y
+   * dice algo que ninguna media dice: un LOD que encoge la pieza entera falla
+   * aquí aunque su desviación media sea pequeña.
+   */
+  boundsDeltaRelative: number;
+  /**
+   * Un veredicto **por criterio**, contra el tope que el destino declare.
+   * `NO_JUZGADO` cuando no lo declara: lo que un LOD puede perder depende de a
+   * qué distancia se mira, y no hay defecto que valga para todos.
+   */
+  verdicts: {
+    surface: LodVerdict;
+    silhouette: LodVerdict;
+    normal: LodVerdict;
+    bounds: LodVerdict;
+  };
 }
+
+export type LodVerdict = "PASS" | "FAIL" | "NO_JUZGADO";
 
 export interface CollisionCheck {
   artifactId: string;
@@ -125,6 +147,9 @@ export interface ProductionInput {
       budgets?: Array<DeclaredBudget & { role?: ProductionRole }>;
       collisionTolerance?: number;
       lodDeviationMax?: number;
+      lodSilhouetteMax?: number;
+      lodNormalMaxDegrees?: number;
+      lodBoundsMax?: number;
     };
     artifacts?: ProductionArtifact[];
   };
@@ -255,7 +280,36 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
       const falta = deviation.aToB.maximum;
       const sobra = deviation.bToA.maximum;
       const worstRelative = Math.max(falta, sobra) / (deviation.boundingBoxDiagonal || 1);
-      const tope = manifest.target?.lodDeviationMax;
+      const silhouette = compareSilhouettes(master, mesh);
+      const peorSilueta = Math.max(
+        silhouette.worstMissing.missingRatio,
+        silhouette.worstExtra.extraRatio,
+      );
+
+      // La caja, componente a componente. El máximo y no la media: encoger la
+      // pieza por un lado es el defecto, y promediarlo con los cinco lados que no
+      // se movieron lo escondería.
+      const masterAudit = measurements.find(
+        (measurement) => measurement.appliesTo.artifactId === masters[0]?.id,
+      );
+      const lodAudit = measurements.find(
+        (measurement) => measurement.appliesTo.artifactId === artifact.id,
+      );
+      let boundsDelta = 0;
+      if (masterAudit !== undefined && lodAudit !== undefined) {
+        for (let axis = 0; axis < 3; axis += 1) {
+          boundsDelta = Math.max(
+            boundsDelta,
+            Math.abs(masterAudit.boundingBoxMin[axis] - lodAudit.boundingBoxMin[axis]),
+            Math.abs(masterAudit.boundingBoxMax[axis] - lodAudit.boundingBoxMax[axis]),
+          );
+        }
+      }
+      const boundsDeltaRelative = boundsDelta / (deviation.boundingBoxDiagonal || 1);
+
+      const juzgar = (valor: number, tope: number | undefined): LodVerdict =>
+        tope === undefined ? "NO_JUZGADO" : valor <= tope ? "PASS" : "FAIL";
+
       lods.push({
         artifactId: artifact.id,
         level: artifact.level,
@@ -263,7 +317,33 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
         worstRelative,
         worstDirection: falta >= sobra ? "FALTA_EN_EL_LOD" : "SOBRA_EN_EL_LOD",
         triangleRatio: masterTriangles === 0 ? 0 : triangles / masterTriangles,
-        verdict: tope === undefined ? "NO_JUZGADO" : worstRelative <= tope ? "PASS" : "FAIL",
+        silhouette,
+        normalDeviationDegrees: {
+          maximum: Math.max(
+            deviation.aToB.normalDeviationDegrees.maximum,
+            deviation.bToA.normalDeviationDegrees.maximum,
+          ),
+          mean: Math.max(
+            deviation.aToB.normalDeviationDegrees.mean,
+            deviation.bToA.normalDeviationDegrees.mean,
+          ),
+        },
+        boundsDeltaRelative,
+        verdicts: {
+          surface: juzgar(worstRelative, manifest.target?.lodDeviationMax),
+          silhouette: juzgar(peorSilueta, manifest.target?.lodSilhouetteMax),
+          // Por la **media** y no por el máximo: con geometría de cajas, el punto
+          // más próximo a una muestra cae a veces en una cara perpendicular y el
+          // máximo sale 90° sin que nada esté mal. El informe publica los dos.
+          normal: juzgar(
+            Math.max(
+              deviation.aToB.normalDeviationDegrees.mean,
+              deviation.bToA.normalDeviationDegrees.mean,
+            ),
+            manifest.target?.lodNormalMaxDegrees,
+          ),
+          bounds: juzgar(boundsDeltaRelative, manifest.target?.lodBoundsMax),
+        },
       });
     }
   }
@@ -351,9 +431,15 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
   } else if (collision?.verdict === "FAIL") {
     certification = "FAIL";
     reason = "LA_MAESTRA_ASOMA_DE_LA_COLISION";
-  } else if (lods.some((lod) => lod.verdict === "FAIL")) {
+  } else if (lods.some((lod) => Object.values(lod.verdicts).includes("FAIL"))) {
     certification = "FAIL";
-    reason = "LOD_FUERA_DE_TOLERANCIA";
+    // El criterio que falló va en el motivo: «fuera de tolerancia» a secas
+    // obligaría a buscar cuál de los cuatro.
+    const culpable = lods.find((lod) => Object.values(lod.verdicts).includes("FAIL"))!;
+    const criterio = (Object.keys(culpable.verdicts) as Array<keyof typeof culpable.verdicts>).find(
+      (nombre) => culpable.verdicts[nombre] === "FAIL",
+    );
+    reason = `LOD_FUERA_DE_TOLERANCIA_${(criterio ?? "surface").toUpperCase()}`;
   } else if (budgets.some((budget) => budget.verdict === "FAIL")) {
     certification = "FAIL";
     reason = "PRESUPUESTO_EXCEDIDO";

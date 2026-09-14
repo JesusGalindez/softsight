@@ -66,6 +66,7 @@ const GATES = [
   "candidates.test.mjs", // 1,9 s de CPU — R9: varios candidatos, e informes que se pueden cruzar
   "repair.test.mjs", // 1,1 s de CPU — R10: qué se puede reparar sin inventar nada
   "production.test.mjs", // 1,3 s de CPU — R11: un asset de producción se puede inspeccionar
+  "lod-qa.test.mjs", // 2,2 s de CPU — R12: la silueta, que es donde un LOD se nota
   "producer-colmap.test.mjs", // 2,5 s de CPU con el fixture — R0-B: el segundo productor
   "producer-superficie.test.mjs", // 10,3 s de CPU con el fixture — la nube dispersa se hace superficie, y R6 mide sobre datos reales
   "self-intersection.test.mjs", // 0,2 s de CPU — cruces y, sobre todo, dónde calla

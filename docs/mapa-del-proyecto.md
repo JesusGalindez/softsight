@@ -637,9 +637,17 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       desviación del LOD **no se juzga sin tope declarado**, porque lo que un
       nivel puede perder depende de a qué distancia se mira. Con esto el contrato
       publicado pasa de siete esquemas a ocho.
-    - Ocho puertas nuevas, `test:masks`, `test:producer-superficie`,
+    - **Y R12: la silueta, que es donde un LOD se nota.** Un nivel que se desvía
+      el 2 % dentro de una pared plana es invisible; el mismo 2 % contra el cielo
+      se ve desde lejos, y la distancia de superficie **mide el mismo número en
+      los dos casos**. Medido sobre el fixture: lod-2 desvía el 2,71 % de
+      superficie y pierde el **12,1 % de silueta**. Se mide en píxeles, en
+      ortográfica —un asset no declara desde dónde se le mirará— y desde catorce
+      vistas, porque media esfera pierde el 50 % de silueta en la peor vista y el
+      0 % en la mejor. Lo que pierde y lo que gana van separados, como en R5.
+    - Nueve puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
-      `test:repair` y `test:production`, y un identificador nuevo,
+      `test:repair`, `test:production` y `test:lod-qa`, y un identificador nuevo,
       `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a los que esperan
       respuesta. Ningún hash del rasterizador se movió.
 

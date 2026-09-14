@@ -138,7 +138,14 @@ const escribir = (cambios = {}) => {
 {
   const sinTope = inspectAsset(escribir()).report;
   for (const lod of sinTope.lods) {
-    assert.equal(lod.verdict, "NO_JUZGADO", "sin tope declarado, la desviación se publica y no decide");
+    // **Los cuatro criterios**, no solo la superficie: ninguno tiene defecto,
+    // porque lo que un LOD puede perder depende de a qué distancia se mira.
+    assert.deepEqual(lod.verdicts, {
+      surface: "NO_JUZGADO",
+      silhouette: "NO_JUZGADO",
+      normal: "NO_JUZGADO",
+      bounds: "NO_JUZGADO",
+    });
     assert.ok(lod.worstRelative > 0, "y el número sale igual: no juzgar no es no medir");
   }
   assert.equal(sinTope.certification, "PASS");
@@ -149,9 +156,11 @@ const escribir = (cambios = {}) => {
     }),
   );
   const juzgados = conTope.report.lods;
-  assert.equal(juzgados[0].verdict, "PASS", "lod-1 desvía menos del 1 %");
-  assert.equal(juzgados[1].verdict, "FAIL", "lod-2 desvía más");
-  assert.equal(conTope.report.certificationReason, "LOD_FUERA_DE_TOLERANCIA");
+  assert.equal(juzgados[0].verdicts.surface, "PASS", "lod-1 desvía menos del 1 %");
+  assert.equal(juzgados[1].verdicts.surface, "FAIL", "lod-2 desvía más");
+  // El motivo **nombra el criterio**: «fuera de tolerancia» a secas obligaría a
+  // buscar cuál de los cuatro falló.
+  assert.equal(conTope.report.certificationReason, "LOD_FUERA_DE_TOLERANCIA_SURFACE");
   assert.equal(conTope.exitCode, 1);
 
   console.log(

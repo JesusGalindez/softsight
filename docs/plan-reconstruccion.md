@@ -3208,6 +3208,50 @@ Gate:
 each LOD passes measurable error budgets
 ```
 
+**Hecho el 2026-09-14.** Las cuatro medidas, y la tercera es la que justifica el
+escalón:
+
+```text
+surface fidelity      la distancia de R5, en las dos direcciones
+normal fidelity       desviación de normales, juzgada por la media
+silhouette fidelity   qué contorno pierde y gana, en píxeles
+bounds delta          cuánto se mueve la caja envolvente
+```
+
+**Un LOD que se desvía el 2 % dentro de una pared plana es invisible**: la
+superficie se mueve hacia dentro de sí misma y ningún píxel cambia. El mismo 2 %
+en un borde contra el cielo es un temblor que se ve desde lejos. La distancia de
+superficie **mide el mismo número en los dos casos**, así que no puede ser el
+único criterio — y medido sobre el fixture, lod-2 desvía el 2,71 % de superficie y
+pierde el **12,1 % de silueta**, cuatro veces más.
+
+La silueta se mide en **ortográfica y desde catorce vistas**. Ortográfica porque
+un asset no declara desde dónde se le va a mirar, y elegir una distancia sería
+inventarse el dato que falta; catorce porque un LOD puede estar impecable de
+frente y roto de perfil — media esfera pierde el 50 % de silueta en la peor vista
+y el 0 % en la mejor.
+
+Lo que pierde y lo que gana van **separados y sin promediar**, como en R5: una
+simplificación que se come una antena y otra que engorda un brazo tienen el mismo
+error simétrico y se arreglan distinto. Medido: la esfera basta solo pierde
+contorno; la misma esfera desplazada pierde y gana lo mismo, porque lo que se sale
+por un lado entra por el otro.
+
+El encuadre es **común a las dos mallas**, y sin eso la comparación mentiría: con
+cajas propias, una esfera de radio 0,5 y otra de radio 1 llenarían la imagen igual
+y sus siluetas saldrían idénticas. Con el encuadre común, la pequeña pierde el
+75 %.
+
+Y una caja en vez de una esfera **no pierde silueta y gana el 122 %**, con la
+misma caja envolvente — justo lo que `bounds delta` no puede ver, y la razón de
+que las cuatro medidas estén y no una.
+
+Los cuatro topes son del destino y **ninguno tiene defecto**: `lodDeviationMax`,
+`lodSilhouetteMax`, `lodNormalMaxDegrees`, `lodBoundsMax`. Sin declararlos se
+publica y no se decide, porque lo que un nivel puede perder depende de a qué
+distancia se mira. El motivo de un fallo **nombra el criterio**:
+`LOD_FUERA_DE_TOLERANCIA_SILHOUETTE`.
+
 ---
 
 ## R13 — UV/PBR QA

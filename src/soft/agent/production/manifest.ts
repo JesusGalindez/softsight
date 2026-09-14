@@ -145,6 +145,27 @@ export const PRODUCTION_ASSET_SCHEMA: ObjectSchema = {
           "por ahí. Se declara para los casos en que asomar es a propósito — una alambrada, un " +
           "adorno fino que nadie quiere en la colisión.",
       },
+      lodSilhouetteMax: {
+        type: "number",
+        description:
+          "Cuánta silueta puede perder o ganar un LOD, en fracción de la silueta maestra y en la peor " +
+          "de las catorce vistas. Es el tope que de verdad describe lo que se ve: la desviación de " +
+          "superficie no distingue un 2 % dentro de una pared de un 2 % contra el cielo.",
+      },
+      lodNormalMaxDegrees: {
+        type: "number",
+        description:
+          "Desviación **media** de normales admitida, en grados. Media y no máxima: con geometría de " +
+          "cajas, el punto más próximo a una muestra cae a veces en una cara perpendicular y el " +
+          "máximo sale 90° sin que nada esté mal.",
+      },
+      lodBoundsMax: {
+        type: "number",
+        description:
+          "Cuánto puede moverse la caja envolvente, en fracción de la diagonal. Barato y dice algo " +
+          "que ninguna media dice: un LOD que encoge la pieza entera falla aquí con una desviación " +
+          "media pequeña.",
+      },
       lodDeviationMax: {
         type: "number",
         description:
