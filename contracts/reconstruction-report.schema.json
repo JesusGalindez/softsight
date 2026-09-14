@@ -447,6 +447,242 @@
       ],
       "description": "El grafo de marcos que rigió (D11): dónde se midió, qué marcos declara el paquete y a cuáles hay camino. Un declarado que no esté en `reachable` es un salto que nadie registró."
     },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "measurementClass": {
+          "type": "string",
+          "description": "APPROXIMATE: el muestreo no visita toda la superficie."
+        },
+        "reproducibility": {
+          "type": "string",
+          "description": "BITWISE_EXACT: visita siempre los mismos puntos."
+        },
+        "seed": {
+          "type": "number",
+          "description": "Semilla del muestreo; sin ella no se reproduce."
+        },
+        "samples": {
+          "type": "number",
+          "description": "Muestras que sostienen los ratios (§86.3 k)."
+        },
+        "areaWeighted": {
+          "type": "boolean",
+          "description": "Siempre cierto; se declara en vez de suponerse."
+        },
+        "observedAreaRatio": {
+          "type": "number",
+          "description": "Área que ve al menos una cámara."
+        },
+        "triangulatedAreaRatio": {
+          "type": "number",
+          "description": "La que ven dos o más."
+        },
+        "weakAreaRatio": {
+          "type": "number",
+          "description": "La que ve exactamente una: hay foto y no hay profundidad."
+        },
+        "unobservedAreaRatio": {
+          "type": "number",
+          "description": "La que no ve ninguna."
+        },
+        "standardError": {
+          "type": "number",
+          "description": "Error estándar del ratio observado."
+        },
+        "interval": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Dos sigmas, recortado a [0,1]."
+        },
+        "bySeenBy": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Muestras por número de cámaras que las ven."
+        },
+        "provenanceAware": {
+          "type": "boolean",
+          "description": "Falso en v1, y se dice (D21)."
+        },
+        "certificationEligible": {
+          "type": "boolean",
+          "description": "Si el número certifica o solo se reporta."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Motivo cuando no certifica; ausente cuando sí."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "measurementClass",
+        "reproducibility",
+        "seed",
+        "samples",
+        "areaWeighted",
+        "observedAreaRatio",
+        "triangulatedAreaRatio",
+        "weakAreaRatio",
+        "unobservedAreaRatio",
+        "standardError",
+        "interval",
+        "bySeenBy",
+        "provenanceAware",
+        "certificationEligible"
+      ],
+      "description": "Qué parte de la superficie sostiene la evidencia (R6). **Ausente** cuando no hay malla o no hay cámaras: no es cero, es que la pregunta no se puede hacer."
+    },
+    "confidence": {
+      "type": "object",
+      "properties": {
+        "measurementClass": {
+          "type": "string",
+          "description": "APPROXIMATE."
+        },
+        "reproducibility": {
+          "type": "string",
+          "description": "BITWISE_EXACT."
+        },
+        "seed": {
+          "type": "number",
+          "description": "Semilla del muestreo."
+        },
+        "samples": {
+          "type": "number",
+          "description": "Muestras que sostienen las clases."
+        },
+        "areaWeighted": {
+          "type": "boolean",
+          "description": "Siempre cierto."
+        },
+        "parallaxThresholdDegrees": {
+          "type": "number",
+          "description": "El suelo que se aplicó; las clases dependen de él."
+        },
+        "byClass": {
+          "type": "object",
+          "properties": {
+            "SIN_EVIDENCIA": {
+              "type": "number",
+              "description": "Ninguna cámara la ve."
+            },
+            "SIN_TRIANGULAR": {
+              "type": "number",
+              "description": "La ve una."
+            },
+            "PARALAJE_CORTO": {
+              "type": "number",
+              "description": "Dos o más demasiado juntas."
+            },
+            "SOSTENIDA": {
+              "type": "number",
+              "description": "Dos o más con ángulo suficiente."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "SIN_EVIDENCIA",
+            "SIN_TRIANGULAR",
+            "PARALAJE_CORTO",
+            "SOSTENIDA"
+          ],
+          "description": "Fracción de área por clase. Suman uno. **No hay número agregado**: un índice medio escondería que la mitad firme y la mitad sin evidencia dan lo mismo que todo mediocre."
+        },
+        "parallaxDegrees": {
+          "type": "object",
+          "properties": {
+            "p05": {
+              "type": "number",
+              "description": "Percentil 5."
+            },
+            "median": {
+              "type": "number",
+              "description": "Mediana."
+            },
+            "p95": {
+              "type": "number",
+              "description": "Percentil 95."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "p05",
+            "median",
+            "p95"
+          ],
+          "description": "Percentiles del ángulo de triangulación, solo sobre lo que triangula. Nulo si nada triangula: «no hay ángulo» no es «el ángulo es cero»."
+        },
+        "obliquityDegrees": {
+          "type": "object",
+          "properties": {
+            "median": {
+              "type": "number",
+              "description": "Mediana."
+            },
+            "p95": {
+              "type": "number",
+              "description": "Percentil 95."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "median",
+            "p95"
+          ],
+          "description": "Percentiles de la oblicuidad de la mejor vista, en grados desde la normal."
+        },
+        "groundSampling": {
+          "type": "object",
+          "properties": {
+            "median": {
+              "type": "number",
+              "description": "Mediana."
+            },
+            "p95": {
+              "type": "number",
+              "description": "Percentil 95."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "median",
+            "p95"
+          ],
+          "description": "Unidades del paquete por píxel en la mejor vista. Con escala desconocida es relativo, y por eso va la diagonal al lado (D9)."
+        },
+        "provenanceAware": {
+          "type": "boolean",
+          "description": "Falso en v1 (D21)."
+        },
+        "certificationEligible": {
+          "type": "boolean",
+          "description": "Si certifica o solo se reporta."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Motivo cuando no certifica."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "measurementClass",
+        "reproducibility",
+        "seed",
+        "samples",
+        "areaWeighted",
+        "parallaxThresholdDegrees",
+        "byClass",
+        "provenanceAware",
+        "certificationEligible"
+      ],
+      "description": "Desde dónde se miró cada región (R6). Ausente por lo mismo que `coverage`."
+    },
     "scale": {
       "type": "object",
       "properties": {
@@ -535,6 +771,10 @@
           "message": {
             "type": "string",
             "description": "Texto para humanos; nunca se parsea."
+          },
+          "evidence": {
+            "type": "object",
+            "description": "Los números que produjeron el aviso (§53). **Opaco a propósito**: cada aviso lleva lo que hace falta para juzgarlo —un ratio con su intervalo y sus muestras, un ángulo con su umbral— y darle una forma fija obligaría a rellenar campos que no aplican o a inventar un campo por aviso. Lo que sí es fijo es que esté: sin él, quien lea tiene que recalcular, y recalcular con otro muestreo da otro número."
           }
         },
         "additionalProperties": false,

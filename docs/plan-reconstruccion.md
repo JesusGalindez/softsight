@@ -2864,6 +2864,49 @@ Gate:
 machine + human report generated from one package
 ```
 
+**Hecho el 2026-09-13 salvo pliegos y modos de diagnóstico**, con puerta
+`test:report-r7`. Es lo que hace utilizable lo de R6: hasta ahora la cobertura y
+la confianza eran funciones que nadie llamaba.
+
+**La trampa del escalón está en el «de un solo».** Escribir el texto por su cuenta
+sería un segundo original del veredicto, y el día que discrepen el que se lea será
+el bonito. `renderHuman` deriva del JSON ya construido, y la puerta lo comprueba de
+la única forma que vale: **cambiando el informe y viendo que el texto cambia con
+él**, y borrando un bloque para ver que su línea desaparece en vez de inventarse.
+
+**Los avisos llevan sus números** (§53). Uno que solo dijera «hay superficie sin
+ver» obliga a recalcularlo para saber si es el 2 % o el 40 %, y a recalcularlo con
+otro muestreo, que daría otro número. Cada uno trae su ratio, sus muestras y su
+intervalo:
+
+```text
+SS-COV-001   superficie sin evidencia      ninguna cámara la ve
+SS-COV-002   superficie sin triangular     la ve una sola
+SS-CONF-001  paralaje corto                dos o más demasiado juntas
+```
+
+**Y no deciden el veredicto.** Media superficie sin ver avisa y no suspende: el
+umbral lo pone quien conoce la pieza, igual que el presupuesto de D9. Si la falta
+de cobertura suspendiera por su cuenta, softsight estaría decidiendo qué tiene que
+fotografiar el productor.
+
+El suelo del aviso es el **suelo del muestreo y no una tolerancia**: con ocho mil
+muestras, un uno por mil son ocho puntos y su intervalo lo cruza entero, así que
+avisar de eso sería avisar de ruido.
+
+Los bloques de R6 se **omiten** cuando no hay malla o no hay cámaras, en vez de
+salir a cero: sin superficie la pregunta no se puede hacer, y un cero diría que no
+se ve nada. El paquete de `producers/colmap/` lo ejerce — es una nube de puntos y
+sale sin ellos.
+
+La evidencia de un aviso es el **cuarto objeto opaco** de la frontera, y su
+opacidad es la decisión: darle forma fija obligaría a rellenar campos que no
+aplican o a inventar un campo por aviso. Lo fijo es que esté.
+
+**Lo que falta de R7**: los pliegos de contacto y los modos de diagnóstico. El
+pliego existe para modelos —`renderContactSheet`— y atarlo a un paquete de
+reconstrucción pide decidir qué vistas se rinden, que es criterio y no código.
+
 ---
 
 ## R8 — Multi-view residuals

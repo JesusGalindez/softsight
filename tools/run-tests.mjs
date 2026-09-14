@@ -56,6 +56,7 @@ const GATES = [
   "summary.test.mjs", // 4,3 s — renderiza el dron entero para medir el recorte
   "rig-spec.test.mjs", // 1,3 s
   "framing.test.mjs", // 4,1 s — renderiza cuatro fixtures para reproducir sus cajas
+  "report-r7.test.mjs", // 4,0 s de CPU — R7: el informe de máquina y el de persona
   "confidence.test.mjs", // 3,5 s de CPU — R6: desde dónde se miró, no solo si se miró
   "coverage.test.mjs", // 3,0 s de CPU — R6: cobertura sobre el cubo y sus cuatro vistas
   "producer-colmap.test.mjs", // 2,5 s de CPU con el fixture — R0-B: el segundo productor

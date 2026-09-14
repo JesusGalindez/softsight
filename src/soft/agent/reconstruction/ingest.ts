@@ -154,6 +154,17 @@ export interface IngestIssue {
   /** Motivo canónico, del vocabulario del contrato cuando lo hay. */
   reason: string;
   message: string;
+  /**
+   * Los números que produjeron el aviso, para quien quiera decidir por su cuenta
+   * en vez de creerse el mensaje (§53: todo aviso importante lleva evidencia).
+   *
+   * Un aviso de cobertura que solo dijera «hay superficie sin ver» obliga a
+   * recalcularlo para saber si es el 2 % o el 40 %, y a recalcularlo **con otro
+   * muestreo**, que daría otro número. Aquí van el ratio, las muestras que lo
+   * sostienen y el intervalo, que es lo que hace falta para juzgarlo contra un
+   * umbral propio.
+   */
+  evidence?: Record<string, unknown>;
 }
 
 export interface IngestResult {
@@ -205,6 +216,11 @@ export const PACKAGE_CODES = {
   // imagen**, y aquí no hay IO a propósito. El identificador vive igual en la
   // tabla, que es lo que el otro lado parsea.
   REJILLA_NO_COINCIDE: "SS-CAM-004",
+  // Los tres de la evidencia. Los emite el informe y no la ingesta: hacen falta
+  // la malla leída y el árbol de triángulos, y aquí no se abre un fichero.
+  SUPERFICIE_SIN_EVIDENCIA: "SS-COV-001",
+  SUPERFICIE_SIN_TRIANGULAR: "SS-COV-002",
+  PARALAJE_CORTO: "SS-CONF-001",
   // El espacio de lectura: topes de recurso y ficheros que no se pueden
   // interpretar. Los cinco primeros los proyecta el código de salida 23, que D13
   // reservaba y hasta ahora no devolvía nadie.

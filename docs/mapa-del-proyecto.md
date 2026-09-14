@@ -502,6 +502,13 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       confianza tratada como exacta— sino fracciones de área por clase. Se
       declaran `coverage` y `confidence-geometric`; **`confidence` a secas sigue
       fuera**, porque quien la pide está pidiendo los residuales.
+    - **Y R7 las pone donde se leen.** Hasta ese momento eran funciones que nadie
+      llamaba: ahora el informe las trae y salen además en texto para una persona,
+      **derivado del mismo objeto** —la puerta lo comprueba cambiando el informe y
+      viendo que el texto cambia con él—. Los avisos llevan su ratio, sus muestras
+      y su intervalo (§53), y **no deciden el veredicto**: media superficie sin ver
+      avisa y no suspende, porque el umbral lo pone quien conoce la pieza. Faltan
+      los pliegos de contacto, que piden decidir qué vistas se rinden.
     - **R1.5 declarado, y R4 y R5 cerrados.** Con ellos entran cuatro puertas
       nuevas: `test:bands`, `test:mesh-diff`, `test:mesh-topology` y
       `test:self-intersection`. El diff de R5 se alcanza además desde fuera

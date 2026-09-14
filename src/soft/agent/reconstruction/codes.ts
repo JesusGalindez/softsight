@@ -163,6 +163,27 @@ export const PACKAGE_CODE_TABLE = {
     status: "PROPUESTO",
     decision: "D11 exige registrar cada transformación, sin número",
   },
+  // Los espacios `SS-COV` y `SS-CONF`: lo que la evidencia sostiene y lo que no.
+  // No dicen que el paquete esté mal —un paquete puede no cubrir la base a
+  // propósito— sino qué parte de lo que entrega no tiene detrás una foto.
+  "SS-COV-001": {
+    reason: "SUPERFICIE_SIN_EVIDENCIA",
+    cause: "parte de la superficie no la ve ninguna cámara declarada",
+    status: "PROPUESTO",
+    decision: "D21 fija qué puede certificar la cobertura, sin número",
+  },
+  "SS-COV-002": {
+    reason: "SUPERFICIE_SIN_TRIANGULAR",
+    cause: "parte de la superficie la ve una sola cámara, así que hay foto y no hay profundidad",
+    status: "PROPUESTO",
+    decision: "D21 fija qué puede certificar la cobertura, sin número",
+  },
+  "SS-CONF-001": {
+    reason: "PARALAJE_CORTO",
+    cause: "parte de la superficie la ven dos o más cámaras demasiado juntas para determinar profundidad",
+    status: "PROPUESTO",
+    decision: "P6 y D28 fijan que la confianza no se trate como exacta, sin número",
+  },
 
   // El espacio `SS-CAM`: la cámara y los píxeles que dice describir.
   "SS-CAM-001": {

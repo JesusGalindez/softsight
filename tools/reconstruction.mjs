@@ -126,7 +126,7 @@ function schemaHashes() {
   }
 }
 
-export function inspectPackage(manifestPath) {
+export function inspectPackage(manifestPath, { samples } = {}) {
   // El primer fichero que se lee sin haber comprobado nada. Antes de `readFileSync`
   // y no después: después ya está en memoria, que es lo que el tope evita.
   const manifestBytes = statSync(manifestPath).size;
@@ -184,6 +184,14 @@ export function inspectPackage(manifestPath) {
     if (mesh === null) continue;
     meshes.push({
       artifactId: artifact.id,
+      // La malla se guarda además de su auditoría: R6 la necesita para cruzarla
+      // con las cámaras, y volver a leer el PLY costaría lo mismo dos veces.
+      mesh: {
+        ...mesh,
+        normals: new Float32Array(0),
+        uvs: new Float32Array(0),
+        boundingRadius: 0,
+      },
       audit: auditMesh({
         ...mesh,
         // La auditoría de normales no aplica: un PLY de posiciones y caras no las
@@ -232,12 +240,29 @@ export function inspectPackage(manifestPath) {
     }
   }
 
+  // La superficie que se cruza con las cámaras (R6). La primera malla admitida y
+  // el CameraSet: si el paquete trae varias, cruzar la primera y callar las demás
+  // sería peor que no cruzar ninguna, así que se dice cuál.
+  const primeraMalla = meshes[0];
+  const surface =
+    primeraMalla === undefined || (manifest.cameras ?? []).length === 0
+      ? undefined
+      : {
+          mesh: primeraMalla.mesh,
+          cameras: manifest.cameras,
+          purelyReconstructed:
+            (manifest.artifacts ?? []).find((artifact) => artifact.id === primeraMalla.artifactId)
+              ?.purelyReconstructed === true,
+          samples: samples,
+        };
+
   const report = buildReconstructionReport({
     manifest,
     manifestSha256,
     ingest,
     meshes,
     softsightVersion: version,
+    surface,
   });
 
   return { report, exitCode: exitCodeForReport(report), fatal: null };
@@ -258,6 +283,80 @@ function plyErrorCode(message) {
   return PACKAGE_CODES.ARTEFACTO_ILEGIBLE;
 }
 
+/**
+ * El informe para una persona, derivado del mismo objeto que sale por stdout.
+ *
+ * R7 pide «informe de máquina **y** de persona a partir de un solo paquete», y la
+ * trampa está en el «a partir de un solo». Escribir el texto por su cuenta sería
+ * un segundo original del veredicto: el día que los dos discrepen, el que se lea
+ * será el bonito. Aquí todo sale del JSON ya construido — si un campo no está en
+ * el informe, tampoco aparece abajo.
+ */
+export function renderHuman(report) {
+  const pct = (value) => `${(value * 100).toFixed(1)} %`;
+  const lineas = [];
+  const veredicto = report.certification === "PASS" ? "PASA" : report.certification;
+  lineas.push(`${report.run.inputPackageId ?? "paquete"} — ${report.execution} · ${veredicto}`);
+  if (report.certificationReason) lineas.push(`  motivo: ${report.certificationReason}`);
+  lineas.push("");
+
+  lineas.push(`evidencia   ${report.evidence.artifacts.length} artifacts` +
+    (report.evidence.missingEvidence.length > 0
+      ? `, falta ${report.evidence.missingEvidence.join(", ")}`
+      : ""));
+  lineas.push(`cámaras     ${report.cameras.declared} declaradas, ${report.cameras.withImage} con imagen`);
+  lineas.push(
+    `escala      ${report.scale.status}` +
+      (report.scale.claimsAbsolutePrecision ? " · promete precisión absoluta" : " · sin precisión absoluta") +
+      (report.scale.boundingBoxDiagonal === null
+        ? ""
+        : ` · diagonal ${report.scale.boundingBoxDiagonal.toFixed(4)}`),
+  );
+
+  for (const measurement of report.measurements) {
+    lineas.push(
+      `malla       ${measurement.appliesTo.artifactId}: ${measurement.triangles} triángulos, ` +
+        `${measurement.boundaryEdges} aristas de borde, ` +
+        `${measurement.watertight ? "cerrada" : "abierta"}` +
+        (measurement.purelyReconstructed ? "" : " · no puramente reconstruida"),
+    );
+  }
+
+  if (report.coverage) {
+    const c = report.coverage;
+    lineas.push("");
+    // El intervalo va **al lado del ratio y no en una nota**: es lo que impide
+    // leer «49,4 %» como un número exacto, que es justo lo que un texto invita a
+    // hacer (§86.3 k).
+    lineas.push(
+      `cobertura   ${pct(c.observedAreaRatio)} observada ` +
+        `(${pct(c.interval[0])}–${pct(c.interval[1])}, ${c.samples} muestras por área)`,
+    );
+    lineas.push(`            ${pct(c.unobservedAreaRatio)} sin ver · ${pct(c.weakAreaRatio)} sin triangular`);
+    if (!c.certificationEligible) lineas.push(`            no certifica: ${c.reason}`);
+  }
+  if (report.confidence) {
+    const f = report.confidence;
+    lineas.push(
+      `confianza   ${pct(f.byClass.SOSTENIDA)} sostenida · ${pct(f.byClass.PARALAJE_CORTO)} con paralaje ` +
+        `corto (suelo ${f.parallaxThresholdDegrees}°)`,
+    );
+    if (f.parallaxDegrees) {
+      lineas.push(
+        `            paralaje p05 ${f.parallaxDegrees.p05.toFixed(1)}° · mediana ` +
+          `${f.parallaxDegrees.median.toFixed(1)}° · p95 ${f.parallaxDegrees.p95.toFixed(1)}°`,
+      );
+    }
+  }
+
+  if (report.warnings.length > 0) {
+    lineas.push("");
+    lineas.push(`avisos      ${report.warnings.length}`);
+    for (const warning of report.warnings) lineas.push(`  ${warning.code}  ${warning.message}`);
+  }
+  return `${lineas.join("\n")}\n`;
+}
+
 /** La proyección de D13, con los dos ejes decidiendo juntos. */
 export function exitCodeForReport(report) {
   // El 23 por delante de todo lo demás: un paquete que no cabe puede ser
@@ -276,7 +375,10 @@ export function exitCodeForReport(report) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [command, target, ...rest] = process.argv.slice(2);
   if (command !== "inspect" || target === undefined) {
-    process.stderr.write("uso: node tools/reconstruction.mjs inspect <manifest.json> [--out informe.json]\n");
+    process.stderr.write(
+      "uso: node tools/reconstruction.mjs inspect <manifest.json> [--out informe.json] [--human]\n" +
+        "  --human   el mismo informe para una persona, derivado del JSON y no escrito aparte\n",
+    );
     process.exit(2);
   }
 
@@ -289,6 +391,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const json = `${JSON.stringify(report, null, 2)}\n`;
   const outIndex = rest.indexOf("--out");
   if (outIndex >= 0) writeFileSync(resolve(rest[outIndex + 1]), json);
-  else process.stdout.write(json);
+  // Con `--human` sale el texto **y nada más**: mezclarlo con el JSON obligaría a
+  // quien automatiza a recortar, y quien lee no quiere el JSON.
+  if (rest.includes("--human")) process.stdout.write(renderHuman(report));
+  else if (outIndex < 0) process.stdout.write(json);
   process.exit(exitCode);
 }

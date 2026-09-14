@@ -94,6 +94,11 @@ const OPAQUE = new Set([
   // espacio de nombres. La puerta queda cerrada donde D30 la quiere cerrada.
   "reconstruction-package.properties.extensions.patternProperties." +
     "^[a-z][a-z0-9]*(\\.[a-z0-9-]+){2,}$.properties.data",
+  // Y el cuarto es la evidencia de un aviso (§53). Cada aviso lleva lo que hace
+  // falta para juzgarlo —un ratio con su intervalo, un ángulo con su umbral— y
+  // darle forma fija obligaría a rellenar campos que no aplican o a inventar un
+  // campo por aviso. Lo fijo es **que esté**, no qué trae.
+  "reconstruction-report.properties.warnings.items.properties.evidence",
 ]);
 
 // 2. `additionalProperties: false` en todos los objetos publicados, a cualquier

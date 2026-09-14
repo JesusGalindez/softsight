@@ -18,11 +18,16 @@
  * quien lo archiva.
  */
 
+import type { Mesh } from "../../mesh";
 import type { MeshAudit } from "../inspect";
 import type { ObjectSchema } from "../schema";
 import { CONTRACT_VERSIONS, CURRENT_VERSION_PAIRS } from "../versions";
+import type { PackageCamera } from "./camera";
 import { resolveFrame, type Frame, type FrameTransform } from "./frameGraph";
-import { CAPABILITY_POLICY, EXTENSION_POLICY } from "./ingest";
+import { CAPABILITY_POLICY, EXTENSION_POLICY, PACKAGE_CODES } from "./ingest";
+import { PACKAGE_CODE_TABLE } from "./codes";
+import { computeCoverage, computeVisibility, type Coverage } from "./coverage";
+import { computeConfidence, type Confidence } from "./confidence";
 import type { IngestIssue, IngestResult } from "./ingest";
 import { RESOURCE_LIMIT_LIST } from "./limits";
 
@@ -32,7 +37,20 @@ export type CertificationVerdict = "PASS" | "FAIL" | "INCONCLUSIVE";
 export interface MeshMeasurement {
   artifactId: string;
   audit: MeshAudit;
+  /** La malla misma, para cruzarla con las cámaras (R6). */
+  mesh?: Mesh;
 }
+
+/**
+ * Umbral por debajo del cual una fracción de superficie sin sostener no se
+ * comenta.
+ *
+ * No es una tolerancia sobre la calidad: es el suelo del muestreo. Con veinte mil
+ * muestras, una fracción del uno por mil son veinte puntos y su intervalo la
+ * cruza entera, así que avisar de ella sería avisar de ruido. Por encima, el
+ * aviso lleva su intervalo y quien lea decide.
+ */
+export const SUPPORT_WARNING_FLOOR = 0.01;
 
 export interface ReportInput {
   manifest: Record<string, unknown>;
@@ -42,6 +60,11 @@ export interface ReportInput {
   meshes: MeshMeasurement[];
   /** Versión de SoftSight que produce el informe. */
   softsightVersion: string;
+  /**
+   * Malla y cámaras para cruzar la superficie con la evidencia (R6). Las pasa
+   * quien leyó el paquete: aquí no hay IO.
+   */
+  surface?: { mesh: Mesh; cameras: PackageCamera[]; purelyReconstructed: boolean; samples?: number };
 }
 
 /**
@@ -171,6 +194,13 @@ export interface ReconstructionReport {
    * diagonal—, y publicarlo es lo que permite al otro lado reproducir el número
    * en vez de recalcular una caja que podría no ser la misma.
    */
+  /**
+   * Qué parte de la superficie sostiene la evidencia, y desde dónde (R6).
+   * **Ausente** cuando no hay malla o no hay cámaras: no es cero, es que la
+   * pregunta no se puede hacer.
+   */
+  coverage?: Coverage;
+  confidence?: Confidence;
   scale: {
     status: string;
     source: string;
@@ -295,6 +325,61 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
     reason = "MALLA_SIN_SUPERFICIE";
   }
 
+  // R6 cruzado con R7: la superficie contra las cámaras. Solo cuando hay las dos
+  // cosas — sin malla no hay qué cubrir y sin cámaras no hay con qué, y en los dos
+  // casos el bloque se **omite** en vez de salir a cero, que diría otra cosa.
+  let coverage: Coverage | undefined;
+  let confidence: Confidence | undefined;
+  const surfaceWarnings: IngestIssue[] = [];
+  if (input.surface !== undefined && input.surface.cameras.length > 0) {
+    const { mesh, cameras, purelyReconstructed } = input.surface;
+    const samples = input.surface.samples ?? 8_000;
+    // Una sola pasada de visibilidad para las dos medidas: es el grueso del coste
+    // y, sobre todo, dos recorridos darían dos fronteras que no se pueden cruzar.
+    const visibility = computeVisibility(mesh, cameras, { samples });
+    coverage = computeCoverage(mesh, cameras, { visibility, purelyReconstructed, samples });
+    confidence = computeConfidence(mesh, cameras, { visibility, purelyReconstructed, samples });
+
+    // Los avisos llevan sus números (§53). Uno que solo dijera «hay superficie sin
+    // ver» obliga a recalcularlo para saber si es el 2 % o el 40 %, y a
+    // recalcularlo con otro muestreo, que daría otro número.
+    const avisar = (code: string, ratio: number, extra: Record<string, unknown>, texto: string) => {
+      if (ratio <= SUPPORT_WARNING_FLOOR) return;
+      surfaceWarnings.push({
+        code,
+        reason: PACKAGE_CODE_TABLE[code as keyof typeof PACKAGE_CODE_TABLE].reason,
+        message: texto,
+        evidence: { ratio, samples: coverage?.samples ?? samples, areaWeighted: true, ...extra },
+      });
+    };
+
+    avisar(
+      PACKAGE_CODES.SUPERFICIE_SIN_EVIDENCIA,
+      coverage.unobservedAreaRatio,
+      { interval: coverage.interval, certificationEligible: coverage.certificationEligible },
+      `el ${(coverage.unobservedAreaRatio * 100).toFixed(1)} % de la superficie no la ve ninguna de ` +
+        `las ${cameras.length} cámaras declaradas`,
+    );
+    avisar(
+      PACKAGE_CODES.SUPERFICIE_SIN_TRIANGULAR,
+      coverage.weakAreaRatio,
+      { interval: coverage.interval },
+      `el ${(coverage.weakAreaRatio * 100).toFixed(1)} % la ve una sola cámara: hay foto y no hay ` +
+        "profundidad, porque triangular pide dos",
+    );
+    avisar(
+      PACKAGE_CODES.PARALAJE_CORTO,
+      confidence.byClass.PARALAJE_CORTO,
+      {
+        parallaxThresholdDegrees: confidence.parallaxThresholdDegrees,
+        parallaxDegrees: confidence.parallaxDegrees,
+      },
+      `el ${(confidence.byClass.PARALAJE_CORTO * 100).toFixed(1)} % lo ven dos o más cámaras demasiado ` +
+        `juntas: por debajo de ${confidence.parallaxThresholdDegrees}° un píxel de ruido mueve la ` +
+        "profundidad mucho más que la superficie",
+    );
+  }
+
   return {
     documentType: "softsight.reconstruction-report",
     contractVersion: (manifest.contractVersion as string) ?? "0.0",
@@ -355,7 +440,10 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
       declared: cameras.length,
       withImage: cameras.filter((camera) => imageIds.has(camera.imageArtifactId as string)).length,
     },
-    warnings: ingest.issues,
+    ...(coverage === undefined ? {} : { coverage, confidence }),
+    // Los de la superficie **detrás** de los de la ingesta: primero por qué el
+    // paquete no se pudo leer, y solo después qué le falta a lo que sí se leyó.
+    warnings: [...ingest.issues, ...surfaceWarnings],
   };
 }
 
@@ -557,6 +645,80 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
       transforms: { type: "number", required: true, description: "Aristas declaradas." },
     },
   },
+  coverage: {
+    type: "object",
+    description:
+      "Qué parte de la superficie sostiene la evidencia (R6). **Ausente** cuando no hay malla o no " +
+      "hay cámaras: no es cero, es que la pregunta no se puede hacer.",
+    fields: {
+      measurementClass: { type: "string", required: true, description: "APPROXIMATE: el muestreo no visita toda la superficie." },
+      reproducibility: { type: "string", required: true, description: "BITWISE_EXACT: visita siempre los mismos puntos." },
+      seed: { type: "number", required: true, description: "Semilla del muestreo; sin ella no se reproduce." },
+      samples: { type: "number", required: true, description: "Muestras que sostienen los ratios (§86.3 k)." },
+      areaWeighted: { type: "boolean", required: true, description: "Siempre cierto; se declara en vez de suponerse." },
+      observedAreaRatio: { type: "number", required: true, description: "Área que ve al menos una cámara." },
+      triangulatedAreaRatio: { type: "number", required: true, description: "La que ven dos o más." },
+      weakAreaRatio: { type: "number", required: true, description: "La que ve exactamente una: hay foto y no hay profundidad." },
+      unobservedAreaRatio: { type: "number", required: true, description: "La que no ve ninguna." },
+      standardError: { type: "number", required: true, description: "Error estándar del ratio observado." },
+      interval: { type: "number[2]", required: true, description: "Dos sigmas, recortado a [0,1]." },
+      bySeenBy: { type: "number[]", required: true, description: "Muestras por número de cámaras que las ven." },
+      provenanceAware: { type: "boolean", required: true, description: "Falso en v1, y se dice (D21)." },
+      certificationEligible: { type: "boolean", required: true, description: "Si el número certifica o solo se reporta." },
+      reason: { type: "string", description: "Motivo cuando no certifica; ausente cuando sí." },
+    },
+  },
+  confidence: {
+    type: "object",
+    description: "Desde dónde se miró cada región (R6). Ausente por lo mismo que `coverage`.",
+    fields: {
+      measurementClass: { type: "string", required: true, description: "APPROXIMATE." },
+      reproducibility: { type: "string", required: true, description: "BITWISE_EXACT." },
+      seed: { type: "number", required: true, description: "Semilla del muestreo." },
+      samples: { type: "number", required: true, description: "Muestras que sostienen las clases." },
+      areaWeighted: { type: "boolean", required: true, description: "Siempre cierto." },
+      parallaxThresholdDegrees: { type: "number", required: true, description: "El suelo que se aplicó; las clases dependen de él." },
+      byClass: {
+        type: "object",
+        required: true,
+        description: "Fracción de área por clase. Suman uno. **No hay número agregado**: un índice medio escondería que la mitad firme y la mitad sin evidencia dan lo mismo que todo mediocre.",
+        fields: {
+          SIN_EVIDENCIA: { type: "number", required: true, description: "Ninguna cámara la ve." },
+          SIN_TRIANGULAR: { type: "number", required: true, description: "La ve una." },
+          PARALAJE_CORTO: { type: "number", required: true, description: "Dos o más demasiado juntas." },
+          SOSTENIDA: { type: "number", required: true, description: "Dos o más con ángulo suficiente." },
+        },
+      },
+      parallaxDegrees: {
+        type: "object",
+        description: "Percentiles del ángulo de triangulación, solo sobre lo que triangula. Nulo si nada triangula: «no hay ángulo» no es «el ángulo es cero».",
+        fields: {
+          p05: { type: "number", required: true, description: "Percentil 5." },
+          median: { type: "number", required: true, description: "Mediana." },
+          p95: { type: "number", required: true, description: "Percentil 95." },
+        },
+      },
+      obliquityDegrees: {
+        type: "object",
+        description: "Percentiles de la oblicuidad de la mejor vista, en grados desde la normal.",
+        fields: {
+          median: { type: "number", required: true, description: "Mediana." },
+          p95: { type: "number", required: true, description: "Percentil 95." },
+        },
+      },
+      groundSampling: {
+        type: "object",
+        description: "Unidades del paquete por píxel en la mejor vista. Con escala desconocida es relativo, y por eso va la diagonal al lado (D9).",
+        fields: {
+          median: { type: "number", required: true, description: "Mediana." },
+          p95: { type: "number", required: true, description: "Percentil 95." },
+        },
+      },
+      provenanceAware: { type: "boolean", required: true, description: "Falso en v1 (D21)." },
+      certificationEligible: { type: "boolean", required: true, description: "Si certifica o solo se reporta." },
+      reason: { type: "string", description: "Motivo cuando no certifica." },
+    },
+  },
   scale: {
     type: "object",
     required: true,
@@ -609,6 +771,15 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
       code: { type: "string", required: true, description: "Identificador neutro; esto es lo que se parsea." },
       reason: { type: "string", required: true, description: "Motivo canónico." },
       message: { type: "string", required: true, description: "Texto para humanos; nunca se parsea." },
+      evidence: {
+        type: "object",
+        description:
+          "Los números que produjeron el aviso (§53). **Opaco a propósito**: cada aviso lleva lo que " +
+          "hace falta para juzgarlo —un ratio con su intervalo y sus muestras, un ángulo con su " +
+          "umbral— y darle una forma fija obligaría a rellenar campos que no aplican o a inventar un " +
+          "campo por aviso. Lo que sí es fijo es que esté: sin él, quien lea tiene que recalcular, y " +
+          "recalcular con otro muestreo da otro número.",
+      },
     },
   },
 };

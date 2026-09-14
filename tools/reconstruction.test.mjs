@@ -807,6 +807,10 @@ function sha256Of(path) {
 
 // D10 y D33: la cámara se ata a los píxeles, no a un nombre.
 //
+// Los códigos se filtran a los espacios de este bloque: desde R7 el informe del
+// cubo trae además los avisos de cobertura —media superficie sin ver— y
+// compararlos aquí ataría esta prueba a la colocación de las cámaras.
+//
 // Los cuatro casos comparten la misma forma de error: **el resultado sigue
 // pareciendo plausible**. Una imagen reapuntada tiene el mismo tamaño, unos
 // intrínsecos rectificados sobre imagen distorsionada dan una reproyección casi
@@ -834,7 +838,7 @@ function sha256Of(path) {
     conCamaras({ imageArtifactHash: base.cameras[1].imageArtifactHash }),
   );
   assert.deepEqual(
-    reapuntada.report.warnings.map((entry) => entry.code),
+    reapuntada.report.warnings.map((entry) => entry.code).filter((code) => !code.startsWith("SS-COV-") && !code.startsWith("SS-CONF-")),
     [PACKAGE_CODES.HASH_DE_IMAGEN_NO_COINCIDE],
   );
   assert.equal(reapuntada.exitCode, 20);
@@ -845,7 +849,7 @@ function sha256Of(path) {
     conCamaras({ imageSpace: "RECTIFIED", distortion: { k1: -0.28, k2: 0.07 } }),
   );
   assert.deepEqual(
-    contradictoria.report.warnings.map((entry) => entry.code),
+    contradictoria.report.warnings.map((entry) => entry.code).filter((code) => !code.startsWith("SS-COV-") && !code.startsWith("SS-CONF-")),
     [PACKAGE_CODES.RECTIFICADA_CON_DISTORSION],
   );
   assert.match(contradictoria.report.warnings[0].message, /RECTIFIED con k1, k2/);
@@ -861,7 +865,7 @@ function sha256Of(path) {
     conCamaras({ width: base.cameras[0].height + 1, height: base.cameras[0].width }),
   );
   assert.deepEqual(
-    girada.report.warnings.map((entry) => entry.code),
+    girada.report.warnings.map((entry) => entry.code).filter((code) => !code.startsWith("SS-COV-") && !code.startsWith("SS-CONF-")),
     [PACKAGE_CODES.REJILLA_NO_COINCIDE],
   );
   assert.match(girada.report.warnings[0].message, /declara \d+×\d+ y la imagen es \d+×\d+/);
@@ -1038,7 +1042,7 @@ function sha256Of(path) {
   );
   const mala = inspectPackage(manifestPath);
   assert.deepEqual(
-    mala.report.warnings.map((entry) => entry.code),
+    mala.report.warnings.map((entry) => entry.code).filter((code) => !code.startsWith("SS-COV-") && !code.startsWith("SS-CONF-")),
     [PACKAGE_CODES.POSE_NO_RIGIDA],
   );
   assert.equal(mala.exitCode, 20);
@@ -1191,7 +1195,7 @@ function sha256Of(path) {
 
 // 7. Lo que sigue fuera, dicho en voz alta.
 console.log(
-  "reconstrucción: no ejecutada — el criterio de certificación de R0 no tiene decisión con número: " +
-    "va como pendiente en el envío para que VideoMesh lo confirme. Cobertura y confianza siguen " +
-    "fuera del esquema por D34, y R0-B espera a su cube-v1 y a expected.json",
+  "reconstrucción: no ejecutada — el criterio de certificación de R0 sigue sin decisión con número y " +
+    "va como pendiente en el envío. Cobertura y confianza **ya no**: entraron con R6 el 2026-09-13, " +
+    "cuando `producers/colmap/` cumplió R0-B y D34 dejó de bloquearlas",
 );
