@@ -300,6 +300,8 @@ export type { Coverage, CoverageOptions, CoverageRegions } from "./reconstructio
 export { sampleMesh } from "./reconstruction/surfaceSampling";
 export { computeVisibility, seesPoint } from "./reconstruction/coverage";
 export type { SurfaceVisibility } from "./reconstruction/coverage";
+export { REPAIR_NEIGHBOURHOOD_RATIO, classifyRepairs } from "./reconstruction/repair";
+export type { RepairAssessment, RepairBoundary, RepairInputs, RepairRisk } from "./reconstruction/repair";
 export { compareCandidates } from "./reconstruction/candidates";
 export type {
   CandidateComparison,

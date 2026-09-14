@@ -99,6 +99,12 @@ const OPAQUE = new Set([
   // darle forma fija obligaría a rellenar campos que no aplican o a inventar un
   // campo por aviso. Lo fijo es **que esté**, no qué trae.
   "reconstruction-report.properties.warnings.items.properties.evidence",
+  // Y el quinto, por lo mismo y para R10: la evidencia de una reparación trae lo
+  // que hace falta para juzgar **esa**. Un agujero lleva sus aristas, su
+  // centroide y cuántas muestras observadas tenía alrededor; unas aristas no
+  // manifold, su recuento. Darles una forma común obligaría a que cada una
+  // rellenara los campos de las demás en blanco.
+  "reconstruction-report.properties.repairBoundary.properties.repairs.items.properties.evidence",
 ]);
 
 // 2. `additionalProperties: false` en todos los objetos publicados, a cualquier

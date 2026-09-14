@@ -479,6 +479,28 @@ export function renderHuman(report) {
     }
   }
 
+  if (report.repairBoundary) {
+    const r = report.repairBoundary;
+    lineas.push("");
+    lineas.push(
+      `reparación  ${r.byRisk.SAFE} seguras · ${r.byRisk.REVIEW} a revisar · ${r.byRisk.UNSAFE} ` +
+        `inseguras` + (r.evidenceAware ? "" : " · sin cruzar con cámaras"),
+    );
+    // **Las inseguras primero**, y no por orden de descubrimiento: son las que
+    // crean superficie que ninguna foto puede desmentir, y una lista cronológica
+    // las entierra entre agujeros grandes e inofensivos.
+    const orden = { UNSAFE: 0, REVIEW: 1, SAFE: 2 };
+    const ordenadas = [...r.repairs].sort((a, b) => orden[a.risk] - orden[b.risk]);
+    for (const reparacion of ordenadas.slice(0, 8)) {
+      const marca = reparacion.breaksPurelyReconstructed ? " · deja de certificar" : "";
+      lineas.push(`  ${reparacion.risk}  ${reparacion.repair} · ${reparacion.reason}${marca}`);
+    }
+    if (ordenadas.length > 8) lineas.push(`  … y ${ordenadas.length - 8} más en el informe`);
+    if (r.omittedLoops > 0) {
+      lineas.push(`  … y ${r.omittedLoops} agujeros más que no caben, contados arriba`);
+    }
+  }
+
   if (report.budgets.length > 0) {
     lineas.push("");
     lineas.push(`presupuestos ${report.budgets.length} declarados`);

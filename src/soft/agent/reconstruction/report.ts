@@ -26,7 +26,9 @@ import type { PackageCamera } from "./camera";
 import { resolveFrame, type Frame, type FrameTransform } from "./frameGraph";
 import { CAPABILITY_POLICY, EXTENSION_POLICY, PACKAGE_CODES } from "./ingest";
 import { PACKAGE_CODE_TABLE } from "./codes";
-import { computeCoverage, computeVisibility, type Coverage } from "./coverage";
+import { computeCoverage, computeVisibility, type Coverage, type SurfaceVisibility } from "./coverage";
+import { analyzeMeshTopology, type MeshTopology } from "./meshTopology";
+import { classifyRepairs, type RepairBoundary } from "./repair";
 import { computeCaptureAdvice, type CaptureAdvice } from "./captureAdvice";
 import { evaluateBudgets, type BudgetResult, type DeclaredBudget } from "./budgets";
 import type { MaskSet } from "./masks";
@@ -215,6 +217,8 @@ export interface ReconstructionReport {
   captureAdvice?: CaptureAdvice;
   /** R9: los presupuestos del paquete contra lo medido. Vacío si no declaró ninguno. */
   budgets: BudgetResult[];
+  /** R10: qué se puede reparar sin inventar nada. Ausente si no hay malla medida. */
+  repairBoundary?: RepairBoundary;
   scale: {
     status: string;
     source: string;
@@ -345,13 +349,20 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
   let coverage: Coverage | undefined;
   let confidence: Confidence | undefined;
   let captureAdvice: CaptureAdvice | undefined;
+  // La visibilidad y la topología se guardan para R10, que las necesita para
+  // decir si un agujero cae donde alguien miró. **Solo de la malla que se cruzó
+  // con las cámaras**: recorrer la topología de todas duplicaría la soldadura de
+  // `auditMesh` sobre mallas que nadie va a cruzar con nada.
+  let visibility: SurfaceVisibility | undefined;
+  let topology: MeshTopology | undefined;
   const surfaceWarnings: IngestIssue[] = [];
   if (input.surface !== undefined && input.surface.cameras.length > 0) {
     const { mesh, cameras, purelyReconstructed } = input.surface;
     const samples = input.surface.samples ?? 8_000;
     // Una sola pasada de visibilidad para las dos medidas: es el grueso del coste
     // y, sobre todo, dos recorridos darían dos fronteras que no se pueden cruzar.
-    const visibility = computeVisibility(mesh, cameras, { samples, masks: input.surface.masks });
+    visibility = computeVisibility(mesh, cameras, { samples, masks: input.surface.masks });
+    topology = analyzeMeshTopology(mesh);
     coverage = computeCoverage(mesh, cameras, { visibility, purelyReconstructed, samples });
     confidence = computeConfidence(mesh, cameras, { visibility, purelyReconstructed, samples });
     // R9 lee la misma visibilidad que las otras dos. No podría ser de otro modo:
@@ -398,6 +409,24 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
         "profundidad mucho más que la superficie",
     );
   }
+
+  // R10: la frontera de reparación, sobre la primera malla medida — la misma que
+  // se cruzó con las cámaras. Ausente sin malla: sin superficie no hay defecto
+  // que reparar, y una lista vacía diría que no hay ninguno.
+  const repairBoundary =
+    measurements.length === 0
+      ? undefined
+      : classifyRepairs({
+          // La auditoría **cruda** y no la fila del informe: `inverted` y
+          // `flippedNormalRatio` no se publican en `measurements`, y R10 los
+          // necesita para separar «la malla entera está del revés» —que se
+          // arregla sin mover un punto— de «unas caras discrepan», que decide
+          // orientación en una región concreta.
+          audit: meshes[0].audit,
+          topology,
+          visibility,
+          diagonal: diagonalOf(measurements) ?? 1,
+        });
 
   // R9: los presupuestos, ya con todo medido. Van **después** de la cobertura
   // porque tres de los términos salen de ella, y antes del veredicto porque lo
@@ -492,6 +521,7 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
     },
     ...(coverage === undefined ? {} : { coverage, confidence, captureAdvice }),
     budgets,
+    ...(repairBoundary === undefined ? {} : { repairBoundary }),
     // Los de la superficie **detrás** de los de la ingesta: primero por qué el
     // paquete no se pudo leer, y solo después qué le falta a lo que sí se leyó.
     warnings: [...ingest.issues, ...surfaceWarnings],
@@ -769,6 +799,74 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
       provenanceAware: { type: "boolean", required: true, description: "Falso en v1 (D21)." },
       certificationEligible: { type: "boolean", required: true, description: "Si certifica o solo se reporta." },
       reason: { type: "string", description: "Motivo cuando no certifica." },
+    },
+  },
+  repairBoundary: {
+    type: "object",
+    description:
+      "Qué se puede reparar sin inventar nada (R10). **No repara**: dice, defecto a defecto, qué " +
+      "arriesga quien lo repare. Ausente cuando no hay malla medida — sin superficie no hay defecto " +
+      "que reparar, y una lista vacía diría que no hay ninguno.",
+    fields: {
+      measurementClass: {
+        type: '"EXACT"|"APPROXIMATE"',
+        required: true,
+        description: "APPROXIMATE en cuanto hay un agujero que clasificar: eso cuelga del muestreo de R6.",
+      },
+      reproducibility: { type: "string", required: true, description: "BITWISE_EXACT." },
+      evidenceAware: {
+        type: "boolean",
+        required: true,
+        description:
+          "Si se pudo cruzar con las cámaras. Falso deja todos los agujeros en REVIEW: **no saber no " +
+          "es estar bien**.",
+      },
+      omittedLoops: {
+        type: "number",
+        required: true,
+        description:
+          "Agujeros que no entraron en la lista por el tope. El recorte va por riesgo primero y por " +
+          "tamaño después, así que lo inseguro nunca se cae por pequeño; y `byRisk` los cuenta igual.",
+      },
+      byRisk: {
+        type: "object",
+        required: true,
+        description: "Cuántas de cada clase **en total**, incluidas las que no se publican.",
+        fields: {
+          SAFE: { type: "number", required: true, description: "No mueven ninguna superficie." },
+          REVIEW: { type: "number", required: true, description: "Mueven o crean superficie donde alguien miró." },
+          UNSAFE: { type: "number", required: true, description: "Crean superficie donde nadie miró." },
+        },
+      },
+      repairs: {
+        type: "object[]",
+        required: true,
+        description: "Una entrada por defecto, y **una por agujero**: el mismo defecto vale cosas distintas según quién miró ahí.",
+        fields: {
+          defect: { type: "string", required: true, description: "Qué está mal." },
+          repair: { type: "string", required: true, description: "Qué haría la reparación, nombrada: sin esto el riesgo no se puede juzgar." },
+          risk: {
+            type: '"SAFE"|"REVIEW"|"UNSAFE"',
+            required: true,
+            description:
+              "SAFE no mueve superficie; REVIEW la mueve o la crea donde hay fotos que pueden " +
+              "desmentirla; UNSAFE la crea donde no las hay, y entonces salga como salga nadie podrá saberlo.",
+          },
+          reason: { type: "string", required: true, description: "Motivo canónico del veredicto." },
+          breaksPurelyReconstructed: {
+            type: "boolean",
+            required: true,
+            description:
+              "Si hacerla fuerza `purelyReconstructed` a false. Es la consecuencia mecánica: con ella, " +
+              "D21 deja de certificar. No es una etiqueta de color — dice qué pierde el paquete.",
+          },
+          evidence: {
+            type: "object",
+            required: true,
+            description: "Los números que sostienen el veredicto, para no obligar a recalcularlos (§53).",
+          },
+        },
+      },
     },
   },
   budgets: {

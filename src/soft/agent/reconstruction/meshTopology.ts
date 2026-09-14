@@ -41,6 +41,15 @@ export interface BoundaryLoop {
   length: number;
   /** Diagonal de la caja del bucle: cuánto ocupa el agujero. */
   extent: number;
+  /**
+   * Dónde está el agujero: media de los puntos medios de sus aristas.
+   *
+   * El centro de la caja sería más barato y **mentiría en un contorno alargado**,
+   * donde cae lejos del borde. Esto lo necesita R10 para preguntar a las cámaras
+   * si la superficie de alrededor se vio: taparlo donde nadie miró y taparlo
+   * entre puntos medidos no son la misma reparación.
+   */
+  centroid: [number, number, number];
 }
 
 export interface MeshComponent {
@@ -266,6 +275,7 @@ export function analyzeMeshTopology(mesh: Mesh): MeshTopology {
     }
     let edges = 0;
     let length = 0;
+    const suma = [0, 0, 0];
     const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
     let current = seed;
     let at = start;
@@ -280,6 +290,7 @@ export function analyzeMeshTopology(mesh: Mesh): MeshTopology {
         for (let axis = 0; axis < 3; axis += 1) {
           box[axis] = Math.min(box[axis], positions[raw * 3 + axis]);
           box[axis + 3] = Math.max(box[axis + 3], positions[raw * 3 + axis]);
+          suma[axis] += positions[raw * 3 + axis];
         }
       }
       const candidates = degree.get(other) ?? [];
@@ -288,12 +299,17 @@ export function analyzeMeshTopology(mesh: Mesh): MeshTopology {
       current = following;
       at = other;
     }
+    // Dos extremos por arista, así que el divisor es `2·edges`: es la media de
+    // los puntos medios, no la de los vértices —un vértice interior del contorno
+    // entra dos veces y uno de un extremo abierto, una—.
+    const divisor = 2 * edges || 1;
     loops.push({
       edges,
       length,
       extent: Number.isFinite(box[0])
         ? Math.hypot(box[3] - box[0], box[4] - box[1], box[5] - box[2])
         : 0,
+      centroid: [suma[0] / divisor, suma[1] / divisor, suma[2] / divisor],
     });
   }
 

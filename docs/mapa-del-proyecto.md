@@ -617,9 +617,19 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       resolverían el compromiso no los conoce quien mide. Entra `compare` en el
       CLI al lado de `inspect`. Con esto **las cuatro piezas de R9 están**:
       presupuesto, PASS/FAIL, consejo de captura y comparación.
-    - Seis puertas nuevas, `test:masks`, `test:producer-superficie`,
-      `test:parity`, `test:capture-advice`, `test:budgets` y `test:candidates`,
-      y un identificador nuevo,
+    - **Y R10, la frontera de reparación.** El eje no es «difícil o fácil»: es si
+      la reparación **puede contradecir la evidencia**. Soldar vértices repetidos
+      no mueve superficie y es SAFE; tapar un agujero donde nadie miró crea
+      superficie que ninguna foto puede desmentir y es UNSAFE. **El mismo agujero
+      vale cosas distintas según quién miró ahí**, y distinguirlo pide cruzar el
+      contorno con el CameraSet — lo que ninguna herramienta de malla puede hacer,
+      y la razón de que R10 viva aquí. La consecuencia es mecánica:
+      `breaksPurelyReconstructed` dice qué pierde el paquete, porque con ella D21
+      deja de certificar. Sobre `south-building`, **61 a revisar y 4 inseguras**,
+      las cuatro agujeros pequeños donde ninguna de las ocho cámaras miró.
+    - Siete puertas nuevas, `test:masks`, `test:producer-superficie`,
+      `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates` y
+      `test:repair`, y un identificador nuevo,
       `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a los que esperan
       respuesta. Ningún hash del rasterizador se movió.
 

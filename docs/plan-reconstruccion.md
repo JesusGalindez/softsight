@@ -3077,6 +3077,50 @@ Gate:
 SoftSight classifies correction risk without becoming a modeling engine
 ```
 
+**Hecho el 2026-09-14.** El eje no es «difícil o fácil»: es **si la reparación
+puede contradecir la evidencia**.
+
+```text
+SAFE     no mueve ninguna superficie — soldar, borrar un triángulo de área nula,
+         voltear la malla entera. La pieza medida sigue siendo la misma
+REVIEW   mueve o crea superficie donde alguien miró: hay fotos que pueden
+         confirmarla o desmentirla, así que la decisión es revisable
+UNSAFE   crea superficie donde nadie miró. No es que salga mal — es que salga
+         como salga, nadie podrá saberlo
+```
+
+**Un agujero no es un defecto uniforme**, y esa es la razón de que R10 viva en
+esta capa y no en una tabla fija. Taparlo entre puntos que tres cámaras vieron es
+interpolar entre medidas; taparlo en la trasera que nadie fotografió es dibujar.
+Los dos se llaman `MALLA_ABIERTA` con tantas aristas de borde, y distinguirlos
+pide cruzar el contorno con el CameraSet — que es justo lo que ninguna herramienta
+de malla puede hacer. La puerta lo ejerce con **la misma malla byte a byte** y dos
+CameraSets: una cámara que mira el borde da REVIEW, una que no lo mira da UNSAFE.
+
+Para preguntarlo hizo falta que `BoundaryLoop` publicara su **centroide** —media
+de los puntos medios de sus aristas—, y que la vecindad en la que se busca
+superficie observada llegue a media anchura del agujero y **no más**: con la
+anchura entera, la vecindad de un agujero en una cara del cubo cruza la pieza y
+recoge muestras de la cara de enfrente.
+
+**La consecuencia es mecánica, no un consejo.** `breaksPurelyReconstructed` dice
+qué pierde el paquete: con ella, D21 deja de certificar, porque la pregunta «¿lo
+vio una cámara?» tiene respuesta trivial y falsa sobre geometría que alguien
+inventó. Y sin cámaras cruzadas ningún agujero sale SAFE: **no saber no es estar
+bien**, así que el veredicto es `REVISION_REQUERIDA_SIN_EVIDENCIA`.
+
+Medido sobre `south-building`: **61 a revisar y 4 inseguras**. Los cuatro son
+agujeros pequeños —de 6 a 12 aristas— en zonas que ninguna de las ocho cámaras
+miró, y por eso el tope de la lista ordena **por riesgo y por lo que no se pudo
+juzgar antes que por tamaño**: con el orden natural, los cuatro se habrían caído
+detrás de agujeros de trescientas aristas e inofensivos.
+
+La capacidad se declara **`repair-boundary` y no `repair`**: quien pide la segunda
+está pidiendo que se repare, y eso cruzaría la línea de la puerta.
+
+**Lo que R10 no hace**: reparar. En cuanto decidiera dónde va un vértice dejaría
+de poder afirmar que sus números son exactos, que es lo único que aporta.
+
 ---
 
 ## R11 — Production manifest

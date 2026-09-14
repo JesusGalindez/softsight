@@ -121,6 +121,12 @@ export const SUPPORTED_CAPABILITIES: readonly string[] = [
   // lo mismo que la de arriba: lo que existe dice «desde aquí verías esto»,
   // medido; un plan sabría de obstáculos, alcance y espacio aéreo, y no sabe.
   "capture-advice",
+  // R10, el mismo día. **`repair-boundary` y no `repair`**: lo que existe dice qué
+  // arriesga quien repare, y quien escribe `repair` a secas está pidiendo que se
+  // repare. Declararlo sería el sobreanuncio que D31 impide, y además cruzaría la
+  // línea que la puerta del escalón traza: sin convertirse en un motor de
+  // modelado.
+  "repair-boundary",
 ];
 
 /**

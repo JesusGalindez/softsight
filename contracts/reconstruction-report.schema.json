@@ -688,6 +688,112 @@
       ],
       "description": "Desde dónde se miró cada región (R6). Ausente por lo mismo que `coverage`."
     },
+    "repairBoundary": {
+      "type": "object",
+      "properties": {
+        "measurementClass": {
+          "type": "string",
+          "enum": [
+            "EXACT",
+            "APPROXIMATE"
+          ],
+          "description": "APPROXIMATE en cuanto hay un agujero que clasificar: eso cuelga del muestreo de R6."
+        },
+        "reproducibility": {
+          "type": "string",
+          "description": "BITWISE_EXACT."
+        },
+        "evidenceAware": {
+          "type": "boolean",
+          "description": "Si se pudo cruzar con las cámaras. Falso deja todos los agujeros en REVIEW: **no saber no es estar bien**."
+        },
+        "omittedLoops": {
+          "type": "number",
+          "description": "Agujeros que no entraron en la lista por el tope. El recorte va por riesgo primero y por tamaño después, así que lo inseguro nunca se cae por pequeño; y `byRisk` los cuenta igual."
+        },
+        "byRisk": {
+          "type": "object",
+          "properties": {
+            "SAFE": {
+              "type": "number",
+              "description": "No mueven ninguna superficie."
+            },
+            "REVIEW": {
+              "type": "number",
+              "description": "Mueven o crean superficie donde alguien miró."
+            },
+            "UNSAFE": {
+              "type": "number",
+              "description": "Crean superficie donde nadie miró."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "SAFE",
+            "REVIEW",
+            "UNSAFE"
+          ],
+          "description": "Cuántas de cada clase **en total**, incluidas las que no se publican."
+        },
+        "repairs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "defect": {
+                "type": "string",
+                "description": "Qué está mal."
+              },
+              "repair": {
+                "type": "string",
+                "description": "Qué haría la reparación, nombrada: sin esto el riesgo no se puede juzgar."
+              },
+              "risk": {
+                "type": "string",
+                "enum": [
+                  "SAFE",
+                  "REVIEW",
+                  "UNSAFE"
+                ],
+                "description": "SAFE no mueve superficie; REVIEW la mueve o la crea donde hay fotos que pueden desmentirla; UNSAFE la crea donde no las hay, y entonces salga como salga nadie podrá saberlo."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Motivo canónico del veredicto."
+              },
+              "breaksPurelyReconstructed": {
+                "type": "boolean",
+                "description": "Si hacerla fuerza `purelyReconstructed` a false. Es la consecuencia mecánica: con ella, D21 deja de certificar. No es una etiqueta de color — dice qué pierde el paquete."
+              },
+              "evidence": {
+                "type": "object",
+                "description": "Los números que sostienen el veredicto, para no obligar a recalcularlos (§53)."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "defect",
+              "repair",
+              "risk",
+              "reason",
+              "breaksPurelyReconstructed",
+              "evidence"
+            ]
+          },
+          "description": "Una entrada por defecto, y **una por agujero**: el mismo defecto vale cosas distintas según quién miró ahí."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "measurementClass",
+        "reproducibility",
+        "evidenceAware",
+        "omittedLoops",
+        "byRisk",
+        "repairs"
+      ],
+      "description": "Qué se puede reparar sin inventar nada (R10). **No repara**: dice, defecto a defecto, qué arriesga quien lo repare. Ausente cuando no hay malla medida — sin superficie no hay defecto que reparar, y una lista vacía diría que no hay ninguno."
+    },
     "budgets": {
       "type": "array",
       "items": {
