@@ -688,6 +688,287 @@
       ],
       "description": "Desde dónde se miró cada región (R6). Ausente por lo mismo que `coverage`."
     },
+    "captureAdvice": {
+      "type": "object",
+      "properties": {
+        "measurementClass": {
+          "type": "string",
+          "description": "APPROXIMATE."
+        },
+        "reproducibility": {
+          "type": "string",
+          "description": "BITWISE_EXACT."
+        },
+        "seed": {
+          "type": "number",
+          "description": "Semilla del muestreo, la misma que la cobertura."
+        },
+        "samples": {
+          "type": "number",
+          "description": "Muestras que sostienen las ganancias."
+        },
+        "areaWeighted": {
+          "type": "boolean",
+          "description": "Siempre cierto."
+        },
+        "parallaxThresholdDegrees": {
+          "type": "number",
+          "description": "El suelo con el que se derivó la base que falta."
+        },
+        "coversDeficit": {
+          "type": "number",
+          "description": "Fracción del déficit que las sugerencias cubren **juntas**. No es la suma de las ganancias: dos fotos pueden recuperar la misma región, y sumarlas la contaría dos veces."
+        },
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "SIN_EVIDENCIA",
+                  "SIN_TRIANGULAR",
+                  "PARALAJE_CORTO"
+                ],
+                "description": "Qué carencia cubre. Las dos últimas piden base, no otra vista de frente."
+              },
+              "intrinsicsFrom": {
+                "type": "string",
+                "description": "De qué cámara se copiaron los intrínsecos. No se inventa ninguna lente."
+              },
+              "distance": {
+                "type": "number",
+                "description": "A qué distancia de la región se propone, en unidades del paquete."
+              },
+              "region": {
+                "type": "object",
+                "properties": {
+                  "areaRatio": {
+                    "type": "number",
+                    "description": "Fracción del área total."
+                  },
+                  "samples": {
+                    "type": "number",
+                    "description": "Muestras que la componen."
+                  },
+                  "centroid": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "description": "Centroide, en el marco de la malla."
+                  },
+                  "normal": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "description": "Normal media, unitaria."
+                  },
+                  "extent": {
+                    "type": "number",
+                    "description": "Diagonal de su caja: cuánto ocupa lo que falta."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "areaRatio",
+                  "samples",
+                  "centroid",
+                  "normal",
+                  "extent"
+                ],
+                "description": "La carencia que la foto cubre, agrupada: «hay 1.842 puntos sin ver» no se puede ejecutar."
+              },
+              "camera": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "`sugerida-N`, en el orden del plan."
+                  },
+                  "width": {
+                    "type": "number",
+                    "description": "Rejilla copiada de la lente de referencia."
+                  },
+                  "height": {
+                    "type": "number",
+                    "description": "Ídem."
+                  },
+                  "pixelOrigin": {
+                    "type": "string",
+                    "enum": [
+                      "TOP_LEFT",
+                      "BOTTOM_LEFT"
+                    ],
+                    "description": "Convención copiada."
+                  },
+                  "pixelCenter": {
+                    "type": "string",
+                    "enum": [
+                      "CENTER",
+                      "CORNER"
+                    ],
+                    "description": "Convención copiada."
+                  },
+                  "cameraAxes": {
+                    "type": "string",
+                    "enum": [
+                      "X_RIGHT_Y_DOWN_Z_FORWARD",
+                      "X_RIGHT_Y_UP_Z_BACKWARD"
+                    ],
+                    "description": "Marco copiado."
+                  },
+                  "intrinsics": {
+                    "type": "object",
+                    "properties": {
+                      "fx": {
+                        "type": "number",
+                        "description": "Focal en x."
+                      },
+                      "fy": {
+                        "type": "number",
+                        "description": "Focal en y."
+                      },
+                      "cx": {
+                        "type": "number",
+                        "description": "Punto principal en x."
+                      },
+                      "cy": {
+                        "type": "number",
+                        "description": "Punto principal en y."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "fx",
+                      "fy",
+                      "cx",
+                      "cy"
+                    ],
+                    "description": "Los de la lente de referencia, sin tocar."
+                  },
+                  "distortion": {
+                    "type": "object",
+                    "properties": {
+                      "k1": {
+                        "type": "number",
+                        "description": "Radial de primer orden."
+                      },
+                      "k2": {
+                        "type": "number",
+                        "description": "Radial de segundo orden."
+                      },
+                      "p1": {
+                        "type": "number",
+                        "description": "Tangencial."
+                      },
+                      "p2": {
+                        "type": "number",
+                        "description": "Tangencial."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "description": "Copiada de la lente si la tenía; ausente si no."
+                  },
+                  "worldFromCamera": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 16,
+                    "maxItems": 16,
+                    "description": "Pose 4×4 por filas, traslación en 3, 7 y 11 (D32)."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "width",
+                  "height",
+                  "pixelOrigin",
+                  "pixelCenter",
+                  "cameraAxes",
+                  "intrinsics",
+                  "worldFromCamera"
+                ],
+                "description": "La cámara propuesta, entera, para poder medirla en vez de creérsela. **No trae imagen**: la foto todavía no existe, que es el trabajo que se aconseja. Quien la haga completa `imageArtifactId`, su hash y el `model` —que sale de la distorsión—."
+              },
+              "gain": {
+                "type": "object",
+                "properties": {
+                  "observedAreaRatio": {
+                    "type": "number",
+                    "description": "Área observada tras esta foto **y las anteriores**."
+                  },
+                  "triangulatedAreaRatio": {
+                    "type": "number",
+                    "description": "Ídem, la que triangula."
+                  },
+                  "supportedAreaRatio": {
+                    "type": "number",
+                    "description": "Ídem, la que triangula por encima del suelo de paralaje. Es el `SOSTENIDA` de `confidence` tras ejecutar el plan."
+                  },
+                  "deltaObserved": {
+                    "type": "number",
+                    "description": "Lo que esta foto añade sobre las anteriores."
+                  },
+                  "deltaTriangulated": {
+                    "type": "number",
+                    "description": "Ídem, en triangulación."
+                  },
+                  "deltaSupported": {
+                    "type": "number",
+                    "description": "Ídem, en superficie sostenida."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "observedAreaRatio",
+                  "triangulatedAreaRatio",
+                  "supportedAreaRatio",
+                  "deltaObserved",
+                  "deltaTriangulated",
+                  "deltaSupported"
+                ],
+                "description": "Lo que el paquete gana si la foto se hace. Medido, no prometido. **Las tres ganancias van en orden de fuerza de la evidencia**: que haya foto, que triangule, que triangule con ángulo suficiente. Una sugerencia de base no gana ninguna de las dos primeras, y sin la tercera no ganaría nada: el consejo no sabría decir «sepárate»."
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "reason",
+              "intrinsicsFrom",
+              "distance",
+              "region",
+              "camera",
+              "gain"
+            ]
+          },
+          "description": "En orden de plan, no de catálogo: la mejor primero, y cada ganancia es lo que **esa foto añade sobre las anteriores**. Hacerlas en orden da exactamente los ratios publicados."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Por qué no hay sugerencias, cuando no las hay. Ausente cuando sí."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "measurementClass",
+        "reproducibility",
+        "seed",
+        "samples",
+        "areaWeighted",
+        "parallaxThresholdDegrees",
+        "coversDeficit",
+        "suggestions"
+      ],
+      "description": "Desde dónde disparar la próxima foto (R9). Ausente por lo mismo que `coverage`. **La ganancia está medida, no estimada**: cada sugerencia trae la cámara entera, y el número sale de meterla en el CameraSet y volver a contar con la misma aritmética que juzgará el resultado."
+    },
     "scale": {
       "type": "object",
       "properties": {

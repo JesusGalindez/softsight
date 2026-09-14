@@ -429,6 +429,26 @@ export function renderHuman(report) {
     }
   }
 
+  if (report.captureAdvice && report.captureAdvice.suggestions.length > 0) {
+    const a = report.captureAdvice;
+    lineas.push("");
+    lineas.push(
+      `próximas    ${a.suggestions.length} fotos cubren el ${pct(a.coversDeficit)} de lo que falta`,
+    );
+    for (const s of a.suggestions) {
+      const ojo = [3, 7, 11].map((slot) => s.camera.worldFromCamera[slot].toFixed(2)).join(", ");
+      // La posición, y **lo que esa foto añade sobre las anteriores**: la lista es
+      // un plan en orden, y dar la ganancia contra el estado de hoy invitaría a
+      // sumarlas, que contaría dos veces la región que dos fotos recuperan.
+      const mas = (value) => `+${(value * 100).toFixed(1)}`;
+      lineas.push(
+        `  ${s.camera.id}  desde (${ojo}) · ${mas(s.gain.deltaObserved)} vista ` +
+          `${mas(s.gain.deltaTriangulated)} triangulada ${mas(s.gain.deltaSupported)} sostenida ` +
+          `→ ${pct(s.gain.observedAreaRatio)} vista y ${pct(s.gain.supportedAreaRatio)} sostenida`,
+      );
+    }
+  }
+
   if (report.warnings.length > 0) {
     lineas.push("");
     lineas.push(`avisos      ${report.warnings.length}`);

@@ -116,6 +116,10 @@ export const SUPPORTED_CAPABILITIES: readonly string[] = [
   // máscaras. Declarar `confidence` aquí sería el sobreanuncio que D31 existe
   // para impedir.
   "confidence-geometric",
+  // R9, el 2026-09-14. Se declara **`capture-advice` y no `capture-plan`**, por
+  // lo mismo que la de arriba: lo que existe dice «desde aquí verías esto»,
+  // medido; un plan sabría de obstáculos, alcance y espacio aéreo, y no sabe.
+  "capture-advice",
 ];
 
 /**

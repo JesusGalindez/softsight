@@ -301,6 +301,20 @@ export { sampleMesh } from "./reconstruction/surfaceSampling";
 export { computeVisibility, seesPoint } from "./reconstruction/coverage";
 export type { SurfaceVisibility } from "./reconstruction/coverage";
 export { MASK_THRESHOLD, MASK_ASPECT_TOLERANCE, maskAllows, maskMismatch } from "./reconstruction/masks";
+export {
+  MAX_SUGGESTIONS,
+  MIN_REGION_AREA_RATIO,
+  REGION_RADIUS_RATIO,
+  computeCaptureAdvice,
+  lookAtPose,
+} from "./reconstruction/captureAdvice";
+export type {
+  CaptureAdvice,
+  CaptureAdviceOptions,
+  CaptureReason,
+  CaptureRegion,
+  CaptureSuggestion,
+} from "./reconstruction/captureAdvice";
 export type { CameraMask, MaskSet } from "./reconstruction/masks";
 export { DEFAULT_PARALLAX_DEGREES, computeConfidence } from "./reconstruction/confidence";
 export type { Confidence, ConfidenceOptions, SupportClass, SupportDistribution } from "./reconstruction/confidence";

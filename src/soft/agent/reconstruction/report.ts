@@ -27,6 +27,7 @@ import { resolveFrame, type Frame, type FrameTransform } from "./frameGraph";
 import { CAPABILITY_POLICY, EXTENSION_POLICY, PACKAGE_CODES } from "./ingest";
 import { PACKAGE_CODE_TABLE } from "./codes";
 import { computeCoverage, computeVisibility, type Coverage } from "./coverage";
+import { computeCaptureAdvice, type CaptureAdvice } from "./captureAdvice";
 import type { MaskSet } from "./masks";
 import { computeConfidence, type Confidence } from "./confidence";
 import type { IngestIssue, IngestResult } from "./ingest";
@@ -209,6 +210,8 @@ export interface ReconstructionReport {
    */
   coverage?: Coverage;
   confidence?: Confidence;
+  /** R9: desde dónde disparar la próxima foto. Ausente por lo mismo que los dos de arriba. */
+  captureAdvice?: CaptureAdvice;
   scale: {
     status: string;
     source: string;
@@ -338,6 +341,7 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
   // casos el bloque se **omite** en vez de salir a cero, que diría otra cosa.
   let coverage: Coverage | undefined;
   let confidence: Confidence | undefined;
+  let captureAdvice: CaptureAdvice | undefined;
   const surfaceWarnings: IngestIssue[] = [];
   if (input.surface !== undefined && input.surface.cameras.length > 0) {
     const { mesh, cameras, purelyReconstructed } = input.surface;
@@ -347,6 +351,10 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
     const visibility = computeVisibility(mesh, cameras, { samples, masks: input.surface.masks });
     coverage = computeCoverage(mesh, cameras, { visibility, purelyReconstructed, samples });
     confidence = computeConfidence(mesh, cameras, { visibility, purelyReconstructed, samples });
+    // R9 lee la misma visibilidad que las otras dos. No podría ser de otro modo:
+    // un consejo calculado sobre otro muestreo aconsejaría cubrir una carencia
+    // que el informe no publica.
+    captureAdvice = computeCaptureAdvice(mesh, cameras, { visibility, samples });
 
     // Los avisos llevan sus números (§53). Uno que solo dijera «hay superficie sin
     // ver» obliga a recalcularlo para saber si es el 2 % o el 40 %, y a
@@ -448,7 +456,7 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
       declared: cameras.length,
       withImage: cameras.filter((camera) => imageIds.has(camera.imageArtifactId as string)).length,
     },
-    ...(coverage === undefined ? {} : { coverage, confidence }),
+    ...(coverage === undefined ? {} : { coverage, confidence, captureAdvice }),
     // Los de la superficie **detrás** de los de la ingesta: primero por qué el
     // paquete no se pudo leer, y solo después qué le falta a lo que sí se leyó.
     warnings: [...ingest.issues, ...surfaceWarnings],
@@ -726,6 +734,108 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
       provenanceAware: { type: "boolean", required: true, description: "Falso en v1 (D21)." },
       certificationEligible: { type: "boolean", required: true, description: "Si certifica o solo se reporta." },
       reason: { type: "string", description: "Motivo cuando no certifica." },
+    },
+  },
+  captureAdvice: {
+    type: "object",
+    description:
+      "Desde dónde disparar la próxima foto (R9). Ausente por lo mismo que `coverage`. **La ganancia " +
+      "está medida, no estimada**: cada sugerencia trae la cámara entera, y el número sale de meterla " +
+      "en el CameraSet y volver a contar con la misma aritmética que juzgará el resultado.",
+    fields: {
+      measurementClass: { type: "string", required: true, description: "APPROXIMATE." },
+      reproducibility: { type: "string", required: true, description: "BITWISE_EXACT." },
+      seed: { type: "number", required: true, description: "Semilla del muestreo, la misma que la cobertura." },
+      samples: { type: "number", required: true, description: "Muestras que sostienen las ganancias." },
+      areaWeighted: { type: "boolean", required: true, description: "Siempre cierto." },
+      parallaxThresholdDegrees: { type: "number", required: true, description: "El suelo con el que se derivó la base que falta." },
+      coversDeficit: {
+        type: "number",
+        required: true,
+        description:
+          "Fracción del déficit que las sugerencias cubren **juntas**. No es la suma de las ganancias: " +
+          "dos fotos pueden recuperar la misma región, y sumarlas la contaría dos veces.",
+      },
+      suggestions: {
+        type: "object[]",
+        required: true,
+        description:
+          "En orden de plan, no de catálogo: la mejor primero, y cada ganancia es lo que **esa foto " +
+          "añade sobre las anteriores**. Hacerlas en orden da exactamente los ratios publicados.",
+        fields: {
+          reason: { type: '"SIN_EVIDENCIA"|"SIN_TRIANGULAR"|"PARALAJE_CORTO"', required: true, description: "Qué carencia cubre. Las dos últimas piden base, no otra vista de frente." },
+          intrinsicsFrom: { type: "string", required: true, description: "De qué cámara se copiaron los intrínsecos. No se inventa ninguna lente." },
+          distance: { type: "number", required: true, description: "A qué distancia de la región se propone, en unidades del paquete." },
+          region: {
+            type: "object",
+            required: true,
+            description: "La carencia que la foto cubre, agrupada: «hay 1.842 puntos sin ver» no se puede ejecutar.",
+            fields: {
+              areaRatio: { type: "number", required: true, description: "Fracción del área total." },
+              samples: { type: "number", required: true, description: "Muestras que la componen." },
+              centroid: { type: "number[3]", required: true, description: "Centroide, en el marco de la malla." },
+              normal: { type: "number[3]", required: true, description: "Normal media, unitaria." },
+              extent: { type: "number", required: true, description: "Diagonal de su caja: cuánto ocupa lo que falta." },
+            },
+          },
+          camera: {
+            type: "object",
+            required: true,
+            description:
+              "La cámara propuesta, entera, para poder medirla en vez de creérsela. **No trae imagen**: " +
+              "la foto todavía no existe, que es el trabajo que se aconseja. Quien la haga completa " +
+              "`imageArtifactId`, su hash y el `model` —que sale de la distorsión—.",
+            fields: {
+              id: { type: "string", required: true, description: "`sugerida-N`, en el orden del plan." },
+              width: { type: "number", required: true, description: "Rejilla copiada de la lente de referencia." },
+              height: { type: "number", required: true, description: "Ídem." },
+              pixelOrigin: { type: '"TOP_LEFT"|"BOTTOM_LEFT"', required: true, description: "Convención copiada." },
+              pixelCenter: { type: '"CENTER"|"CORNER"', required: true, description: "Convención copiada." },
+              cameraAxes: { type: '"X_RIGHT_Y_DOWN_Z_FORWARD"|"X_RIGHT_Y_UP_Z_BACKWARD"', required: true, description: "Marco copiado." },
+              intrinsics: {
+                type: "object",
+                required: true,
+                description: "Los de la lente de referencia, sin tocar.",
+                fields: {
+                  fx: { type: "number", required: true, description: "Focal en x." },
+                  fy: { type: "number", required: true, description: "Focal en y." },
+                  cx: { type: "number", required: true, description: "Punto principal en x." },
+                  cy: { type: "number", required: true, description: "Punto principal en y." },
+                },
+              },
+              distortion: {
+                type: "object",
+                description: "Copiada de la lente si la tenía; ausente si no.",
+                fields: {
+                  k1: { type: "number", description: "Radial de primer orden." },
+                  k2: { type: "number", description: "Radial de segundo orden." },
+                  p1: { type: "number", description: "Tangencial." },
+                  p2: { type: "number", description: "Tangencial." },
+                },
+              },
+              worldFromCamera: { type: "number[16]", required: true, description: "Pose 4×4 por filas, traslación en 3, 7 y 11 (D32)." },
+            },
+          },
+          gain: {
+            type: "object",
+            required: true,
+            description:
+              "Lo que el paquete gana si la foto se hace. Medido, no prometido. **Las tres ganancias " +
+              "van en orden de fuerza de la evidencia**: que haya foto, que triangule, que triangule " +
+              "con ángulo suficiente. Una sugerencia de base no gana ninguna de las dos primeras, y " +
+              "sin la tercera no ganaría nada: el consejo no sabría decir «sepárate».",
+            fields: {
+              observedAreaRatio: { type: "number", required: true, description: "Área observada tras esta foto **y las anteriores**." },
+              triangulatedAreaRatio: { type: "number", required: true, description: "Ídem, la que triangula." },
+              supportedAreaRatio: { type: "number", required: true, description: "Ídem, la que triangula por encima del suelo de paralaje. Es el `SOSTENIDA` de `confidence` tras ejecutar el plan." },
+              deltaObserved: { type: "number", required: true, description: "Lo que esta foto añade sobre las anteriores." },
+              deltaTriangulated: { type: "number", required: true, description: "Ídem, en triangulación." },
+              deltaSupported: { type: "number", required: true, description: "Ídem, en superficie sostenida." },
+            },
+          },
+        },
+      },
+      reason: { type: "string", description: "Por qué no hay sugerencias, cuando no las hay. Ausente cuando sí." },
     },
   },
   scale: {

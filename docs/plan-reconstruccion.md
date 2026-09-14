@@ -2962,6 +2962,49 @@ Gate:
 VideoMesh can send multiple candidates and receive comparable reports
 ```
 
+**`capture-advisor`, el 2026-09-14.** Es la primera pieza de R9 y la primera que
+produce **algo que se ejecuta**: hasta ahora el informe decía «el 27,4 % no lo vio
+nadie» y ahí se acababa. Ahora contesta la pregunta siguiente, que es la única
+accionable — **¿dónde me pongo?**.
+
+Lo que lo hace valer algo es que la ganancia **no se estima: se mide**. Cada
+sugerencia trae una cámara entera, y el número sale de meterla en el CameraSet y
+volver a contar con la misma aritmética que juzgará el resultado. Una puerta lo
+comprueba **en cada prefijo del plan**: aplicando las `k` primeras, el ratio tiene
+que salir idéntico al que la `k`-ésima publicó. Un consejo que dijera «prueba por
+aquí, seguramente mejore» no se puede verificar ni desmentir.
+
+```text
+SIN_EVIDENCIA     nadie la ve       una cámara sobre la normal de la región
+SIN_TRIANGULAR    la ve una sola    una segunda, separada de la que hay
+PARALAJE_CORTO    la ven juntas     una separada por la base que falta,
+                                    derivada de b = 2·d·tan(θ/2)
+```
+
+**La lista es un plan y no un catálogo.** Varias vistas recuperan la misma cara,
+así que dar la ganancia de cada una contra el estado de hoy invita a sumarlas — y
+sumarlas cuenta esa cara dos veces. El reparto es codicioso: la mejor primero, y
+cada número es lo que **esa foto añade sobre las anteriores**.
+
+**Tres ganancias y no dos**, en orden de fuerza de la evidencia: que haya foto,
+que triangule, y que triangule con ángulo suficiente. La tercera no estaba, y sin
+ella una sugerencia de base no ganaba nunca nada — el consejo no sabía decir
+«sepárate» aunque el paquete entero fuera paralaje corto. Lo encontró la puerta,
+con un cubo visto por seis pares de cámaras a un grado.
+
+Y **`capture-advice`, no `capture-plan`**: no sabe de obstáculos, alcance, batería
+ni espacio aéreo. Dice «desde aquí verías esto»; decidir si se puede ir es de
+quien conoce el sitio. La misma línea que R10 traza para la reparación.
+
+Medido sobre `south-building`: ocho fotos llevan la cobertura del 72,7 % al
+87,6 %, y cubren el 60,1 % de lo que falta. La primera sugerencia sale de una
+región del 5,3 % y gana más que otra del 10,2 %, que es lo que prueba que el orden
+lo pone la ganancia medida y no el tamaño de la carencia.
+
+**Lo que falta de R9**: el presupuesto de reconstrucción, el PASS/FAIL sobre él, y
+la comparación de candidatos —que se apoya en el diff de R5, ya alcanzable desde
+el CLI y desde el puente—.
+
 ---
 
 ## R10 — Repair boundary

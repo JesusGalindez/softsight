@@ -580,10 +580,24 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       a 0** en los tres centros de cámara, con el dorado en medio a 4,1e-7; de
       `cube-v1` no hay segunda implementación, así que **D23 sigue ACORDADA** y lo
       que le falta está dicho.
-    - Tres puertas nuevas, `test:masks`, `test:producer-superficie` y
-      `test:parity`, y un identificador nuevo, `SS-CAM-007`
-      (`MASCARA_NO_APLICABLE`), que se suma a los que esperan respuesta. Ningún
-      hash del rasterizador se movió.
+    - **Y la primera pieza de R9: el consejo de captura.** Es lo primero que el
+      informe produce **que se ejecuta**. Hasta ahora decía «el 27,4 % no lo vio
+      nadie» y ahí se acababa; ahora contesta **dónde ponerse**. Lo que lo hace
+      valer algo es que la ganancia no se estima: cada sugerencia trae una cámara
+      entera y su número sale de meterla en el CameraSet y volver a contar, así
+      que la puerta lo desmiente en una línea — y lo comprueba **en cada prefijo
+      del plan**. Sobre `south-building`, ocho fotos llevan la cobertura del
+      72,7 % al 87,6 %. La lista va en orden de ganancia medida y es un plan, no
+      un catálogo: cada número es lo que esa foto añade sobre las anteriores,
+      porque sumarlas contaría dos veces la cara que dos fotos recuperan.
+      Escribir la puerta encontró que **faltaba una tercera ganancia** —la
+      superficie que pasa a estar sostenida—: sin ella, una sugerencia de base no
+      ganaba nada y el consejo no sabía decir «sepárate». Se declara
+      `capture-advice` y no `capture-plan`: no sabe de obstáculos ni de batería.
+    - Cuatro puertas nuevas, `test:masks`, `test:producer-superficie`,
+      `test:parity` y `test:capture-advice`, y un identificador nuevo,
+      `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a los que esperan
+      respuesta. Ningún hash del rasterizador se movió.
 
 21. **Qué queda, y de quién es.** Del lado de este repositorio **no queda nada
     que no dependa de otro**, y conviene que esté dicho en un sitio en vez de
