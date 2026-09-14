@@ -92,6 +92,21 @@ export function box(half) {
   return { positions, indices };
 }
 
+/**
+ * La misma caja con una esquina hundida hacia el centro.
+ *
+ * Sigue cerrada y sigue teniendo doce triángulos: **lo único que cambia es que
+ * deja de ser convexa**, que es exactamente lo que un recuento de triángulos no
+ * puede ver y un motor de física paga en cada fotograma.
+ */
+export function dentedBox(half, depth) {
+  const malla = box(half);
+  const positions = new Float32Array(malla.positions);
+  // El vértice 6 es la esquina (+half, +half, +half).
+  for (let axis = 0; axis < 3; axis += 1) positions[6 * 3 + axis] -= depth;
+  return { ...malla, positions };
+}
+
 /** PLY ASCII de malla, el mismo formato que lee el verificador. */
 export function writeMeshPly(mesh) {
   const lines = [
@@ -237,7 +252,13 @@ export function writeProductionAsset(destination, cambios = {}) {
     { id: "maestra", role: "MASTER", mesh: spherifiedCube(cambios.masterDivisions ?? 12) },
     { id: "lod-1", role: "LOD", level: 1, mesh: spherifiedCube(cambios.lod1Divisions ?? 6) },
     { id: "lod-2", role: "LOD", level: 2, mesh: spherifiedCube(cambios.lod2Divisions ?? 3) },
-    { id: "colision", role: "COLLISION", mesh: box(cambios.collisionHalf ?? 1.02) },
+    {
+      id: "colision",
+      role: "COLLISION",
+      mesh: cambios.collisionDent
+        ? dentedBox(cambios.collisionHalf ?? 1.02, cambios.collisionDent)
+        : box(cambios.collisionHalf ?? 1.02),
+    },
   ].filter((pieza) => !(cambios.omit ?? []).includes(pieza.id));
 
   const temp = `${destination}.escribiendo`;

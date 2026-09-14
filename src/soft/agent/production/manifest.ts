@@ -207,6 +207,41 @@ export const PRODUCTION_ASSET_SCHEMA: ObjectSchema = {
           "por ahí. Se declara para los casos en que asomar es a propósito — una alambrada, un " +
           "adorno fino que nadie quiere en la colisión.",
       },
+      collisionSlackMax: {
+        type: "number",
+        description:
+          "Fracción del proxy que puede quedar lejos de la maestra. **Es la otra dirección de la " +
+          "contención**: una caja enorme contiene perfectamente y hace chocar con el aire, así que " +
+          "medir solo una premia al peor proxy posible.",
+      },
+      collisionSlackTolerance: {
+        type: "number",
+        description:
+          "A partir de qué distancia de la maestra se cuenta holgura, en fracción de la diagonal. " +
+          "Sin declarar, un 2 %: por debajo, un proxy ceñido no se distingue del grosor de la propia " +
+          "superficie.",
+      },
+      collisionRequireConvex: {
+        type: "boolean",
+        description:
+          "Si el destino exige un proxy convexo. **El recuento de triángulos no describe lo que " +
+          "cuesta**: un motor trata un casco convexo con un algoritmo y una malla cóncava con otro, " +
+          "y la diferencia es de orden.",
+      },
+      collisionConvexTolerance: {
+        type: "number",
+        description:
+          "Cuánto puede salirse un vértice del plano de una cara, en fracción de la diagonal, sin " +
+          "dejar de contar como convexo. Existe porque **una esfera teselada no es convexa como " +
+          "malla**: sus quads no son coplanarios y una diagonal queda de valle. Quien sepa que su " +
+          "proxy es así lo declara; el defecto no lo supone.",
+      },
+      collisionVolumeRatioMax: {
+        type: "number",
+        description:
+          "Volumen del proxy entre el de la maestra. Barato y dice lo mismo que la holgura por otro " +
+          "camino: un proxy al 300 % envuelve mucho aire.",
+      },
       uvRequired: {
         type: "boolean",
         description:

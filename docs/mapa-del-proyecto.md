@@ -663,10 +663,18 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       Y la comprobación de normales se cayó y hubo que rehacerla: azul medio y
       norma media **las pasaba un damero corriente**, y lo que sí distingue es que
       una normal tangente nunca apunta hacia dentro.
-    - Once puertas nuevas, `test:masks`, `test:producer-superficie`,
+    - **Y R14: la holgura, que es la asimetría que nadie mide.** R11 preguntaba
+      solo si la maestra asoma del proxy, y medir eso solo **premia al proxy más
+      grande posible**: la caja del fixture contiene la esfera al 100 % y tiene el
+      93 % de su superficie lejos de ella — se choca con el aire. Con la
+      convexidad, que el recuento de triángulos no ve: una caja con una esquina
+      hundida tiene los mismos doce triángulos y se sale un 32 %. Y un hallazgo
+      del camino: **una esfera teselada no es convexa como malla**, porque sus
+      quads no son coplanarios y una diagonal queda de valle.
+    - Doce puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
       `test:repair`, `test:production`, `test:lod-qa`, `test:uv-qa` y
-      `test:texture-qa`, y un identificador nuevo,
+      `test:texture-qa` y `test:collision-qa`, y un identificador nuevo,
       `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a los que esperan
       respuesta. Ningún hash del rasterizador se movió.
 

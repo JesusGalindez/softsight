@@ -3367,6 +3367,43 @@ Gate:
 collision asset certifiable
 ```
 
+**Hecho el 2026-09-14.** R11 contestaba **una** pregunta —¿asoma la maestra del
+proxy?— y medida sola **premia al peor proxy posible**: una caja enorme contiene
+perfectamente, saca cero por ciento asomado y un veredicto impecable, y el jugador
+choca con el aire a medio metro del objeto.
+
+Medido sobre el fixture: la caja de semilado 1,02 alrededor de la esfera de radio
+1 **contiene al cien por cien y tiene el 93 % del proxy lejos de la maestra**, con
+el 204 % de su volumen. Las dos direcciones no se promedian y ni siquiera se
+parecen: una dice «lo atraviesan» y la otra «choca con nada».
+
+**Y la convexidad, que el recuento de triángulos no puede ver.** Un motor de
+física trata un casco convexo con un algoritmo y una malla cóncava con otro, y la
+diferencia es de orden. Una caja con una esquina hundida tiene **los mismos doce
+triángulos** y se sale un 32 % de la diagonal.
+
+Escribirlo dio un hallazgo que no se esperaba: **una esfera teselada no es convexa
+como malla**. Es convexa como conjunto de puntos, pero los cuatro vértices de un
+quad proyectados sobre la esfera no son coplanarios, así que al partirlo en dos
+triángulos una diagonal queda de valle — cuatro milésimas de la diagonal en una
+esfera de ocho divisiones, mil veces el redondeo. La medida lo dice en vez de
+esconderlo, y la tolerancia se declara: suponerla habría dado por convexa una
+herradura poco profunda.
+
+Los cuatro criterios suspenden **con su nombre y en orden de daño**: atravesar la
+pieza se ve y se sufre, ser cóncavo cuesta en cada fotograma y no se nota hasta
+que el motor va lento, chocar con el aire se sufre y no se ve.
+
+```text
+LA_MAESTRA_ASOMA_DE_LA_COLISION   gana a todo
+PROXY_NO_CONVEXO
+PROXY_DEMASIADO_HOLGADO
+PROXY_DEMASIADO_VOLUMINOSO
+```
+
+**Lo que R14 no hace**: proponer un proxy. Calcular un casco convexo o descomponer
+una pieza en partes convexas es modelar, y la línea es la misma que la de R10.
+
 ---
 
 ## R15 — Final GLB gate

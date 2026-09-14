@@ -32,13 +32,12 @@
  * de devolver un número que parecería una respuesta.
  */
 
-import { buildTriangleBoundsTree, raycast, type TriangleBoundsTree } from "../boundsTree";
 import { auditMesh, type MeshAudit } from "../inspect";
 import type { Mesh } from "../../mesh";
 import { diffMeshes, type MeshDiff } from "../reconstruction/meshDiff";
 import { evaluateBudgets, type BudgetResult, type DeclaredBudget } from "../reconstruction/budgets";
-import { sampleMesh } from "../reconstruction/surfaceSampling";
 import { compareSilhouettes, type SilhouetteComparison } from "./silhouette";
+import { assessCollision, type CollisionQuality } from "./collision";
 import { auditUvs, type UvAudit } from "./uv";
 import {
   auditMaterials,
@@ -142,6 +141,10 @@ export interface CollisionCheck {
   /** La tolerancia que se aplicó, publicada porque el veredicto depende de ella. */
   tolerance?: number;
   verdict?: "PASS" | "FAIL";
+  /** R14: lo que un proxy es además de contener. Ausente si no se pudo medir. */
+  quality?: CollisionQuality;
+  /** Qué criterio suspendió, cuando suspende. */
+  reasonDetail?: string;
 }
 
 export interface ProductionReport {
@@ -172,6 +175,11 @@ export interface ProductionInput {
       preset?: string;
       budgets?: Array<DeclaredBudget & { role?: ProductionRole }>;
       collisionTolerance?: number;
+      collisionSlackMax?: number;
+      collisionSlackTolerance?: number;
+      collisionConvexTolerance?: number;
+      collisionRequireConvex?: boolean;
+      collisionVolumeRatioMax?: number;
       lodDeviationMax?: number;
       textureMaxSize?: number;
       texturePowerOfTwo?: boolean;
@@ -198,34 +206,6 @@ export interface ProductionInput {
   uvPresence?: ReadonlyMap<string, boolean>;
   samples?: number;
   seed?: number;
-}
-
-/**
- * ¿Está el punto dentro de la malla cerrada?
- *
- * Paridad de cruces a lo largo de un rayo fijo. **Fijo y no aleatorio**: la
- * dirección tiene que ser la misma en dos ejecuciones, o el mismo asset daría dos
- * informes. Se avanza un pelo más allá de cada choque para no volver a contar el
- * mismo triángulo.
- */
-function inside(tree: TriangleBoundsTree, point: readonly number[], offset: number): boolean {
-  // Una dirección que no es paralela a ningún eje: con (1,0,0) sobre una caja
-  // alineada, el rayo roza aristas y la paridad se vuelve una moneda.
-  const direction = [0.577350269, 0.5773502692, 0.5773502694];
-  let crossings = 0;
-  let travelled = 0;
-  for (let step = 0; step < 64; step += 1) {
-    const origin = [
-      point[0] + direction[0] * travelled,
-      point[1] + direction[1] * travelled,
-      point[2] + direction[2] * travelled,
-    ];
-    const hit = raycast(tree, origin, direction);
-    if (hit === null) break;
-    crossings += 1;
-    travelled += hit.distance + offset;
-  }
-  return crossings % 2 === 1;
 }
 
 export function buildProductionReport(input: ProductionInput): ProductionReport {
@@ -438,48 +418,58 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
       // parecería una respuesta.
       collision = { artifactId: collisionArtifact.id, ran: false, reason: "PROXY_NO_CERRADO" };
     } else {
-      const tree = buildTriangleBoundsTree(proxy);
-      const samples = input.samples ?? CONTAINMENT_SAMPLES;
-      const set = sampleMesh(master, samples, input.seed ?? 1);
-      let magnitude = 0;
-      for (let index = 0; index < master.positions.length; index += 1) {
-        magnitude = Math.max(magnitude, Math.abs(master.positions[index]));
-      }
-      const offset = CONTAINMENT_OFFSET * (magnitude || 1);
+      const masterAudit = measurements.find(
+        (measurement) => measurement.appliesTo.artifactId === masters[0]?.id,
+      );
+      const quality = assessCollision({
+        master,
+        proxy,
+        masterAudit: masterAudit!,
+        proxyAudit: medida,
+        diagonal,
+        samples: input.samples ?? CONTAINMENT_SAMPLES,
+        seed: input.seed,
+        slackTolerance: manifest.target?.collisionSlackTolerance,
+        convexTolerance: manifest.target?.collisionConvexTolerance,
+      });
 
-      let fuera = 0;
-      let peor = 0;
-      for (let sample = 0; sample < set.count; sample += 1) {
-        const point = [set.points[sample * 3], set.points[sample * 3 + 1], set.points[sample * 3 + 2]];
-        if (inside(tree, point, offset)) continue;
-        fuera += 1;
-        // Cuánto asoma: la distancia al proxy más cercano. Sale de un rayo hacia
-        // dentro por la normal, que es la dirección en la que el proxy debería
-        // estar si estuviera donde toca.
-        const normal = [
-          set.normals[sample * 3],
-          set.normals[sample * 3 + 1],
-          set.normals[sample * 3 + 2],
-        ];
-        const hit = raycast(tree, point, [-normal[0], -normal[1], -normal[2]]);
-        if (hit !== null) peor = Math.max(peor, hit.distance);
-      }
-
-      const protrudingRatio = set.count === 0 ? 0 : fuera / set.count;
       // **Cero por defecto, y ese defecto se puede defender**: un proxy que no
       // contiene la pieza deja que la atraviesen por ahí. La tolerancia existe
       // para cuando asomar es a propósito, y entonces se declara.
       const tolerance = manifest.target?.collisionTolerance ?? 0;
+      // Los cuatro criterios, en orden de daño. Atravesar la pieza se ve y se
+      // sufre; chocar con el aire se sufre y no se ve; un proxy cóncavo cuesta
+      // en cada fotograma y no se nota hasta que el motor va lento.
+      let detalle: string | undefined;
+      if (quality.protrudingRatio > tolerance) detalle = "LA_MAESTRA_ASOMA_DE_LA_COLISION";
+      else if (
+        manifest.target?.collisionRequireConvex === true &&
+        !quality.convexity.convex
+      ) {
+        detalle = "PROXY_NO_CONVEXO";
+      } else if (
+        manifest.target?.collisionSlackMax !== undefined &&
+        quality.slackRatio > manifest.target.collisionSlackMax
+      ) {
+        detalle = "PROXY_DEMASIADO_HOLGADO";
+      } else if (
+        manifest.target?.collisionVolumeRatioMax !== undefined &&
+        quality.volumeRatio > manifest.target.collisionVolumeRatioMax
+      ) {
+        detalle = "PROXY_DEMASIADO_VOLUMINOSO";
+      }
+
       collision = {
         artifactId: collisionArtifact.id,
         ran: true,
-        samples: set.count,
-        protrudingRatio,
-        worstProtrusionRelative: diagonal === 0 ? 0 : peor / diagonal,
-        triangleRatio:
-          master.indices.length === 0 ? 0 : proxy.indices.length / master.indices.length,
+        samples: quality.samples,
+        protrudingRatio: quality.protrudingRatio,
+        worstProtrusionRelative: quality.worstProtrusionRelative,
+        triangleRatio: quality.triangleRatio,
         tolerance,
-        verdict: protrudingRatio <= tolerance ? "PASS" : "FAIL",
+        quality,
+        verdict: detalle === undefined ? "PASS" : "FAIL",
+        ...(detalle === undefined ? {} : { reasonDetail: detalle }),
       };
     }
   }
@@ -554,7 +544,8 @@ export function buildProductionReport(input: ProductionInput): ProductionReport 
     reason = issues[0].reason;
   } else if (collision?.verdict === "FAIL") {
     certification = "FAIL";
-    reason = "LA_MAESTRA_ASOMA_DE_LA_COLISION";
+    // El criterio que falló, no un «colisión mal» que obligue a buscarlo.
+    reason = collision.reasonDetail ?? "LA_MAESTRA_ASOMA_DE_LA_COLISION";
   } else if (materialIssues.length > 0) {
     // Se contradice el manifest consigo mismo: no hace falta abrir nada.
     certification = "FAIL";

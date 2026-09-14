@@ -69,6 +69,7 @@ const GATES = [
   "lod-qa.test.mjs", // 2,2 s de CPU — R12: la silueta, que es donde un LOD se nota
   "uv-qa.test.mjs", // 1,5 s de CPU — R13: las coordenadas de textura, y el formato que las admite
   "texture-qa.test.mjs", // 0,9 s de CPU — R13: la textura y el material, con la imagen como fichero
+  "collision-qa.test.mjs", // 3,0 s de CPU — R14: el proxy de colisión, y la holgura que nadie mide
   "producer-colmap.test.mjs", // 2,5 s de CPU con el fixture — R0-B: el segundo productor
   "producer-superficie.test.mjs", // 10,3 s de CPU con el fixture — la nube dispersa se hace superficie, y R6 mide sobre datos reales
   "self-intersection.test.mjs", // 0,2 s de CPU — cruces y, sobre todo, dónde calla

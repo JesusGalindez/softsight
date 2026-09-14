@@ -313,6 +313,14 @@ export type {
 } from "./production/texture";
 export type { UvAudit } from "./production/uv";
 export type { SilhouetteComparison, SilhouetteView } from "./production/silhouette";
+export {
+  COLLISION_SAMPLES,
+  CONVEX_TOLERANCE,
+  assessCollision,
+  checkConvexity,
+  insideClosedMesh,
+} from "./production/collision";
+export type { CollisionQuality, ConvexityCheck } from "./production/collision";
 export { CONTAINMENT_SAMPLES, buildProductionReport } from "./production/report";
 export type {
   CollisionCheck,

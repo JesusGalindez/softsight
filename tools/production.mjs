@@ -238,12 +238,32 @@ export function renderProduction(report) {
     const c = report.collision;
     lineas.push(
       c.ran
-        ? `colisión    ${(c.protrudingRatio * 100).toFixed(2)} % de la maestra asoma del proxy ` +
-            `(tolerancia ${(c.tolerance * 100).toFixed(2)} %) · ${c.verdict} · peor ` +
-            `${(c.worstProtrusionRelative * 100).toFixed(2)} % de la diagonal · ` +
-            `${(c.triangleRatio * 100).toFixed(1)} % de sus triángulos`
+        ? `colisión    ${(c.protrudingRatio * 100).toFixed(2)} % de la maestra asoma ` +
+            `(tolerancia ${(c.tolerance * 100).toFixed(2)} %) · ${c.verdict}` +
+            (c.reasonDetail ? ` · ${c.reasonDetail}` : "")
         : `colisión    no comprobada · ${c.reason}`,
     );
+    if (c.quality) {
+      const q = c.quality;
+      // **Las dos direcciones, separadas.** Una dice «lo atraviesan» y la otra
+      // «choca con nada»: promediarlas daría un número que no describe ninguna.
+      lineas.push(
+        `            holgura ${(q.slackRatio * 100).toFixed(1)} % del proxy a más del ` +
+          `${(q.slackTolerance * 100).toFixed(0)} % de la maestra · peor ` +
+          `${(q.worstSlackRelative * 100).toFixed(1)} %`,
+      );
+      lineas.push(
+        `            ${q.convexity.convex ? "convexo" : `cóncavo (se sale ${(q.convexity.worstExcursion * 100).toFixed(2)} %)`} · ` +
+          `${(q.triangleRatio * 100).toFixed(1)} % de los triángulos · ` +
+          `${(q.volumeRatio * 100).toFixed(0)} % del volumen · ` +
+          `caja +${(q.boundsExcess * 100).toFixed(2)} %`,
+      );
+      lineas.push(
+        `            ${q.topology.watertight ? "cerrado" : "**abierto**"}` +
+          `${q.topology.inverted ? " · **del revés**" : ""}` +
+          `${q.topology.nonManifoldEdges > 0 ? ` · ${q.topology.nonManifoldEdges} aristas no manifold` : ""}`,
+      );
+    }
   }
 
   if (report.textures.length > 0) {
