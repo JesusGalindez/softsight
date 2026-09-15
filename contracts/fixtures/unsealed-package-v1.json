@@ -1,0 +1,75 @@
+{
+  "fixture": "unsealed-package-v1",
+  "decision": "D15 — Una sola fuente ejecutable; JSON Schema es la frontera pública",
+  "why": [
+    "D15 asume un riesgo explícito: dos validadores pueden discrepar. SoftSight",
+    "valida con su esquema en ejecución; VideoMesh con modelos derivados de",
+    "`contracts/*.schema.json`. Un documento que uno acepta y el otro no es un",
+    "paquete que viaja y se cae al llegar. La forma de cerrarlo que la decisión",
+    "eligió son fixtures que los dos lados deben rechazar.",
+    "",
+    "**Y este fixture descubre que aquí no hay simetría, y que está bien.** El",
+    "esquema acepta `state: WRITING` — comprobado, devuelve cero errores—, porque",
+    "es un estado legítimo: es el que VideoMesh escribe mientras construye el",
+    "paquete. Un esquema que lo prohibiera impediría escribir el manifest en",
+    "curso.",
+    "",
+    "Así que el rechazo no es de validación sino de **consumo**, y cada lado",
+    "rechaza una cosa distinta en un momento distinto:",
+    "",
+    "  VideoMesh   no puede PUBLICAR un paquete que no haya sellado",
+    "  SoftSight   no puede CONSUMIR un paquete que no esté sellado",
+    "",
+    "El fallo que esto evita no es un error de lectura. Un paquete sin sellar se",
+    "puede leer perfectamente: los ficheros están ahí. Lo que sale es una medida",
+    "sobre un paquete que todavía estaba creciendo, y sale bien y es mentira.",
+    "",
+    "**Los dos casos de abajo caen en capas distintas, y ése es el mapa de la",
+    "frontera.** Traer `state: WRITING` lo acepta el esquema y lo para el consumo;",
+    "no traer `state` lo para el esquema, porque es un campo requerido. La segunda",
+    "sí es simétrica: los dos lados la rechazan igual. Escribir un fixture donde",
+    "todo cayera en la misma capa habría sido más limpio y habría descrito otro",
+    "repositorio."
+  ],
+  "reject": [
+    {
+      "name": "state WRITING — el paquete se estaba escribiendo",
+      "patch": { "state": "WRITING" },
+      "layer": "ingest",
+      "schemaAccepts": true,
+      "execution": "ERROR",
+      "exitCode": 20,
+      "code": "SS-PKG-011",
+      "reason": "PAQUETE_SIN_SELLAR"
+    },
+    {
+      "name": "state ausente — el manifest no llegó a escribir su estado",
+      "note": [
+        "D29 dice que un paquete sellado son dos condiciones a la vez: existe el",
+        "manifest y `state == SEALED`. Los dos acaban en ERROR con salida 20, y",
+        "**por motivos distintos a propósito**: faltar el campo lo caza el",
+        "esquema y traerlo mal lo caza el consumo. Quien automatice sobre el",
+        "identificador quiere poder distinguir «tu escritor de manifests está",
+        "roto» de «publicaste antes de sellar»."
+      ],
+      "remove": ["state"],
+      "layer": "schema",
+      "schemaAccepts": false,
+      "execution": "ERROR",
+      "exitCode": 20,
+      "code": "SS-PKG-010",
+      "reason": "ESQUEMA_NO_COINCIDE"
+    }
+  ],
+  "accept": [
+    {
+      "name": "state SEALED — el paquete publicado",
+      "note": [
+        "Sin este caso, una comprobación que rechazara cualquier valor de `state`",
+        "también aprobaría la puerta."
+      ],
+      "patch": { "state": "SEALED" },
+      "execution": "COMPLETE"
+    }
+  ]
+}

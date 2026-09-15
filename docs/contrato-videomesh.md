@@ -90,10 +90,10 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-09-14:
 
 ```text
-ACORDADAS       11   D2, D5, D15, D18, D22, D23, D26, D28, D29, D32, D34
+ACORDADAS       10   D2, D5, D18, D22, D23, D26, D28, D29, D32, D34
 PROPUESTAS       0
-IMPLEMENTADAS   23   D1, D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14, D16,
-                     D17, D19, D20, D21, D24, D25, D27, D30, D31, D33
+IMPLEMENTADAS   24   D1, D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15,
+                     D16, D17, D19, D20, D21, D24, D25, D27, D30, D31, D33
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -103,6 +103,11 @@ describía una frontera que se cumplía **sin que nadie la comprobara**. Una
 decisión no es IMPLEMENTADA porque su regla sea cierta hoy, sino porque hay una
 puerta que se pone roja si deja de serlo — y en los dos casos se comprobó
 rompiéndola a propósito.
+
+**D15 pasó el mismo día**, y por el mismo patrón que D1: su nota decía que le
+faltaban dos fixtures porque «piden capabilities y sellado, que no existen», y los
+dos existían desde el 2026-09-13. La nota describía un repositorio que ya no era
+éste.
 
 **El único movimiento admisible ahora es de ACORDADA a IMPLEMENTADA.** La primera
 la trajo D25 el 2026-08-12: la puerta de recursos existe y falla si `auditMesh`
@@ -610,7 +615,7 @@ y el informe declara el suyo y valida contra `contracts/reconstruction-report.sc
 La versión del documento vive dentro de `versions`, no en la raíz al lado de
 `contractVersion`.
 
-### D15 — Una sola fuente ejecutable; JSON Schema es la frontera pública
+### D15 — Una sola fuente ejecutable; JSON Schema es la frontera pública — IMPLEMENTADA (2026-09-14)
 ```text
 esquema en ejecución de SoftSight   (fuente única, la que valida de verdad)
         ↓ generado
@@ -632,12 +637,55 @@ necesita, se extiende el esquema; el JSON Schema nunca se escribe a mano.
 --check`, más `unknown-field-v1`, `unknown-capability-v1`, `unsealed-package-v1`.
 
 **Hecho el 2026-08-12, la mitad:** `tools/contracts.mjs` genera
-`contracts/*.schema.json` de los seis esquemas que hoy son frontera —escena,
-parche, guion, puesta en escena, referencia de muestreo y el paquete de
-reconstrucción— y `--check` pone la
+`contracts/*.schema.json` de los ocho esquemas que hoy son frontera —escena,
+parche, guion, puesta en escena, referencia de muestreo, el paquete de
+reconstrucción, su informe y el asset de producción— y `--check` pone la
 puerta roja si el commiteado y el generado divergen, o si sobra un esquema que ya
 no se publica. `unknown-field-v1` está; `unknown-capability-v1` y
 `unsealed-package-v1` piden capabilities y sellado, que no existen.
+
+**Completada el 2026-09-14.** Los dos fixtures que faltaban existen, y escribirlos
+destapó algo que la nota de arriba no podía ver: **el esquema acepta los dos
+documentos**.
+
+No es un agujero. `state: WRITING` es el estado legítimo que VideoMesh escribe
+mientras construye el paquete, y un esquema que lo prohibiera impediría escribir
+el manifest en curso. Y qué capacidades sabe hacer este binario cambia con cada
+escalón —`coverage` el 13, `capture-advice` y `repair-boundary` el 14—, así que
+meterlas en el JSON Schema publicado obligaría a regenerar vuestros modelos en
+cada una.
+
+Así que el rechazo va en la capa de **consumo**, y cada lado rechaza una cosa
+distinta en un momento distinto:
+
+```text
+VideoMesh   no puede PUBLICAR un paquete que no haya sellado
+SoftSight   no puede CONSUMIR un paquete que no esté sellado
+```
+
+El fallo que esto evita no es un error de lectura: un paquete sin sellar **se
+puede leer**, los ficheros están ahí. Lo que sale es una medida sobre un paquete
+que todavía estaba creciendo, y sale bien y es mentira.
+
+Y las dos capas conviven dentro del mismo fixture, que es el mapa de la frontera:
+
+```text
+state: WRITING    el esquema lo acepta   → lo para el consumo, SS-PKG-011
+state ausente     el esquema lo rechaza  → SS-PKG-010, y aquí sí hay simetría
+```
+
+Los dos acaban en ERROR con salida 20 **por motivos distintos a propósito**: quien
+automatice sobre el identificador quiere poder distinguir «tu escritor de
+manifests está roto» de «publicaste antes de sellar».
+
+**Un hallazgo del camino, y es un sobreanuncio al revés.** Escribiendo el caso que
+debe pasar de `unknown-capability-v1` salió que `SUPPORTED_CAPABILITIES` no
+declaraba `ply-binary`, construido el día antes: un productor que la pidiera
+recibía UNSUPPORTED sobre algo que este binario **sabe leer**. Declarar de menos
+también es mentir, solo que en la otra dirección. Entra el mismo día, **aparte de
+`ply-ascii`** y no sustituyéndola: son dos cosas que se saben hacer.
+
+**Prueba:** `test:contracts`, bloque 7.
 
 ### D16 — El hash del esquema se comprueba — IMPLEMENTADA (2026-08-12)
 Hash desconocido:

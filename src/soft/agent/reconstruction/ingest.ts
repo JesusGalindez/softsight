@@ -104,6 +104,13 @@ export const SUPPORTED_CAPABILITIES: readonly string[] = [
   "mesh-audit",
   "camera-projection",
   "ply-ascii",
+  // El 2026-09-14, cuando el lector binario existe (§72, ítem 10). Va **aparte**
+  // de `ply-ascii` y no sustituyéndolo: son dos cosas que se saben hacer, y un
+  // paquete escrito en texto sigue queriendo pedir la primera. Entra aquí el
+  // mismo día que el lector porque, hasta declararla, un productor que pidiera
+  // `ply-binary` recibía UNSUPPORTED sobre algo que este binario **sabe leer** —
+  // el reverso del sobreanuncio de D31, y igual de mentira.
+  "ply-binary",
   // Entra el 2026-09-13, cuando R0-B deja de estar pendiente y `coverage.ts`
   // existe. Antes estaba fuera **a propósito** y era el caso que la negociación
   // existía para contestar bien: un paquete que la pidiera salía UNSUPPORTED en

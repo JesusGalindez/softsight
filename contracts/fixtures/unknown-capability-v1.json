@@ -1,0 +1,74 @@
+{
+  "fixture": "unknown-capability-v1",
+  "decision": "D15 — Una sola fuente ejecutable; JSON Schema es la frontera pública",
+  "why": [
+    "El segundo de los dos fixtures que D15 nombraba y que no se podían escribir",
+    "hasta que existiera la negociación de capabilities (D31, 2026-09-13).",
+    "",
+    "Igual que `unsealed-package-v1`, el esquema **acepta** el documento: `requires`",
+    "es una lista de cadenas y nada en el JSON Schema puede saber qué sabe hacer",
+    "este binario hoy. Escribirlo en el esquema sería peor: la lista cambia cada",
+    "vez que entra un escalón —`coverage` el 2026-09-13, `capture-advice` y",
+    "`repair-boundary` el 14—, y un esquema publicado que la llevara obligaría a",
+    "regenerar los modelos de VideoMesh en cada uno.",
+    "",
+    "Lo que el fixture fija es la política, que es lo que no puede cambiar sin",
+    "aviso:",
+    "",
+    "  requerida desconocida   UNSUPPORTED con salida 21, y el mensaje dice qué",
+    "                          se sabe hacer — para que el productor pueda",
+    "                          decidir, no adivinar",
+    "  provista desconocida    se preserva y se nombra; no se ignora en silencio",
+    "",
+    "La diferencia entre las dos es quién queda colgado. Una capacidad requerida",
+    "que no tenemos significa que el informe contestaría otra pregunta; una",
+    "provista que no entendemos solo significa que el paquete trae más de lo que",
+    "sabemos aprovechar."
+  ],
+  "reject": [
+    {
+      "name": "una capacidad que nadie ha construido",
+      "patch": { "requires": ["teletransporte"] },
+      "layer": "ingest",
+      "schemaAccepts": true,
+      "execution": "UNSUPPORTED",
+      "exitCode": 21,
+      "code": "SS-PKG-024",
+      "reason": "CAPACIDAD_REQUERIDA_NO_SOPORTADA"
+    },
+    {
+      "name": "confidence a secas, que es la que más se va a pedir por error",
+      "note": [
+        "`confidence-geometric` dice desde dónde se miró; `confidence` a secas",
+        "pide si lo que se ve encaja con las fotos, que son los residuales de R8.",
+        "Aceptarla sería el sobreanuncio que D31 impide, y el informe contestaría",
+        "una pregunta distinta de la que se hizo."
+      ],
+      "patch": { "requires": ["confidence"] },
+      "layer": "ingest",
+      "schemaAccepts": true,
+      "execution": "UNSUPPORTED",
+      "exitCode": 21,
+      "reason": "CAPACIDAD_REQUERIDA_NO_SOPORTADA"
+    }
+  ],
+  "accept": [
+    {
+      "name": "ply-binary, que se sabe hacer desde el 2026-09-14",
+      "note": [
+        "Este caso no pasaba antes del lector binario, y ahí estaba el reverso del",
+        "sobreanuncio: un productor que pidiera `ply-binary` recibía UNSUPPORTED",
+        "sobre algo que este binario sabe leer. Declarar de menos también es",
+        "mentir, solo que en la otra dirección."
+      ],
+      "patch": { "requires": ["ply-ascii", "ply-binary", "coverage"] },
+      "execution": "COMPLETE"
+    },
+    {
+      "name": "una capacidad provista que no entendemos se preserva, no se rechaza",
+      "patch": { "provides": ["nube-coloreada"] },
+      "execution": "COMPLETE",
+      "preserved": ["nube-coloreada"]
+    }
+  ]
+}

@@ -27,8 +27,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -37,6 +38,7 @@ import {
   CURRENT_VERSION_PAIRS,
   EXTENSION_POLICY,
   PACKAGE_CODES,
+  RECONSTRUCTION_PACKAGE_SCHEMA,
   SUPPORTED_CAPABILITIES,
   exitCodeFor,
   ingestPackage,
@@ -44,6 +46,8 @@ import {
   validate,
 } from "../dist-node/agent3d.mjs";
 import { PUBLISHED } from "./contracts.mjs";
+import { writeCubePackage } from "./cubeV1.mjs";
+import { inspectPackage } from "./reconstruction.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
@@ -405,5 +409,118 @@ const OPAQUE = new Set([
     `contratos: ok (D31: requerida desconocida → UNSUPPORTED con salida 21 y el mensaje dice qué se sabe ` +
       `hacer, requerida conocida entra, provista desconocida preservada y nombrada, y los ` +
       `${SUPPORTED_CAPABILITIES.length} supports viajan aunque nadie pida nada)`,
+  );
+}
+
+// 7. Los dos fixtures que D15 nombraba y no se podían escribir — `unsealed-package-v1`
+//    y `unknown-capability-v1`.
+//
+// La nota de D15 del 2026-08-12 decía que «piden capabilities y sellado, que no
+// existen». Los dos existen desde el 2026-09-13, y escribirlos destapó algo que
+// esa nota no podía ver: **el esquema acepta los dos documentos**.
+//
+// No es un agujero. `state: WRITING` es el estado legítimo que VideoMesh escribe
+// mientras construye, y un esquema que lo prohibiera impediría escribir el
+// manifest en curso; y qué capacidades sabe hacer este binario cambia con cada
+// escalón, así que meterlas en el JSON Schema obligaría a regenerar los modelos
+// del otro lado cada vez. El rechazo va en la capa de **consumo**, y cada lado
+// rechaza una cosa distinta en un momento distinto:
+//
+//   VideoMesh   no puede PUBLICAR un paquete sin sellar
+//   SoftSight   no puede CONSUMIR un paquete sin sellar
+//
+// Por eso los fixtures declaran su `layer`, y la puerta comprueba **las dos
+// capas**: que el esquema dice lo que el fixture afirma que dice, y que la
+// ingesta rechaza lo que tiene que rechazar.
+{
+  const sandbox = mkdtempSync(join(tmpdir(), "softsight-d15-"));
+  const raiz = join(sandbox, "cube-v1");
+  writeCubePackage(raiz);
+  const manifestPath = join(raiz, "manifest.json");
+  const original = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+  /** El manifest con el retoque del caso aplicado, escrito en su sitio. */
+  const conCaso = (testCase) => {
+    const documento = JSON.parse(JSON.stringify(original));
+    for (const campo of testCase.remove ?? []) delete documento[campo];
+    Object.assign(documento, testCase.patch ?? {});
+    writeFileSync(manifestPath, `${JSON.stringify(documento, null, 2)}\n`);
+    return documento;
+  };
+
+  let rechazados = 0;
+  let aceptados = 0;
+  const capas = { schema: 0, ingest: 0 };
+  for (const nombre of ["unsealed-package-v1", "unknown-capability-v1"]) {
+    const fixture = JSON.parse(
+      readFileSync(resolve(projectRoot, `contracts/fixtures/${nombre}.json`), "utf8"),
+    );
+    for (const testCase of fixture.reject) {
+      assert.ok(
+        testCase.layer === "schema" || testCase.layer === "ingest",
+        `${nombre} · ${testCase.name}: cada caso tiene que decir en qué capa se rechaza`,
+      );
+    }
+
+    for (const testCase of fixture.reject) {
+      const documento = conCaso(testCase);
+
+      // Primero la afirmación sobre el esquema, que es la mitad que viaja al otro
+      // lado. Si un día el esquema empezara a rechazarlo, el fixture estaría
+      // mintiendo sobre dónde está la frontera.
+      if (testCase.schemaAccepts !== undefined) {
+        const errores = validate(documento, RECONSTRUCTION_PACKAGE_SCHEMA);
+        assert.equal(
+          errores.length === 0,
+          testCase.schemaAccepts,
+          `${nombre} · ${testCase.name}: el fixture dice schemaAccepts=${testCase.schemaAccepts} y el esquema dice ${JSON.stringify(errores)}`,
+        );
+      }
+
+      const { report, exitCode } = inspectPackage(manifestPath);
+      assert.equal(report.execution, testCase.execution, `${nombre} · ${testCase.name}`);
+      assert.equal(exitCode, testCase.exitCode, `${nombre} · ${testCase.name}: código de salida`);
+      assert.ok(
+        report.warnings.some((warning) => warning.reason === testCase.reason),
+        `${nombre} · ${testCase.name}: ningún aviso dice ${testCase.reason}`,
+      );
+      // El identificador solo se comprueba cuando el fixture lo fija: D2 manda
+      // parsear el identificador, y atarlo aquí cuando el caso no lo nombra
+      // convertiría este fichero en una segunda tabla de códigos.
+      if (testCase.code !== undefined) {
+        assert.ok(
+          report.warnings.some((warning) => warning.code === testCase.code),
+          `${nombre} · ${testCase.name}: ningún aviso lleva ${testCase.code}`,
+        );
+      }
+      rechazados += 1;
+      capas[testCase.layer] += 1;
+    }
+
+    // Y los que deben pasar. Sin ellos, una ingesta que rechazara todo aprobaría
+    // esta puerta igual que aprobaría la de `unknown-field-v1`.
+    for (const testCase of fixture.accept) {
+      conCaso(testCase);
+      const { report, exitCode } = inspectPackage(manifestPath);
+      assert.equal(report.execution, testCase.execution, `${nombre} · ${testCase.name}`);
+      assert.equal(exitCode, 0, `${nombre} · ${testCase.name}: tenía que pasar`);
+      if (testCase.preserved !== undefined) {
+        assert.deepEqual(
+          report.capabilities.unknownProvided,
+          testCase.preserved,
+          `${nombre} · ${testCase.name}: lo provisto desconocido se preserva y se nombra`,
+        );
+      }
+      aceptados += 1;
+    }
+  }
+
+  rmSync(sandbox, { recursive: true, force: true });
+
+  console.log(
+    `contratos: ok (D15 entera: ${rechazados} documentos rechazados —${capas.schema} por el esquema y ` +
+      `${capas.ingest} por el consumo— y ${aceptados} aceptados. Que las dos capas aparezcan es el ` +
+      "hallazgo: un paquete sin sellar lo acepta el esquema y lo para la ingesta, y el fixture lo dice " +
+      "en vez de fingir simetría)",
   );
 }

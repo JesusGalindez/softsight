@@ -719,7 +719,19 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       una costumbre, y una costumbre se rompe sin que nadie se entere. Las dos se
       cerraron rompiéndolas a propósito para ver la puerta en rojo, porque una
       decisión no es IMPLEMENTADA por ser cierta hoy sino por haber quien avise
-      cuando deje de serlo. Quedan **11 ACORDADAS y 23 IMPLEMENTADAS**.
+      cuando deje de serlo.
+    - **Y D15 el mismo día, por el mismo patrón que D1**: su nota decía que le
+      faltaban dos fixtures porque «piden capabilities y sellado, que no existen»,
+      y los dos existían desde el 2026-09-13 — la nota describía un repositorio
+      que ya no era éste. Escribirlos destapó que **el esquema acepta los dos
+      documentos**, y que eso está bien: `state: WRITING` es lo que VideoMesh
+      escribe mientras construye, y qué capacidades sabe hacer este binario cambia
+      con cada escalón. El rechazo va en el **consumo**, no en la validación, y
+      cada lado rechaza una cosa distinta: VideoMesh no puede publicar sin sellar
+      y SoftSight no puede consumir sin sellar. De paso salió un sobreanuncio al
+      revés: `ply-binary` no estaba declarada, así que un productor que la pidiera
+      recibía UNSUPPORTED sobre algo que este binario sabe leer desde el día
+      antes. Quedan **10 ACORDADAS y 24 IMPLEMENTADAS**.
     - Dieciséis puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
       `test:repair`, `test:production`, `test:lod-qa`, `test:uv-qa` y
