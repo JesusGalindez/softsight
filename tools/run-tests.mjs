@@ -75,6 +75,7 @@ const GATES = [
   "recon-cache.test.mjs", // 2,5 s de CPU — R16: la caché de visibilidad, y la invalidación que no es una tabla
   "preview-proxy.test.mjs", // 1,8 s de CPU — R16 (§54): la geometría que se mide y la que se mira
   "ply-binary.test.mjs", // 0,8 s de CPU — §72 ítem 10: los dos lectores de PLY dan la misma malla bit a bit
+  "boundaries.test.mjs", // 0,2 s de CPU — D27: la frontera modular, comprobada en vez de respetada
   "producer-colmap.test.mjs", // 2,5 s de CPU con el fixture — R0-B: el segundo productor
   "producer-superficie.test.mjs", // 10,3 s de CPU con el fixture — la nube dispersa se hace superficie, y R6 mide sobre datos reales
   "self-intersection.test.mjs", // 0,2 s de CPU — cruces y, sobre todo, dónde calla

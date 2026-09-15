@@ -711,6 +711,15 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       cubo de juguete **crece** en binario, porque `-0.5` ocupa lo mismo escrito
       que codificado— y que desbloqueó la etapa `parseo` del banco, la más cara en
       memoria de las cuatro: 1.038 MiB en el escalón de 10M.
+    - **Y dos decisiones que pasan a IMPLEMENTADA, D1 y D27**, por caminos
+      opuestos y el mismo motivo. D1 —el paquete por ruta— describía un
+      transporte que no existió hasta R16; D27 —la frontera modular— describía
+      una regla que **se cumplía sin que nadie la comprobara**, que es lo que la
+      hacía frágil: una frontera que solo vive en la cabecera de un fichero es
+      una costumbre, y una costumbre se rompe sin que nadie se entere. Las dos se
+      cerraron rompiéndolas a propósito para ver la puerta en rojo, porque una
+      decisión no es IMPLEMENTADA por ser cierta hoy sino por haber quien avise
+      cuando deje de serlo. Quedan **11 ACORDADAS y 23 IMPLEMENTADAS**.
     - Dieciséis puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
       `test:repair`, `test:production`, `test:lod-qa`, `test:uv-qa` y

@@ -87,15 +87,22 @@ reuniones periódicas                 las sustituye el aviso por evento
 
 ## 2. Estado del registro
 
-Al 2026-09-13:
+Al 2026-09-14:
 
 ```text
-ACORDADAS       13   D1, D2, D5, D15, D18, D22, D23, D26–D29, D32, D34
+ACORDADAS       11   D2, D5, D15, D18, D22, D23, D26, D28, D29, D32, D34
 PROPUESTAS       0
-IMPLEMENTADAS   21   D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14, D16,
-                     D17, D19, D20, D21, D24, D25, D30, D31, D33
+IMPLEMENTADAS   23   D1, D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14, D16,
+                     D17, D19, D20, D21, D24, D25, D27, D30, D31, D33
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
+
+**D1 y D27 pasaron el 2026-09-14**, y las dos por el mismo motivo aunque por
+caminos opuestos: D1 describía un transporte que no existía hasta R16, y D27
+describía una frontera que se cumplía **sin que nadie la comprobara**. Una
+decisión no es IMPLEMENTADA porque su regla sea cierta hoy, sino porque hay una
+puerta que se pone roja si deja de serlo — y en los dos casos se comprobó
+rompiéndola a propósito.
 
 **El único movimiento admisible ahora es de ACORDADA a IMPLEMENTADA.** La primera
 la trajo D25 el 2026-08-12: la puerta de recursos existe y falla si `auditMesh`
@@ -152,11 +159,39 @@ C  de VideoMesh           igual, en su lado
 
 ## 4. Las decisiones
 
-### D1 — Transporte del paquete
+### D1 — Transporte del paquete — IMPLEMENTADA (2026-09-14)
 Filesystem y rutas. VideoMesh escribe el paquete en disco y pasa la ruta del
 manifest. Nada de base64 en el JSON, nada de streaming, y los límites del puente
 no se suben como parche. El puente se queda para el editor y peticiones pequeñas.
-**Prueba:** sin escribir.
+**Prueba:** `test:package-transport`.
+
+**Hecho con R16 el 2026-09-14.** La decisión decía «prueba: sin escribir» desde
+el principio y lo que faltaba era el transporte, no la prueba: hasta R16 el
+puente solo sabía recibir base64, así que la decisión describía algo que no
+existía.
+
+Lo que la cierra es `bridgeContractVersion: 2` con `package: { root }`, y las
+cinco reglas del §84 comprobadas en la puerta:
+
+```text
+1  raíz por SOFTSIGHT_PACKAGE_ROOTS, no por la petición
+2  realpath en los dos lados antes de comparar
+3  prefijo por COMPONENTES — /datos/x no es prefijo de /datos/x-otro
+4  ningún `..`, aunque resolviera dentro
+5  lectura solamente
+```
+
+La 1 es la que sostiene a las otras cuatro, y es la que se comprobó **rompiéndola
+a propósito**: añadir `/` a las raíces declaradas pone la puerta roja. Sin esa
+comprobación, una regla que aceptara todo habría pasado igual.
+
+Y la segunda mitad de la decisión también se cumple: «el puente se queda para el
+editor». La versión 1 sigue valiendo entera para sus diez comandos y la respuesta
+hace eco de la versión pedida, así que el editor no cambia.
+
+**Lo que no promete:** la ruta se abre solo para **lectura**. Los artefactos
+siguen saliendo por el canal de siempre, así que un paquete que produjera 150 MB
+de salida todavía no tiene por dónde devolverlos.
 
 ### D2 — Códigos de aviso
 Código legible en español, más un **identificador neutro y estable**
@@ -1018,13 +1053,51 @@ puntos, no superficie, así que las comparaciones de recuentos y caja de D23 no
 tienen qué comparar. Llegan con un productor que entregue malla — Meshroom o el
 denso de COLMAP—, y entonces sí.
 
-### D27 — Un repositorio, con frontera modular estricta
+### D27 — Un repositorio, con frontera modular estricta — IMPLEMENTADA (2026-09-14)
 `reconstruction/` y `production/` bajo `src/soft/agent/`. Esos módulos consumen
 las APIs públicas o del núcleo, no importan a discreción de todo el repositorio.
 Se extrae a un repositorio aparte solo si la cadencia diverge, aparecen
 consumidores independientes, la legibilidad sufre de forma medible o el tamaño
 del paquete se vuelve un problema real.
-**Prueba:** comprobación de importaciones permitidas.
+**Prueba:** `test:boundaries`.
+
+**Hecho el 2026-09-14.** Las cuatro fronteras que la puerta comprueba **ya se
+cumplían todas**, y eso no es que sobrara: es lo que las hacía frágiles. Una
+frontera que solo vive en la cabecera de un fichero no es una frontera, es una
+costumbre, y una costumbre se rompe sin que nadie se entere.
+
+```text
+1  src/soft/** no importa node:*        79 ficheros, ninguno
+2  el núcleo no importa las dos capas   solo `index.ts`, que es su trabajo
+3  reconstruction/ no importa           y producción sí lee de reconstrucción,
+   production/                           en 3 sitios
+4  producers/ no importa de src/,       D34: es lo que los hace productores y no
+   tools/ ni dist-node/                  extensiones del verificador
+```
+
+La 1 me la salté yo mismo construyendo R16 y lo resolví a mano —la caché de
+visibilidad vive en `tools/` justo por eso—. Salió bien porque me acordé; la
+puerta existe para las veces que no.
+
+La 2 es la que da sentido a la palabra «frontera»: si el núcleo pudiera importar
+de la capa que lo usa, la dependencia iría en los dos sentidos y no habría nada
+que separar. Por eso la regla exceptúa al barril y la puerta comprueba **también
+la excepción**: `index.ts` sigue pudiendo, o no habría forma de publicar las
+capas.
+
+Y la 3 lleva su recíproca a propósito. Comprobar solo que reconstrucción no mira
+a producción se cumpliría igual si no hubiera ninguna relación entre las dos, así
+que la puerta exige que el sentido bueno exista.
+
+**Cómo se comprobó que la puerta puede ponerse roja.** Nació verde —las cuatro
+reglas ya se cumplían—, y una puerta que nunca ha fallado no ha demostrado que
+mire nada: una que devolviera siempre la lista vacía habría pasado igual. Así que
+las cuatro reciben una violación inventada y tienen que cazarla.
+
+**Lo que queda abierto, y se dice:** qué módulos del núcleo pueden consumir las
+dos capas. Hoy son cinco —`mesh`, `boundsTree`, `inspect`, `schema` y
+`versions`— y fijar esa lista sería convertir el estado actual en regla sin que
+nadie lo haya decidido.
 
 ### D28 — NumericDeterminism: dos ejes, no uno
 **Refinamiento de VideoMesh, aceptado y correcto.** Un solo enum colapsaba dos
