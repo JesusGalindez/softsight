@@ -3591,25 +3591,47 @@ máquina y el segundo no se arregla nunca. Con un solo escalón no hay veredicto
 lo honrado es imprimir el número y callarse.
 
 `--nightly` corre 1M, 5M y 10M, que es lo del §64 y lo que no cabe en una suite
-de 147 s. Medido el 2026-09-14 en el i5-5350U, con `--heavy`:
+de 147 s. Medido el 2026-09-14 en el i5-5350U — el escalón de 100k con `--heavy`,
+los otros tres con `--nightly`, dos corridas del mismo día:
 
 ```text
 escalón   etapa         CPU        RSS pico
 100k      auditoría     0,12 s      67 MiB
 100k      árbol         0,17 s      72 MiB
 100k      visibilidad   0,96 s      77 MiB
-1M        auditoría     0,27 s     112 MiB
-1M        árbol         0,57 s     155 MiB
-1M        visibilidad   7,28 s     166 MiB
-5M        auditoría     0,96 s     316 MiB
-5M        árbol         2,53 s     511 MiB
-5M        visibilidad  34,42 s     551 MiB
+1M        auditoría     0,25 s     113 MiB
+1M        árbol         0,61 s     157 MiB
+1M        visibilidad   7,25 s     164 MiB
+5M        auditoría     0,95 s     315 MiB
+5M        árbol         2,48 s     510 MiB
+5M        visibilidad  34,98 s     550 MiB
+10M       auditoría     1,90 s     572 MiB
+10M       árbol         4,99 s     952 MiB
+10M       visibilidad  69,33 s     951 MiB
 ```
 
-Las tres pendientes salen **por debajo de 1**, y eso no es magia: en el escalón
+**El escalón de 5M se atraviesa** —550 MiB—, que es lo que el §61 pedía, y el de
+10M también: 952 MiB y 69 s de visibilidad, el más caro de los doce.
+
+Lo interesante no son los tiempos sino que **la pendiente se lee distinta según
+desde dónde se mire**, y las dos lecturas juntas dicen más que cualquiera sola:
+
+```text
+de 100k a 5M    auditoría ×0,15   árbol ×0,30   visibilidad ×0,72
+de 1M a 10M     auditoría ×0,76   árbol ×0,82   visibilidad ×0,96
+```
+
+Por debajo de 1 el coste por triángulo **baja**, y eso no es magia: en el escalón
 pequeño pesa lo que no depende del tamaño —arrancar, reservar, calentar el JIT— y
-al multiplicar por cincuenta se reparte. Ninguna es cuadrática, que es lo que el
-§61 pedía comprobar, y **el escalón de 5M se atraviesa** con 551 MiB.
+al multiplicar se reparte. Lo que confirma que era eso y no otra cosa es la
+segunda fila: entre 1M y 10M, donde el coste fijo ya no pesa, las tres se acercan
+a 1 por abajo. Ninguna es cuadrática, que es exactamente lo que el §61 pedía
+comprobar.
+
+Y de paso responde por qué la caché de R16 guarda la visibilidad y no otra cosa:
+de los 76 s que cuestan las tres etapas en el escalón de 10M, **la visibilidad se
+lleva 69 y la auditoría 1,9**. Cachear lo barato solo habría añadido sitios donde
+equivocarse.
 
 **Lo que R16 no hace**: `parse` no está en la matriz, y no por olvido — el único
 lector de PLY es el ASCII, y un PLY ASCII de 5M de triángulos son ~400 MB de
