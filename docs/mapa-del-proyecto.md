@@ -692,7 +692,14 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       y mismo `mtime`, habrían recibido el uno la cobertura del otro. Y el §56 no
       lleva tabla de invalidación a propósito — lo que invalida cada cosa es lo
       que entra en su clave, así que la matriz sale sola. 439 ms → 279 ms de CPU
-      por informe.
+      por informe. Y el banco del §61 —`npm run bench`, con `--nightly` para lo
+      que no cabe en la suite— **atraviesa el escalón de 10M**: 952 MiB de pico y
+      69 s de visibilidad. No afirma tiempos sino **pendientes**, porque un número
+      suelto no distingue «esta máquina es lenta» de «este código es cuadrático»;
+      y la pendiente se lee distinta según el tramo —muy por debajo de 1 de 100k a
+      5M, cerca de 1 de 1M a 10M—, que es lo que demuestra que el sesgo estaba en
+      el coste fijo del escalón pequeño y no en el algoritmo. Los cuatro
+      escalones, en [`plan-reconstruccion.md`](plan-reconstruccion.md) R16.
     - Dieciséis puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
       `test:repair`, `test:production`, `test:lod-qa`, `test:uv-qa` y
