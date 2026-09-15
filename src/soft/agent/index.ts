@@ -314,6 +314,11 @@ export { sampleMesh } from "./reconstruction/surfaceSampling";
 export { computeVisibility, seesPoint } from "./reconstruction/coverage";
 export type { SurfaceVisibility } from "./reconstruction/coverage";
 export { PRODUCTION_ASSET_SCHEMA } from "./production/manifest";
+export {
+  writeMatrixFromGltf,
+  writeMatrixFromGltfTrs,
+  writeMatrixToGltf,
+} from "./gltfFrame";
 export { SILHOUETTE_RESOLUTION, SILHOUETTE_VIEWS, compareSilhouettes } from "./production/silhouette";
 export {
   PREVIEW_MAX_TRIANGLES,

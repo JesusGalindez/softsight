@@ -1,0 +1,369 @@
+{
+  "fixture": "transform-gltf-v1",
+  "decision": "D32 — Álgebra canónica de transformaciones",
+  "why": [
+    "`test:gltf-frame` comprueba que las dos rutas del repositorio —la que aplana",
+    "para rasterizar y la que conserva el árbol para evaluar poses— dan la misma",
+    "matriz. Eso es necesario y **no es suficiente**: desde que la conversión se",
+    "unificó, las dos salen del mismo módulo, así que pueden coincidir y estar las",
+    "dos mal. Es el código comparándose consigo mismo.",
+    "",
+    "Este fixture es el ancla que no viene de aquí. Sus números están calculados",
+    "aparte, con la fórmula del cuaternión escrita desde cero, y lo decisivo es la",
+    "última columna: **un punto conocido a su punto transformado conocido**.",
+    "",
+    "Por qué el punto y no solo la matriz: una transposición de más y otra de",
+    "menos se cancelan. La ida y vuelta canónico → glTF → canónico sale idéntica,",
+    "ninguna huella se mueve, y el punto acaba en otro sitio. Es literalmente el",
+    "fallo que D32 describe —«dos transposiciones sin dueño se cancelan o se",
+    "duplican sin que nada salte»— y una comprobación de ida y vuelta no lo ve.",
+    "",
+    "Las cuatro primeras filas dan números que se leen a ojo —(6,8,10), (2,4,6),",
+    "(0,1,0), (1,4,3)—, a propósito: un fixture cuyos valores solo se puedan",
+    "apuntar después de ejecutarlo no prueba que el resultado sea el correcto,",
+    "prueba que no ha cambiado. La quinta usa un eje oblicuo, que es donde una",
+    "convención equivocada deja de disimular."
+  ],
+  "convention": {
+    "canonicalByRows": "D32: 4x4 por filas, traslación en 3, 7 y 11, vectores columna a la derecha.",
+    "gltfMatrixByColumns": "Como lo serializa glTF: por columnas, traslación en 12, 13 y 14.",
+    "expected": "p_destino = M x p_origen, con M en la convención canónica."
+  },
+  "cases": [
+    {
+      "name": "traslación pura",
+      "gltf": {
+        "translation": [
+          5,
+          6,
+          7
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "gltfMatrixByColumns": [
+        1,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1,
+        0.0,
+        5,
+        6,
+        7,
+        1.0
+      ],
+      "canonicalByRows": [
+        1,
+        0.0,
+        0.0,
+        5,
+        0.0,
+        1,
+        0.0,
+        6,
+        0.0,
+        0.0,
+        1,
+        7,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "point": [
+        1,
+        2,
+        3
+      ],
+      "expected": [
+        6,
+        8,
+        10
+      ]
+    },
+    {
+      "name": "escala uniforme",
+      "gltf": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.0,
+          1
+        ],
+        "scale": [
+          2,
+          2,
+          2
+        ]
+      },
+      "gltfMatrixByColumns": [
+        2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "canonicalByRows": [
+        2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "point": [
+        1,
+        2,
+        3
+      ],
+      "expected": [
+        2,
+        4,
+        6
+      ]
+    },
+    {
+      "name": "rotación de 90° sobre Z",
+      "gltf": {
+        "translation": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067811865476,
+          0.7071067811865476
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "gltfMatrixByColumns": [
+        -2.220446049250313e-16,
+        1.0000000000000002,
+        0.0,
+        0.0,
+        -1.0000000000000002,
+        -2.220446049250313e-16,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "canonicalByRows": [
+        -2.220446049250313e-16,
+        -1.0000000000000002,
+        0.0,
+        0.0,
+        1.0000000000000002,
+        -2.220446049250313e-16,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "point": [
+        1,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        -2.220446049250313e-16,
+        1.0000000000000002,
+        0.0
+      ]
+    },
+    {
+      "name": "composición no trivial: escala, rotación y traslación",
+      "gltf": {
+        "translation": [
+          1,
+          2,
+          3
+        ],
+        "rotation": [
+          0.0,
+          0.0,
+          0.7071067811865476,
+          0.7071067811865476
+        ],
+        "scale": [
+          2,
+          2,
+          2
+        ]
+      },
+      "gltfMatrixByColumns": [
+        -4.440892098500626e-16,
+        2.0000000000000004,
+        0.0,
+        0.0,
+        -2.0000000000000004,
+        -4.440892098500626e-16,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        2,
+        0.0,
+        1,
+        2,
+        3,
+        1.0
+      ],
+      "canonicalByRows": [
+        -4.440892098500626e-16,
+        -2.0000000000000004,
+        0.0,
+        1,
+        2.0000000000000004,
+        -4.440892098500626e-16,
+        0.0,
+        2,
+        0.0,
+        0.0,
+        2,
+        3,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "point": [
+        1,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.9999999999999996,
+        4.0,
+        3.0
+      ]
+    },
+    {
+      "name": "rotación sobre un eje oblicuo, con escala y traslación",
+      "gltf": {
+        "translation": [
+          -1,
+          0.5,
+          2
+        ],
+        "rotation": [
+          0.08627301503417358,
+          0.17254603006834715,
+          0.17254603006834715,
+          0.9659258262890683
+        ],
+        "scale": [
+          1.5,
+          1.5,
+          1.5
+        ]
+      },
+      "gltfMatrixByColumns": [
+        1.3213672050459184,
+        0.5446581987385204,
+        -0.45534180126147955,
+        0.0,
+        -0.45534180126147955,
+        1.3883545031536988,
+        0.3393163974770409,
+        0.0,
+        0.5446581987385204,
+        -0.1606836025229591,
+        1.3883545031536988,
+        0.0,
+        -1,
+        0.5,
+        2,
+        1.0
+      ],
+      "canonicalByRows": [
+        1.3213672050459184,
+        -0.45534180126147955,
+        0.5446581987385204,
+        -1,
+        0.5446581987385204,
+        1.3883545031536988,
+        -0.1606836025229591,
+        0.5,
+        -0.45534180126147955,
+        0.3393163974770409,
+        1.3883545031536988,
+        2,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "point": [
+        0.3,
+        -0.7,
+        1.1
+      ],
+      "expected": [
+        0.31427344100918364,
+        -0.48520265536128815,
+        3.1530659348566963
+      ]
+    }
+  ]
+}

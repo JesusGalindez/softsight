@@ -90,10 +90,11 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-09-14:
 
 ```text
-ACORDADAS        9   D2, D5, D22, D23, D26, D28, D29, D32, D34
+ACORDADAS        7   D2, D5, D23, D26, D28, D29, D34
 PROPUESTAS       0
-IMPLEMENTADAS   25   D1, D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15,
-                     D16, D17, D18, D19, D20, D21, D24, D25, D27, D30, D31, D33
+IMPLEMENTADAS   27   D1, D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15,
+                     D16, D17, D18, D19, D20, D21, D22, D24, D25, D27, D30, D31,
+                     D32, D33
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -951,7 +952,7 @@ Y un quinto que sale gratis y hacía falta: un tipo que no existe dice cuáles h
 —«artifacts[0].type no admite "MESH"; admitidos: TRIANGLE_MESH, POINT_CLOUD,
 IMAGE, DEPTH_MAP»— en vez de un fallo de forma.
 
-### D22 — Dónde viven los fixtures
+### D22 — Dónde viven los fixtures — IMPLEMENTADA (2026-09-14)
 ```text
 ligeros (< 1 MB, sintéticos)  →  en el repositorio, versionados
 pesados (COLMAP real, 5M)     →  fuera, por variable de entorno, con sha256
@@ -959,7 +960,38 @@ pesados (COLMAP real, 5M)     →  fuera, por variable de entorno, con sha256
 sin fixture                   →  la puerta se declara NOT_RUN con su motivo;
                                  nunca PASS
 ```
-**Prueba:** sin escribir.
+**Prueba:** `test:fixtures`.
+
+**Hecha el 2026-09-14.** Las tres filas se cumplían y ninguna se comprobaba, pero
+no son igual de frágiles y la puerta se organiza por eso:
+
+```text
+ligeros y pesados   se rompen RUIDOSAMENTE — alguien commitea 69 MB y está en el diff
+sin fixture         se rompe EN SILENCIO
+```
+
+La tercera es la peligrosa. Una puerta que necesita un fixture ausente y sale
+verde sin decirlo deja un hueco **del tamaño de lo que esa puerta probaba**, y el
+registro de la ejecución dice «ok». Por eso ese bloque no lee el código: **ejecuta**
+las tres puertas que dependen del COLMAP real con la variable apuntando a un
+directorio vacío, y comprueba las dos cosas a la vez — que salen con 0 y que lo
+dicen con su motivo. Cualquiera de las dos por separado se puede fingir: salir 0
+sin decirlo es saltarse el trabajo, y decirlo y luego fallar es otra cosa.
+
+Y comprueba una cuarta que no está en el texto de la decisión y la sostiene
+entera: **el corredor de la suite busca la misma marca que las puertas escriben**.
+El mecanismo cuelga de una subcadena; una redacción distinta en una puerta la
+convertiría en verde sin que nadie lo viera.
+
+**Dos cosas que la puerta cazó al escribirse**, y las dos valen como ejemplo de lo
+que vigila: `transform-gltf-v1.json` estaba sin versionar —el fixture de D32,
+escrito ese mismo día—, y un falso positivo mío al comparar los pesados por nombre
+de fichero en vez de por ruta: `cameras.txt` existe en el sintético
+`colmap-small-v1`, que sí va en git, y en las dos escenas pesadas, que no. **El
+nombre de un fichero no lo identifica.**
+
+**Lo que no comprueba**, y se dice: que los ligeros sean *sintéticos*. Eso es un
+juicio sobre el origen del dato y no se deduce de los bytes.
 
 ### D23 — Puerta de paridad, contra valores dorados
 Cuatro filas sobre `cube-v1` y `colmap-small-v1`: recuentos, caja tras normalizar
@@ -1482,7 +1514,7 @@ su capability se usó o se tiró.
 `supports` viaja en el informe aunque el paquete no pida nada: es lo que le dice
 al productor qué puede pedir la próxima vez sin tener que probarlo.
 
-### D32 — Álgebra canónica de transformaciones
+### D32 — Álgebra canónica de transformaciones — IMPLEMENTADA (2026-09-14)
 ```text
 matriz          4×4 homogénea
 serialización   por filas, 16 números, traslación en 3, 7, 11
@@ -1526,6 +1558,42 @@ que nadie la pida.
 **Prueba:** fixture `transform-gltf-v1` con traslación, rotación, escala uniforme
 y una composición no trivial: ida y vuelta canónico → glTF → canónico, más un
 punto conocido a su punto transformado conocido.
+
+**Escrito el 2026-09-14**, y lo que faltaba era exactamente la última línea de esa
+prueba.
+
+Lo que `test:gltf-frame` comprobaba desde el 2026-08-12 —que las dos rutas dan la
+misma matriz— es necesario y **no suficiente**: desde que la conversión se
+unificó, las dos salen del mismo módulo, así que pueden coincidir y estar las dos
+mal. Es el código comparándose consigo mismo. Y la ida y vuelta tampoco basta:
+**una transposición de más y otra de menos se cancelan**, el documento vuelve
+idéntico y ninguna huella se mueve. Es literalmente el fallo que esta decisión
+describe.
+
+Lo único que lo caza es un punto conocido. Los números del fixture están
+calculados fuera del repositorio, con la fórmula del cuaternión escrita desde
+cero, y cuatro de los cinco casos dan valores que se leen a ojo:
+
+```text
+traslación (5,6,7)          (1,2,3) → (6,8,10)
+escala uniforme 2           (1,2,3) → (2,4,6)
+rotación 90° sobre Z        (1,0,0) → (0,1,0)
+escala 2, 90° Z, t=(1,2,3)  (1,0,0) → (1,4,3)
+```
+
+Eso es a propósito: un fixture cuyos valores solo se puedan apuntar **después** de
+ejecutarlo no prueba que el resultado sea correcto, prueba que no ha cambiado. El
+quinto caso usa un eje oblicuo, que es donde una convención equivocada deja de
+disimular.
+
+Y la puerta comprueba además que la trampa existe: leyendo la matriz de glTF sin
+transponer —el fallo de tratarla como si ya fuera canónica—, la ida y vuelta
+seguiría saliendo idéntica y el punto oblicuo se va a `(-0,486, -0,735, 1,803)` en
+vez de a `(0,314, -0,485, 3,153)`. Sin ese caso, el fixture no probaría nada.
+
+**Lo que sigue aparcado** es unificar el árbol de nodos de los dos lectores, que
+es otra cosa: existen por motivos distintos y su fusión arriesga las 296 piezas
+del dron sin que nadie la pida.
 
 ### D33 — Orientación canónica de imagen — IMPLEMENTADA (2026-09-13)
 Toda imagen referenciada por el CameraSet entra con la **orientación horneada en

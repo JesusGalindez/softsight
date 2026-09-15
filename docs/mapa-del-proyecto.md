@@ -758,6 +758,30 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       por falta de segundo productor —`producers/colmap/` lo es desde el 13—,
       sino porque las tres comparaciones de D23 piden valores dorados de fuera.
       Quedan **9 ACORDADAS y 25 IMPLEMENTADAS**.
+    - **Y D32, con el fixture que la decisión nombraba y no existía.** Lo que
+      `test:gltf-frame` comprobaba —que las dos rutas dan la misma matriz— es
+      necesario y no suficiente: desde que la conversión se unificó, las dos salen
+      del mismo módulo y **pueden coincidir estando las dos mal**. La ida y vuelta
+      tampoco basta, porque una transposición de más y otra de menos se cancelan y
+      el documento vuelve idéntico — que es el fallo que D32 describe con esas
+      palabras. Lo único que lo caza es **un punto conocido**, con los números
+      calculados fuera del repositorio: cuatro de los cinco casos se leen a ojo,
+      `(1,2,3) → (6,8,10)`, y el quinto usa un eje oblicuo, que es donde una
+      convención equivocada deja de disimular. La puerta comprueba además que la
+      trampa existe: leyendo sin transponer, el punto oblicuo se va a
+      `(-0,486, -0,735, 1,803)` en vez de a `(0,314, -0,485, 3,153)`. Quedan
+      **8 ACORDADAS y 26 IMPLEMENTADAS**.
+    - **Y D22, cuyas tres filas se cumplían sin que nadie las mirara.** No son
+      igual de frágiles: las dos primeras se rompen ruidosamente —alguien commitea
+      69 MB y está en el diff— y **la tercera se rompe en silencio**. Una puerta
+      que necesita un fixture ausente y sale verde sin decirlo deja un hueco del
+      tamaño de lo que probaba, y el registro dice «ok». Por eso ese bloque
+      **ejecuta** las tres puertas del COLMAP real con la raíz vacía en vez de leer
+      el código, y exige las dos cosas a la vez: salida 0 y el motivo escrito.
+      Cazó dos cosas al escribirse — el fixture de D32 sin versionar, y un falso
+      positivo mío por comparar los pesados por nombre en vez de por ruta, porque
+      `cameras.txt` existe en el sintético y en los dos pesados. Quedan
+      **7 ACORDADAS y 27 IMPLEMENTADAS**.
     - Dieciséis puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
       `test:repair`, `test:production`, `test:lod-qa`, `test:uv-qa` y

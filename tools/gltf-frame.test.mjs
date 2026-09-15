@@ -24,6 +24,15 @@
  *      forma que tiene una transposición de escribirse, y buscarla en el texto es
  *      leer lo mismo que leería alguien preguntándose dónde ocurre.
  *   3. El cuaternión se expande en un solo sitio.
+ *   4. El fixture `transform-gltf-v1`: matrices y **puntos conocidos** calculados
+ *      fuera de este repositorio.
+ *
+ * La 4 es la que faltaba, y la 1 no la sustituye. Desde que la conversión se
+ * unificó, las dos rutas salen del mismo módulo: **pueden coincidir y estar las
+ * dos mal**, y entonces la 1 sigue verde. Lo mismo con una ida y vuelta —una
+ * transposición de más y otra de menos se cancelan y el documento vuelve
+ * idéntico—, que es literalmente el fallo que D32 describe. Lo único que lo caza
+ * es un punto conocido que acabe donde tiene que acabar.
  */
 
 import assert from "node:assert/strict";
@@ -31,7 +40,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseGlb, parseGlbAnimation } from "../dist-node/agent3d.mjs";
+import {
+  parseGlb,
+  parseGlbAnimation,
+  writeMatrixFromGltf,
+  writeMatrixFromGltfTrs,
+  writeMatrixToGltf,
+} from "../dist-node/agent3d.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const sourceRoot = resolve(here, "../src/soft");
@@ -187,5 +202,87 @@ function sources(directory) {
   );
   console.log(
     "glTF: ok (la transposición y la expansión del cuaternión existen en un solo fichero, gltfFrame.ts)",
+  );
+}
+
+// 4. El fixture `transform-gltf-v1` — D32 lo nombra y no existía.
+//
+// Sus números están calculados aparte, con la fórmula del cuaternión escrita
+// desde cero. Es lo que convierte esta puerta en una comprobación y no en una
+// comparación del código consigo mismo.
+{
+  const fixture = JSON.parse(
+    readFileSync(resolve(here, "../contracts/fixtures/transform-gltf-v1.json"), "utf8"),
+  );
+  const cerca = (a, b, tolerancia = 1e-12) => Math.abs(a - b) <= tolerancia;
+
+  for (const caso of fixture.cases) {
+    // a) De la matriz de glTF —por columnas— a la canónica.
+    const desdeMatriz = new Array(16).fill(0);
+    writeMatrixFromGltf(caso.gltfMatrixByColumns, desdeMatriz);
+    for (let index = 0; index < 16; index += 1) {
+      assert.ok(
+        cerca(desdeMatriz[index], caso.canonicalByRows[index]),
+        `${caso.name}: componente ${index} sale ${desdeMatriz[index]} y el fixture dice ${caso.canonicalByRows[index]}`,
+      );
+    }
+
+    // b) De traslación, rotación y escala sueltas, a la misma matriz. Dos
+    // caminos de entrada distintos tienen que llegar al mismo sitio, o glTF
+    // significaría dos cosas según cómo venga escrito.
+    const desdeTrs = new Array(16).fill(0);
+    const { translation, rotation, scale } = caso.gltf;
+    writeMatrixFromGltfTrs(translation, rotation, scale, desdeTrs);
+    for (let index = 0; index < 16; index += 1) {
+      assert.ok(
+        cerca(desdeTrs[index], caso.canonicalByRows[index], 1e-12),
+        `${caso.name}: por TRS el componente ${index} sale ${desdeTrs[index]}`,
+      );
+    }
+
+    // c) **El punto conocido.** Lo que una ida y vuelta no puede comprobar.
+    const punto = caso.point;
+    const transformado = [0, 1, 2].map(
+      (row) =>
+        desdeMatriz[row * 4] * punto[0] +
+        desdeMatriz[row * 4 + 1] * punto[1] +
+        desdeMatriz[row * 4 + 2] * punto[2] +
+        desdeMatriz[row * 4 + 3],
+    );
+    for (let axis = 0; axis < 3; axis += 1) {
+      assert.ok(
+        cerca(transformado[axis], caso.expected[axis], 1e-12),
+        `${caso.name}: el punto acaba en ${transformado} y tenía que acabar en ${caso.expected}`,
+      );
+    }
+
+    // d) Y la vuelta: canónico → glTF devuelve exactamente lo que entró.
+    const deVuelta = new Array(16).fill(0);
+    writeMatrixToGltf(desdeMatriz, deVuelta);
+    assert.deepEqual(deVuelta, caso.gltfMatrixByColumns, `${caso.name}: la vuelta no reproduce la entrada`);
+  }
+
+  // Y la trampa que esto existe para cazar, comprobada: con la matriz **sin
+  // transponer** —el fallo de leer glTF como si ya fuera canónico— la ida y
+  // vuelta seguiría saliendo idéntica, y el punto no.
+  const oblicuo = fixture.cases[fixture.cases.length - 1];
+  const sinTransponer = [...oblicuo.gltfMatrixByColumns];
+  const mal = [0, 1, 2].map(
+    (row) =>
+      sinTransponer[row * 4] * oblicuo.point[0] +
+      sinTransponer[row * 4 + 1] * oblicuo.point[1] +
+      sinTransponer[row * 4 + 2] * oblicuo.point[2] +
+      sinTransponer[row * 4 + 3],
+  );
+  assert.ok(
+    mal.some((value, axis) => !cerca(value, oblicuo.expected[axis], 1e-6)),
+    "si leer glTF sin transponer diera el mismo punto, este fixture no probaría nada",
+  );
+
+  console.log(
+    `glTF: ok (${fixture.cases.length} transformaciones del fixture: matriz por columnas y por TRS dan la ` +
+      `canónica, la vuelta reproduce la entrada, y **el punto conocido acaba donde tiene que acabar** — ` +
+      `leer sin transponer lo manda a ${mal.map((v) => v.toFixed(3)).join(", ")} en vez de a ` +
+      `${oblicuo.expected.map((v) => v.toFixed(3)).join(", ")})`,
   );
 }
