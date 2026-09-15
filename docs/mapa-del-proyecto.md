@@ -795,8 +795,18 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     que no dependa de otro**, y conviene que esté dicho en un sitio en vez de
     deducirse.
 
-    **Del dueño:** nada desde el 2026-09-13. Lo que había queda tachado abajo,
-    con la fecha, para que se vea qué desbloqueó a qué.
+    **Del dueño:** mandar el envío 03 —[`envio-videomesh-03.md`](envio-videomesh-03.md)—,
+    redactado el 2026-09-14 y sin mandar, como los dos anteriores. Es lo único, y
+    es nuevo: entre el 13 y el 14 no había nada. Lo que lo obliga es §1.4 del
+    contrato, porque el informe **sube de versión por primera vez**,
+    `reconstructionReport` de `0.1` a `0.2`: había cambiado seis veces con el
+    número quieto, que es justo lo que D12 existe para impedir. Y lo que lo hace
+    valioso es lo otro que lleva: **el transporte del §84 está resuelto**, así que
+    VideoMesh ya tiene por dónde entregar un paquete de verdad — no lo tenía desde
+    el envío 01.
+
+    Lo que había antes queda tachado abajo, con la fecha, para que se vea qué
+    desbloqueó a qué.
 
     - ~~Mandar el envío 02.~~ **Enviado el 2026-09-13**, publicado en `main` con
       los commits que lo sostienen —[`envio-videomesh-02.md`](envio-videomesh-02.md)—.

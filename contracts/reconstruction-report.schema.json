@@ -13,7 +13,7 @@
     },
     "contractVersion": {
       "type": "string",
-      "description": "Versión del contrato del paquete que se evaluó."
+      "description": "Versión del contrato del PAQUETE que se evaluó, no la de este informe. La de este informe —y la de todo lo demás— va en `versions.contracts`, porque D12 manda comparar la combinación entera y no un campo suelto."
     },
     "execution": {
       "type": "string",

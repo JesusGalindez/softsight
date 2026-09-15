@@ -128,6 +128,14 @@ export const CERTIFICATION_POLICY = "r0-integridad-y-coherencia" as const;
 
 export interface ReconstructionReport {
   documentType: "softsight.reconstruction-report";
+  /**
+   * La del **paquete que entró**, no la de este documento.
+   *
+   * El nombre invita a leerlo al revés, y conviene decirlo aquí porque un
+   * consumidor que lo confunda comparará la versión equivocada: la de este
+   * informe vive en `versions.contracts`, con las otras seis, que es lo que D12
+   * manda comparar.
+   */
   contractVersion: string;
   execution: IngestResult["execution"];
   certification: CertificationVerdict;
@@ -563,7 +571,10 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
   contractVersion: {
     type: "string",
     required: true,
-    description: "Versión del contrato del paquete que se evaluó.",
+    description:
+      "Versión del contrato del PAQUETE que se evaluó, no la de este informe. La de este informe " +
+      "—y la de todo lo demás— va en `versions.contracts`, porque D12 manda comparar la combinación " +
+      "entera y no un campo suelto.",
   },
   execution: {
     type: '"COMPLETE"|"PARTIAL"|"ERROR"|"UNSUPPORTED"',

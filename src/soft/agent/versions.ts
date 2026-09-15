@@ -68,7 +68,20 @@ export const CONTRACT_VERSIONS = {
     consumer: "VideoMesh, que lo escribe",
   },
   reconstructionReport: {
-    value: "0.1",
+    // 0.1 → 0.2 el 2026-09-14. **El documento cambió seis veces y el número se
+    // había quedado quieto**, que es exactamente lo que D12 existe para impedir:
+    // quien compara la combinación creía estar leyendo el informe de agosto.
+    //
+    // Lo que entró desde entonces: cinco bloques nuevos —`coverage`,
+    // `confidence`, `captureAdvice`, `budgets`, `repairBoundary`—, un campo
+    // requerido nuevo (`coverage.maskedCameras`) y un enum **estrechado**
+    // (`measurementClass`, que en tres sitios aceptaba cualquier cadena). El
+    // último es el que rompe de verdad: un consumidor que emitiera otro valor
+    // validaba ayer y no valida hoy.
+    //
+    // El paquete de entrada **no sube**: su esquema no ha cambiado. Subirlo por
+    // acompañar obligaría a VideoMesh a regenerar modelos que están bien.
+    value: "0.2",
     governs: "el informe de reconstrucción que sale",
     consumer: "VideoMesh, que lo lee",
   },
