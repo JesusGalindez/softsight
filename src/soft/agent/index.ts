@@ -394,7 +394,14 @@ export {
 } from "./reconstruction/colmap";
 export type { ColmapCamera, ColmapImage, ColmapModel, ColmapPoint } from "./reconstruction/colmap";
 export type { PackageCamera, Projection } from "./reconstruction/camera";
-export { parsePlyAscii, serializePlyMesh, serializePlyPoints } from "./reconstruction/ply";
+export {
+  parsePly,
+  parsePlyAscii,
+  parsePlyBinary,
+  serializePlyMesh,
+  serializePlyMeshBinary,
+  serializePlyPoints,
+} from "./reconstruction/ply";
 export {
   CERTIFICATION_POLICY,
   RECONSTRUCTION_REPORT_SCHEMA,

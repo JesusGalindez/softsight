@@ -50,6 +50,7 @@
     "test:package-transport": "npm run build:agent3d && node tools/package-transport.test.mjs",
     "test:recon-cache": "npm run build:agent3d && node tools/recon-cache.test.mjs",
     "test:preview-proxy": "npm run build:agent3d && node tools/preview-proxy.test.mjs",
+    "test:ply-binary": "npm run build:agent3d && node tools/ply-binary.test.mjs",
     "bench": "npm run build:agent3d && node tools/bench.mjs",
     "bench:nightly": "npm run build:agent3d && node tools/bench.mjs --nightly",
     "test:producer-colmap": "npm run build:agent3d && node tools/producer-colmap.test.mjs",

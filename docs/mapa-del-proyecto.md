@@ -700,6 +700,17 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       5M, cerca de 1 de 1M a 10M—, que es lo que demuestra que el sesgo estaba en
       el coste fijo del escalón pequeño y no en el algoritmo. Los cuatro
       escalones, en [`plan-reconstruccion.md`](plan-reconstruccion.md) R16.
+    - **Y el lector de PLY binario**, que era el ítem 10 del §72 y el único de los
+      cincuenta y tres que seguía sin construirse. Una cabecera y dos cuerpos: lo
+      que cambia es cómo se leen los números, no qué significan, y dos cabeceras
+      habrían sido dos verdades sobre el mismo fichero. `parsePly` elige por la
+      línea `format` y no por la extensión. Lo que la puerta comprueba es que los
+      dos caminos dan la misma malla **byte a byte**, y `test:reconstruction`
+      comprueba lo mismo de otro modo: el mismo cubo en binario da exactamente la
+      misma cobertura que en texto. Un dato que salió al revés de lo esperado —el
+      cubo de juguete **crece** en binario, porque `-0.5` ocupa lo mismo escrito
+      que codificado— y que desbloqueó la etapa `parseo` del banco, la más cara en
+      memoria de las cuatro: 1.038 MiB en el escalón de 10M.
     - Dieciséis puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
       `test:repair`, `test:production`, `test:lod-qa`, `test:uv-qa` y

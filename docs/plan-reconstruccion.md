@@ -3595,20 +3595,29 @@ de 147 s. Medido el 2026-09-14 en el i5-5350U — el escalón de 100k con `--hea
 los otros tres con `--nightly`, dos corridas del mismo día:
 
 ```text
-escalón   etapa         CPU        RSS pico
+escalón   etapa         CPU        RSS pico   fichero
+100k      parseo        0,08 s      74 MiB      1,8 MiB
 100k      auditoría     0,12 s      67 MiB
 100k      árbol         0,17 s      72 MiB
 100k      visibilidad   0,96 s      77 MiB
+1M        parseo        0,44 s     260 MiB     18,1 MiB
 1M        auditoría     0,25 s     113 MiB
-1M        árbol         0,61 s     157 MiB
-1M        visibilidad   7,25 s     164 MiB
-5M        auditoría     0,95 s     315 MiB
-5M        árbol         2,48 s     510 MiB
-5M        visibilidad  34,98 s     550 MiB
-10M       auditoría     1,90 s     572 MiB
-10M       árbol         4,99 s     952 MiB
-10M       visibilidad  69,33 s     951 MiB
+1M        árbol         0,55 s     157 MiB
+1M        visibilidad   7,27 s     164 MiB
+5M        parseo        1,76 s     706 MiB     90,6 MiB
+5M        auditoría     0,94 s     316 MiB
+5M        árbol         2,49 s     511 MiB
+5M        visibilidad  34,93 s     550 MiB
+10M       parseo        3,60 s   1.038 MiB    181,2 MiB
+10M       auditoría     1,92 s     572 MiB
+10M       árbol         4,96 s     952 MiB
+10M       visibilidad  69,27 s     953 MiB
 ```
+
+`parseo` entró después, con el lector binario, y es **la etapa más cara en
+memoria**: 1.038 MiB en el escalón de 10M, más que el árbol. Tiene sentido — el
+fichero y la malla coexisten mientras se lee. El mismo contenido en ASCII serían
+~450 MB de texto y no habría habido medida que tomar.
 
 **El escalón de 5M se atraviesa** —550 MiB—, que es lo que el §61 pedía, y el de
 10M también: 952 MiB y 69 s de visibilidad, el más caro de los doce.
@@ -3617,16 +3626,16 @@ Lo interesante no son los tiempos sino que **la pendiente se lee distinta según
 desde dónde se mire**, y las dos lecturas juntas dicen más que cualquiera sola:
 
 ```text
-de 100k a 5M    auditoría ×0,15   árbol ×0,30   visibilidad ×0,72
-de 1M a 10M     auditoría ×0,76   árbol ×0,82   visibilidad ×0,96
+de 1M a 10M   parseo ×0,82   auditoría ×0,77   árbol ×0,90   visibilidad ×0,95
+de 100k a 5M                 auditoría ×0,15   árbol ×0,30   visibilidad ×0,72
 ```
 
 Por debajo de 1 el coste por triángulo **baja**, y eso no es magia: en el escalón
 pequeño pesa lo que no depende del tamaño —arrancar, reservar, calentar el JIT— y
 al multiplicar se reparte. Lo que confirma que era eso y no otra cosa es la
-segunda fila: entre 1M y 10M, donde el coste fijo ya no pesa, las tres se acercan
-a 1 por abajo. Ninguna es cuadrática, que es exactamente lo que el §61 pedía
-comprobar.
+primera fila: entre 1M y 10M, donde el coste fijo ya no pesa, las cuatro se
+acercan a 1 por abajo. Ninguna es cuadrática, que es exactamente lo que el §61
+pedía comprobar.
 
 Y de paso responde por qué la caché de R16 guarda la visibilidad y no otra cosa:
 de los 76 s que cuestan las tres etapas en el escalón de 10M, **la visibilidad se
@@ -3639,6 +3648,65 @@ texto que no caben en una cadena de Node. El lector binario sigue siendo el íte
 10 del §72. Y la opción 1 del §84 queda abierta **solo para lectura**: los
 artefactos siguen saliendo por el canal de siempre, así que un paquete que
 produjera 150 MB de salida todavía no tiene por dónde devolverlos.
+
+---
+
+## Ítem 10 del §72 — PLY binary little-endian
+
+**Hecho el 2026-09-14**, trece meses después de escribirse la lista y siendo el
+único de los cincuenta y tres que seguía sin construirse.
+
+Lo que lo ordena es una frase que ya estaba escrita en `ply.ts` cuando solo había
+ASCII: *«será un caso más de la cabecera, no una reescritura: lo que cambia es
+cómo se leen los números, no qué significan»*. Resultó ser el diseño. **La
+cabecera se parsea una vez y con el mismo código**, y solo se bifurca el cuerpo;
+dos cabeceras habrían sido dos verdades sobre el mismo fichero.
+
+`parsePly(bytes)` es la puerta única y elige por la línea `format`, no por la
+extensión: un `.ply` no dice en su nombre cómo está escrito, y COLMAP escribe los
+dos. Elegir por extensión sería adivinar, que es lo que este módulo lleva desde
+el principio negándose a hacer.
+
+### La diferencia que no es de implementación sino de formato
+
+```text
+ASCII    sabe cuántas filas hay contándolas, antes de tocar memoria
+binario  solo se entera al llegar al final
+```
+
+Por eso cada lectura binaria comprueba lo que le queda. Sin eso, un `dense.ply`
+cortado por una copia a medias devolvería vértices en cero y **nadie lo sabría**:
+la malla tendría el recuento prometido y la geometría de otra cosa.
+
+### El número que salió al revés de lo esperado
+
+```text
+cubo de juguete      644 bytes en binario contra 626 en texto   → CRECE
+malla con decimales  58.596 contra 132.881                      → 44 %
+```
+
+El fixture **crece** en binario, porque `-0.5` ocupa lo mismo escrito que
+codificado y sus índices son de una cifra. Medir solo el cubo habría dado la
+conclusión contraria a la verdadera: el ahorro vive en los decimales, que es lo
+que produce una reconstrucción y nunca un fixture escrito a mano.
+
+### Lo que se rechaza, y lo que dejó de rechazarse
+
+`binary_big_endian` sale por su nombre. Soportarlo cuesta un booleano y no se
+hace: no hay ningún fichero así con el que comprobarlo, y **código que nadie ha
+ejecutado es peor que una ausencia declarada** — el primero promete y el segundo
+avisa.
+
+Y al revés: `test:reconstruction` usaba un PLY binario como ejemplo de «formato
+no soportado», y ese caso dejó de ser cierto el mismo día. Ahora comprueba lo
+contrario, que es más fuerte: **el mismo cubo en binario da exactamente la misma
+cobertura que en texto**. Si el formato del fichero pudiera mover el número, el
+formato estaría decidiendo el veredicto.
+
+**Lo que no hace**: los dos productores de la casa siguen escribiendo ASCII. No
+se han tocado — eso sería cambiar lo que producen sin que nadie lo haya pedido—,
+y por eso la puerta se declara no ejecutada sobre un binario real: falta el
+fichero, no el camino.
 
 ---
 

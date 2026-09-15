@@ -85,7 +85,7 @@ import {
   computeVisibility,
   ingestPackage,
   maskMismatch,
-  parsePlyAscii,
+  parsePly,
 } from "../dist-node/agent3d.mjs";
 import { decodePng } from "./agent3d.mjs";
 import { openVisibilityCache, visibilityKey } from "./reconCache.mjs";
@@ -170,7 +170,11 @@ export function inspectPackage(manifestPath, { samples, cache = true, cacheRoot 
     if (artifact.type !== "TRIANGLE_MESH") continue;
     let mesh = null;
     try {
-      mesh = parsePlyAscii(readFileSync(artifact.realPath, "utf8")).mesh;
+      // Por bytes y no por texto: `parsePly` elige por lo que el fichero declara,
+      // y decodificar un `dense.ply` binario de 150 MB como si fuera UTF-8 sería
+      // pagar el coste que el lector binario existe para ahorrar — cuando no
+      // desbordar la cadena directamente.
+      mesh = parsePly(readFileSync(artifact.realPath)).mesh;
     } catch (error) {
       // Un formato que no sabemos leer no es un paquete inválido ni una malla
       // mala: es trabajo que no se puede hacer. Se marca UNSUPPORTED y el código

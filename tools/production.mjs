@@ -18,7 +18,7 @@ import {
   PRODUCTION_ASSET_SCHEMA,
   buildProductionReport,
   parseGlb,
-  parsePlyAscii,
+  parsePly,
   validate,
 } from "../dist-node/agent3d.mjs";
 
@@ -175,7 +175,9 @@ export function inspectAsset(manifestPath, external) {
       continue;
     }
 
-    const leido = parsePlyAscii(bytes.toString("utf8"));
+    // Igual que el lector de paquetes: el formato lo dice el fichero, no su
+    // extensión, y un PLY binario no sobrevive a `toString("utf8")`.
+    const leido = parsePly(bytes);
     if (leido.mesh === null) {
       fatales.push(`${artifact.id}: el PLY no trae triángulos`);
       continue;

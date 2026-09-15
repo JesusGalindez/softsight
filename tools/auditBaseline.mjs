@@ -250,11 +250,32 @@ function measureCoverage(mesh, computeVisibility) {
   };
 }
 
+/**
+ * El parseo de un PLY, que §61 pide y hasta el lector binario no se podía medir:
+ * el mismo contenido en ASCII son ~400 MB de texto en el escalón de 5M y una
+ * cadena de Node se acaba antes.
+ *
+ * Se cronometra **solo la lectura**. Serializar es el precio de tener el fichero,
+ * no parte de lo que se mide, y meterlo dentro daría un número que baja cuando
+ * alguien optimice el escritor.
+ */
+function measureParse(mesh, parsePlyBinary, serializePlyMeshBinary) {
+  const bytes = serializePlyMeshBinary(mesh);
+  global.gc?.();
+  const start = process.cpuUsage();
+  const leido = parsePlyBinary(bytes);
+  const cpu = process.cpuUsage(start);
+  return {
+    cpuMs: (cpu.user + cpu.system) / 1000,
+    fileBytes: bytes.length,
+    triangles: leido.mesh.indices.length / 3,
+  };
+}
+
 async function runWorker() {
   const { triangles, measure } = workerData;
-  const { auditMesh, buildTriangleBoundsTree, computeVisibility } = await import(
-    resolve(projectRoot, "dist-node/agent3d.mjs")
-  );
+  const { auditMesh, buildTriangleBoundsTree, computeVisibility, parsePlyBinary, serializePlyMeshBinary } =
+    await import(resolve(projectRoot, "dist-node/agent3d.mjs"));
 
   const buildStart = process.cpuUsage();
   const mesh = torusMesh(triangles);
@@ -268,9 +289,11 @@ async function runWorker() {
         ? measureBoundsTree(mesh, buildTriangleBoundsTree)
         : measure === "coverage"
           ? measureCoverage(mesh, computeVisibility)
-          : measure === "weld"
-            ? measureWeld(mesh)
-            : measureEdge(mesh);
+          : measure === "parse"
+            ? measureParse(mesh, parsePlyBinary, serializePlyMeshBinary)
+            : measure === "weld"
+              ? measureWeld(mesh)
+              : measureEdge(mesh);
 
   const memory = process.memoryUsage();
   parentPort.postMessage({

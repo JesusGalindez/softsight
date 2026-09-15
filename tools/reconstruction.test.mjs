@@ -58,6 +58,7 @@ import {
   projectPoint,
   ingestPackage,
   parsePlyAscii,
+  serializePlyMeshBinary,
   validate,
 } from "../dist-node/agent3d.mjs";
 import { decodePng } from "./agent3d.mjs";
@@ -389,19 +390,55 @@ function sha256Of(path) {
   // que no se puede hacer. D13 le da su propio código de salida, distinto del de
   // «este contrato no lo leo», porque quien automatiza reacciona distinto:
   // convertir el artifact, o actualizar el consumidor.
+  //
+  // **Este caso era un binario little-endian hasta que se construyó su lector.**
+  // Ahora ese fichero entra y se mide, así que el ejemplo de «no soportado» pasa
+  // a ser el que de verdad no se lee: big endian, rechazado por su nombre porque
+  // no hay ninguno con el que comprobarlo.
+  const reescribirMalla = (destino, bytes) => {
+    writeFileSync(join(destino, "mesh.ply"), bytes);
+    const documento = JSON.parse(readFileSync(join(destino, "manifest.json"), "utf8"));
+    const entrada = documento.artifacts.find((artifact) => artifact.id === "mesh");
+    entrada.bytes = bytes.length;
+    entrada.sha256 = createHash("sha256").update(bytes).digest("hex");
+    writeFileSync(join(destino, "manifest.json"), `${JSON.stringify(documento, null, 2)}\n`);
+  };
+
   const binario = join(sandbox, "cube-binario");
   writeCubePackage(binario);
-  const plyBinario =
-    "ply\nformat binary_little_endian 1.0\nelement vertex 1\nproperty float x\nproperty float y\n" +
-    "property float z\nend_header\n\u0000\u0000\u0000\u0000";
-  writeFileSync(join(binario, "mesh.ply"), plyBinario);
-  const manifestBinario = JSON.parse(readFileSync(join(binario, "manifest.json"), "utf8"));
-  const mallaBinaria = manifestBinario.artifacts.find((artifact) => artifact.id === "mesh");
-  mallaBinaria.bytes = Buffer.byteLength(plyBinario);
-  mallaBinaria.sha256 = createHash("sha256").update(plyBinario).digest("hex");
-  writeFileSync(join(binario, "manifest.json"), `${JSON.stringify(manifestBinario, null, 2)}\n`);
+  const mallaAscii = parsePlyAscii(readFileSync(join(binario, "mesh.ply"), "utf8")).mesh;
+  const enBytes = Buffer.from(serializePlyMeshBinary(mallaAscii));
 
-  const noLegible = inspectPackage(join(binario, "manifest.json"));
+  // Primero, lo nuevo: el mismo cubo en binario se mide **igual** que en texto.
+  // Si el lector binario diera otra cobertura, el formato estaría decidiendo el
+  // veredicto, que es lo que un paquete no puede permitirse.
+  // El mismo paquete medido dos veces, y **sin caché en la segunda**: la clave de
+  // la caché es el contenido geométrico, así que un binario que se lea bien
+  // acierta y devolvería la medida del texto sin haber medido nada. Aquí lo que
+  // se comprueba es el lector, no la caché.
+  const enTexto = inspectPackage(join(binario, "manifest.json"));
+  reescribirMalla(binario, enBytes);
+  const desdeBinario = inspectPackage(join(binario, "manifest.json"), { cache: false });
+  assert.equal(desdeBinario.report.execution, "COMPLETE", JSON.stringify(desdeBinario.report.warnings));
+  assert.equal(desdeBinario.exitCode, enTexto.exitCode);
+  assert.equal(
+    desdeBinario.report.coverage.observedAreaRatio,
+    enTexto.report.coverage.observedAreaRatio,
+    "el formato del fichero no puede cambiar lo que se mide sobre él",
+  );
+
+  // Y ahora el que sigue sin leerse, con su nombre.
+  const bigEndian = join(sandbox, "cube-big-endian");
+  writeCubePackage(bigEndian);
+  const alReves = Buffer.from(enBytes);
+  alReves.write(
+    alReves.toString("latin1", 0, 64).replace("binary_little_endian", "binary_big_endian___"),
+    0,
+    "latin1",
+  );
+  reescribirMalla(bigEndian, alReves);
+
+  const noLegible = inspectPackage(join(bigEndian, "manifest.json"));
   assert.equal(noLegible.report.execution, "UNSUPPORTED");
   assert.equal(noLegible.report.certification, "INCONCLUSIVE");
   assert.equal(noLegible.exitCode, 22, "formato no soportado tiene su propio código de salida");
@@ -420,8 +457,9 @@ function sha256Of(path) {
   assert.equal(noSoportado.report.execution, "UNSUPPORTED");
   assert.equal(noSoportado.exitCode, 21);
   console.log(
-    "reconstrucción: ok (un PLY binario sale UNSUPPORTED con salida 22 y una versión de contrato " +
-      "desconocida con 21: dos cosas distintas, dos códigos)",
+    "reconstrucción: ok (el mismo cubo en PLY binario da exactamente la misma cobertura que en texto " +
+      "—el formato no decide el veredicto—; big endian sale UNSUPPORTED con salida 22 y una versión de " +
+      "contrato desconocida con 21: dos cosas distintas, dos códigos)",
   );
 
   // Y el único FAIL de R0: el paquete declara superficie y no la hay. Se hace con

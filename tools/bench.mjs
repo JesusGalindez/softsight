@@ -54,13 +54,16 @@ const STEPS = [
 ];
 
 /**
- * Las etapas que §61 nombra y que hoy existen. `parse` no está, y no por olvido:
- * el único lector de PLY es el ASCII, y un PLY ASCII de 5M de triángulos son ~400
- * MB de texto que no caben en una cadena de Node. El lector binario es el ítem 10
- * de la lista del §72 y sigue sin construirse; hasta entonces, medir el parseo a
- * escala mediría el generador de texto.
+ * Las cuatro etapas que §61 nombra.
+ *
+ * `parse` entró con el lector binario (ítem 10 del §72) y antes no se podía
+ * medir: el único lector era el ASCII y el mismo contenido en texto son ~400 MB
+ * en el escalón de 5M, que no caben en una cadena de Node. Se mide sobre binario
+ * **a propósito** — es lo que trae un paquete real, y medir el ASCII a escala
+ * habría medido el generador de texto.
  */
 const MEASURES = [
+  { key: "parse", label: "parseo" },
   { key: "audit", label: "auditoría" },
   { key: "boundsTree", label: "árbol" },
   { key: "coverage", label: "visibilidad" },
@@ -124,11 +127,13 @@ if (process.argv.includes("--json")) {
         continue;
       }
       const nota =
-        measure.key === "coverage"
-          ? `${(medida.observed * 100).toFixed(1)} % observado, ${(medida.cacheBytes / MEGA).toFixed(1)} MiB en caché`
-          : measure.key === "boundsTree"
-            ? `${medida.nodes} nodos, ${(medida.treeBytes / MEGA).toFixed(1)} MiB`
-            : `${(medida.meshBytes / MEGA).toFixed(1)} MiB de malla`;
+        measure.key === "parse"
+          ? `${(medida.fileBytes / MEGA).toFixed(1)} MiB de PLY binario`
+          : measure.key === "coverage"
+            ? `${(medida.observed * 100).toFixed(1)} % observado, ${(medida.cacheBytes / MEGA).toFixed(1)} MiB en caché`
+            : measure.key === "boundsTree"
+              ? `${medida.nodes} nodos, ${(medida.treeBytes / MEGA).toFixed(1)} MiB`
+              : `${(medida.meshBytes / MEGA).toFixed(1)} MiB de malla`;
       process.stdout.write(
         `${row.step.padEnd(9)} ${measure.label.padEnd(13)} ${`${(medida.cpuMs / 1000).toFixed(2)} s`.padEnd(10)} ` +
           `${`${(medida.peakRss / MEGA).toFixed(0)} MiB`.padEnd(10)} ${nota}\n`,
