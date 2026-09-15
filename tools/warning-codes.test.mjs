@@ -225,6 +225,6 @@ console.log("códigos: ok (--schema publica el registro igual que la biblioteca)
     assert.match(entry.decision, /sin número/, `${entry.code}: propuesto sin decir qué le falta`);
   }
   console.log(
-    "códigos: ok (tabla y emisión coinciden; los cuatro de D6 fijados y el resto propuesto con su motivo)",
+    "códigos: ok (tabla y emisión coinciden; los 36 fijados, cada uno con la decisión que le dio número)",
   );
 }

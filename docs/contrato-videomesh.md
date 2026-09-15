@@ -90,11 +90,11 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-09-15:
 
 ```text
-ACORDADAS        4   D2, D5, D26, D28
+ACORDADAS        3   D5, D26, D28
 PROPUESTAS       0
-IMPLEMENTADAS   30   D1, D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15,
-                     D16, D17, D18, D19, D20, D21, D22, D23, D24, D25, D27, D29,
-                     D30, D31, D32, D33, D34
+IMPLEMENTADAS   31   D1, D2, D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14,
+                     D15, D16, D17, D18, D19, D20, D21, D22, D23, D24, D25, D27,
+                     D29, D30, D31, D32, D33, D34
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -207,7 +207,7 @@ hace eco de la versión pedida, así que el editor no cambia.
 siguen saliendo por el canal de siempre, así que un paquete que produjera 150 MB
 de salida todavía no tiene por dónde devolverlos.
 
-### D2 — Códigos de aviso
+### D2 — Códigos de aviso — IMPLEMENTADA (2026-09-15)
 Código legible en español, más un **identificador neutro y estable**
 (`SS-RECON-001`). VideoMesh parsea el identificador, nunca el mensaje. Espacios:
 `SS-PKG`, `SS-IO`, `SS-GEO`, `SS-RECON`, `SS-CAM`, `SS-COV`, `SS-CONF`,
@@ -260,6 +260,29 @@ quien automatice sobre el identificador quiere poder distinguirlos.
 **Un motivo puede repetirse y un identificador no.** `SS-PKG-001` y `SS-PKG-003`
 comparten `RUTA_FUERA_DE_LA_RAIZ` porque el resultado es el mismo y la causa
 no. Es la razón de que el contrato mande parsear el identificador.
+
+**VideoMesh contestó el 2026-09-15, y los acepta los treinta y dos tal cual.** No
+es conformidad: es que renumerar habría roto fixtures vivos de los dos lados —
+`package-integrity-v1` cita seis de ellos y `SS-COV-001` sale en todo informe— a
+cambio de ningún beneficio.
+
+Lo que convierte la respuesta en un hecho y no en una preferencia: las reglas de
+`SS-RECON-003`, `004` y `005` se escribieron en VideoMesh desde el texto de D11,
+**sin mirar la tabla de identificadores**, y sus motivos salieron
+`TRANSFORMACION_MAL_FORMADA`, `TRANSFORMACION_NO_RIGIDA` y `MARCO_INALCANZABLE`,
+palabra por palabra los canónicos. Dos implementaciones que llegan por separado al
+mismo vocabulario dicen que el vocabulario está bien elegido.
+
+Auditados antes de aceptarlos: los 36 tienen forma válida, ninguno se repite, y
+todos pertenecen a los doce espacios que esta decisión declara. Los huecos de
+`SS-PKG` —005 a 009 y 015 a 019— son reserva por bloque y se dejan como están:
+sandbox, integridad y no soportado tienen cada uno su decena.
+
+La mitad de VideoMesh también está: allí se actúa por el identificador y **nunca
+por el mensaje**, vigilado por ausencia —ningún fichero lee `message`—, y un aviso
+sin identificador o de un espacio no declarado se rechaza en vez de tragarse. Una
+puerta suya compara sus motivos contra esta tabla, así que renombrar uno aquí se
+ve allí.
 
 ### D3 — Ejecución y certificación son dos ejes — IMPLEMENTADA (2026-08-12)
 ```text
