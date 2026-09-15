@@ -795,19 +795,24 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     que no dependa de otro**, y conviene que esté dicho en un sitio en vez de
     deducirse.
 
-    **Del dueño:** mandar el envío 03 —[`envio-videomesh-03.md`](envio-videomesh-03.md)—,
-    redactado el 2026-09-14 y sin mandar, como los dos anteriores. Es lo único, y
-    es nuevo: entre el 13 y el 14 no había nada. Lo que lo obliga es §1.4 del
-    contrato, porque el informe **sube de versión por primera vez**,
-    `reconstructionReport` de `0.1` a `0.2`: había cambiado seis veces con el
-    número quieto, que es justo lo que D12 existe para impedir. Y lo que lo hace
-    valioso es lo otro que lleva: **el transporte del §84 está resuelto**, así que
-    VideoMesh ya tiene por dónde entregar un paquete de verdad — no lo tenía desde
-    el envío 01.
+    **Del dueño:** nada. Lo que había queda tachado abajo, con la fecha, para que
+    se vea qué desbloqueó a qué.
 
-    Lo que había antes queda tachado abajo, con la fecha, para que se vea qué
-    desbloqueó a qué.
+    - ~~Mandar el envío 03.~~ **Enviado el 2026-09-15**, publicado en `main` con
+      los treinta y ocho commits que lo sostienen —[`envio-videomesh-03.md`](envio-videomesh-03.md)—.
+      Lo obliga §1.4: el informe **sube de versión por primera vez**,
+      `reconstructionReport` de `0.1` a `0.2`, después de cambiar seis veces con el
+      número quieto — que es justo lo que D12 existe para impedir. Lleva además el
+      enum de `measurementClass` estrechado, `coverage.maskedCameras` como campo
+      requerido, y los **32 identificadores en PROPUESTO**, que eran cinco en el
+      envío 01.
 
+      Lo que de verdad desbloquea es otra cosa: **el transporte del §84**. VideoMesh
+      no tenía por dónde entregar un paquete desde el envío 01 —150 MB de
+      `dense.ply` son ~200 en base64 contra un tope de 256 ya codificados, así que
+      no era estrecho sino imposible—, y ahora sí. Y corrige algo que el envío 02
+      afirmaba y dejó de ser cierto: a R0-B no le falta un segundo productor, le
+      faltan los valores dorados de D23.
     - ~~Mandar el envío 02.~~ **Enviado el 2026-09-13**, publicado en `main` con
       los commits que lo sostienen —[`envio-videomesh-02.md`](envio-videomesh-02.md)—.
       Lleva cuatro campos obligatorios nuevos, la sustitución de `versions.report`

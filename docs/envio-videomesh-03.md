@@ -1,4 +1,4 @@
-# Envío 03 a VideoMesh — 2026-09-14
+# Envío 03 a VideoMesh — 2026-09-15
 
 Disparado por §1.4 del contrato, que obliga a avisar **cuando cambia cualquier
 esquema**. Ha cambiado uno —el informe que leéis— y sube de versión por primera
