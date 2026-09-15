@@ -87,16 +87,24 @@ reuniones periódicas                 las sustituye el aviso por evento
 
 ## 2. Estado del registro
 
-Al 2026-09-14:
+Al 2026-09-15:
 
 ```text
-ACORDADAS        7   D2, D5, D23, D26, D28, D29, D34
+ACORDADAS        4   D2, D5, D26, D28
 PROPUESTAS       0
-IMPLEMENTADAS   27   D1, D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15,
-                     D16, D17, D18, D19, D20, D21, D22, D24, D25, D27, D30, D31,
-                     D32, D33
+IMPLEMENTADAS   30   D1, D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15,
+                     D16, D17, D18, D19, D20, D21, D22, D23, D24, D25, D27, D29,
+                     D30, D31, D32, D33, D34
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
+
+**D23, D29 y D34 pasaron el 2026-09-15, y las tres por lo mismo:** VideoMesh
+construyó su mitad. Ninguna esperaba código de este repositorio, y decirlo así
+importa — llevaban un mes anotadas como abiertas sin que hubiera nada que hacer
+aquí. D26 **no se mueve**: `cube-v1` es sintético y no promueve el contrato a 1.0,
+como dice su propia nota. Lo que sí cambia de D26 es que sus comparaciones de
+recuentos y caja ya tienen qué comparar, porque este segundo productor sí entrega
+superficie.
 
 **D1 y D27 pasaron el 2026-09-14**, y las dos por el mismo motivo aunque por
 caminos opuestos: D1 describía un transporte que no existía hasta R16, y D27
@@ -993,7 +1001,7 @@ nombre de un fichero no lo identifica.**
 **Lo que no comprueba**, y se dice: que los ligeros sean *sintéticos*. Eso es un
 juicio sobre el origen del dato y no se deduce de los bytes.
 
-### D23 — Puerta de paridad, contra valores dorados
+### D23 — Puerta de paridad, contra valores dorados — IMPLEMENTADA (2026-09-15)
 Cuatro filas sobre `cube-v1` y `colmap-small-v1`: recuentos, caja tras normalizar
 el marco, cámaras registradas, y proyección de puntos 3D conocidos.
 
@@ -1041,13 +1049,32 @@ Y el tercer caso es el hallazgo de D11 hecho dorado: **sin camino, `null` y no l
 identidad**. Un grafo incompleto no se arregla suponiendo que seguramente son el
 mismo marco.
 
+**La tercera columna llegó el 2026-09-15, y es de VideoMesh.** Su `cube-v1` se
+escribió allí desde el esquema publicado —cubo, rasterizador, PLY y PNG propios, sin
+compartir una línea con `tools/cubeV1.mjs`— y su `expected.json` es el oráculo que
+faltaba. Las tres comparaciones pasan sobre ese paquete: recuentos y cámaras
+exactos, caja con tolerancia declarada de 1e-6, y sale `COMPLETE + PASS` con salida
+0 por este consumidor.
+
+Lo que hace que la fila 2 signifique algo no es que coincida sobre el cubo —ahí la
+normalización es la identidad y acierta quien ignore el grafo—, sino que allí se
+corre contra los tres casos de `normalizacion` de este fixture y **se comprueban las
+dos mutaciones que esta decisión nombra**: ignorar la matriz pone rojos los dos
+primeros casos, y componer al revés pone rojo exactamente el de dos aristas.
+
+La fila 4 se cierra allí contra algo que no depende de ninguna fórmula de nadie: la
+caja de los ocho vértices proyectados contra **la silueta que su rasterizador
+pintó**. Es contención y no igualdad, con un píxel de holgura por discretización y
+dos en la otra dirección, porque el muestreo es por centro de píxel y una esquina
+puntiaguda puede no cubrir ninguno — en su vista oblicua pasa, y son 1,9 píxeles.
+
 De las tres columnas hay dos. `colmap-small-v1` tiene la del productor —
 `producers/colmap` trae su propio lector, escrito desde la documentación del
 formato— y las dos lecturas caen **exactas a 0** en los tres centros de cámara,
 con el dorado en medio a 4,1e-7, que es la cota de redondear a seis decimales.
-**De `cube-v1` no hay segunda implementación**: lo escribimos nosotros y nadie
-más lo ha vuelto a escribir, así que la decisión sigue ACORDADA y lo que le falta
-está dicho en vez de supuesto.
+De `cube-v1` **ya hay segunda implementación**, y era lo que esta decisión llevaba
+esperando desde agosto. `colmap-small-v1` sigue sin la suya, y eso no la bloquea:
+son paquetes distintos y cada uno cierra sus propias filas.
 
 `expected.json` es el oráculo de prueba, **no parte del paquete**: SoftSight no lo
 consume en producción. La lógica vive en `tests/contracts/parity/`.
@@ -1332,7 +1359,7 @@ reducciones paralelas   no hay reducción paralela que probar. `computeVisibilit
 Por eso D28 **sigue ACORDADA**. Media prueba es media prueba, y llamarla
 IMPLEMENTADA sería exactamente lo que el registro existe para impedir.
 
-### D29 — Sellado atómico del paquete
+### D29 — Sellado atómico del paquete — IMPLEMENTADA (2026-09-15)
 ```text
 escribir artifacts → cerrarlos → calcular bytes y sha256 → construir manifest
 con los hashes → state: SEALED → escribir el manifest EL ÚLTIMO → cerrarlo
@@ -1379,6 +1406,21 @@ prueba las dos condiciones de sellado que SoftSight puede comprobar: sellado ent
 `WRITING` se rechaza con `PAQUETE_SIN_SELLAR`. El resto —rename atómico, mismo
 volumen, destino que ya existe— lo garantiza quien escribe, y su prueba es de
 VideoMesh.
+
+**Cerrada el 2026-09-15 con esa otra mitad.** El escritor de VideoMesh publica por
+rename, comprueba el volumen **antes de escribir un solo byte** y falla con
+`PACKAGE_ATOMIC_PUBLISH_UNAVAILABLE` en vez de caer a copiar y borrar; un destino
+que ya existe se rechaza sin tocar lo que hubiera; y un fallo a mitad no deja ni
+destino ni temporal. Seis reglas, comprobadas rompiendo cada una: seis pruebas
+rojas, incluida la del manifest al final escribiéndolo al principio.
+
+Dos cosas que su implementación deja dichas y aquí no estaban. La primera, que «un
+fallo a mitad no deja nada en el destino» y «no deja el temporal» son **dos
+garantías y no una**: la primera sigue pasando aunque no se limpie el temporal,
+porque el destino nunca llegó a existir, así que con una sola prueba la mitad de la
+garantía no está vigilada. La segunda, que `CONSUMED` se vigila allí **por
+ausencia** —ningún fichero lo nombra—, porque escribirlo no rompería ninguna otra
+prueba.
 
 ### D30 — Campo desconocido es error — IMPLEMENTADA (2026-09-13)
 `additionalProperties: false` en el núcleo, y un espacio explícito para lo
@@ -1614,7 +1656,7 @@ su fichero, y por el mismo motivo: **un uso de este campo no rompe ninguna
 prueba**. Da una imagen girada que sigue siendo una imagen, así que ningún hash lo
 delata. Declararlo no mueve el veredicto, y eso también se ejerce.
 
-### D34 — El criterio de salida de R0, en dos
+### D34 — El criterio de salida de R0, en dos — IMPLEMENTADA (2026-09-15)
 ```text
 R0-A   cierra SoftSight solo
        un cube-v1 generado por un script de nuestro repositorio recorre
@@ -1646,8 +1688,14 @@ poses. Lo que falta son **las tres comparaciones de D23**, que necesitan valores
 dorados de una implementación de fuera — y eso no lo puede producir este
 repositorio sin dejar de ser la prueba.
 
-Por eso D34 **sigue ACORDADA**: tiene dos mitades y solo una está. La otra no
-depende de escribir código aquí.
+**R0-B cerrado el 2026-09-15.** El `cube-v1` de VideoMesh recorre lo mismo que el
+nuestro y sale `COMPLETE + PASS` con salida 0, y las tres comparaciones de D23 pasan
+con sus tolerancias declaradas. Los valores dorados que faltaban vienen de una
+implementación de fuera, que es lo que esta decisión pedía y lo que este repositorio
+no podía producir sin dejar de ser la prueba.
+
+Con esto se levanta la condición de parada: lo que dependa del contrato compartido
+ya puede avanzar.
 
 ---
 
