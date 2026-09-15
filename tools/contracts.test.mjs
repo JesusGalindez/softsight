@@ -17,6 +17,13 @@
  *      registro, y una combinación que nadie ha declarado se rechaza.
  *   5. La negociación de capabilities de D31: requerida desconocida para el
  *      consumo, provista desconocida se preserva y se nombra.
+ *   7. Cada decisión IMPLEMENTADA nombra en su `**Prueba:**` algo que se puede
+ *      ejecutar o abrir. Es la fila que fallaba callando: el 2026-09-15, D7 y D20
+ *      apuntaban a `hash-mismatch-v1`, `depth-optical-axis-v1` y
+ *      `depth-ray-length-v1`, tres ficheros que **nunca existieron** —los casos
+ *      acabaron dentro de fixtures que ya viajaban— y otras cinco decían «sin
+ *      escribir» o «es la prueba» teniendo puerta. Nadie lo veía porque el
+ *      documento no se ejecuta.
  *   6. Las otras dos filas de D30, que hasta el 2026-09-13 no se podían ejercer
  *      porque ningún esquema declaraba `extensions`: una extensión **requerida**
  *      desconocida deja el paquete UNSUPPORTED con salida 21, y una **opcional**
@@ -27,7 +34,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -522,5 +529,88 @@ const OPAQUE = new Set([
       `${capas.ingest} por el consumo— y ${aceptados} aceptados. Que las dos capas aparezcan es el ` +
       "hallazgo: un paquete sin sellar lo acepta el esquema y lo para la ingesta, y el fixture lo dice " +
       "en vez de fingir simetría)",
+  );
+}
+
+// 8. Y que ninguna decisión IMPLEMENTADA apunte a algo que no existe.
+//
+// El registro de decisiones es el único documento que dice qué está cerrado, y su
+// línea `**Prueba:**` es la que lo sostiene: sin ella, «IMPLEMENTADA» es una
+// afirmación de quien la escribió. Un nombre que nunca llegó a existir la deja
+// **peor que vacía**, porque quien la lea creerá que hay un fichero que mirar.
+//
+// La regla es deliberadamente floja —basta con **un** referente que resuelva— y
+// aun así encontró siete. Apretarla a «todos los nombres existen» rompería las
+// líneas que nombran a propósito lo que no se escribió, que es información y no
+// un error.
+{
+  /** Los nombres que este repositorio puede resolver hoy. */
+  const puertas = new Set(Object.keys(JSON.parse(readFileSync(resolve(projectRoot, "package.json"), "utf8")).scripts));
+  const fixtures = new Set(
+    readdirSync(resolve(projectRoot, "contracts/fixtures")).map((n) => n.replace(/\.json$/, "")),
+  );
+
+  /**
+   * Las decisiones cuya prueba no nombra nada que exista.
+   *
+   * Recibe el texto por argumento —no lo lee— para poder verla en rojo con un
+   * documento inventado. Una puerta que solo supiera mirar el fichero real no
+   * podría distinguirse de una que no mira nada.
+   */
+  function sinReferente(texto) {
+    const lineas = texto.split("\n");
+    const rotas = [];
+    let decision = null;
+    for (let i = 0; i < lineas.length; i += 1) {
+      if (lineas[i].startsWith("### D")) decision = lineas[i];
+      if (!lineas[i].startsWith("**Prueba:**")) continue;
+
+      // El bloque llega hasta la primera línea en blanco: hay pruebas de tres
+      // líneas, y cortar en la primera perdería el nombre de la puerta.
+      const bloque = [];
+      while (i < lineas.length && lineas[i].trim()) bloque.push(lineas[i++]);
+      if (!/IMPLEMENTADA/.test(decision ?? "")) continue;
+
+      const citados = [...bloque.join(" ").matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+      const resuelve = citados.some(
+        (nombre) =>
+          puertas.has(nombre) ||
+          puertas.has(nombre.split(" ")[0]) ||
+          fixtures.has(nombre) ||
+          nombre.startsWith("test_") || // una puerta de VideoMesh, como en D24 y D29
+          existsSync(resolve(projectRoot, nombre)),
+      );
+      if (!resuelve) rotas.push((decision ?? "").slice(4).split(" ")[0]);
+    }
+    return rotas;
+  }
+
+  const contrato = readFileSync(resolve(projectRoot, "docs/contrato-videomesh.md"), "utf8");
+  assert.deepEqual(
+    sinReferente(contrato),
+    [],
+    "una decisión IMPLEMENTADA nombra una prueba que no se puede ejecutar ni abrir",
+  );
+
+  // Vista en rojo, que es lo único que distingue una puerta de un comentario.
+  assert.deepEqual(
+    sinReferente(
+      ["### D99 — inventada — IMPLEMENTADA (2026-09-15)", "**Prueba:** `no-existe-v1`.", ""].join("\n"),
+    ),
+    ["D99"],
+    "el nombre inventado tenía que caer",
+  );
+
+  // Y que no caza de más: una decisión sin cerrar puede decir «sin escribir».
+  assert.deepEqual(
+    sinReferente(["### D98 — inventada — ACORDADA", "**Prueba:** sin escribir.", ""].join("\n")),
+    [],
+    "una decisión que no está cerrada no debe una prueba",
+  );
+
+  console.log(
+    `contratos: ok (las ${(contrato.match(/^\*\*Prueba:\*\*/gm) ?? []).length} líneas de prueba del ` +
+      "registro: cada decisión IMPLEMENTADA nombra algo que existe, un nombre inventado cae, y una " +
+      "decisión sin cerrar puede seguir diciendo «sin escribir»)",
   );
 }

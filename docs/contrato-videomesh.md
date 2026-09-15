@@ -409,14 +409,15 @@ y nunca del nombre del directorio.
 sha256** sin trucos recursivos. Lo calcula SoftSight después de la publicación y
 lo ata al informe. Y `packageId` es la identidad canónica: **SoftSight nunca
 infiere identidad del nombre del directorio**, que es comodidad humana.
-**Prueba:** `hash-mismatch-v1`.
+**Prueba:** `package-integrity-v1` —el nombre `hash-mismatch-v1` que la decisión
+previó nunca llegó a existir como fichero— con puerta `test:reconstruction`.
 
 ### D8 — `requiredEvidence` por contrato — IMPLEMENTADA (2026-09-13)
 ```text
 falta evidencia requerida por el contrato  → INCONCLUSIVE
 falta evidencia que el contrato no usa     → irrelevante
 ```
-**Prueba:** casos A y B.
+**Prueba:** los casos A y B de arriba, con puerta `test:reconstruction`.
 
 
 **Cerrada el 2026-09-13, y lo que faltaba era la segunda fila.** La primera
@@ -569,7 +570,7 @@ identidad **exacta**.
 `auditTransforms` en vez de una segunda regla parecida: una matriz con la última
 fila distinta de `[0,0,0,1]` lleva proyección dentro y no es una pose, aunque los
 dieciséis números sigan ahí.
-**Prueba:** sin escribir.
+**Prueba:** `test:reconstruction`, con los tres rechazos de arriba.
 
 ### D12 — Versiones y capabilities — IMPLEMENTADA a medias (2026-09-13)
 Bloque `versions`, bloque `models`, lista `capabilities`. El consumidor comprueba
@@ -603,7 +604,7 @@ obligar a declarar — subir un número sin regenerar pone la puerta roja.
 
 **Lo que falta para IMPLEMENTADA entera:** el bloque `models` y la lista
 `capabilities`, que van con D31 y no antes.
-**Prueba:** sin escribir.
+**Prueba:** `test:contracts`, con las cuatro filas de arriba.
 
 ### D13 — Códigos de salida nuevos, solo en subcomandos nuevos — IMPLEMENTADA (2026-08-12)
 ```text
@@ -832,7 +833,7 @@ no hay nada que auditar.
 **R0 se queda pequeño a propósito:** sin cobertura, sin confianza, sin LOD, UV,
 PBR ni collision. La cobertura depende del árbol de triángulos, la visibilidad y
 el muestreo, y llega después.
-**Prueba:** es la prueba.
+**Prueba:** el comando de arriba, con puerta `test:r0`.
 
 ### D19 — Parámetros de distorsión con nombre, sin vector posicional — IMPLEMENTADA (2026-08-12)
 Mejora de VideoMesh sobre nuestra propuesta: **eliminar el vector** en vez de
@@ -866,7 +867,10 @@ borde, que es justo donde la distorsión decide.
 Confundirlos mete un error que crece con el ángulo respecto al centro: cero en el
 centro, máximo en las esquinas. `INVERSE_DEPTH` y `DISPARITY` llegarán por
 capability, nunca reinterpretando depth V1.
-**Prueba:** `depth-optical-axis-v1`, `depth-ray-length-v1`.
+**Prueba:** `reconstruction-package-v1`, con `RAY_LENGTH` declarado y un mapa sin
+`depthKind`, con puerta `test:reconstruction`. Los dos nombres que la decisión
+previó —`depth-optical-axis-v1`, `depth-ray-length-v1`— nunca llegaron a existir
+como ficheros: los dos casos acabaron dentro de un fixture que ya viajaba.
 
 **El campo estaba desde R0-A; lo que faltaba era la prueba y el número.** La
 decisión se explicaba sola en una frase —confundir la coordenada sobre el eje
@@ -1421,8 +1425,10 @@ el estado anterior o el paquete sellado completo—, no durabilidad ante caída.
 `fsync` de ficheros, manifest y directorio, y las semánticas de sistemas de
 ficheros en red, quedan fuera del contrato y **no bloquean `cube-v1`**. El
 informe no debe afirmar durabilidad.
-**Prueba:** paquete sin sellar, sellado, manifest ausente, estado incorrecto,
-destino ya existente, y temporal en otro volumen si se puede probar.
+**Prueba:** `unsealed-package-v1` con puerta `test:contracts` por el lado del
+consumidor, y `tests/test_c3_sellado.py` en VideoMesh por el del productor:
+paquete sin sellar, sellado, manifest ausente, estado incorrecto, destino ya
+existente, y temporal en otro volumen si se puede probar.
 
 **Medio hecha el 2026-08-12, por el lado del consumidor.** `package-integrity-v1`
 prueba las dos condiciones de sellado que SoftSight puede comprobar: sellado entra,
