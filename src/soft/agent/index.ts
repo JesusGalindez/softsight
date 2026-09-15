@@ -264,6 +264,12 @@ export {
 export type { SceneRole } from "./schema";
 export type { FieldSchema, ObjectSchema } from "./schema";
 export { RECONSTRUCTION_PACKAGE_SCHEMA } from "./reconstruction/packageSchema";
+export {
+  MEASUREMENT_CLASSES,
+  REPRODUCIBILITY_MODES,
+  type MeasurementClass,
+  type ReproducibilityMode,
+} from "./reconstruction/measurement";
 export { DEFAULT_SURFACE_SAMPLES, SUPPORT_WARNING_FLOOR } from "./reconstruction/report";
 export {
   CONTRACT_VERSIONS,

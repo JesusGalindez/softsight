@@ -52,6 +52,7 @@
     "test:preview-proxy": "npm run build:agent3d && node tools/preview-proxy.test.mjs",
     "test:ply-binary": "npm run build:agent3d && node tools/ply-binary.test.mjs",
     "test:boundaries": "node tools/boundaries.test.mjs",
+    "test:measurement": "npm run build:agent3d && node tools/measurement.test.mjs",
     "bench": "npm run build:agent3d && node tools/bench.mjs",
     "bench:nightly": "npm run build:agent3d && node tools/bench.mjs --nightly",
     "test:producer-colmap": "npm run build:agent3d && node tools/producer-colmap.test.mjs",

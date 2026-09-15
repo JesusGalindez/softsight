@@ -27,6 +27,7 @@ import { resolveFrame, type Frame, type FrameTransform } from "./frameGraph";
 import { CAPABILITY_POLICY, EXTENSION_POLICY, PACKAGE_CODES } from "./ingest";
 import { PACKAGE_CODE_TABLE } from "./codes";
 import { computeCoverage, computeVisibility, type Coverage, type SurfaceVisibility } from "./coverage";
+import { MEASUREMENT_CLASS_TYPE, REPRODUCIBILITY_TYPE } from "./measurement";
 import { analyzeMeshTopology, type MeshTopology } from "./meshTopology";
 import { classifyRepairs, type RepairBoundary } from "./repair";
 import { computeCaptureAdvice, type CaptureAdvice } from "./captureAdvice";
@@ -722,12 +723,12 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
       boundingBoxMax: { type: "number[3]", required: true, description: "Esquina máxima." },
       frame: { type: "string", required: true, description: "Marco en el que están estos números (D11)." },
       measurementClass: {
-        type: '"EXACT"|"DETERMINISTIC_APPROXIMATION"|"EXTERNAL_MEASUREMENT"',
+        type: MEASUREMENT_CLASS_TYPE,
         required: true,
         description: "Qué clase de medida es (D28). Recuentos y caja son exactos.",
       },
       reproducibility: {
-        type: '"BITWISE_EXACT"|"QUANTIZED"|"TOLERANCE"',
+        type: REPRODUCIBILITY_TYPE,
         required: true,
         description: "Con qué reproducibilidad. Nace BITWISE_EXACT y moverla exige medida.",
       },
@@ -752,8 +753,8 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
       "Qué parte de la superficie sostiene la evidencia (R6). **Ausente** cuando no hay malla o no " +
       "hay cámaras: no es cero, es que la pregunta no se puede hacer.",
     fields: {
-      measurementClass: { type: "string", required: true, description: "APPROXIMATE: el muestreo no visita toda la superficie." },
-      reproducibility: { type: "string", required: true, description: "BITWISE_EXACT: visita siempre los mismos puntos." },
+      measurementClass: { type: MEASUREMENT_CLASS_TYPE, required: true, description: "APPROXIMATE: el muestreo no visita toda la superficie." },
+      reproducibility: { type: REPRODUCIBILITY_TYPE, required: true, description: "BITWISE_EXACT: visita siempre los mismos puntos." },
       seed: { type: "number", required: true, description: "Semilla del muestreo; sin ella no se reproduce." },
       samples: { type: "number", required: true, description: "Muestras que sostienen los ratios (§86.3 k)." },
       areaWeighted: { type: "boolean", required: true, description: "Siempre cierto; se declara en vez de suponerse." },
@@ -774,8 +775,8 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
     type: "object",
     description: "Desde dónde se miró cada región (R6). Ausente por lo mismo que `coverage`.",
     fields: {
-      measurementClass: { type: "string", required: true, description: "APPROXIMATE." },
-      reproducibility: { type: "string", required: true, description: "BITWISE_EXACT." },
+      measurementClass: { type: MEASUREMENT_CLASS_TYPE, required: true, description: "APPROXIMATE." },
+      reproducibility: { type: REPRODUCIBILITY_TYPE, required: true, description: "BITWISE_EXACT." },
       seed: { type: "number", required: true, description: "Semilla del muestreo." },
       samples: { type: "number", required: true, description: "Muestras que sostienen las clases." },
       areaWeighted: { type: "boolean", required: true, description: "Siempre cierto." },
@@ -829,11 +830,11 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
       "que reparar, y una lista vacía diría que no hay ninguno.",
     fields: {
       measurementClass: {
-        type: '"EXACT"|"APPROXIMATE"',
+        type: MEASUREMENT_CLASS_TYPE,
         required: true,
         description: "APPROXIMATE en cuanto hay un agujero que clasificar: eso cuelga del muestreo de R6.",
       },
-      reproducibility: { type: "string", required: true, description: "BITWISE_EXACT." },
+      reproducibility: { type: REPRODUCIBILITY_TYPE, required: true, description: "BITWISE_EXACT." },
       evidenceAware: {
         type: "boolean",
         required: true,
@@ -929,8 +930,8 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
       "está medida, no estimada**: cada sugerencia trae la cámara entera, y el número sale de meterla " +
       "en el CameraSet y volver a contar con la misma aritmética que juzgará el resultado.",
     fields: {
-      measurementClass: { type: "string", required: true, description: "APPROXIMATE." },
-      reproducibility: { type: "string", required: true, description: "BITWISE_EXACT." },
+      measurementClass: { type: MEASUREMENT_CLASS_TYPE, required: true, description: "APPROXIMATE." },
+      reproducibility: { type: REPRODUCIBILITY_TYPE, required: true, description: "BITWISE_EXACT." },
       seed: { type: "number", required: true, description: "Semilla del muestreo, la misma que la cobertura." },
       samples: { type: "number", required: true, description: "Muestras que sostienen las ganancias." },
       areaWeighted: { type: "boolean", required: true, description: "Siempre cierto." },

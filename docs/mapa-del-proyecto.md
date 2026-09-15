@@ -732,6 +732,19 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       revés: `ply-binary` no estaba declarada, así que un productor que la pidiera
       recibía UNSUPPORTED sobre algo que este binario sabe leer desde el día
       antes. Quedan **10 ACORDADAS y 24 IMPLEMENTADAS**.
+    - **Y un fallo de frontera que la auditoría del registro destapó, D28.** No
+      era un desacuerdo de opinión: el **mismo campo** —`measurementClass`— tenía
+      tres formas dentro del esquema publicado, dos enums que no coincidían y tres
+      `string` libres cuya descripción decía `APPROXIMATE` sin que el esquema lo
+      exigiera. `measurementClass: "cualquier cosa"` pasaba la validación en tres
+      de los cinco sitios, y quien derivara modelos obtenía tres tipos para un
+      nombre. Los cinco publican ahora el mismo vocabulario desde
+      `reconstruction/measurement.ts`, y `DETERMINISTIC_APPROXIMATION` se retira
+      porque metía el segundo eje dentro del primero, que es lo que D28 nació para
+      deshacer. **D28 sigue ACORDADA a propósito**: su prueba pide macOS y Linux y
+      aquí no hay segunda plataforma, y el refinamiento de las reducciones
+      paralelas no tiene qué probar porque no hay reducción paralela en esta capa.
+      Media prueba es media prueba.
     - Dieciséis puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
       `test:repair`, `test:production`, `test:lod-qa`, `test:uv-qa` y

@@ -1154,17 +1154,32 @@ produce los mismos bits. Una cobertura por muestreo es una **aproximación** de 
 cobertura real y a la vez puede ser **bit a bit reproducible**.
 
 ```text
-MeasurementClass    EXACT | DETERMINISTIC_APPROXIMATION | HEURISTIC
-                    | EXTERNAL_MEASUREMENT
+MeasurementClass    EXACT | APPROXIMATE | EXTERNAL_MEASUREMENT
 ReproducibilityMode BITWISE_EXACT | QUANTIZED | TOLERANCE
 ```
 
 ```text
-triangleCount     EXACT                        + BITWISE_EXACT
-coverage          DETERMINISTIC_APPROXIMATION  + BITWISE_EXACT
-surfaceDistance   DETERMINISTIC_APPROXIMATION  + BITWISE_EXACT
+triangleCount     EXACT        + BITWISE_EXACT
+coverage          APPROXIMATE  + BITWISE_EXACT
+surfaceDistance   APPROXIMATE  + BITWISE_EXACT
 validador externo EXTERNAL_MEASUREMENT
 ```
+
+**`APPROXIMATE` y no `DETERMINISTIC_APPROXIMATION`, corregido el 2026-09-14.** La
+primera redacción de esta decisión conservaba el valor del vocabulario anterior
+mientras adoptaba el nuevo, y eso se contradecía consigo mismo: el
+«DETERMINISTIC_» mete el segundo eje dentro del primero, que es exactamente lo
+que esta decisión existe para deshacer. Con los dos ejes publicados, una medida
+aproximada y reproducible se dice entera; con el nombre viejo, **esta fila no se
+puede escribir**:
+
+```text
+APPROXIMATE + TOLERANCE    aproximada, y además no reproducible al bit
+```
+
+`HEURISTIC` sale de la lista porque no lo emite nadie y nunca lo emitió: un valor
+publicado que ninguna medida usa es una promesa sobre una clase de medida que no
+existe.
 
 **La carga de la prueba.** `ReproducibilityMode` nace `BITWISE_EXACT`. Moverla a
 `TOLERANCE` exige fixture, ejecución en dos plataformas, diferencia observada,
@@ -1212,7 +1227,45 @@ Rechazamos en la primera ronda las «exactness classes» por duplicar
 `WarningSeverity`. Con los dos ejes separados ya no duplican: aquello iba sobre
 avisos y esto va sobre métricas.
 **Prueba:** recuentos exactos en macOS y Linux; cobertura con la misma semilla,
-mismos bloques y misma entrada, comparada bit a bit.
+mismos bloques y misma entrada, comparada bit a bit. **Parcial: `test:measurement`.**
+
+**Medio hecha el 2026-09-14, y lo que se arregló no era un desacuerdo de opinión.**
+El **mismo campo** aparecía de tres formas dentro del esquema publicado:
+
+```text
+measurements[].measurementClass        enum con DETERMINISTIC_APPROXIMATION
+repairBoundary.measurementClass        enum con APPROXIMATE
+coverage · confidence · captureAdvice  string libre, sin enum
+```
+
+Los tres últimos eran lo peor: su `description` decía `APPROXIMATE` y el esquema
+**no lo exigía**, así que `measurementClass: "cualquier cosa"` pasaba la
+validación. Una descripción no valida nada, y quien derivara modelos del esquema
+obtenía tres tipos para un nombre. Los cinco publican ahora el mismo vocabulario,
+derivado de un solo sitio —`reconstruction/measurement.ts`—, y el segundo eje
+también queda cerrado: afirmar reproducibilidad con una palabra inventada era la
+afirmación más cara del documento y no la validaba nadie.
+
+La ortogonalidad que la decisión declara también se comprueba: ninguna métrica
+lleva severidad, ningún aviso lleva clase de medida.
+
+**Lo que falta, y son dos cosas distintas por dos razones distintas.** Decirlo
+junto sería esconder que una se puede levantar mañana y la otra no depende de
+nadie de aquí:
+
+```text
+macOS y Linux           pide una segunda plataforma. Esta máquina es Darwin
+                        x86_64 y no hay docker ni podman: no es que no se haya
+                        hecho, es que no hay dónde
+reducciones paralelas   no hay reducción paralela que probar. `computeVisibility`
+                        es de un solo hilo, y el `parallel.ts` que sí reparte es
+                        el del rasterizador del navegador, que no mide nada de
+                        esto. El refinamiento describe un riesgo futuro, no uno
+                        presente
+```
+
+Por eso D28 **sigue ACORDADA**. Media prueba es media prueba, y llamarla
+IMPLEMENTADA sería exactamente lo que el registro existe para impedir.
 
 ### D29 — Sellado atómico del paquete
 ```text

@@ -376,7 +376,7 @@
             "type": "string",
             "enum": [
               "EXACT",
-              "DETERMINISTIC_APPROXIMATION",
+              "APPROXIMATE",
               "EXTERNAL_MEASUREMENT"
             ],
             "description": "Qué clase de medida es (D28). Recuentos y caja son exactos."
@@ -452,10 +452,20 @@
       "properties": {
         "measurementClass": {
           "type": "string",
+          "enum": [
+            "EXACT",
+            "APPROXIMATE",
+            "EXTERNAL_MEASUREMENT"
+          ],
           "description": "APPROXIMATE: el muestreo no visita toda la superficie."
         },
         "reproducibility": {
           "type": "string",
+          "enum": [
+            "BITWISE_EXACT",
+            "QUANTIZED",
+            "TOLERANCE"
+          ],
           "description": "BITWISE_EXACT: visita siempre los mismos puntos."
         },
         "seed": {
@@ -548,10 +558,20 @@
       "properties": {
         "measurementClass": {
           "type": "string",
+          "enum": [
+            "EXACT",
+            "APPROXIMATE",
+            "EXTERNAL_MEASUREMENT"
+          ],
           "description": "APPROXIMATE."
         },
         "reproducibility": {
           "type": "string",
+          "enum": [
+            "BITWISE_EXACT",
+            "QUANTIZED",
+            "TOLERANCE"
+          ],
           "description": "BITWISE_EXACT."
         },
         "seed": {
@@ -695,12 +715,18 @@
           "type": "string",
           "enum": [
             "EXACT",
-            "APPROXIMATE"
+            "APPROXIMATE",
+            "EXTERNAL_MEASUREMENT"
           ],
           "description": "APPROXIMATE en cuanto hay un agujero que clasificar: eso cuelga del muestreo de R6."
         },
         "reproducibility": {
           "type": "string",
+          "enum": [
+            "BITWISE_EXACT",
+            "QUANTIZED",
+            "TOLERANCE"
+          ],
           "description": "BITWISE_EXACT."
         },
         "evidenceAware": {
@@ -856,10 +882,20 @@
       "properties": {
         "measurementClass": {
           "type": "string",
+          "enum": [
+            "EXACT",
+            "APPROXIMATE",
+            "EXTERNAL_MEASUREMENT"
+          ],
           "description": "APPROXIMATE."
         },
         "reproducibility": {
           "type": "string",
+          "enum": [
+            "BITWISE_EXACT",
+            "QUANTIZED",
+            "TOLERANCE"
+          ],
           "description": "BITWISE_EXACT."
         },
         "seed": {
