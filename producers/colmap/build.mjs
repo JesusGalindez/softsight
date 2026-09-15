@@ -41,7 +41,11 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const CONTRACT = resolve(here, "../../contracts/reconstruction-package.schema.json");
 
-/** Cuántas vistas entran. Ocho caben en catorce megas de imágenes. */
+/**
+ * Cuántas vistas entran **por defecto**. Ocho caben en catorce megas de imágenes,
+ * que es lo que pedía el fixture del repositorio. Una reconstrucción de verdad
+ * trae las que traiga y las declara: `--vistas todas`.
+ */
 const VIEWS = 8;
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -209,14 +213,28 @@ function jpegGrid(bytes) {
   throw new Error("el JPEG no declara sus dimensiones donde se esperaba");
 }
 
-export function buildColmapPackage(source, destination) {
+/**
+ * Empaqueta una reconstrucción de COLMAP.
+ *
+ * `opciones.malla` añade la superficie densa como `TRIANGLE_MESH`. Sin ella el
+ * paquete sigue siendo lo que era —cámaras y nube— y no promete superficie.
+ *
+ * `opciones.interpolada` es la honestidad de esa malla, y no es un detalle
+ * administrativo: `poisson_mesher` **cierra agujeros por construcción**, así que
+ * una región de su superficie puede no derivar de ninguna evidencia. Eso es
+ * exactamente lo que `purelyReconstructed: false` declara. `delaunay_mesher` no
+ * interpola, y por eso el que la escribe decide, no este fichero.
+ */
+export function buildColmapPackage(source, destination, opciones = {}) {
+  const { vistas = VIEWS, malla = null, interpolada = true, packageId = "colmap-v1" } = opciones;
   const cameras = readCameras(readFileSync(join(source, "cameras.txt"), "utf8"));
   const images = readImages(readFileSync(join(source, "images.txt"), "utf8"));
   const points = readPoints(readFileSync(join(source, "points3D.txt"), "utf8"));
 
   // Las vistas cuyas imágenes están: el fixture trae ocho de las 128.
   const disponibles = new Set(readdirSync(join(source, "images")));
-  const elegidas = images.filter((image) => disponibles.has(image.name)).slice(0, VIEWS);
+  const registradas = images.filter((image) => disponibles.has(image.name));
+  const elegidas = vistas === "todas" ? registradas : registradas.slice(0, vistas);
   if (elegidas.length === 0) throw new Error("ninguna de las imágenes registradas está en images/");
 
   // Solo los puntos que esas vistas observan: empaquetar la nube entera diría que
@@ -246,6 +264,21 @@ export function buildColmapPackage(source, destination) {
     bytes: Buffer.byteLength(ply),
     sha256: sha256(ply),
   });
+
+  // La malla, si la hay. Se copia tal cual: reescribirla aquí la convertiría en
+  // otra malla, y el hash dejaría de ser el de lo que salió del reconstructor.
+  if (malla !== null) {
+    const bytes = readFileSync(malla);
+    writeFileSync(join(temp, "malla.ply"), bytes);
+    artifacts.push({
+      id: "malla",
+      type: "TRIANGLE_MESH",
+      path: "malla.ply",
+      bytes: bytes.length,
+      sha256: sha256(bytes),
+      purelyReconstructed: !interpolada,
+    });
+  }
 
   const cameraSet = [];
   for (const image of elegidas) {
@@ -295,10 +328,13 @@ export function buildColmapPackage(source, destination) {
   const manifest = {
     documentType: "videomesh.reconstruction-package",
     contractVersion: "0.1",
-    packageId: "colmap-v1",
+    packageId,
     state: "SEALED",
     producer: {
-      name: `producers/colmap · subconjunto de ${elegidas.length} de ${images.length} vistas`,
+      name:
+        elegidas.length === images.length
+          ? `producers/colmap · las ${images.length} vistas registradas`
+          : `producers/colmap · subconjunto de ${elegidas.length} de ${images.length} vistas`,
       version: "0.1.0",
     },
     artifacts,
@@ -310,9 +346,10 @@ export function buildColmapPackage(source, destination) {
     // Declarar una identidad hacia ASSET_CANONICAL sería inventarse que su marco
     // es el canónico de algo.
     frameGraph: { transforms: [] },
-    // Lo que el contrato necesita para certificar: la nube. No hay malla y no se
-    // promete ninguna.
-    requiredEvidence: ["puntos"],
+    // Lo que el contrato necesita para certificar. Sin malla es la nube y nada
+    // más: un SfM disperso no promete superficie, y pedirla dejaría el paquete
+    // en INCONCLUSIVE por algo que nunca iba a traer.
+    requiredEvidence: malla === null ? ["puntos"] : ["puntos", "malla"],
   };
 
   // El manifest **el último**, que es el orden de D29: escribir artifacts,
@@ -321,23 +358,46 @@ export function buildColmapPackage(source, destination) {
   rmSync(destination, { recursive: true, force: true });
   renameSync(temp, destination);
 
-  return { manifest, points: nube.length, views: elegidas.length };
+  return { manifest, points: nube.length, views: elegidas.length, mesh: malla !== null };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const [source, destination] = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  const bandera = (nombre) => {
+    const i = argv.indexOf(nombre);
+    return i === -1 ? undefined : argv[i + 1];
+  };
+  const posicionales = argv.filter((a, i) => !a.startsWith("--") && !argv[i - 1]?.startsWith("--"));
+  const [source, destination] = posicionales;
   if (source === undefined || destination === undefined) {
     process.stderr.write(
-      "uso: node producers/colmap/build.mjs <raíz-colmap> <destino>\n" +
-        "  la raíz lleva cameras.txt, images.txt, points3D.txt e images/\n",
+      "uso: node producers/colmap/build.mjs <raíz-colmap> <destino> [opciones]\n" +
+        "  la raíz lleva cameras.txt, images.txt, points3D.txt e images/\n" +
+        "\n" +
+        "  --vistas N|todas   cuántas vistas entran (por defecto 8)\n" +
+        "  --malla <ruta>     añade la superficie densa como TRIANGLE_MESH\n" +
+        "  --sin-interpolar   la malla no rellena agujeros (delaunay, no poisson)\n" +
+        "  --id <nombre>      packageId; por defecto colmap-v1\n",
     );
     process.exit(2);
   }
+  const vistasPedidas = bandera("--vistas");
+  const opciones = {
+    vistas: vistasPedidas === undefined ? VIEWS : vistasPedidas === "todas" ? "todas" : Number(vistasPedidas),
+    malla: bandera("--malla") ? resolve(bandera("--malla")) : null,
+    interpolada: !argv.includes("--sin-interpolar"),
+    packageId: bandera("--id") ?? "colmap-v1",
+  };
   // Se lee para comprobar que existe: un productor que no encuentra el contrato
   // publicado no debería inventarse la forma del paquete.
   JSON.parse(readFileSync(CONTRACT, "utf8"));
-  const { manifest, points, views } = buildColmapPackage(resolve(source), resolve(destination));
+  const { manifest, points, views, mesh } = buildColmapPackage(
+    resolve(source),
+    resolve(destination),
+    opciones,
+  );
   process.stdout.write(
-    `colmap-v1: ${views} vistas, ${points} puntos, ${manifest.artifacts.length} artifacts en ${destination}\n`,
+    `${manifest.packageId}: ${views} vistas, ${points} puntos, ${mesh ? "malla" : "sin malla"}, ` +
+      `${manifest.artifacts.length} artifacts en ${destination}\n`,
   );
 }
