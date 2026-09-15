@@ -745,6 +745,19 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
       aquí no hay segunda plataforma, y el refinamiento de las reducciones
       paralelas no tiene qué probar porque no hay reducción paralela en esta capa.
       Media prueba es media prueba.
+    - **Y D18, con R0-A de D34.** Las dos llevaban desde el 2026-08-12 con la
+      misma nota —«falta el sobre del informe»— describiendo un repositorio que
+      ya no era éste: el sobre estaba y lo que faltaba era comprobarlo. `test:r0`
+      recorre **las nueve etapas como dato**, que es la lista que el contrato
+      escribe, y comprueba que cada una deja huella en el informe. Lo que no
+      miraba nadie es el sobre, que es la etapa que **ata el informe a su
+      entrada**: `run.inputManifestSha256` tiene que ser el sha del manifest
+      leído, porque si no el informe habla de otro paquete y sale igual de bien.
+      El caso que lo demuestra cambia el `packageId` y mira las dos cosas: el
+      sobre entero cambia y no se mueve una sola medida. R0-B sigue abierto y no
+      por falta de segundo productor —`producers/colmap/` lo es desde el 13—,
+      sino porque las tres comparaciones de D23 piden valores dorados de fuera.
+      Quedan **9 ACORDADAS y 25 IMPLEMENTADAS**.
     - Dieciséis puertas nuevas, `test:masks`, `test:producer-superficie`,
       `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
       `test:repair`, `test:production`, `test:lod-qa`, `test:uv-qa` y

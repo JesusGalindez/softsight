@@ -90,10 +90,10 @@ reuniones periódicas                 las sustituye el aviso por evento
 Al 2026-09-14:
 
 ```text
-ACORDADAS       10   D2, D5, D18, D22, D23, D26, D28, D29, D32, D34
+ACORDADAS        9   D2, D5, D22, D23, D26, D28, D29, D32, D34
 PROPUESTAS       0
-IMPLEMENTADAS   24   D1, D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15,
-                     D16, D17, D19, D20, D21, D24, D25, D27, D30, D31, D33
+IMPLEMENTADAS   25   D1, D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15,
+                     D16, D17, D18, D19, D20, D21, D24, D25, D27, D30, D31, D33
 PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
 ```
 
@@ -742,7 +742,7 @@ no finito se rechaza **en todo el repositorio**, no solo en el paquete, con su
 propio mensaje: «es Infinity y tiene que ser un número finito», que dice qué
 buscar en vez de mandar a mirar el tipo.
 
-### D18 — R0 termina con `cube-v1` pasando
+### D18 — R0 termina con `cube-v1` pasando — IMPLEMENTADA (2026-09-14)
 ```bash
 softsight reconstruction inspect fixtures/cube-v1/reconstruction.json
 ```
@@ -763,6 +763,39 @@ Lo que el paquete atraviesa hoy: esquema, sandbox, hashes, PLY, CameraSet
 declarado, escala, FrameGraph y auditoría de la malla —12 triángulos, 24
 vértices, 16 duplicados soldados, cerrada, volumen 1—. **Falta el sobre del
 informe**, que es S6, y con él R0-A.
+
+**Cerrada el 2026-09-14.** El sobre existía desde hacía tiempo —`documentType`,
+`contractVersion`, `run` y `versions`— y lo que faltaba era **comprobarlo**: la
+nota de arriba describía un repositorio que ya no era éste, como pasó con D1 y
+con D15.
+
+`test:r0` recorre las nueve etapas como **dato** y comprueba que cada una deja su
+huella en el informe que sale. La lista vive junta a propósito: es la que escribe
+el contrato, y tenerla suelta en nueve asertos permitiría añadir una etapa aquí y
+olvidarla allí.
+
+Lo que no estaba cubierto en ningún sitio es el sobre, y es la etapa que ata el
+informe a su entrada:
+
+```text
+run.inputManifestSha256 == sha256 del manifest que se leyó
+run.runId               deriva de ese sha
+versions.contracts      una de las combinaciones declaradas (D12)
+```
+
+Sin esa comprobación, un informe podría hablar de otro paquete y **saldría igual
+de bien**: los números no se enteran de con qué sobre viajan. El caso que lo
+demuestra cambia el `packageId` y mira las dos cosas a la vez — el sobre entero
+cambia y no se mueve una sola medida, porque el sobre identifica la entrada y no
+el resultado.
+
+Y las nueve huellas se comprueban **por su ausencia**: nueve predicados que
+devolvieran `true` sin mirar habrían pasado igual. Cada etapa recibe un informe al
+que le falta lo suyo y tiene que fallar ella y solo ella; la única pareja que cae
+junta es la auditoría con el PLY, y es una dependencia de verdad — sin malla leída
+no hay nada que auditar.
+
+**Prueba:** `test:r0`.
 
 **R0 se queda pequeño a propósito:** sin cobertura, sin confianza, sin LOD, UV,
 PBR ni collision. La cobertura depende del árbol de triángulos, la visibilidad y
@@ -1532,7 +1565,21 @@ en paralelo.
 **Condición de parada:** si R0-B falla por proyección de cámara, transformación
 de matrices, interpretación del esquema o identidad de artifacts, **no se avanza
 nada que dependa del contrato**. Se arregla la frontera primero.
-**Prueba:** es la prueba.
+**Prueba:** `test:r0` cubre R0-A; R0-B sigue sin cubrir.
+
+**R0-A cerrado el 2026-09-14**, con la misma puerta que cierra D18: las nueve
+etapas dejan huella, el sobre ata el informe a su entrada por el hash, y `cube-v1`
+sale `COMPLETE + PASS` con salida 0.
+
+**R0-B sigue abierto, y conviene ser exacto sobre qué le falta.** No es el segundo
+productor: lo cumple `producers/colmap/` desde el 2026-09-13, escrito solo desde
+el JSON Schema publicado y coincidiendo con el adaptador exacta a 0 en las ocho
+poses. Lo que falta son **las tres comparaciones de D23**, que necesitan valores
+dorados de una implementación de fuera — y eso no lo puede producir este
+repositorio sin dejar de ser la prueba.
+
+Por eso D34 **sigue ACORDADA**: tiene dos mitades y solo una está. La otra no
+depende de escribir código aquí.
 
 ---
 
