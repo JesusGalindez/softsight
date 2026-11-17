@@ -210,22 +210,25 @@ function readInput(files) {
   return { kind, name, bytes };
 }
 
+/** Un documento JSON en base64, como los de `patch` o `story`. */
+function readDocument(payload, slot) {
+  const { bytes } = decodePayload(payload, slot);
+  let document;
+  try {
+    document = JSON.parse(bytes.toString("utf8"));
+  } catch {
+    throw invalid(`${slot} no es JSON`);
+  }
+  if (!isPlainObject(document)) throw invalid(`${slot} debe ser un objeto`);
+  return document;
+}
+
 /** Parches en base64, como en `patch`: cada uno, un documento JSON. */
 function readPatches(payloads, slot) {
   if (!Array.isArray(payloads) || payloads.length === 0) {
     throw invalid(`${slot} debe ser una lista no vacía de { name, data }`);
   }
-  return payloads.map((payload, index) => {
-    const { bytes } = decodePayload(payload, `${slot}[${index}]`);
-    let document;
-    try {
-      document = JSON.parse(bytes.toString("utf8"));
-    } catch {
-      throw invalid(`${slot}[${index}] no es JSON`);
-    }
-    if (!isPlainObject(document)) throw invalid(`${slot}[${index}] debe ser un objeto de parche`);
-    return document;
-  });
+  return payloads.map((payload, index) => readDocument(payload, `${slot}[${index}]`));
 }
 
 /** El CLI, con su código de salida: 2 es un error de datos y no deja informe. */
@@ -533,18 +536,26 @@ async function exportSession(request, execute, store) {
 // ---------------------------------------------------------------------------
 // El barrido
 
+/**
+ * Las variantes. Cada una varía **una** cosa sobre la base: una lista de parches,
+ * o un reparto de la malla en piezas (encargo 05-A). No se mezclan en un barrido:
+ * un informe de revisión y uno de reparto no tienen criterios en común que cruzar.
+ */
 function readVariants(variants) {
   if (!Array.isArray(variants) || variants.length === 0) {
-    throw invalid("variants debe ser una lista no vacía de { name?, patches }");
+    throw invalid("variants debe ser una lista no vacía de { name?, patches } o { name?, partition }");
   }
   if (variants.length > MAX_SWEEP_VARIANTS) {
     throw invalid(`un barrido admite como mucho ${MAX_SWEEP_VARIANTS} variantes; parte la búsqueda en varios`);
   }
   const names = new Set(["base"]);
-  return variants.map((variant, index) => {
-    if (!isPlainObject(variant)) throw invalid(`variants[${index}] debe ser un objeto { name?, patches }`);
-    const unknown = Object.keys(variant).filter((key) => key !== "name" && key !== "patches");
+  const parsed = variants.map((variant, index) => {
+    if (!isPlainObject(variant)) throw invalid(`variants[${index}] debe ser un objeto { name?, patches | partition }`);
+    const unknown = Object.keys(variant).filter((key) => !["name", "patches", "partition"].includes(key));
     if (unknown.length > 0) throw invalid(`variants[${index}]: clave desconocida ${unknown[0]}`);
+    if (("patches" in variant) === ("partition" in variant)) {
+      throw invalid(`variants[${index}] necesita patches o partition, uno de los dos`);
+    }
     const name = variant.name ?? `variante-${index + 1}`;
     if (typeof name !== "string" || name === "") throw invalid(`variants[${index}].name debe ser una cadena no vacía`);
     if (names.has(name)) {
@@ -553,8 +564,14 @@ function readVariants(variants) {
       );
     }
     names.add(name);
-    return { name, patches: readPatches(variant.patches, `variants[${index}].patches`) };
+    return "partition" in variant
+      ? { name, kind: "partition", partition: readDocument(variant.partition, `variants[${index}].partition`) }
+      : { name, kind: "patches", patches: readPatches(variant.patches, `variants[${index}].patches`) };
   });
+  if (new Set(parsed.map((variant) => variant.kind)).size > 1) {
+    throw invalid("un barrido varía una sola cosa: todas las variantes con patches, o todas con partition");
+  }
+  return parsed;
 }
 
 function readCriteria(criteria) {
@@ -589,6 +606,9 @@ async function sweep(request, execute) {
   const flags = parseOptions(settings);
   const variants = readVariants(request.variants);
   const criteria = readCriteria(request.criteria);
+  if (variants[0].kind === "partition") {
+    return sweepPartitions(request, execute, { input, variants, criteria, projection, flags });
+  }
 
   const workDir = mkdtempSync(join(tmpdir(), "softsight-barrido-"));
   const inputPath = inputPathIn(workDir, input.name);
@@ -671,6 +691,72 @@ async function sweep(request, execute) {
     };
   } finally {
     removeWorkDir(workDir, input.kind === "model" ? inputPath : null);
+  }
+}
+
+/**
+ * El barrido de repartos: la misma malla partida de K maneras, y cada reparto
+ * auditado por `--partition`. Es lo que pide la cabecera de `meshPartition.ts`
+ * —«probar cien combinaciones de parámetros y quedarse con la mejor, sin ver
+ * ninguna»—, y el criterio natural es `cut.length`, el borde total que abre el
+ * corte.
+ *
+ * Dos diferencias con el de revisiones, y las dos salen de qué se compara. **No
+ * hay base**: la malla sin repartir no tiene un informe de reparto contra el que
+ * medir, así que el cruce es solo entre variantes. Y **las filas van enteras por
+ * defecto**: un informe de reparto es corto, y su resumen —`contractVersion` y
+ * `warnings`— no dice nada del corte.
+ */
+async function sweepPartitions(request, execute, { input, variants, criteria, projection, flags }) {
+  if (input.kind !== "model") {
+    throw invalid("un barrido de repartos necesita model: se reparte una malla, no una escena");
+  }
+  const workDir = mkdtempSync(join(tmpdir(), "softsight-barrido-"));
+  const inputPath = inputPathIn(workDir, input.name);
+  try {
+    writeInput(inputPath, input.bytes);
+    const rows = [];
+    const entries = [];
+    const excluded = [];
+    for (const [index, variant] of variants.entries()) {
+      const file = join(workDir, `v${index}-reparto.json`);
+      writeFileSync(file, `${JSON.stringify(variant.partition)}\n`);
+      try {
+        const { exitCode, report } = await runCli(execute, ["--model", inputPath, "--partition", file, ...flags]);
+        rows.push({ name: variant.name, exitCode, row: view(report, projection) });
+        entries.push({ name: variant.name, report });
+      } catch (error) {
+        if (!(error instanceof BridgeError) || error.code !== "data-error") throw error;
+        rows.push({ name: variant.name, error: error.message });
+        excluded.push({ candidate: variant.name, reason: "ERROR_DE_DATOS" });
+      }
+    }
+    let comparison;
+    try {
+      comparison = compareSweep(entries, criteria);
+    } catch (error) {
+      throw new BridgeError("data-error", error instanceof Error ? error.message : String(error));
+    }
+    return {
+      bridgeContractVersion: request.bridgeContractVersion,
+      command: "sweep",
+      exitCode: 0,
+      report: {
+        contractVersion: entries[0]?.report.contractVersion ?? null,
+        documentType: "softsight.sweep",
+        base: null,
+        variants: rows,
+        compared: comparison.compared,
+        excluded,
+        criteria: comparison.criteria,
+        verdict: comparison.verdict,
+        ...(comparison.reason === undefined ? {} : { reason: comparison.reason }),
+        frontier: comparison.frontier,
+      },
+      artifacts: [],
+    };
+  } finally {
+    removeWorkDir(workDir, inputPath);
   }
 }
 

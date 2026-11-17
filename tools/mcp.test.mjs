@@ -31,6 +31,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { COMMANDS } from "./bridge.mjs";
+import { writeCubePackage } from "./cubeV1.mjs";
 import { fixture } from "./fixtures.mjs";
 import { EXCLUDED_COMMANDS, PROTOCOL_VERSIONS, TOOLS } from "./mcp-server.mjs";
 
@@ -57,8 +58,11 @@ const LATEST = PROTOCOL_VERSIONS[0];
  * 16.632 B con diecinueve. Lo que pesa son las opciones de revisión de
  * `softsight_open` y `softsight_sweep`, que son estado de la sesión y no se
  * pueden quitar sin volver a pedirlas en cada turno.
+ *
+ * **Y otra vez con las fases 4 y 5**: `softsight_status` y `softsight_partition`
+ * lo llevan a 17.887 B con veintiuna.
  */
-const CATALOG_MAX_BYTES = 17_500;
+const CATALOG_MAX_BYTES = 18_500;
 
 /** Abre el servidor MCP y devuelve con qué hablarle por JSON-RPC. */
 function openServer(env = {}) {
@@ -486,6 +490,22 @@ try {
       "mcp: ok (sesión por MCP: abrir, aplicar y exportar dan lo del CLI con el turno anterior como referencia, " +
         "deshacer vuelve al stateHash de apertura, y el barrido trae la fila de la llamada suelta)",
     );
+  }
+
+  // 7. El estado y el reparto (fases 4 y 5): los dos, lo mismo que el CLI.
+  {
+    const estado = await server.tool("softsight_status", {});
+    assert.deepEqual(estado.report, (await runCli(["--status"])).report, "softsight_status es --status");
+
+    writeCubePackage(join(work, "cubo"));
+    const malla = join(work, "cubo/mesh.ply");
+    const reparto = { partitionVersion: 1, parts: [{ name: "cara", triangles: [0, 1] }, { name: "resto", triangles: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }] };
+    await writeFile(join(work, "reparto.json"), `${JSON.stringify(reparto)}\n`);
+    const tool = await server.tool("softsight_partition", { model: malla, partition: reparto });
+    const cli = await runCli(["--model", malla, "--partition", join(work, "reparto.json")]);
+    assert.deepEqual({ ...tool.report, source: null }, { ...cli.report, source: null });
+    assert.deepEqual(tool.report.cut, { edges: 4, length: 4 });
+    console.log("mcp: ok (softsight_status es --status, y softsight_partition audita el reparto igual que --partition)");
   }
 
   console.log(`mcp: ok (${Object.keys(TOOLS).length} herramientas; las de modelo, iguales al CLI directo)`);

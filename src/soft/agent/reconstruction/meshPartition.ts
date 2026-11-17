@@ -53,6 +53,7 @@
 
 import type { Mesh } from "../../mesh";
 import { weldPositions } from "../inspect";
+import { assertValid, type ObjectSchema } from "../schema";
 
 /** Una pieza del reparto: los triángulos que reclama —índices del original— y
  * las posiciones que lleva consigo, que es lo que la auditoría de vértices
@@ -128,12 +129,26 @@ export interface PartitionCoverage {
   outOfRange: number;
 }
 
+/** El corte entero, cada arista abierta contada **una** vez. */
+export interface PartitionCut {
+  /** Aristas que el reparto abrió: entre dos partes, o entre una parte y lo que no reclamó nadie. */
+  edges: number;
+  /** Su longitud, en unidades del paquete. */
+  length: number;
+}
+
 export interface PartitionAudit {
   /** La auditoría de cada pieza, en el orden del reparto. */
   parts: PartAudit[];
   /** El recuento sobre la malla entera, que es el titular de §2.1:
    * `accounted + unassigned == total`. */
   coverage: PartitionCoverage;
+  /**
+   * El total del corte. Es el número que un barrido minimiza, y no sale de sumar
+   * los `boundary` de las partes: la arista que separa dos partes está en las dos,
+   * y la que separa una parte de lo que nadie reclamó, solo en una.
+   */
+  cut: PartitionCut;
 }
 
 /**
@@ -269,6 +284,8 @@ export function auditPartition(mesh: Mesh, partition: TrianglePartition): Partit
     }
   }
 
+  let cutEdges = 0;
+  let cutLength = 0;
   for (const [id, pair] of edgeTriangles) {
     const [t0, t1] = pair;
     if (t1 < 0) continue; // borde del original o arista no-variedad
@@ -284,6 +301,8 @@ export function auditPartition(mesh: Mesh, partition: TrianglePartition): Partit
       positions[rawA * 3 + 1] - positions[rawB * 3 + 1],
       positions[rawA * 3 + 2] - positions[rawB * 3 + 2],
     );
+    cutEdges += 1;
+    cutLength += length;
     for (const partIndex of [p0, p1]) {
       if (partIndex < 0) continue;
       const audit = perPart[partIndex];
@@ -311,6 +330,7 @@ export function auditPartition(mesh: Mesh, partition: TrianglePartition): Partit
 
   return {
     parts: perPart,
+    cut: { edges: cutEdges, length: cutLength },
     coverage: {
       total: triangleCount,
       accounted: assigned,
@@ -318,5 +338,98 @@ export function auditPartition(mesh: Mesh, partition: TrianglePartition): Partit
       duplicated: crossDuplicated,
       outOfRange: outOfRangeClaims,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// El documento de reparto: lo que llega por `--partition`.
+
+/**
+ * La forma del documento. Los triángulos se nombran por su índice en la malla que
+ * se audita —en un GLB u OBJ de varias piezas, la malla aplanada en el orden del
+ * fichero, la misma que usa `--diff`—, y las posiciones son opcionales: sin ellas,
+ * la pieza lleva las del original y la comprobación de vértices no contrasta nada.
+ */
+export const PARTITION_SCHEMA: ObjectSchema = {
+  partitionVersion: { type: "number", required: true, description: "Versión del documento; hoy, 1." },
+  parts: {
+    type: "object[]",
+    required: true,
+    description: "Las piezas del reparto, en orden.",
+    fields: {
+      name: { type: "string", required: true, description: "Nombre de la pieza; único en el reparto." },
+      triangles: {
+        type: "number[]",
+        required: true,
+        description: "Índices de los triángulos de la malla original que reclama la pieza.",
+      },
+      positions: {
+        type: "number[]",
+        description:
+          "Las posiciones que la pieza lleva consigo, tres por vértice y tantas como el original. Sin " +
+          "ellas, las del original: entonces «ningún vértice se mueve» se cumple por construcción.",
+      },
+    },
+  },
+};
+
+export interface PartitionDocument {
+  partitionVersion: number;
+  parts: Array<{ name: string; triangles: number[]; positions?: number[] }>;
+}
+
+/** Lo que `--partition` publica de cada pieza: su auditoría, con su nombre y de dónde salen sus posiciones. */
+export interface PartitionPartReport extends PartAudit {
+  name: string;
+  positionsFrom: "pieza" | "original";
+}
+
+export interface PartitionReport {
+  mesh: { triangles: number; vertices: number };
+  coverage: PartitionCoverage;
+  cut: PartitionCut;
+  parts: PartitionPartReport[];
+}
+
+/**
+ * Valida un documento de reparto y lo audita contra la malla. Lo que no encaja con
+ * la medida —otra versión, dos piezas con el mismo nombre, unas posiciones de otro
+ * largo— es un error de datos y no una medida rara: una pieza cuyas posiciones no
+ * se pueden contrastar daría una distancia infinita, que no es un número que se
+ * pueda publicar.
+ */
+export function auditPartitionDocument(mesh: Mesh, document: unknown): PartitionReport {
+  assertValid(document, PARTITION_SCHEMA, "el reparto");
+  const doc = document as PartitionDocument;
+  if (doc.partitionVersion !== 1) {
+    throw new Error(`el reparto declara partitionVersion ${doc.partitionVersion}; este binario lee la 1`);
+  }
+  if (doc.parts.length === 0) throw new Error("el reparto no tiene piezas");
+  const names = new Set<string>();
+  for (const part of doc.parts) {
+    if (names.has(part.name)) throw new Error(`el reparto tiene dos piezas llamadas «${part.name}»`);
+    names.add(part.name);
+    if (part.positions !== undefined && part.positions.length !== mesh.positions.length) {
+      throw new Error(
+        `«${part.name}» trae ${part.positions.length} posiciones y la malla tiene ${mesh.positions.length}: ` +
+          "sin el mismo largo no hay vértice con el que contrastarlas",
+      );
+    }
+  }
+  const audit = auditPartition(mesh, {
+    parts: doc.parts.map((part) => ({
+      triangles: [...part.triangles],
+      positions: part.positions === undefined ? Float32Array.from(mesh.positions) : Float32Array.from(part.positions),
+    })),
+  });
+  return {
+    mesh: { triangles: mesh.indices.length / 3, vertices: mesh.positions.length / 3 },
+    coverage: audit.coverage,
+    cut: audit.cut,
+    parts: doc.parts.map((part, index) => ({
+      name: part.name,
+      positionsFrom: part.positions === undefined ? "original" : "pieza",
+      ...audit.parts[index],
+    })),
   };
 }

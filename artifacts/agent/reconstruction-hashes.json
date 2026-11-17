@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "name": "cube-v1",
+      "contractVersion": "0.1",
+      "measurements": "ec5729265b803f79",
+      "coverage": "e22f451e0bbfe433",
+      "confidence": "88389070d4b4578a",
+      "coverageRatios": {
+        "observed": 0.493625,
+        "triangulated": 0.493625,
+        "weak": 0,
+        "unobserved": 0.506375
+      }
+    }
+  ]
+}

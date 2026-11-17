@@ -73,6 +73,7 @@
     "test:affected-gates": "node tools/affected-gates.test.mjs",
     "test:session": "npm run build:agent3d && node tools/session.test.mjs",
     "test:sweep": "npm run build:agent3d && node tools/sweep.test.mjs",
+    "test:estado": "npm run build:agent3d && node tools/estado.test.mjs",
     "test:bands": "npm run build:agent3d && node tools/bands.test.mjs",
     "test:bounds-tree": "npm run build:agent3d && node tools/bounds-tree.test.mjs",
     "test:reconstruction": "npm run build:agent3d && node tools/reconstruction.test.mjs",

@@ -121,6 +121,7 @@ export const GATES = [
   "geometry.test.mjs", // 0,2 s
   "text.test.mjs", // 0,2 s
   "agents-md.mjs --check", // 0,2 s — no acaba en .test.mjs porque también regenera
+  "estado.test.mjs", // 1,5 s — estado.json y los bloques al día, y ningún recuento a mano en la prosa vigilada
   "glb-writer.test.mjs", // 0,1 s
 ];
 

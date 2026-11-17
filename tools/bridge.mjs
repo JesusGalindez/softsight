@@ -126,7 +126,7 @@ const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 export const COMMANDS = new Set([
   "inspect", "render", "patch", "sample", "scene", "bvh", "story", "staging", "diff", "schema",
   "reconstructionInspect", "reconstructionCoverage", "reconstructionCompare", "productionValidate",
-  "sessionOpen", "sessionApply", "sessionUndo", "sessionExport", "sweep",
+  "sessionOpen", "sessionApply", "sessionUndo", "sessionExport", "sweep", "status", "partition",
 ]);
 
 /**
@@ -229,6 +229,8 @@ const FILE_SLOTS = {
   // segundo no pasa por la caché de modelos —es el que cambia en cada pase de
   // quien llama, así que cachearlo sería llenar el disco de versiones muertas—.
   diff: { model: false, other: false },
+  // El reparto de una malla en piezas: la malla y el documento que la reparte.
+  partition: { model: false, partition: false },
   // El guion no trae geometría ni produce fichero: entra texto y salen hechos.
   story: { story: false },
   // La puesta en escena tampoco: entran medidas del editor y salen hechos.
@@ -381,6 +383,11 @@ function buildArgs(request, workDir) {
       continue;
     }
     files[slot] = writeFilePayload(workDir, slot, payload);
+  }
+
+  if (request.command === "partition") {
+    // Como el diff: medir no produce artefacto, produce números.
+    return ["--model", files.model, "--partition", files.partition, ...parseOptions(request.options)];
   }
 
   if (request.command === "diff") {
@@ -658,6 +665,17 @@ export async function handleRequest(request, execute = spawnAgent, sessions = nu
     return {
       bridgeContractVersion: request.bridgeContractVersion,
       command: "schema",
+      exitCode: 0,
+      report: JSON.parse(stdout),
+    };
+  }
+  if (request.command === "status") {
+    // Como `schema`: leer lo que el CLI publica, sin ficheros ni sandbox.
+    const { exitCode, stdout, stderr } = await execute(["--status"]);
+    if (exitCode !== 0) throw new BridgeError("data-error", stderr.trim() || "error de datos");
+    return {
+      bridgeContractVersion: request.bridgeContractVersion,
+      command: "status",
       exitCode: 0,
       report: JSON.parse(stdout),
     };

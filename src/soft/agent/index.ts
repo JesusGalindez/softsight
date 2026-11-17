@@ -305,7 +305,13 @@ export type { ResourceLimit, ResourceLimitName } from "./reconstruction/limits";
 export { bandWithHalo } from "../postprocess";
 export { DIFF_NOISE_FLOOR, diffMeshes } from "./reconstruction/meshDiff";
 export { analyzeMeshTopology } from "./reconstruction/meshTopology";
-export { auditPartition, partitionTriangles } from "./reconstruction/meshPartition";
+export {
+  PARTITION_SCHEMA,
+  auditPartition,
+  auditPartitionDocument,
+  partitionTriangles,
+} from "./reconstruction/meshPartition";
+export type { PartitionDocument, PartitionReport } from "./reconstruction/meshPartition";
 export { SELF_INTERSECTION_EPSILON, findSelfIntersections } from "./reconstruction/selfIntersection";
 export type { SelfIntersectionPair, SelfIntersectionReport } from "./reconstruction/selfIntersection";
 export type { BoundaryLoop, MeshComponent, MeshTopology } from "./reconstruction/meshTopology";

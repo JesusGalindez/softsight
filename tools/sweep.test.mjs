@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import { compareSweep, dominanceVerdict } from "../dist-node/agent3d.mjs";
 import { runAgent } from "./agent3d.mjs";
 import { handleRequest } from "./bridge.mjs";
+import { writeCubePackage } from "./cubeV1.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
@@ -200,11 +201,52 @@ try {
   await rechaza({ variants: Array.from({ length: 65 }, () => uno[0]) }, "invalid-request", /como mucho 64/);
   await rechaza({ variants: uno, criteria: [{ field: "triangles", direction: "MEJOR" }] }, "invalid-request", /MENOR_MEJOR/);
   console.log("barrido: ok (una errata en un criterio se sabe con la base, antes de revisar variantes; nombres repetidos, «base», más de 64 o una dirección inventada se rechazan)");
+
+  // Repartos (encargo 05-A): el cubo de cube-v1 partido de tres maneras. Separar
+  // una cara abre 4 aristas, partirlo por la mitad 8, y alternar triángulos abre
+  // también las diagonales. El criterio es el borde total del corte.
+  writeCubePackage(w("cubo"));
+  const malla = w("cubo/mesh.ply");
+  const reparto = (...listas) => ({ partitionVersion: 1, parts: listas.map((triangles, i) => ({ name: `p${i}`, triangles })) });
+  const repartos = [
+    { name: "mitades", partition: reparto([0, 1, 2, 3, 4, 5], [6, 7, 8, 9, 10, 11]) },
+    { name: "una-cara", partition: reparto([0, 1], [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) },
+    { name: "salteado", partition: reparto([0, 2, 4, 6, 8, 10], [1, 3, 5, 7, 9, 11]) },
+  ];
+  const deRepartos = await handleRequest(
+    {
+      bridgeContractVersion: 1,
+      command: "sweep",
+      files: { model: { name: "mesh.ply", data: readFileSync(malla).toString("base64") } },
+      variants: repartos.map(({ name, partition }) => ({ name, partition: doc(partition) })),
+      criteria: [{ field: "cut.length", direction: MENOS }],
+      options: { fields: "cut,coverage" },
+    },
+    runAgent,
+  );
+  assert.equal(deRepartos.report.base, null, "un reparto no tiene base: la malla sin repartir no es un reparto");
+  for (const [index, { name, partition }] of repartos.entries()) {
+    writeFileSync(w(`r${index}.json`), `${JSON.stringify(partition)}\n`);
+    const suelta = cli(["--model", malla, "--partition", w(`r${index}.json`), "--fields", "cut,coverage"]);
+    assert.equal(suelta.exitCode, 0, "medir un reparto no tiene veredicto");
+    assert.deepEqual(deRepartos.report.variants[index].row, suelta.report, `${name}: la fila es la de su llamada suelta`);
+  }
+  assert.deepEqual(
+    deRepartos.report.variants.map(({ row }) => row.cut.edges),
+    [8, 4, 14],
+    "una cara abre 4 aristas, la mitad 8, y alternar triángulos 14 con las diagonales",
+  );
+  assert.equal(deRepartos.report.verdict, "una-cara");
+  assert.deepEqual(deRepartos.report.frontier, ["una-cara"]);
+  console.log(
+    "barrido: ok (tres repartos de cube-v1: cada fila es la de --partition suelto, una cara abre 4 aristas, la mitad 8 " +
+      "y alternar triángulos 14, y gana el corte más corto)",
+  );
 } finally {
   rmSync(work, { recursive: true, force: true });
 }
 
 console.log(
-  "barrido: fuera de alcance — los repartos del encargo 05-A no se barren todavía: `auditPartition` no se alcanza " +
-    "desde el CLI hasta el 5.2, y un barrido solo varía lo que el CLI sabe revisar",
+  "barrido: fuera de alcance — un barrido varía una sola cosa: parches o repartos, no los dos a la vez, porque un " +
+    "informe de revisión y uno de reparto no tienen criterios en común que cruzar",
 );

@@ -21,6 +21,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+import { SCHEMA_PART_NAMES } from "./agent3d.mjs";
+
 const execFileAsync = promisify(execFile);
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -126,7 +128,9 @@ try {
   //    de una vez para escribir un parche de tres líneas. La unión de las partes
   //    tiene que ser el completo —el completo se construye así, y esto comprueba
   //    que nadie ha metido una clave por fuera de las partes—.
-  const partes = ["scene", "patch", "story", "staging", "sample", "report", "codes"];
+  // Las partes, de la tabla del CLI y en su orden: escritas aquí a mano, una parte
+  // nueva habría puesto esto rojo sin que hubiera nada mal.
+  const partes = SCHEMA_PART_NAMES;
   const completo = JSON.parse((await runCli(["--schema"])).stdout);
   const union = { notes: [] };
   const tamaños = [];
@@ -141,7 +145,7 @@ try {
 
   const mala = await runCli(["--schema", "escena"]);
   assert.equal(mala.exitCode, 2);
-  assert.match(mala.stderr, /las partes son scene\|patch\|story\|staging\|sample\|report\|codes/);
+  assert.ok(mala.stderr.includes(`las partes son ${partes.join("|")}`), mala.stderr);
 
   console.log(
     `schema: ok (unión de ${partes.length} partes == completo de ` +

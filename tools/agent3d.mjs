@@ -73,6 +73,9 @@ import {
   hashSamplesAtFrames,
   parseGlbAnimation,
   validateSampleReference,
+  PARTITION_SCHEMA,
+  auditPartitionDocument,
+  parsePly,
 } from "../dist-node/agent3d.mjs";
 
 /**
@@ -481,6 +484,40 @@ async function diffModelFiles(options) {
     worstRelative: relative,
     budget: budget ?? null,
     warnings,
+  };
+}
+
+/**
+ * `--model malla --partition reparto.json`: las dos medidas del encargo 05-A
+ * —conservación y borde del corte— sobre un reparto que trae quien segmenta.
+ *
+ * La malla puede ser un PLY, que es como llega una reconstrucción fundida, o un
+ * GLB u OBJ, aplanado en el orden del fichero como en `--diff`: los triángulos del
+ * reparto se nombran por su índice en esa malla. **No hay veredicto** —igual que
+ * el módulo, que no decide si un corte es aceptable—, así que la orden sale 0 y
+ * los números los juzga quien reparte, con su presupuesto.
+ */
+async function auditPartitionFile(options) {
+  const modelPath = options.get("model");
+  if (modelPath === undefined || modelPath === "true") {
+    throw new Error("--partition necesita --model con la malla que se reparte");
+  }
+  const path = resolve(modelPath);
+  let mesh;
+  if (path.toLowerCase().endsWith(".ply")) {
+    const parsed = parsePly(new Uint8Array(await readFile(path))).mesh;
+    if (parsed === null) throw new Error(`${modelPath} es una nube de puntos: un reparto necesita caras`);
+    mesh = { ...parsed, normals: new Float32Array(0), uvs: new Float32Array(0), boundingRadius: 0 };
+  } else {
+    ({ mesh } = await loadFlattenedMesh(path));
+  }
+  const document = JSON.parse(await readFile(resolve(options.get("partition")), "utf8"));
+  return {
+    contractVersion: REPORT_CONTRACT_VERSION,
+    documentType: "softsight.partition-audit",
+    source: modelPath,
+    ...auditPartitionDocument(mesh, document),
+    warnings: [],
   };
 }
 
@@ -908,8 +945,16 @@ Otras
                           puede salir, de qué severidad y si trae arreglo—, todo
                           generado por el propio código. Sin argumento son ~40 KB
                           de una vez; con parte —scene|patch|story|staging|sample|
-                          report|codes— solo esa. El completo se construye
+                          partition|report|codes— solo esa. El completo se construye
                           uniendo las partes, así que no pueden divergir
+  --partition <j>         con --model: audita un reparto de la malla en piezas
+                          —el documento de --schema partition—: conservación,
+                          borde del corte de cada pieza y total. Sin veredicto:
+                          sale 0 y el umbral lo pone quien reparte
+  --status                la foto del repositorio en ~2 KB: versiones de
+                          contrato, estado de cada decisión, puertas, comandos
+                          del puente y herramientas MCP. Es docs/estado.json,
+                          generado por tools/estado.mjs: lo primero que leer
   --serve                 modo residente: peticiones NDJSON por stdin,
                           respuestas NDJSON por stdout, con el mismo contrato que
                           tools/bridge.mjs. El módulo se carga una vez y la caché
@@ -1002,6 +1047,12 @@ const SCHEMA_PARTS = {
     notes: ["staging es lo que el editor mide sobre un frame ya montado; SoftSight solo lo juzga."],
   }),
   sample: () => ({ sampleReference: SAMPLE_REFERENCE_SCHEMA, notes: [] }),
+  partition: () => ({
+    partition: PARTITION_SCHEMA,
+    notes: [
+      "partition es el reparto de una malla en piezas, para --partition: los triángulos se nombran por su índice en la malla aplanada.",
+    ],
+  }),
   report: () => ({
     reportExample: {
       contractVersion: REPORT_CONTRACT_VERSION,
@@ -1261,6 +1312,13 @@ async function main(argv) {
     printSchema(part === "true" ? undefined : part);
     return 0;
   }
+  // La foto del repositorio. Se lee del fichero generado y no se rehace aquí: la
+  // generan `tools/estado.mjs` y su puerta, que es lo que la mantiene al día, y
+  // rehacerla en el CLI sería un segundo original.
+  if (options.has("status")) {
+    emit(readFileSync(new URL("../docs/estado.json", import.meta.url), "utf8"));
+    return 0;
+  }
   // El guion tampoco es un modelo: no hay geometría que mirar, solo texto y
   // tiempo. Va antes por el mismo motivo que el BVH.
   if (options.has("story")) {
@@ -1284,6 +1342,13 @@ async function main(argv) {
     const report = await diffModelFiles(options);
     emitReport(report, options);
     return hasDefect(report.warnings) ? 1 : 0;
+  }
+  // El reparto tampoco revisa un modelo: mide cómo se partió. Va antes que
+  // `--model` por el mismo motivo que el diff.
+  if (options.has("partition")) {
+    const report = await auditPartitionFile(options);
+    emitReport(report, options);
+    return 0;
   }
   if (options.has("bvh")) {
     const report = await convertBvhFile(options);

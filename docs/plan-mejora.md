@@ -10,9 +10,9 @@ dejaron medido en agosto: **tres de esos números han vuelto a crecer**, la supe
 pensada para agentes —MCP— es **la única desde la que no se cierra el bucle
 principal**, y **el estado escrito en prosa se contradice de un documento a otro**.
 
-**Estado, 2026-11-17 (noche): fases 0 a 3 hechas, salvo 0.4.** Las 0 a 2 están en
-la PR #1; la 3, en `mejora/fase-3`, encima. `npm run verify` en verde: 62 puertas,
-371 comprobaciones, y el pliego del dron sigue en `46228b7c`. Lo que se movió:
+**Estado, 2026-11-17 (noche): fases 0 a 5 hechas, salvo 0.4 y 5.3 (R8).** Las 0 a 3
+están en `main` (PR #1 y #2); la 4 y la 5, en `mejora/fases-4-5`. Los recuentos ya no
+se escriben aquí: los da `node tools/agent3d.mjs --status`. Lo que se movió:
 
 | Medida | Antes | Ahora |
 |---|---|---|
@@ -30,6 +30,11 @@ la PR #1; la 3, en `mejora/fase-3`, encima. `npm run verify` en verde: 62 puerta
 | Equivalencia de la sesión | — | N turnos ≡ el CLI lanzado aparte con su propia cadena, pliego byte a byte |
 | K variantes (3.2) | K llamadas y K informes | `softsight_sweep`: una llamada, una tabla, la frontera; base y 4 variantes del dron sin pliego en 0,22–0,39 s, sin dejar entradas en `.cache/` |
 | MCP `tools/list` | 11.084 B, 14 herramientas | 16.632 B, 19: el techo sube a 17.500 a propósito |
+| Entrada de un agente frío (4.1) | ~134 KB de documentos | `--status`: 2.375 B, generado de sus fuentes |
+| Recuentos escritos a mano (4.2) | se contradecían entre documentos | generados; uno a mano en lo vigilado pone `test:estado` rojo |
+| Mapa §5 (4.3) | 55 KB de diario | 4,6 KB de lo abierto; el diario, íntegro, en `historial.md` |
+| Medidas de reconstrucción en CI (5.1) | solo el pliego del dron | también `cube-v1`: medidas, cobertura y confianza, en los dos sistemas |
+| Reparto de piezas (5.2) | solo una función exportada | `--partition`, `partition`, `softsight_partition`, `--schema partition` y barrido de repartos |
 
 0.4 no se hizo: el encargo 05-A no se puede escribir sin quien lo encargó, y
 inventar sus §2.1 y §2.2 sería falsificarlo.
@@ -435,10 +440,27 @@ de `agents-md.mjs`. Y una puerta comprueba que el título de cada decisión y la
 del §2 dicen lo mismo, que hoy no pasa con D12.
 *Prueba:* volver a escribir «siete herramientas» en el README pone la puerta roja.
 
+**4.1 y 4.2, hechas el 2026-11-17** en `tools/estado.mjs` y su puerta `test:estado`.
+El estado de cada decisión sale del sufijo de su título, que es la convención que el
+registro ya seguía; sin sufijo, ACORDADA. Con eso la tabla del §2 del contrato se
+genera, y D12 aparece en ella «a medias», como dice su título. La regla de la prosa
+vigila el README, `AGENTS.md`, el mapa §4 y el contrato §2: una cifra, o un número de
+siete en adelante con letra, delante de `herramientas`, `puertas` o `comprobaciones`
+fuera de un bloque generado es rojo. Del uno al seis con letra se deja pasar, porque
+«las dos puertas cruzadas» nombra cosas que se cuentan leyendo.
+
 **4.3 El mapa §5, en dos.** Un estado vigente, corto —lo abierto y su dueño—, y un
 `docs/historial.md` con el diario tal cual, sin reescribirlo, porque es registro.
 **Es decisión tuya** (§5): el documento es tuyo. La regla de que nadie más lleva la
 cuenta se mantiene; solo cambia la forma.
+
+**Hecha el 2026-11-17**, con el «ejecuta las fases 4 y 5» como respuesta. El diario
+—los puntos 1 a 22 y el párrafo del riesgo de la Fase D— se movió a `historial.md`
+sin cambiar una letra (comprobado: las 52.578 letras del diario están enteras, y el
+resto del mapa sale idéntico). Se quedan en el §5 lo abierto con su dueño y los avisos
+que siguen valiendo: el alcance de E4, medir fluidez y el trabajo de eficiencia sin
+fase. Las citas a «mapa §5.N» de documentos anteriores siguen sirviendo: el punto N
+del historial.
 
 ### Fase 5 — El programa: lo que el registro deja abierto
 
@@ -449,15 +471,35 @@ informe de `cube-v1` y sus fracciones de cobertura en un fichero como
 paralelas sigue abierta, porque esas reducciones siguen sin existir.
 *Versiones:* ninguna; es una puerta nueva sobre números que ya existen.
 
+**Hecho el 2026-11-17**, en `tools/render-hashes.mjs`, que es lo que CI corre en los
+dos sistemas: `cube-v1` se genera de nuevo, se mide dos veces sin caché y se compara
+contra `artifacts/agent/reconstruction-hashes.json`. **El consejo de captura no
+entra**, por H12. D28 no cambia de estado: es decisión del registro, y la mitad de
+plataforma pide que el trabajo de macOS llegue a correr —hoy GitHub lo deja en cola—.
+
 **5.2 El encargo 05-A, alcanzable.** Hoy `auditPartition` solo existe como función
 exportada. Le faltan `--partition` en el CLI, `partition` en el puente, su
 herramienta MCP y su parte de esquema. Con 3.2 se convierte en el primer consumidor
 real del barrido.
 
+**Hecho el 2026-11-17.** `--model malla --partition reparto.json` —PLY, GLB u OBJ—,
+`partition` en el puente, `softsight_partition`, `--schema partition`, y el barrido
+acepta variantes de reparto. Para el barrido hacía falta un número por variante, y
+`auditPartition` publica ahora `cut`: el total del corte con cada arista una vez,
+porque la que separa dos piezas está en las dos. Sin veredicto, como el módulo:
+sale 0. Con tres repartos del cubo, una cara abre 4 aristas, la mitad 8 y alternar
+triángulos 14, y gana el corte más corto.
+
 **5.3 La confianza que pide residuales (R8).** Es el paso grande que le queda a la
 reconstrucción: «¿coincide con lo que muestran las fotos?». Lo bloqueaba la
 superficie densa, que pide CUDA, y desde `ee6e8e0` el cuaderno de Colab la produce.
 Es una fase entera, y **es decisión tuya** si va antes o después de las anteriores.
+
+**No se hizo**, y no por falta de tiempo. El R8 de `plan-reconstruccion.md` son cuatro
+piezas —reproyección de máscaras, EXR, residuo de profundidad y residuo de normal—, y
+dos de ellas comparan contra mapas de profundidad que hoy no entrega ningún productor:
+el cuaderno de Colab saca malla densa, no mapas. Lo único que se puede hacer sin datos
+nuevos es la reproyección de máscaras, sobre siluetas sintéticas.
 
 **5.4 D5 (EXR)** se queda como está hasta que algún productor entregue mapas de
 profundidad. Un lector que no usa nadie sería una promesa sin prueba, que es

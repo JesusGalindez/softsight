@@ -87,16 +87,22 @@ reuniones periódicas                 las sustituye el aviso por evento
 
 ## 2. Estado del registro
 
-Al 2026-09-15:
+La tabla se genera de los títulos de cada decisión (`tools/estado.mjs`): el estado
+es el sufijo del título, y sin sufijo es ACORDADA. Así los dos no pueden decir cosas
+distintas, que es lo que pasaba con D12.
 
+<!-- generado: registro -->
 ```text
-ACORDADAS        3   D5, D26, D28
-PROPUESTAS       0
-IMPLEMENTADAS   31   D1, D2, D3, D4, D6, D7, D8, D9, D10, D11, D12, D13, D14,
-                     D15, D16, D17, D18, D19, D20, D21, D22, D23, D24, D25, D27,
-                     D29, D30, D31, D32, D33, D34
-PENDIENTE sin número   qué certifica R0 (§6, criterio aplicado y en uso)
+ACORDADAS                3   D5, D26, D28
+PROPUESTAS               0
+IMPLEMENTADAS           31   D1, D2, D3, D4, D6, D7, D8, D9, D10, D11,
+                             D12 (a medias), D13, D14, D15, D16, D17, D18, D19, D20, D21,
+                             D22, D23, D24, D25, D27, D29, D30, D31, D32, D33,
+                             D34
 ```
+<!-- /generado: registro -->
+
+Y PENDIENTE sin número: qué certifica R0 (§6, criterio aplicado y en uso).
 
 **D23, D29 y D34 pasaron el 2026-09-15, y las tres por lo mismo:** VideoMesh
 construyó su mitad. Ninguna esperaba código de este repositorio, y decirlo así
