@@ -1233,7 +1233,7 @@ function sha256Of(path) {
 
 // 7. Lo que sigue fuera, dicho en voz alta.
 console.log(
-  "reconstrucción: no ejecutada — el criterio de certificación de R0 sigue sin decisión con número y " +
+  "reconstrucción: fuera de alcance — el criterio de certificación de R0 sigue sin decisión con número y " +
     "va como pendiente en el envío. Cobertura y confianza **ya no**: entraron con R6 el 2026-09-13, " +
     "cuando `producers/colmap/` cumplió R0-B y D34 dejó de bloquearlas",
 );

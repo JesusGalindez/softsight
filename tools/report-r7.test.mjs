@@ -184,7 +184,7 @@ const manifestPath = join(raiz, "manifest.json");
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "r7: no ejecutada — los pliegos de contacto y los modos de diagnóstico que R7 también pide siguen " +
+  "r7: fuera de alcance — los pliegos de contacto y los modos de diagnóstico que R7 también pide siguen " +
     "fuera: el pliego existe para modelos (`renderContactSheet`) y atarlo a un paquete de " +
     "reconstrucción pide decidir qué vistas se rinden, que es criterio y no código",
 );

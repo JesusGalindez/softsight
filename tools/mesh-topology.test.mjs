@@ -233,6 +233,6 @@ function merge(a, b) {
 }
 
 console.log(
-  "topología: no ejecutada — la autointersección que R4 pide sigue fuera: en coma flotante no existe " +
+  "topología: fuera de alcance — la autointersección que R4 pide sigue fuera: en coma flotante no existe " +
     "el confirmado (§86.3 n), así que solo cabe como candidato con su epsilon, igual que el perfil 2D",
 );

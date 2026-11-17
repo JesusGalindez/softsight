@@ -200,7 +200,7 @@ function clasesPublicadas() {
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "d28: no ejecutada — faltan las dos mitades de su prueba, y **por motivos distintos**. Los «recuentos " +
+  "d28: fuera de alcance — faltan las dos mitades de su prueba, y **por motivos distintos**. Los «recuentos " +
     "exactos en macOS y Linux» piden una segunda plataforma que esta máquina no tiene y ningún " +
     "contenedor suple: es Darwin x86_64 y no hay docker. Y la independencia del número de workers no " +
     "se puede probar porque **no hay reducción paralela que probar**: `computeVisibility` es de un solo " +

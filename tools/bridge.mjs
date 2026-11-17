@@ -123,7 +123,7 @@ const MODEL_CACHE_DIR = process.env.SOFTSIGHT_BRIDGE_MODEL_CACHE ?? "";
 const MODEL_CACHE_MAX_BYTES = Number(process.env.SOFTSIGHT_BRIDGE_MODEL_CACHE_MAX_MB ?? 256) * 1024 * 1024;
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
-const COMMANDS = new Set([
+export const COMMANDS = new Set([
   "inspect", "render", "patch", "sample", "scene", "bvh", "story", "staging", "diff", "schema",
   "reconstructionInspect", "reconstructionCoverage", "reconstructionCompare", "productionValidate",
 ]);
@@ -662,6 +662,11 @@ export function errorResponse(error) {
 }
 
 async function main() {
+  // Cada petición lanza el CLI, que ya avisa por su stderr; pero el puente solo
+  // reenvía ese stderr con la salida 2, así que el aviso se da aquí también.
+  const { checkBuild } = await import("./buildFingerprint.mjs");
+  const build = checkBuild();
+  if (!build.fresh) process.stderr.write(`aviso: ${build.message}\n`);
   const input = await readStdin();
   let request;
   try {

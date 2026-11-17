@@ -255,7 +255,7 @@ if (!existsSync(join(escena, "images"))) {
 }
 
 console.log(
-  "superficie: no ejecutada — la malla sale de una nube **dispersa**, así que describe la fachada con " +
+  "superficie: fuera de alcance — la malla sale de una nube **dispersa**, así que describe la fachada con " +
     "el detalle que dan 16.000 puntos y no el de una reconstrucción densa. Para eso hace falta " +
     "profundidad, que exige CUDA en los dos caminos que existen (COLMAP y Meshroom) y no corre aquí",
 );

@@ -200,7 +200,7 @@ function conBaseCorta(camera, fraccion) {
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "confianza: no ejecutada — la confianza por **residuales** —¿la superficie coincide con lo que las " +
+  "confianza: fuera de alcance — la confianza por **residuales** —¿la superficie coincide con lo que las " +
     "fotos muestran?— es R8 y pide profundidad y máscaras. Esta es geométrica: dice desde dónde se " +
     "miró, no si lo que se ve encaja",
 );

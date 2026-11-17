@@ -189,7 +189,7 @@ if (!existsSync(join(escena, "images"))) {
 }
 
 console.log(
-  "productor: no ejecutada — R0-B pide además las tres comparaciones de D23 contra valores dorados, " +
+  "productor: fuera de alcance — R0-B pide además las tres comparaciones de D23 contra valores dorados, " +
     "y el paquete de arriba no declara malla, así que las de recuentos y caja no tienen qué comparar. " +
     "Llegan con un productor que entregue superficie",
 );

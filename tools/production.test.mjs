@@ -277,7 +277,7 @@ const escribir = (cambios = {}) => {
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "producción: no ejecutada — el manifest describe **mallas y nada más**: sin materiales, sin UV, sin " +
+  "producción: fuera de alcance — el manifest describe **mallas y nada más**: sin materiales, sin UV, sin " +
     "texturas. R12 y R13 son las que miden eso, y meterlas aquí habría hecho un documento que " +
     "describe mal las dos cosas",
 );

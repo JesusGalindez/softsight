@@ -190,7 +190,7 @@ const malla = (mesh) => ({
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "colisión: no ejecutada — **no propone un proxy**. Calcular un casco convexo o descomponer una " +
+  "colisión: fuera de alcance — **no propone un proxy**. Calcular un casco convexo o descomponer una " +
     "pieza en partes convexas es modelar, y en cuanto esto decidiera dónde va un vértice dejaría de " +
     "poder afirmar que sus números son exactos. Dice qué tiene el proxy que hay, no cuál debería ser",
 );

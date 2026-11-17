@@ -1023,6 +1023,10 @@ const SCHEMA_PARTS = {
   }),
 };
 
+/** Los nombres de las partes, para quien las enumera: el servidor MCP los usa en
+ * vez de copiarlos. */
+export const SCHEMA_PART_NAMES = Object.keys(SCHEMA_PARTS);
+
 /**
  * Une las partes pedidas. `softsight` va en todas: identifica quién responde y
  * son dos líneas, y sin él una parte suelta no se puede comparar contra el pin
@@ -1475,6 +1479,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const { serve } = await import("./serve.mjs");
     await serve(runAgent);
   } else {
+    // Antes que nada, que lo que va a responder sea lo que hay escrito en src/. Es
+    // un aviso y no un error: el informe sale igual, pero quien lo lee sabe que
+    // viene de la compilación anterior.
+    const { checkBuild } = await import("./buildFingerprint.mjs");
+    const build = checkBuild();
+    if (!build.fresh) process.stderr.write(`aviso: ${build.message}\n`);
     // Mensaje limpio, no volcado de pila: los errores de este CLI son de datos
     // —extensión no soportada, patrón sin coincidencias, fichero ilegible— y llevan
     // la corrección dentro. La pila solo estorba, y con `--debug` sigue disponible.

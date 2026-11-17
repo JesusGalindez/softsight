@@ -218,7 +218,7 @@ const quad = (uvs, indices = [0, 1, 2, 0, 2, 3]) => ({
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "uv: no ejecutada — de R13 falta lo que necesita **la textura como fichero**: auditoría de " +
+  "uv: fuera de alcance — de R13 falta lo que necesita **la textura como fichero**: auditoría de " +
     "tangentes, de imagen y de material. El manifest de producción todavía no las declara, y medir " +
     "densidad de téxel en téxeles de verdad —no por unidad de mundo— pide saber el tamaño de la imagen",
 );

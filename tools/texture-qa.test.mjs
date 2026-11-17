@@ -291,7 +291,7 @@ const imagen = (width, height, color) => {
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "textura: no ejecutada — la comprobación de normales **no prueba qué es la imagen**: un degradado " +
+  "textura: fuera de alcance — la comprobación de normales **no prueba qué es la imagen**: un degradado " +
     "azul la pasaría. Afirma que el contenido no se parece a lo que dice ser, y por eso el informe " +
     "publica los tres números y no solo el veredicto",
 );

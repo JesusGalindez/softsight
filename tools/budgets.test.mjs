@@ -280,7 +280,7 @@ const recuento = (name, max) => ({ name, units: "ABSOLUTE", unit: "unidades", ma
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "presupuestos: no ejecutada — el vocabulario deja fuera lo que el informe no publica —componentes " +
+  "presupuestos: fuera de alcance — el vocabulario deja fuera lo que el informe no publica —componentes " +
     "conexos, distancia de superficie—, porque presupuestar contra una medida que no sale en el " +
     "informe dejaría al productor sin poder comprobar por qué suspendió. Y `RELATIVE_TO_DIAGONAL` no " +
     "tiene todavía ningún término: el único que llevaría escala es el volumen, y una fracción de " +

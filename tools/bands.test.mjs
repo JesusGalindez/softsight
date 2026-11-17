@@ -213,7 +213,7 @@ console.log(
 }
 
 console.log(
-  "bandas: no ejecutada — la reducción en coma flotante que el §86.3 (m) teme, sumar distancias de " +
+  "bandas: fuera de alcance — la reducción en coma flotante que el §86.3 (m) teme, sumar distancias de " +
     "cobertura sobre millones de muestras, no existe todavía: la bloquea D34. Cuando llegue, el sitio " +
     "donde tiene que fallar es éste",
 );

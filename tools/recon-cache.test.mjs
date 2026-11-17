@@ -229,7 +229,7 @@ const conCache = { cacheRoot };
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "caché: no ejecutada — los otros seis directorios que el §55 pide (`parsed/`, `bvh/`, `adjacency/`, " +
+  "caché: fuera de alcance — los otros seis directorios que el §55 pide (`parsed/`, `bvh/`, `adjacency/`, " +
     "`samples/`, `coverage/`, `proxy/`) no existen: la visibilidad es la que cuesta —338 ms de los 439 " +
     "del informe sobre south-building— y cachear lo barato solo añade sitios donde equivocarse",
 );

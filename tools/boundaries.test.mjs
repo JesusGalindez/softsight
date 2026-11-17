@@ -268,7 +268,7 @@ function productorHaciaLaCasa(files, imports) {
 }
 
 console.log(
-  "frontera: no ejecutada — el sentido que D27 deja abierto sigue sin comprobarse: qué módulos del " +
+  "frontera: fuera de alcance — el sentido que D27 deja abierto sigue sin comprobarse: qué módulos del " +
     "núcleo pueden consumir las dos capas. Hoy son cinco —`mesh`, `boundsTree`, `inspect`, `schema` y " +
     "`versions`— y fijar esa lista sería convertir el estado actual en regla sin que nadie lo haya decidido",
 );

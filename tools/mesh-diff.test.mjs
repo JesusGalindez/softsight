@@ -315,7 +315,7 @@ const SAMPLES = 4_000;
 }
 
 console.log(
-  "diff: no ejecutada — comparar contra un presupuesto es R9 y necesita la escala (D9); aquí las " +
+  "diff: fuera de alcance — comparar contra un presupuesto es R9 y necesita la escala (D9); aquí las " +
     "distancias salen en unidades del paquete con la diagonal al lado. Y el diff sobre un paquete real " +
     "espera a que exista una reparación que comparar, que es R10",
 );

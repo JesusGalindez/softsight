@@ -277,7 +277,7 @@ const inspeccion = { bridgeContractVersion: 2, command: "reconstructionInspect",
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "transporte: no ejecutada — la opción 1 del §84 queda abierta solo para **lectura**; los artefactos " +
+  "transporte: fuera de alcance — la opción 1 del §84 queda abierta solo para **lectura**; los artefactos " +
     "siguen saliendo por el canal de siempre, así que un paquete que produjera 150 MB de salida " +
     "todavía no tiene por dónde devolverlos",
 );
