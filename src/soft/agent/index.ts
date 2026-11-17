@@ -285,6 +285,7 @@ export {
   EXTENSION_POLICY,
   PACKAGE_CODES,
   SUPPORTED_CAPABILITIES,
+  DEPTH_EXTENSION,
   MASK_EXTENSION,
   SUPPORTED_EXTENSIONS,
   exitCodeFor,
@@ -316,7 +317,12 @@ export { SELF_INTERSECTION_EPSILON, findSelfIntersections } from "./reconstructi
 export type { SelfIntersectionPair, SelfIntersectionReport } from "./reconstruction/selfIntersection";
 export type { BoundaryLoop, MeshComponent, MeshTopology } from "./reconstruction/meshTopology";
 export type { MeshDiff, MeshDiffOptions, SurfaceDistance, TopologyDelta } from "./reconstruction/meshDiff";
-export { projectPoint } from "./reconstruction/camera";
+export { pixelRay, projectPoint } from "./reconstruction/camera";
+export type { PixelRay } from "./reconstruction/camera";
+export { halfToFloat, parseExr } from "./reconstruction/exr";
+export type { ExrImage, ExrOptions } from "./reconstruction/exr";
+export { RESIDUAL_MAX_PIXELS, computeResiduals } from "./reconstruction/residuals";
+export type { DepthMap, DepthSet, Residuals } from "./reconstruction/residuals";
 export { COVERAGE_RAY_OFFSET, computeCoverage, coverageVerdict } from "./reconstruction/coverage";
 export type { Coverage, CoverageOptions, CoverageRegions } from "./reconstruction/coverage";
 export { sampleMesh } from "./reconstruction/surfaceSampling";

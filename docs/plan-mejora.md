@@ -10,8 +10,9 @@ dejaron medido en agosto: **tres de esos números han vuelto a crecer**, la supe
 pensada para agentes —MCP— es **la única desde la que no se cierra el bucle
 principal**, y **el estado escrito en prosa se contradice de un documento a otro**.
 
-**Estado, 2026-11-17 (noche): fases 0 a 5 hechas, salvo 0.4 y 5.3 (R8).** Las 0 a 3
-están en `main` (PR #1 y #2); la 4 y la 5, en `mejora/fases-4-5`. Los recuentos ya no
+**Estado, 2026-11-17 (noche): fases 0 a 5 hechas, salvo 0.4.** Las 0 a 3
+están en `main` (PR #1 y #2); la 4 y la 5, en `mejora/fases-4-5`; R8 (5.3), en
+`mejora/r8`, apilada sobre ella. Los recuentos ya no
 se escriben aquí: los da `node tools/agent3d.mjs --status`. Lo que se movió:
 
 | Medida | Antes | Ahora |
@@ -495,15 +496,27 @@ reconstrucción: «¿coincide con lo que muestran las fotos?». Lo bloqueaba la
 superficie densa, que pide CUDA, y desde `ee6e8e0` el cuaderno de Colab la produce.
 Es una fase entera, y **es decisión tuya** si va antes o después de las anteriores.
 
-**No se hizo**, y no por falta de tiempo. El R8 de `plan-reconstruccion.md` son cuatro
-piezas —reproyección de máscaras, EXR, residuo de profundidad y residuo de normal—, y
-dos de ellas comparan contra mapas de profundidad que hoy no entrega ningún productor:
-el cuaderno de Colab saca malla densa, no mapas. Lo único que se puede hacer sin datos
-nuevos es la reproyección de máscaras, sobre siluetas sintéticas.
+**Hecho el 2026-11-17, en `mejora/r8`.** Las cuatro piezas del R8 de
+`plan-reconstruccion.md`, en un bloque `residuals` del informe (versión 0.3):
 
-**5.4 D5 (EXR)** se queda como está hasta que algún productor entregue mapas de
-profundidad. Un lector que no usa nadie sería una promesa sin prueba, que es
-justo lo que el registro existe para impedir.
+```text
+máscaras      IoU, falsos positivos y negativos, distancia entre bordes
+EXR           lector de D5, sin IO: zlib la pasa quien llama
+profundidad   error medio, mediano, p95, máximo, sesgo y relativo
+normales      la de la malla contra la derivada del mapa de profundidad
+```
+
+Cada muestra de la imagen lanza su rayo con `pixelRay` —la inversa exacta de
+`projectPoint`, distorsión incluida— y lo cruza con el árbol de triángulos. La
+verdad de la puerta es una caja analítica cruzada por planos, no la malla.
+
+Lo que sigue sin datos reales es lo que ya se sabía: ningún productor entrega
+mapas de profundidad, y el cuaderno de Colab saca malla densa. La puerta prueba la
+aritmética y la convención de cámara sobre evidencia fabricada.
+
+**5.4 D5 (EXR).** El lector existe y la decisión **no** cambia de estado: ver la
+nota de D5 en el contrato. Es un lector que todavía no usa nadie, y por eso lo
+dice el registro en vez de darlo por implementado.
 
 ---
 
@@ -543,4 +556,4 @@ justo lo que el registro existe para impedir.
    atrás.
 2. **`.mcp.json` y el `.gitignore` de `.claude/`** (1.6).
 3. **El mapa §5 partido en estado e historial** (4.3).
-4. **Si R8 va antes o después que las sesiones** (5.3).
+4. ~~**Si R8 va antes o después que las sesiones** (5.3).~~ Decidido: R8 ahora.

@@ -38,6 +38,7 @@
     "test:confidence": "npm run build:agent3d && node tools/confidence.test.mjs",
     "test:coverage": "npm run build:agent3d && node tools/coverage.test.mjs",
     "test:masks": "npm run build:agent3d && node tools/masks.test.mjs",
+    "test:residuals": "npm run build:agent3d && node tools/residuals.test.mjs",
     "test:parity": "npm run build:agent3d && node tools/parity.test.mjs",
     "test:capture-advice": "npm run build:agent3d && node tools/capture-advice.test.mjs",
     "test:budgets": "npm run build:agent3d && node tools/budgets.test.mjs",

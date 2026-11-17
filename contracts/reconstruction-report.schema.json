@@ -877,6 +877,398 @@
       },
       "description": "Los presupuestos que el paquete declaró, evaluados contra lo medido (R9), en el orden en que los escribió. **Uno excedido suspende**: el límite lo puso el productor, y aprobar por encima de él convertiría el campo en decoración. Vacío cuando el paquete no declaró ninguno."
     },
+    "residuals": {
+      "type": "object",
+      "properties": {
+        "measurementClass": {
+          "type": "string",
+          "enum": [
+            "EXACT",
+            "APPROXIMATE",
+            "EXTERNAL_MEASUREMENT"
+          ],
+          "description": "EXTERNAL_MEASUREMENT: se compara contra la medida de otro."
+        },
+        "reproducibility": {
+          "type": "string",
+          "enum": [
+            "BITWISE_EXACT",
+            "QUANTIZED",
+            "TOLERANCE"
+          ],
+          "description": "BITWISE_EXACT: rejilla fija, sin muestreo aleatorio."
+        },
+        "maxPixelsPerCamera": {
+          "type": "number",
+          "description": "Por encima, la rejilla pasa a tener paso, y el paso se publica por cámara."
+        },
+        "masks": {
+          "type": "object",
+          "properties": {
+            "cameras": {
+              "type": "number",
+              "description": "Cámaras con máscara comparadas."
+            },
+            "iou": {
+              "type": "number",
+              "description": "Intersección sobre unión, sumando todas las cámaras."
+            },
+            "falsePositiveRatio": {
+              "type": "number",
+              "description": "De la silueta de la malla, la fracción fuera de la máscara."
+            },
+            "falseNegativeRatio": {
+              "type": "number",
+              "description": "De la máscara, la fracción que la malla no cubre."
+            },
+            "byCamera": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "cameraId": {
+                    "type": "string",
+                    "description": "La cámara."
+                  },
+                  "stride": {
+                    "type": "number",
+                    "description": "Paso de la rejilla, en píxeles de la máscara."
+                  },
+                  "samples": {
+                    "type": "number",
+                    "description": "Muestras comparadas."
+                  },
+                  "unevaluated": {
+                    "type": "number",
+                    "description": "Muestras sin rayo: la distorsión no converge ahí."
+                  },
+                  "meshPixels": {
+                    "type": "number",
+                    "description": "Muestras donde la malla tiene superficie."
+                  },
+                  "maskPixels": {
+                    "type": "number",
+                    "description": "Muestras dentro de la máscara."
+                  },
+                  "intersection": {
+                    "type": "number",
+                    "description": "Muestras en las dos."
+                  },
+                  "iou": {
+                    "type": "number",
+                    "description": "Ausente si ninguna de las dos tiene silueta."
+                  },
+                  "falsePositiveRatio": {
+                    "type": "number",
+                    "description": "Ausente si la malla no tiene silueta aquí."
+                  },
+                  "falseNegativeRatio": {
+                    "type": "number",
+                    "description": "Ausente si la máscara está vacía."
+                  },
+                  "boundary": {
+                    "type": "object",
+                    "properties": {
+                      "meshToMaskMean": {
+                        "type": "number",
+                        "description": "Media, del borde de la malla al de la máscara."
+                      },
+                      "meshToMaskMax": {
+                        "type": "number",
+                        "description": "Máximo, en ese sentido."
+                      },
+                      "maskToMeshMean": {
+                        "type": "number",
+                        "description": "Media, del borde de la máscara al de la malla."
+                      },
+                      "maskToMeshMax": {
+                        "type": "number",
+                        "description": "Máximo, en ese sentido."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "meshToMaskMean",
+                      "meshToMaskMax",
+                      "maskToMeshMean",
+                      "maskToMeshMax"
+                    ],
+                    "description": "Distancia entre los bordes de las dos siluetas, en píxeles de la imagen."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "cameraId",
+                  "stride",
+                  "samples",
+                  "unevaluated",
+                  "meshPixels",
+                  "maskPixels",
+                  "intersection"
+                ]
+              },
+              "description": "Lo mismo, cámara a cámara, en orden de identidad."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "cameras",
+            "byCamera"
+          ],
+          "description": "Silueta de la malla contra la máscara de cada cámara (§37)."
+        },
+        "depth": {
+          "type": "object",
+          "properties": {
+            "cameras": {
+              "type": "number",
+              "description": "Cámaras con mapa comparadas."
+            },
+            "compared": {
+              "type": "number",
+              "description": "Muestras donde la fuente midió y la malla tiene superficie."
+            },
+            "sourceInvalidRatio": {
+              "type": "number",
+              "description": "Fracción de muestras sin medida en la fuente."
+            },
+            "meshMissRatio": {
+              "type": "number",
+              "description": "De lo que la fuente midió, la fracción donde la malla no tiene superficie."
+            },
+            "meshOnlyRatio": {
+              "type": "number",
+              "description": "De lo que la fuente no midió, la fracción donde la malla sí la tiene."
+            },
+            "stats": {
+              "type": "object",
+              "properties": {
+                "meanAbs": {
+                  "type": "number",
+                  "description": "Error absoluto medio."
+                },
+                "medianAbs": {
+                  "type": "number",
+                  "description": "Mediana del error absoluto."
+                },
+                "p95Abs": {
+                  "type": "number",
+                  "description": "Percentil 95 del error absoluto, por rango más próximo."
+                },
+                "maxAbs": {
+                  "type": "number",
+                  "description": "El peor."
+                },
+                "meanSigned": {
+                  "type": "number",
+                  "description": "Media con signo, malla menos fuente: el sesgo."
+                },
+                "medianRelative": {
+                  "type": "number",
+                  "description": "Mediana del error absoluto entre la profundidad de la fuente."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "meanAbs",
+                "medianAbs",
+                "p95Abs",
+                "maxAbs",
+                "meanSigned",
+                "medianRelative"
+              ],
+              "description": "El error, sumando todas las cámaras."
+            },
+            "meanAbsRelativeToDiagonal": {
+              "type": "number",
+              "description": "El error absoluto medio en fracción de la diagonal de lo medido."
+            },
+            "byCamera": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "cameraId": {
+                    "type": "string",
+                    "description": "La cámara."
+                  },
+                  "depthKind": {
+                    "type": "string",
+                    "enum": [
+                      "OPTICAL_AXIS",
+                      "RAY_LENGTH"
+                    ],
+                    "description": "Qué número es cada píxel (D20)."
+                  },
+                  "stride": {
+                    "type": "number",
+                    "description": "Paso de la rejilla, en píxeles del mapa."
+                  },
+                  "samples": {
+                    "type": "number",
+                    "description": "Muestras con rayo."
+                  },
+                  "unevaluated": {
+                    "type": "number",
+                    "description": "Muestras sin rayo."
+                  },
+                  "compared": {
+                    "type": "number",
+                    "description": "Muestras comparadas."
+                  },
+                  "sourceInvalidRatio": {
+                    "type": "number",
+                    "description": "Fracción sin medida en la fuente."
+                  },
+                  "meshMissRatio": {
+                    "type": "number",
+                    "description": "Fuente con medida y malla sin superficie."
+                  },
+                  "meshOnlyRatio": {
+                    "type": "number",
+                    "description": "Malla con superficie y fuente sin medida."
+                  },
+                  "stats": {
+                    "type": "object",
+                    "properties": {
+                      "meanAbs": {
+                        "type": "number",
+                        "description": "Error absoluto medio."
+                      },
+                      "medianAbs": {
+                        "type": "number",
+                        "description": "Mediana del error absoluto."
+                      },
+                      "p95Abs": {
+                        "type": "number",
+                        "description": "Percentil 95 del error absoluto, por rango más próximo."
+                      },
+                      "maxAbs": {
+                        "type": "number",
+                        "description": "El peor."
+                      },
+                      "meanSigned": {
+                        "type": "number",
+                        "description": "Media con signo, malla menos fuente: el sesgo."
+                      },
+                      "medianRelative": {
+                        "type": "number",
+                        "description": "Mediana del error absoluto entre la profundidad de la fuente."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "meanAbs",
+                      "medianAbs",
+                      "p95Abs",
+                      "maxAbs",
+                      "meanSigned",
+                      "medianRelative"
+                    ],
+                    "description": "El error en esta cámara."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "cameraId",
+                  "depthKind",
+                  "stride",
+                  "samples",
+                  "unevaluated",
+                  "compared",
+                  "sourceInvalidRatio"
+                ]
+              },
+              "description": "Lo mismo, cámara a cámara."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "cameras",
+            "compared",
+            "sourceInvalidRatio",
+            "byCamera"
+          ],
+          "description": "Profundidad de la malla contra los mapas de profundidad del productor (§38). En unidades del paquete, con la diagonal al lado para relativizar (D9)."
+        },
+        "normals": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "enum": [
+                "DERIVADA_DE_PROFUNDIDAD"
+              ],
+              "description": "De dónde sale la normal de la fuente."
+            },
+            "samples": {
+              "type": "number",
+              "description": "Muestras con las cuatro vecinas medidas."
+            },
+            "medianDegrees": {
+              "type": "number",
+              "description": "Mediana, en grados. Ausente sin muestras."
+            },
+            "p95Degrees": {
+              "type": "number",
+              "description": "Percentil 95, en grados."
+            },
+            "maxDegrees": {
+              "type": "number",
+              "description": "El peor, en grados."
+            },
+            "byCamera": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "cameraId": {
+                    "type": "string",
+                    "description": "La cámara."
+                  },
+                  "samples": {
+                    "type": "number",
+                    "description": "Muestras con las cuatro vecinas medidas."
+                  },
+                  "medianDegrees": {
+                    "type": "number",
+                    "description": "Mediana, en grados. Ausente sin muestras."
+                  },
+                  "p95Degrees": {
+                    "type": "number",
+                    "description": "Percentil 95, en grados."
+                  },
+                  "maxDegrees": {
+                    "type": "number",
+                    "description": "El peor, en grados."
+                  }
+                },
+                "additionalProperties": false,
+                "required": [
+                  "cameraId",
+                  "samples"
+                ]
+              },
+              "description": "Lo mismo, cámara a cámara."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "samples",
+            "byCamera"
+          ],
+          "description": "Ángulo entre la normal de la malla y la de la fuente (§39). La de la fuente se deriva de su mapa de profundidad —el paquete no trae mapas de normales—, y en las aristas queda entre dos caras."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "measurementClass",
+        "reproducibility",
+        "maxPixelsPerCamera"
+      ],
+      "description": "La malla contra la evidencia de origen (R8): su silueta contra las máscaras y su profundidad contra los mapas de profundidad, un rayo por muestra de la imagen. Ausente cuando el paquete no trae ninguna de las dos. **Sin umbrales ni veredicto**: qué IoU o qué error basta lo decide quien usa la pieza. Lo que no se pudo medir no sale, en vez de salir a cero."
+    },
     "captureAdvice": {
       "type": "object",
       "properties": {

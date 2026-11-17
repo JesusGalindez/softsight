@@ -81,7 +81,12 @@ export const CONTRACT_VERSIONS = {
     //
     // El paquete de entrada **no sube**: su esquema no ha cambiado. Subirlo por
     // acompañar obligaría a VideoMesh a regenerar modelos que están bien.
-    value: "0.2",
+    //
+    // 0.2 → 0.3 el 2026-11-17: entra el bloque `residuals` (R8), la malla contra
+    // las máscaras y la profundidad. Es opcional y aditivo, y sube igual: un
+    // consumidor que valide contra el esquema publicado con campo desconocido es
+    // error (D30) rechazaría el informe nuevo, así que para él cambió el documento.
+    value: "0.3",
     governs: "el informe de reconstrucción que sale",
     consumer: "VideoMesh, que lo lee",
   },

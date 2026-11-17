@@ -146,3 +146,82 @@ export function projectPoint(camera: PackageCamera, point: readonly number[]): P
     inside: forward > 0 && pixelX >= 0 && pixelY >= 0 && pixelX < camera.width && pixelY < camera.height,
   };
 }
+
+/** Un rayo del mundo: de dónde sale y hacia dónde va. */
+export interface PixelRay {
+  origin: [number, number, number];
+  /**
+   * Dirección **sin normalizar**, con componente 1 sobre el eje óptico en el marco
+   * de la cámara. Así la distancia que devuelve un trazado es directamente la
+   * profundidad sobre el eje óptico, y la longitud del rayo es esa distancia por
+   * la norma de este vector: las dos interpretaciones de `depthKind` (D20) salen
+   * del mismo cruce sin trigonometría.
+   */
+  direction: [number, number, number];
+  /** Norma de `direction`, para pasar de eje óptico a longitud de rayo. */
+  length: number;
+}
+
+/** Iteraciones de punto fijo para deshacer la distorsión, y su tolerancia. */
+const UNDISTORT_ITERATIONS = 50;
+const UNDISTORT_TOLERANCE = 1e-12;
+
+/**
+ * El rayo que proyecta en `(x, y)`: la inversa exacta de `projectPoint`.
+ *
+ * Deshace los mismos pasos en orden inverso —el medio píxel de `CORNER`, la fila
+ * contada desde abajo de `BOTTOM_LEFT`, los intrínsecos, la distorsión y los ejes
+ * de la cámara— y por eso vive aquí, al lado de la proyección: dos módulos con su
+ * propia idea de dónde cae el centro del píxel darían siluetas desplazadas medio
+ * píxel sin que nada fallara. La puerta lo comprueba en la dirección que importa:
+ * cualquier punto del rayo vuelve a proyectar en `(x, y)`.
+ *
+ * La distorsión se deshace por punto fijo, que es lo habitual y converge para las
+ * distorsiones de una cámara real. Si no converge, `null`: un píxel cuyo rayo no
+ * se sabe no se compara, y fingir uno pondría superficie donde nadie la midió.
+ */
+export function pixelRay(camera: PackageCamera, x: number, y: number): PixelRay | null {
+  let pixelX = x;
+  let pixelY = y;
+  if (camera.pixelCenter === "CORNER") {
+    pixelX += 0.5;
+    pixelY += 0.5;
+  }
+  if (camera.pixelOrigin === "BOTTOM_LEFT") pixelY = camera.height - pixelY;
+
+  const { fx, fy, cx, cy } = camera.intrinsics;
+  const distortedX = (pixelX - cx) / fx;
+  const distortedY = (pixelY - cy) / fy;
+  let normalizedX = distortedX;
+  let normalizedY = distortedY;
+  if (camera.distortion !== undefined) {
+    let converged = false;
+    for (let iteration = 0; iteration < UNDISTORT_ITERATIONS; iteration += 1) {
+      const [px, py] = distort(camera.distortion, normalizedX, normalizedY);
+      const errorX = distortedX - px;
+      const errorY = distortedY - py;
+      normalizedX += errorX;
+      normalizedY += errorY;
+      if (Math.abs(errorX) < UNDISTORT_TOLERANCE && Math.abs(errorY) < UNDISTORT_TOLERANCE) {
+        converged = true;
+        break;
+      }
+    }
+    if (!converged) return null;
+  }
+
+  // En el marco de la cámara, con la componente sobre el eje óptico a 1.
+  const yDown = camera.cameraAxes === "X_RIGHT_Y_DOWN_Z_FORWARD";
+  const local = [normalizedX, yDown ? normalizedY : -normalizedY, yDown ? 1 : -1];
+  const m = camera.worldFromCamera;
+  const direction: [number, number, number] = [
+    m[0] * local[0] + m[1] * local[1] + m[2] * local[2],
+    m[4] * local[0] + m[5] * local[1] + m[6] * local[2],
+    m[8] * local[0] + m[9] * local[1] + m[10] * local[2],
+  ];
+  return {
+    origin: [m[3], m[7], m[11]],
+    direction,
+    length: Math.hypot(local[0], local[1], local[2]),
+  };
+}

@@ -35,8 +35,8 @@
  * nada. Una puerta de VideoMesh compara sus motivos contra esta tabla y se pone
  * roja si aquí se renombra uno.
  *
- * Ya no queda ningún `PROPUESTO`. El tipo se conserva porque el siguiente código
- * nuevo volverá a nacer así.
+ * Desde entonces volvió a nacer uno, como se esperaba: `SS-CAM-008`, de R8
+ * (2026-11-17), que espera la respuesta de VideoMesh igual que esperaron aquellos.
  */
 
 export type CodeStatus = "FIJADO" | "PROPUESTO";
@@ -233,6 +233,12 @@ export const PACKAGE_CODE_TABLE = {
     status: "FIJADO",
     decision: "D33 fija que las dimensiones describen la rejilla real, número fijado por D2 el 2026-09-15",
   },
+  "SS-CAM-008": {
+    reason: "PROFUNDIDAD_NO_APLICABLE",
+    cause: "un mapa de profundidad declarado no se puede leer, no declara cómo, o no describe la rejilla de su cámara; no se compara y se dice en vez de medir contra un número que no se sabe qué es",
+    status: "PROPUESTO",
+    decision: "R8 y D5, propuesto el 2026-11-17 y sin número acordado: lo fija D2 cuando VideoMesh lo acepte",
+  },
   "SS-CAM-007": {
     reason: "MASCARA_NO_APLICABLE",
     cause: "una máscara declarada no describe el encuadre de su cámara, o apunta a algo que no está, o no se puede leer; no se aplica y se dice en vez de medir con media silueta",
@@ -309,8 +315,8 @@ export const PACKAGE_CODE_LIST: Array<PackageCodeEntry & { code: string }> = Obj
 /**
  * Los que todavía no tienen número acordado: se envían, no se dan por buenos.
  *
- * Hoy está vacía, desde que VideoMesh contestó el 2026-09-15. Se conserva porque
- * el siguiente código nuevo volverá a nacer `PROPUESTO`, y porque la lista va
+ * Estuvo vacía desde que VideoMesh contestó el 2026-09-15 hasta R8, que trajo
+ * `SS-CAM-008` el 2026-11-17. Se conserva además porque la lista va
  * anotada con `PackageCodeEntry`: sin esa anotación, `as const` estrecha `status`
  * a los literales que hay hoy y el compilador declara imposible una comparación
  * que solo es imposible **por ahora**.

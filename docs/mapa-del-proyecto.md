@@ -145,7 +145,7 @@ tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
 alcance, con los recuentos generados por `tools/estado.mjs`:
 
 <!-- generado: puertas-ci -->
-La suite (`npm run test:animation`) son 63 puertas. Estas 5 leen el fixture certificado del editor, que es un repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su motivo impreso — `animation-contract`, `bridge`, `glb-loader`, `glb-writer`, `sample-surface`. Fuera de la suite quedan `test:determinism`, `test:model-cache`, `test:worker`; de esas, CI corre `test:determinism` aparte, en dos sistemas.
+La suite (`npm run test:animation`) son 64 puertas. Estas 5 leen el fixture certificado del editor, que es un repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su motivo impreso — `animation-contract`, `bridge`, `glb-loader`, `glb-writer`, `sample-surface`. Fuera de la suite quedan `test:determinism`, `test:model-cache`, `test:worker`; de esas, CI corre `test:determinism` aparte, en dos sistemas.
 <!-- /generado: puertas-ci -->
 
 Las que piden el fixture del editor solo las cierra una ejecución local con los dos
@@ -182,9 +182,10 @@ historial—. Los recuentos no se escriben a mano en ningún sitio: los da
 **De este repositorio, sin dueño todavía.** El detalle de cada uno, con su medida, en
 [`plan-mejora.md`](plan-mejora.md).
 
-- **R8, los residuales multivista** —reproyección de máscaras, EXR (D5), residuo de
-  profundidad y de normal—. Es el paso grande que le queda a la reconstrucción, y la
-  mitad espera a un productor que entregue mapas de profundidad.
+- **R8 sobre datos reales.** Los residuales están hechos (historial §23), probados
+  sobre evidencia fabricada. Falta un productor que entregue máscaras y mapas de
+  profundidad, y el envío a VideoMesh que todavía no se ha escrito: el informe sube a
+  0.3, la extensión `org.softsight.profundidad` y `SS-CAM-008`, que nace PROPUESTO.
 - **H11**: el veredicto de R9 no es dominancia con tres candidatos o más. Alinearlo es
   decisión de quien consume el cruce.
 - **H12**: el consejo de captura no es reproducible al bit dentro de un mismo proceso,

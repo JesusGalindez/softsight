@@ -712,6 +712,17 @@ Hoy es la historia de cómo se llegó aquí, en el orden en que se hizo.
     encargo 05-A sigue sin documento. Ningún hash se movió: el pliego del
     dron sigue en `46228b7c`, `contractVersion` en 3 y `bridgeContractVersion` en 2.
 
+23. **R8 — la malla contra la evidencia de origen** (2026-11-17, `mejora/r8`). El
+    informe de reconstrucción gana el bloque `residuals` y sube a 0.3: la silueta de
+    la malla contra cada máscara —IoU, falsos positivos y negativos, distancia entre
+    bordes—, su profundidad contra cada mapa —medio, mediano, p95, máximo, sesgo y
+    relativo— y su normal contra la que se deriva del mapa. Cada muestra lanza su
+    rayo con `pixelRay`, la inversa exacta de `projectPoint`, y el lector EXR de D5
+    no toca disco ni zlib. Los mapas se declaran en la extensión experimental
+    `org.softsight.profundidad`, y lo que no encaja se avisa con `SS-CAM-008`,
+    PROPUESTO. D5 no cambia de estado: ningún productor entrega todavía mapas, y la
+    verdad de `test:residuals` es una caja analítica cruzada por planos.
+
 Riesgo declarado: D era el mayor cuello de botella, porque el editor dependía
 del CLI por proceso. El puente lo cierra: el editor habla con un proceso local
 por JSON, y la forma del contrato sale de `--schema`, que no puede divergir.

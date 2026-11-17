@@ -34,6 +34,7 @@ import { computeCaptureAdvice, type CaptureAdvice } from "./captureAdvice";
 import { evaluateBudgets, type BudgetResult, type DeclaredBudget } from "./budgets";
 import type { MaskSet } from "./masks";
 import { computeConfidence, type Confidence } from "./confidence";
+import { computeResiduals, type DepthSet, type Residuals } from "./residuals";
 import type { IngestIssue, IngestResult } from "./ingest";
 import { RESOURCE_LIMIT_LIST } from "./limits";
 
@@ -77,6 +78,12 @@ export interface ReportInput {
     samples?: number;
     /** Siluetas por identidad de cámara, si el paquete las declaró. */
     masks?: MaskSet;
+    /**
+     * Mapas de profundidad ya decodificados, por identidad de cámara (R8). Los
+     * decodifica quien leyó el paquete, con lo que el manifest declara de cada
+     * canal: aquí no se abre un EXR.
+     */
+    depth?: DepthSet;
     /**
      * La visibilidad ya calculada, si quien leyó el paquete la tenía guardada.
      *
@@ -242,6 +249,12 @@ export interface ReconstructionReport {
   confidence?: Confidence;
   /** R9: desde dónde disparar la próxima foto. Ausente por lo mismo que los dos de arriba. */
   captureAdvice?: CaptureAdvice;
+  /**
+   * R8: la malla contra la evidencia de origen —máscaras y profundidad—. Ausente
+   * cuando el paquete no trae ninguna de las dos: sin evidencia con la que
+   * comparar, un bloque a cero diría que coincide.
+   */
+  residuals?: Residuals;
   /** R9: los presupuestos del paquete contra lo medido. Vacío si no declaró ninguno. */
   budgets: BudgetResult[];
   /** R10: qué se puede reparar sin inventar nada. Ausente si no hay malla medida. */
@@ -376,6 +389,7 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
   let coverage: Coverage | undefined;
   let confidence: Confidence | undefined;
   let captureAdvice: CaptureAdvice | undefined;
+  let residuals: Residuals | undefined;
   // La visibilidad y la topología se guardan para R10, que las necesita para
   // decir si un agujero cae donde alguien miró. **Solo de la malla que se cruzó
   // con las cámaras**: recorrer la topología de todas duplicaría la soldadura de
@@ -398,6 +412,15 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
     // un consejo calculado sobre otro muestreo aconsejaría cubrir una carencia
     // que el informe no publica.
     captureAdvice = computeCaptureAdvice(mesh, cameras, { visibility, samples });
+    // R8: no comparte la visibilidad —esa muestrea la superficie, y esto muestrea
+    // las imágenes— pero sí las cámaras, y la diagonal con la que se relativiza.
+    residuals = computeResiduals({
+      mesh,
+      cameras,
+      masks: input.surface.masks,
+      depth: input.surface.depth,
+      diagonal: diagonalOf(measurements),
+    });
 
     // Los avisos llevan sus números (§53). Uno que solo dijera «hay superficie sin
     // ver» obliga a recalcularlo para saber si es el 2 % o el 40 %, y a
@@ -549,6 +572,7 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
       withImage: cameras.filter((camera) => imageIds.has(camera.imageArtifactId as string)).length,
     },
     ...(coverage === undefined ? {} : { coverage, confidence, captureAdvice }),
+    ...(residuals === undefined ? {} : { residuals }),
     budgets,
     ...(repairBoundary === undefined ? {} : { repairBoundary }),
     // Los de la superficie **detrás** de los de la ingesta: primero por qué el
@@ -556,6 +580,24 @@ export function buildReconstructionReport(input: ReportInput): ReconstructionRep
     warnings: [...ingest.issues, ...surfaceWarnings],
   };
 }
+
+/** Las estadísticas de un error de profundidad (R8), en los dos sitios donde salen. */
+const DEPTH_STATS_FIELDS: ObjectSchema = {
+  meanAbs: { type: "number", required: true, description: "Error absoluto medio." },
+  medianAbs: { type: "number", required: true, description: "Mediana del error absoluto." },
+  p95Abs: { type: "number", required: true, description: "Percentil 95 del error absoluto, por rango más próximo." },
+  maxAbs: { type: "number", required: true, description: "El peor." },
+  meanSigned: { type: "number", required: true, description: "Media con signo, malla menos fuente: el sesgo." },
+  medianRelative: { type: "number", required: true, description: "Mediana del error absoluto entre la profundidad de la fuente." },
+};
+
+/** Las estadísticas de un ángulo de normales (R8). */
+const NORMAL_STATS_FIELDS: ObjectSchema = {
+  samples: { type: "number", required: true, description: "Muestras con las cuatro vecinas medidas." },
+  medianDegrees: { type: "number", description: "Mediana, en grados. Ausente sin muestras." },
+  p95Degrees: { type: "number", description: "Percentil 95, en grados." },
+  maxDegrees: { type: "number", description: "El peor, en grados." },
+};
 
 /**
  * La forma del informe, publicada como frontera igual que la del paquete: es el
@@ -931,6 +973,104 @@ export const RECONSTRUCTION_REPORT_SCHEMA: ObjectSchema = {
           "`METRICA_REQUERIDA_NO_DISPONIBLE` cuando el término se entiende y el dato falta, y ese sí " +
           "deja el paquete inconcluso. `UNIDAD_DE_PRESUPUESTO_MAL_DECLARADA` cuando un recuento o una " +
           "fracción se declaran relativos a la diagonal.",
+      },
+    },
+  },
+  residuals: {
+    type: "object",
+    description:
+      "La malla contra la evidencia de origen (R8): su silueta contra las máscaras y su profundidad " +
+      "contra los mapas de profundidad, un rayo por muestra de la imagen. Ausente cuando el paquete no " +
+      "trae ninguna de las dos. **Sin umbrales ni veredicto**: qué IoU o qué error basta lo decide quien " +
+      "usa la pieza. Lo que no se pudo medir no sale, en vez de salir a cero.",
+    fields: {
+      measurementClass: { type: MEASUREMENT_CLASS_TYPE, required: true, description: "EXTERNAL_MEASUREMENT: se compara contra la medida de otro." },
+      reproducibility: { type: REPRODUCIBILITY_TYPE, required: true, description: "BITWISE_EXACT: rejilla fija, sin muestreo aleatorio." },
+      maxPixelsPerCamera: { type: "number", required: true, description: "Por encima, la rejilla pasa a tener paso, y el paso se publica por cámara." },
+      masks: {
+        type: "object",
+        description: "Silueta de la malla contra la máscara de cada cámara (§37).",
+        fields: {
+          cameras: { type: "number", required: true, description: "Cámaras con máscara comparadas." },
+          iou: { type: "number", description: "Intersección sobre unión, sumando todas las cámaras." },
+          falsePositiveRatio: { type: "number", description: "De la silueta de la malla, la fracción fuera de la máscara." },
+          falseNegativeRatio: { type: "number", description: "De la máscara, la fracción que la malla no cubre." },
+          byCamera: {
+            type: "object[]",
+            required: true,
+            description: "Lo mismo, cámara a cámara, en orden de identidad.",
+            fields: {
+              cameraId: { type: "string", required: true, description: "La cámara." },
+              stride: { type: "number", required: true, description: "Paso de la rejilla, en píxeles de la máscara." },
+              samples: { type: "number", required: true, description: "Muestras comparadas." },
+              unevaluated: { type: "number", required: true, description: "Muestras sin rayo: la distorsión no converge ahí." },
+              meshPixels: { type: "number", required: true, description: "Muestras donde la malla tiene superficie." },
+              maskPixels: { type: "number", required: true, description: "Muestras dentro de la máscara." },
+              intersection: { type: "number", required: true, description: "Muestras en las dos." },
+              iou: { type: "number", description: "Ausente si ninguna de las dos tiene silueta." },
+              falsePositiveRatio: { type: "number", description: "Ausente si la malla no tiene silueta aquí." },
+              falseNegativeRatio: { type: "number", description: "Ausente si la máscara está vacía." },
+              boundary: {
+                type: "object",
+                description: "Distancia entre los bordes de las dos siluetas, en píxeles de la imagen.",
+                fields: {
+                  meshToMaskMean: { type: "number", required: true, description: "Media, del borde de la malla al de la máscara." },
+                  meshToMaskMax: { type: "number", required: true, description: "Máximo, en ese sentido." },
+                  maskToMeshMean: { type: "number", required: true, description: "Media, del borde de la máscara al de la malla." },
+                  maskToMeshMax: { type: "number", required: true, description: "Máximo, en ese sentido." },
+                },
+              },
+            },
+          },
+        },
+      },
+      depth: {
+        type: "object",
+        description:
+          "Profundidad de la malla contra los mapas de profundidad del productor (§38). En unidades del " +
+          "paquete, con la diagonal al lado para relativizar (D9).",
+        fields: {
+          cameras: { type: "number", required: true, description: "Cámaras con mapa comparadas." },
+          compared: { type: "number", required: true, description: "Muestras donde la fuente midió y la malla tiene superficie." },
+          sourceInvalidRatio: { type: "number", required: true, description: "Fracción de muestras sin medida en la fuente." },
+          meshMissRatio: { type: "number", description: "De lo que la fuente midió, la fracción donde la malla no tiene superficie." },
+          meshOnlyRatio: { type: "number", description: "De lo que la fuente no midió, la fracción donde la malla sí la tiene." },
+          stats: { type: "object", description: "El error, sumando todas las cámaras.", fields: DEPTH_STATS_FIELDS },
+          meanAbsRelativeToDiagonal: { type: "number", description: "El error absoluto medio en fracción de la diagonal de lo medido." },
+          byCamera: {
+            type: "object[]",
+            required: true,
+            description: "Lo mismo, cámara a cámara.",
+            fields: {
+              cameraId: { type: "string", required: true, description: "La cámara." },
+              depthKind: { type: '"OPTICAL_AXIS"|"RAY_LENGTH"', required: true, description: "Qué número es cada píxel (D20)." },
+              stride: { type: "number", required: true, description: "Paso de la rejilla, en píxeles del mapa." },
+              samples: { type: "number", required: true, description: "Muestras con rayo." },
+              unevaluated: { type: "number", required: true, description: "Muestras sin rayo." },
+              compared: { type: "number", required: true, description: "Muestras comparadas." },
+              sourceInvalidRatio: { type: "number", required: true, description: "Fracción sin medida en la fuente." },
+              meshMissRatio: { type: "number", description: "Fuente con medida y malla sin superficie." },
+              meshOnlyRatio: { type: "number", description: "Malla con superficie y fuente sin medida." },
+              stats: { type: "object", description: "El error en esta cámara.", fields: DEPTH_STATS_FIELDS },
+            },
+          },
+        },
+      },
+      normals: {
+        type: "object",
+        description:
+          "Ángulo entre la normal de la malla y la de la fuente (§39). La de la fuente se deriva de su " +
+          "mapa de profundidad —el paquete no trae mapas de normales—, y en las aristas queda entre dos caras.",
+        fields: {
+          source: { type: '"DERIVADA_DE_PROFUNDIDAD"', required: true, description: "De dónde sale la normal de la fuente." },
+          ...NORMAL_STATS_FIELDS,
+          byCamera: {
+            type: "object[]",
+            required: true,
+            description: "Lo mismo, cámara a cámara.",
+            fields: { cameraId: { type: "string", required: true, description: "La cámara." }, ...NORMAL_STATS_FIELDS },
+          },
+        },
       },
     },
   },

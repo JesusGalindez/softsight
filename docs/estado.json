@@ -9,7 +9,7 @@
     "storyAudit": 1,
     "stagingAudit": 1,
     "reconstructionPackage": "0.1",
-    "reconstructionReport": "0.2"
+    "reconstructionReport": "0.3"
   },
   "decisions": {
     "total": 34,
@@ -57,7 +57,7 @@
     "REVERTIDA": []
   },
   "gates": {
-    "inSuite": 63,
+    "inSuite": 64,
     "outsideSuite": [
       "test:determinism",
       "test:model-cache",

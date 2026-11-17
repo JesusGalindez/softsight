@@ -381,7 +381,31 @@ leer.
 ### D5 — EXR
 Scanline sin comprimir o ZIP, HALF o FLOAT. PIZ, DWA y B44 se rechazan por
 código. Cada canal declara semántica, espacio, rango, unidad e inválido.
-**Prueba:** sin escribir.
+**Prueba:** `test:residuals` (desde el 2026-11-17).
+
+**El lector existe desde el 2026-11-17, con R8, y el estado no se ha movido.**
+`src/soft/agent/reconstruction/exr.ts` lee exactamente lo acordado —scanline,
+NO_COMPRESSION, ZIPS o ZIP, HALF o FLOAT— y rechaza con su código y el nombre del
+compresor RLE, PIZ, PXR24, B44, B44A y DWA, además de teselado, multiparte,
+profundo, UINT y submuestreado. La declaración de cada canal va en la extensión
+experimental `org.softsight.profundidad` (D30), no en el esquema publicado:
+
+```text
+formato     EXR, el único
+canal       el nombre del canal en el fichero
+semantica   PROFUNDIDAD, la única que se compara
+espacio     el imageSpace de su cámara (D10)
+unidad      PAQUETE, la de la malla; otra pediría una escala (D9)
+invalido    CERO, NAN o INFINITO
+rango       opcional, [mínimo, máximo]; lo de fuera es «no medido»
+```
+
+Por qué no pasa a IMPLEMENTADA: lo que se prueba son ficheros fabricados —uno
+ensamblado byte a byte en la puerta y los del escritor de `tools/exr.mjs`—, y
+ningún productor entrega todavía mapas de profundidad. Y la forma de la
+declaración es propuesta de este lado: hasta que VideoMesh la vea, ponerla en
+el esquema sería declarar frontera algo que el otro lado no ha leído. El código
+de rechazo, `SS-CAM-008`, nace PROPUESTO por lo mismo.
 
 ### D6 — Sandbox del paquete — IMPLEMENTADA (2026-08-12)
 `PACKAGE_ROOT`; todo artifact resuelve dentro. Se rechaza `../`, ruta absoluta
