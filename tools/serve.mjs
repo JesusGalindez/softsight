@@ -43,6 +43,13 @@ export async function serve(runAgent) {
   const { checkBuild } = await import("./buildFingerprint.mjs");
   const build = checkBuild();
   if (!build.fresh) process.stderr.write(`aviso: ${build.message}\n`);
+  // Las sesiones (fase 3) viven aquí porque este proceso no se muere entre
+  // peticiones. Cada una tiene su directorio temporal, que se borra al salir:
+  // una señal también es salir, y sin esto un SIGTERM los dejaría en el disco.
+  const { createSessionStore } = await import("./session.mjs");
+  const sessions = createSessionStore();
+  process.once("SIGTERM", () => process.exit(143));
+  process.once("SIGINT", () => process.exit(130));
   const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
   for await (const line of lines) {
     if (line.trim() === "") continue;
@@ -54,7 +61,7 @@ export async function serve(runAgent) {
       } catch {
         throw new BridgeError("invalid-request", "la petición no es JSON válido");
       }
-      response = await handleRequest(request, runAgent);
+      response = await handleRequest(request, runAgent, sessions);
     } catch (error) {
       response = errorResponse(error);
     }

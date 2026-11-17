@@ -857,6 +857,23 @@ Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
     `externo` de la severidad, que no entra hasta que exista un proveedor externo
     que lo emita.
 
+22. **Plan de mejora** (fases 0 a 3 hechas el 2026-11-17, salvo 0.4). Ver
+    [`plan-mejora.md`](plan-mejora.md), que lleva la tabla de antes y ahora; aquí
+    solo lo que cambia el estado. La suite vuelve a verde y el verde deja de mentir:
+    una puerta muda es roja, y «no ejecutada» ya no cuenta los límites declarados.
+    MCP pasa a superficie de primera —catálogo de 41 KB a 16,6 KB con 19
+    herramientas, errores con `isError`, artefactos por ruta, y una herramienta por
+    comando del puente, comprobado—. El CLI avisa cuando sirve una compilación vieja,
+    y `verify:rapido` acorta el bucle interno sin cerrar nada. Y las **sesiones**: el
+    banco lleva la cuenta de pliego, informe y parches entre turnos, y un turno es el
+    CLI con la lista entera, comprobado contra el CLI lanzado aparte; el **barrido**
+    cruza K variantes por la frontera de Pareto. Queda anotado en el plan, sin dueño
+    todavía: la regla de veredicto de R9 no es dominancia con tres candidatos o más
+    (H11), el consejo de captura no es reproducible al bit dentro de un mismo proceso
+    —un rojo intermitente de `test:recon-cache`, ya presente en `main`— (H12), y el
+    encargo 05-A sigue sin documento. Ningún hash se movió: el pliego del
+    dron sigue en `46228b7c`, `contractVersion` en 3 y `bridgeContractVersion` en 2.
+
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un
 vínculo declarado y verifica que es completo y coherente, que es trabajo de

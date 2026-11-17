@@ -10,8 +10,9 @@ dejaron medido en agosto: **tres de esos números han vuelto a crecer**, la supe
 pensada para agentes —MCP— es **la única desde la que no se cierra el bucle
 principal**, y **el estado escrito en prosa se contradice de un documento a otro**.
 
-**Estado, 2026-11-17 (tarde): fases 0, 1 y 2 hechas salvo 0.4**, sin commitear.
-`npm run verify` en verde: 60 puertas, 356 comprobaciones. Lo que se movió:
+**Estado, 2026-11-17 (noche): fases 0 a 3 hechas, salvo 0.4.** Las 0 a 2 están en
+la PR #1; la 3, en `mejora/fase-3`, encima. `npm run verify` en verde: 62 puertas,
+371 comprobaciones, y el pliego del dron sigue en `46228b7c`. Lo que se movió:
 
 | Medida | Antes | Ahora |
 |---|---|---|
@@ -25,6 +26,10 @@ principal**, y **el estado escrito en prosa se contradice de un documento a otro
 | Compilación vieja | servida en silencio | aviso en CLI, puente y residente; `isError` en MCP |
 | Bucle interno | la suite entera | `verify:rapido`: 1 puerta para `meshPartition.ts`, ninguna para la demo |
 | Reparto en dos procesos (2.2) | descartado con 17 puertas | **descartado otra vez**: 7–12 % con 60, por debajo del 30 % |
+| Bucle editar-mirar por MCP (3.1) | el agente guarda pliego e informe y se los pasa | `softsight_open/apply/undo/export`: turno 0 en 0,84 s, cada turno siguiente en ~0,33 s con el dron |
+| Equivalencia de la sesión | — | N turnos ≡ el CLI lanzado aparte con su propia cadena, pliego byte a byte |
+| K variantes (3.2) | K llamadas y K informes | `softsight_sweep`: una llamada, una tabla, la frontera; base y 4 variantes del dron sin pliego en 0,22–0,39 s, sin dejar entradas en `.cache/` |
+| MCP `tools/list` | 11.084 B, 14 herramientas | 16.632 B, 19: el techo sube a 17.500 a propósito |
 
 0.4 no se hizo: el encargo 05-A no se puede escribir sin quien lo encargó, y
 inventar sus §2.1 y §2.2 sería falsificarlo.
@@ -182,6 +187,71 @@ trabajo `determinism` de CI corre desde el 2026-08-09 en `ubuntu-latest` (x86_64
 `macos-latest` (arm64): **dos sistemas y dos arquitecturas**. Solo compara el pliego
 del dron y nada de reconstrucción. La mitad de D28 que «no tiene dónde» tiene dónde.
 
+### H11 — El veredicto de R9 no es dominancia con tres candidatos o más
+
+Encontrado el 2026-11-17 al mover la regla de decisión a `src/soft/agent/dominance.ts`
+para que el barrido no la copiara. `compareCandidates` corona al que es el mejor de
+**cada criterio decidido**, y un criterio cuyo mejor valor comparten dos candidatos se
+declara EMPATE y se cae. Con dos candidatos eso es dominancia; con tres, no: puede
+ganar uno que en el criterio caído es **peor** que los otros dos. Con los números del
+dron —la base y «movido» empatan a 296 piezas, «sin-bujes» tiene 292—, la regla
+coronaría a «sin-bujes». Contradice la cabecera del propio módulo: «gana quien es mejor
+o igual en todos».
+
+**No se cambió**: es el veredicto del cruce de candidatos y tiene consumidor fuera, así
+que alinearlo es decisión de quien lo consume. El barrido, que es de muchos, decide por
+la frontera de Pareto, y `test:sweep` deja escrito el caso: si R9 se alinea, la puerta
+avisa para reescribir la nota.
+
+### H12 — El consejo de captura no es reproducible al bit dentro de un mismo proceso
+
+Encontrado el 2026-11-17 porque `test:recon-cache` salió rojo en una `verify` y verde
+al repetirla. La puerta mide el mismo paquete dos veces —en frío y con la caché de
+visibilidad caliente— y exige el mismo informe byte a byte. A veces no lo es:
+`captureAdvice.suggestions[k].distance` sale con los dos últimos bits distintos,
+`1.5758941936865705` frente a `1.57589419368657`. El informe declara ese bloque
+`BITWISE_EXACT`.
+
+Lo medido, en procesos nuevos:
+
+| Árbol | Fallos |
+|---|---|
+| `main` en `aa2e09f`, antes de este plan | 2 de 100 |
+| Fases 0–2, intercalado con la 3 | 1 de 80 |
+| Fase 3, intercalado | 2 de 80 |
+| Fase 3, con `--no-maglev` | 0 de 40 |
+| Fase 3, con `--no-turbofan` | 0 de 40 |
+
+**No lo trae este plan**: está en `main` y sale con la misma frecuencia en los tres
+árboles. Las series sueltas llegaron a dar un 13 %, pero no son comparables entre sí:
+la frecuencia sube con la carga de la máquina. Solo aparece cuando conviven los dos
+optimizadores de V8, así que depende de en qué nivel esté compilado el código cuando
+corre cada medida.
+
+**Lo que se descartó, y lo que no se encontró.** `Math.hypot` da lo mismo en los
+tres niveles: 0 diferencias en 300.000 casos, la mitad con una componente a cero, y
+los valores concretos del fallo también coinciden. En una ejecución que falló,
+`distancia`, centroides y normales salieron idénticos bit a bit. Cualquier
+instrumentación lo esconde: con una traza puesta, 0 fallos en 80. **La operación
+exacta sigue sin aislar.**
+
+Por qué importa más de lo que parece: `test:recon-cache` corre en CI, y ahí este
+fallo es un rojo intermitente sin relación con el cambio que se esté probando. Y el
+informe promete reproducibilidad al bit en un campo que no la tiene. Lo siguiente es
+reproducirlo en una función aislada de `captureAdvice.ts` con su entrada real, y no
+tocar la aritmética antes de saber qué operación es: cambiarla movería números del
+informe, que es decisión de contrato.
+
+### H13 — `test:model-cache` está rojo en `main` desde agosto, y no lo ve nadie
+
+Cinco aserciones esperan que el dron salga con código 1 porque «trae avisos». Desde el
+2026-08-10 el código de salida cuenta solo `certeza`, y los avisos del dron son
+`candidato`: sale 0. La puerta no está ni en `verify` ni en CI, así que el rojo no
+lo ve nadie, y con él se apagan las comprobaciones de la caché que vienen detrás.
+Con solo esas cinco expectativas a 0, en una copia fuera del repositorio, la puerta
+pasa entera. **No se tocó**: la expectativa es de quien escribió la puerta, y el
+arreglo es cambiar «trae avisos» por «trae solo candidatos».
+
 ### H10 — Higiene
 
 - `.claude/worktrees/gallant-napier-dd56d4`: un árbol de trabajo vivo en la rama
@@ -322,10 +392,19 @@ parches desde cero, byte a byte, en informe y pliego.
 *Versiones:* comandos nuevos en el puente; `bridgeContractVersion` no se mueve si son
 aditivos, como pasó con `scene` y `story`.
 
-Obliga a algo que hoy no existe: que el residente llame a la revisión **por API y no
-por `argv`**, porque `runAgent(argv)` es la única entrada. Sacar `reviewModelFile` de
-`agent3d.mjs` a una función con opciones tipadas es el refactor que este ítem
-justifica. No antes, y no por tamaño.
+~~Obliga a algo que hoy no existe: que el residente llame a la revisión por API y no
+por `argv`.~~ **Corregido al hacerlo: no hacía falta, y la medida ya estaba escrita.**
+Lo que un turno repite es cargar el modelo, y Ω2 midió que copiar un modelo en memoria
+cuesta lo mismo que leerlo de la caché de disco, que la sesión acierta en cada turno
+porque su fichero no cambia de ruta ni de `mtime`. Por `argv`, en cambio, un turno
+**es** el CLI —`--model M --patch p1 … --patch pk --baseline S(k-1) --baseline-report
+R(k-1)`—, así que la equivalencia no hay que mantenerla. `reviewModelFile` no se tocó.
+
+**Hecho el 2026-11-17** en `tools/session.mjs`. Lo que la prueba destapó por el camino:
+la proyección de la respuesta tiene que hacerse **antes** de confirmar el turno, o una
+errata en `fields` deja la sesión un turno por delante de lo que el agente cree. Y
+deshacer quita lo de la última llamada entera, no el último parche suelto. Puerta
+`test:session`, ocho bloques, contra el CLI lanzado aparte.
 
 **3.2 Barrido: K variantes en una llamada.** `softsight_sweep(base, variantes,
 fields)` evalúa K parches, escenas o repartos cargando el modelo una sola vez, y
@@ -334,6 +413,12 @@ devuelve una tabla con las medidas pedidas. No la ordena por una nota; como
 `meshPartition.ts` —«probar cien combinaciones de parámetros y quedarse con la mejor,
 sin ver ninguna»— y lo que necesita la geometría declarativa para buscar parámetros.
 *Prueba:* cada fila de la tabla es `deepEqual` a su llamada suelta.
+
+**Hecho el 2026-11-17**, con dos diferencias sobre lo escrito arriba. El veredicto sale
+de la frontera y no de la regla de R9, por H11. Y **los repartos no entran todavía**:
+`auditPartition` no se alcanza desde el CLI hasta el 5.2, y un barrido solo varía lo
+que el CLI sabe revisar. El núcleo es `src/soft/agent/sweep.ts`; la puerta, `test:sweep`,
+recalcula el cruce con informes del CLI lanzado aparte.
 
 ### Fase 4 — El estado como dato
 
