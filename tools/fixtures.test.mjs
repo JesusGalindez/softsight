@@ -189,6 +189,8 @@ function versionados(ruta) {
   assert.ok(salto.skipped && !salto.failed);
   const limite = classifyGate({ code: 0, out: `x: ok (algo)\nx${SCOPE_MARK} no mide eso a propósito` });
   assert.ok(limite.scoped && !limite.skipped && !limite.failed, "un límite declarado no es un salto");
+  const sinFixture = classifyGate({ code: 0, out: `x${SKIP_MARK} falta el fixture certificado` });
+  assert.ok(sinFixture.skipped && !sinFixture.failed, "la que no corre nada pero dice por qué no es muda");
   const muda = classifyGate({ code: 0, out: "" });
   assert.ok(muda.silent && muda.failed, "una puerta que sale 0 sin comprobar nada tiene que ser roja");
   assert.ok(classifyGate({ code: 1, out: "x: ok (algo)" }).failed);

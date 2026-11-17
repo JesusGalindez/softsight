@@ -17,8 +17,10 @@
  * enseña lo mismo siempre se aprende a ignorar, y se ignora también el día que
  * una puerta deja de correr de verdad.
  *
- * Y una regla: **salir 0 sin una sola comprobación es rojo**. Una puerta muda
- * no dice qué probó, que es el hueco que D22 describe con esas palabras.
+ * Y una regla: **salir 0 sin una sola comprobación ni un motivo es rojo**. Una
+ * puerta muda no dice qué probó, que es el hueco que D22 describe con esas
+ * palabras. La que no corrió nada pero dice por qué —falta el fixture del
+ * editor, que en CI no está nunca— no es muda: es «no ejecutada», y se lista.
  */
 
 export const OK_MARK = ": ok";
@@ -31,6 +33,6 @@ export function classifyGate({ code, out }) {
   const checks = lines.filter((line) => line.includes(OK_MARK)).length;
   const skipped = lines.some((line) => line.includes(SKIP_MARK));
   const scoped = lines.some((line) => line.includes(SCOPE_MARK));
-  const silent = code === 0 && checks === 0;
+  const silent = code === 0 && checks === 0 && !skipped;
   return { checks, skipped, scoped, silent, failed: code !== 0 || silent };
 }

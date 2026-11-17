@@ -41,7 +41,6 @@ const projectRoot = resolve(here, "..");
 const CLI = resolve(here, "agent3d.mjs");
 const SERVER = resolve(here, "mcp-server.mjs");
 const MODEL = resolve(projectRoot, "artifacts/export/drone.glb");
-const OTHER = resolve(projectRoot, "artifacts/agent/drone-editado.obj");
 const SCENE = resolve(projectRoot, "artifacts/agent/ejemplo-dron.json");
 const STORY = resolve(projectRoot, "artifacts/agent/guion-tawantinsuyu.json");
 const BVH = resolve(projectRoot, "artifacts/agent/captura-ejemplo.bvh");
@@ -288,6 +287,13 @@ try {
 
   console.log("mcp: diff == CLI directo");
   {
+    // La otra versión se fabrica aquí: un OBJ de `artifacts/agent/` estaría
+    // ignorado por git y en CI no existiría.
+    const OTHER = join(work, "otra.obj");
+    const movePath = join(work, "mover.json");
+    await writeFile(movePath, `${JSON.stringify({ edits: [{ op: "translate", target: "rotor-*", delta: [0, 0.1, 0] }] })}\n`);
+    await runCli(["--model", MODEL, "--patch", movePath, "--inspect-only", "true", "--export", OTHER, "--no-cache"]);
+    assert.ok(existsSync(OTHER), "no se pudo fabricar la otra versión del dron");
     const cli = await runCli(["--model", MODEL, "--diff", OTHER, "--diff-samples", "2000"]);
     const tool = await server.tool("softsight_diff", { model: MODEL, other: OTHER, diffSamples: 2000 });
     assert.deepEqual(comparable(tool.report), comparable(cli.report));
