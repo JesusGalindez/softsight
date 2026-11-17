@@ -37,6 +37,12 @@ import { BridgeError, errorResponse, handleRequest } from "./bridge.mjs";
  * aviso.
  */
 export async function serve(runAgent) {
+  // El residente carga el paquete una vez y lo sirve durante horas: si arranca
+  // sobre una compilación vieja, todo lo que conteste será de antes. Lo dice al
+  // arrancar, por stderr, que es donde no rompe el protocolo.
+  const { checkBuild } = await import("./buildFingerprint.mjs");
+  const build = checkBuild();
+  if (!build.fresh) process.stderr.write(`aviso: ${build.message}\n`);
   const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
   for await (const line of lines) {
     if (line.trim() === "") continue;

@@ -306,7 +306,7 @@ function informe(id, cambios = {}) {
 }
 
 console.log(
-  "cruce: no ejecutada — no compara **geometría**: dos candidatos pueden ser dos reconstrucciones de " +
+  "cruce: fuera de alcance — no compara **geometría**: dos candidatos pueden ser dos reconstrucciones de " +
     "piezas distintas y el cruce los ordenaría igual. Eso lo contesta el diff de R5, que existe y se " +
     "alcanza desde el CLI, y atarlo aquí pide decidir a partir de qué distancia dos candidatos dejan " +
     "de ser el mismo objeto — criterio, no código",

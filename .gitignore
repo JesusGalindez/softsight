@@ -5,8 +5,11 @@ dist-node/
 .cache/
 .DS_Store
 
-# Configuración local con rutas absolutas de la máquina
-.claude/
+# Configuración local con rutas absolutas de la máquina. Solo lo local: lo que
+# sea del proyecto —habilidades, ajustes compartidos— se puede versionar.
+.claude/launch.json
+.claude/settings.local.json
+.claude/worktrees/
 
 # Pliegos generados por el banco de agentes; los ejemplos JSON sí entran
 artifacts/agent/*.png

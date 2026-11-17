@@ -194,6 +194,6 @@ function splitCube(side = 1) {
 }
 
 console.log(
-  "autointersección: no ejecutada — el caso coplanar sigue sin poderse afirmar y por eso se cuenta " +
+  "autointersección: fuera de alcance — el caso coplanar sigue sin poderse afirmar y por eso se cuenta " +
     "aparte (§86.3 n). Resolverlo pide predicados exactos, que es otra decisión y otro coste",
 );

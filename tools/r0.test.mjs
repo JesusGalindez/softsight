@@ -246,7 +246,7 @@ const ETAPAS = [
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "r0: no ejecutada — R0-B con **el `cube-v1` de VideoMesh** sigue sin poderse hacer, y no por falta de " +
+  "r0: fuera de alcance — R0-B con **el `cube-v1` de VideoMesh** sigue sin poderse hacer, y no por falta de " +
     "camino: lo cumple `producers/colmap/` desde el 2026-09-13 como segundo productor, pero las tres " +
     "comparaciones de D23 necesitan valores dorados de una implementación de fuera. Esta puerta cubre " +
     "R0-A entero",

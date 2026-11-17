@@ -32,6 +32,14 @@
  * apagado por defecto y el descarte se queda anotado con su medida, como los de
  * `plan-renderizador.md`.
  *
+ * **Vuelto a medir el 2026-11-17**, porque el descarte se hizo con 17 puertas y
+ * una dominante, y la suite ya era otra: 60 puertas, casi todas de 1–2 s, que es
+ * la forma en que repartir sí podría ganar. Dos vueltas de cada: en serie 131,5 y
+ * 149,8 s; con dos procesos 126,1 y 122,0. Un 7 % mejor contra mejor y un 12 %
+ * de media, otra vez por debajo del 30 %: **el descarte se queda**. Lo que manda
+ * ahora no es el reparto sino que esta máquina tiene dos núcleos y las puertas
+ * caras —`bridge`, `producer-superficie`, `mcp`— lanzan procesos propios.
+ *
  * La salida se agrupa por fichero: un hijo escribe entera y de una vez cuando
  * termina, así que el registro se lee igual aunque no se produzca en orden.
  */
@@ -41,6 +49,8 @@ import { availableParallelism } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { classifyGate } from "./gateResult.mjs";
+
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
 
@@ -49,7 +59,7 @@ const projectRoot = resolve(here, "..");
  * medido en serie el 2026-08-09. El orden solo importa con reparto encendido:
  * con una cola, dejar la más larga para el final la deja corriendo sola.
  */
-const GATES = [
+export const GATES = [
   "bridge.test.mjs", // 15,5 s — lanza el CLI muchas veces, y ahora también el residente
   "incremental.test.mjs", // 5,5 s — seis revisiones del dron con contrato de topología
   "mcp.test.mjs", // 5,2 s — siete herramientas, cada una contra el CLI directo
@@ -84,6 +94,9 @@ const GATES = [
   "self-intersection.test.mjs", // 0,2 s de CPU — cruces y, sobre todo, dónde calla
   "mesh-topology.test.mjs", // 0,2 s de CPU — componentes y bucles contra casos conocidos
   "mesh-diff.test.mjs", // 0,5 s de CPU — el diff contra casos de resultado conocido
+  "mesh-partition.test.mjs", // 0,3 s de CPU — conservación y borde del corte: las dos medidas del encargo 05-A
+  "build-fingerprint.test.mjs", // 0,5 s — dist-node corresponde a src/, y si no, se avisa
+  "affected-gates.test.mjs", // 0,1 s — verify:rapido elige lo que el mapa dice, y ante la duda, todo
   "bands.test.mjs", // 1,0 s — la misma escena en 1, 2, 3 y 4 franjas, byte a byte
   "bounds-tree.test.mjs", // 1,6 s — el árbol contra la fuerza bruta; 1M y 5M piden SOFTSIGHT_HEAVY=1
   "reconstruction.test.mjs", // 0,6 s — esquema del paquete de R0-A e ingesta
@@ -126,59 +139,90 @@ function seconds(milliseconds) {
   return `${(milliseconds / 1000).toFixed(1).replace(".", ",")} s`;
 }
 
-// La orden de compilar vive en `package.json` y aquí no se copia.
-const buildStart = performance.now();
-const build = await run("npm", ["run", "build:agent3d"]);
-if (build.code !== 0) {
-  process.stdout.write(build.out);
-  console.error("suite: la compilación falló, no se ejecuta ninguna puerta");
-  process.exit(1);
-}
-const buildMilliseconds = performance.now() - buildStart;
+/**
+ * Corre las puertas pedidas —todas por defecto— y sale como la suite. `--only`
+ * recibe una lista separada por comas; es lo que usa `verify:rapido`, que elige
+ * las puertas por el mapa de cobertura (`affectedGates.mjs`).
+ */
+async function runSuite(gates) {
+  // La orden de compilar vive en `package.json` y aquí no se copia.
+  const buildStart = performance.now();
+  const build = await run("npm", ["run", "build:agent3d"]);
+  if (build.code !== 0) {
+    process.stdout.write(build.out);
+    console.error("suite: la compilación falló, no se ejecuta ninguna puerta");
+    process.exit(1);
+  }
+  const buildMilliseconds = performance.now() - buildStart;
 
-const requested = Number(process.env.SOFTSIGHT_TEST_JOBS);
-const workers = Number.isInteger(requested) && requested > 0
-  ? Math.min(requested, availableParallelism())
-  : 1;
-const suiteStart = performance.now();
-const pending = [...GATES];
-const results = [];
+  const requested = Number(process.env.SOFTSIGHT_TEST_JOBS);
+  const workers = Number.isInteger(requested) && requested > 0
+    ? Math.min(requested, availableParallelism())
+    : 1;
+  const suiteStart = performance.now();
+  const pending = [...gates];
+  const results = [];
 
-async function drain() {
-  for (let gate = pending.shift(); gate !== undefined; gate = pending.shift()) {
-    const started = performance.now();
-    // Una puerta puede llevar argumentos —`agents-md.mjs --check`—, así que la
-    // entrada se parte por espacios en vez de ser solo un nombre de fichero.
-    const [file, ...args] = gate.split(" ");
-    const { code, out } = await run(process.execPath, [resolve(here, file), ...args]);
-    const milliseconds = performance.now() - started;
-    const checks = out.split("\n").filter((line) => line.includes(": ok")).length;
-    const skipped = out.includes(": no ejecutada —");
-    results.push({ gate, code, milliseconds, checks, skipped });
+  async function drain() {
+    for (let gate = pending.shift(); gate !== undefined; gate = pending.shift()) {
+      const started = performance.now();
+      // Una puerta puede llevar argumentos —`agents-md.mjs --check`—, así que la
+      // entrada se parte por espacios en vez de ser solo un nombre de fichero.
+      const [file, ...args] = gate.split(" ");
+      const { code, out } = await run(process.execPath, [resolve(here, file), ...args]);
+      const milliseconds = performance.now() - started;
+      // Las marcas y lo que significan viven en `gateResult.mjs`: una puerta muda
+      // —salida 0 sin una comprobación— cuenta como roja.
+      const { checks, skipped, scoped, silent, failed } = classifyGate({ code, out });
+      results.push({ gate, code, milliseconds, checks, skipped, scoped, failed });
 
-    const mark = code === 0 ? (skipped ? "—" : "✓") : "✗";
-    process.stdout.write(
-      `${mark} ${gate}  ${seconds(milliseconds)}  ${checks} comprobaciones\n${out}`,
-    );
+      const mark = failed ? "✗" : skipped ? "—" : "✓";
+      const note = silent ? "  muda: salió 0 sin una sola comprobación" : "";
+      process.stdout.write(
+        `${mark} ${gate}  ${seconds(milliseconds)}  ${checks} comprobaciones${note}\n${out}`,
+      );
+    }
+  }
+
+  await Promise.all(Array.from({ length: workers }, drain));
+
+  const suiteMilliseconds = performance.now() - suiteStart;
+  const checks = results.reduce((total, result) => total + result.checks, 0);
+  const failed = results.filter((result) => result.failed);
+  const skipped = results.filter((result) => result.skipped);
+  const scoped = results.filter((result) => result.scoped);
+
+  console.log(
+    `suite: ${gates.length} puertas, ${checks} comprobaciones, ` +
+      `${seconds(buildMilliseconds + suiteMilliseconds)} ` +
+      `(compilar ${seconds(buildMilliseconds)}, ${workers} ${workers === 1 ? "proceso" : "procesos"})`,
+  );
+  if (skipped.length > 0) {
+    console.log(`suite: ${skipped.length} con algo no ejecutado — ${skipped.map((r) => r.gate).join(", ")}`);
+  }
+  // Los límites declarados se cuentan y no se listan: no piden nada a quien lee.
+  if (scoped.length > 0) {
+    console.log(`suite: ${scoped.length} declaran un límite de alcance (\`: fuera de alcance —\`)`);
+  }
+  if (failed.length > 0) {
+    console.error(`suite: ${failed.length} en rojo — ${failed.map((r) => r.gate).join(", ")}`);
+    process.exit(1);
   }
 }
 
-await Promise.all(Array.from({ length: workers }, drain));
-
-const suiteMilliseconds = performance.now() - suiteStart;
-const checks = results.reduce((total, result) => total + result.checks, 0);
-const failed = results.filter((result) => result.code !== 0);
-const skipped = results.filter((result) => result.skipped);
-
-console.log(
-  `suite: ${GATES.length} puertas, ${checks} comprobaciones, ` +
-    `${seconds(buildMilliseconds + suiteMilliseconds)} ` +
-    `(compilar ${seconds(buildMilliseconds)}, ${workers} ${workers === 1 ? "proceso" : "procesos"})`,
-);
-if (skipped.length > 0) {
-  console.log(`suite: ${skipped.length} no ejecutadas — ${skipped.map((r) => r.gate).join(", ")}`);
-}
-if (failed.length > 0) {
-  console.error(`suite: ${failed.length} en rojo — ${failed.map((r) => r.gate).join(", ")}`);
-  process.exit(1);
+// Solo si es el programa invocado: `verify:rapido` y el mapa de cobertura
+// importan la lista de puertas sin lanzar la suite.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const only = process.argv.indexOf("--only");
+  let gates = GATES;
+  if (only !== -1) {
+    const wanted = (process.argv[only + 1] ?? "").split(",").filter(Boolean);
+    const unknown = wanted.filter((gate) => !GATES.includes(gate));
+    if (unknown.length > 0) {
+      console.error(`suite: puertas desconocidas: ${unknown.join(", ")}`);
+      process.exit(2);
+    }
+    gates = GATES.filter((gate) => wanted.includes(gate));
+  }
+  await runSuite(gates);
 }

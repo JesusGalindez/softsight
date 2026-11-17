@@ -324,7 +324,7 @@ const DIAGONAL = Math.sqrt(3);
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "reparación: no ejecutada — **no repara nada, y no va a hacerlo**: la puerta del escalón dice «sin " +
+  "reparación: fuera de alcance — **no repara nada, y no va a hacerlo**: la puerta del escalón dice «sin " +
     "convertirse en un motor de modelado». En cuanto decidiera dónde va un vértice dejaría de poder " +
     "afirmar que sus números son exactos, que es lo único que aporta. Lo que falta es que alguien " +
     "repare y vuelva a medir, y eso es de quien tenga la herramienta",

@@ -170,7 +170,7 @@ const triangulos = malla.indices.length / 3;
 }
 
 console.log(
-  `proxy: no ejecutada — el pliego de un paquete de reconstrucción sigue sin existir, así que el ` +
+  `proxy: fuera de alcance — el pliego de un paquete de reconstrucción sigue sin existir, así que el ` +
     `presupuesto de ${PREVIEW_MAX_TRIANGLES} solo se aplica a modelos y escenas; y los modos de ` +
     "diagnóstico del §54 —el proxy para el viewport del navegador— son del editor, no de aquí",
 );

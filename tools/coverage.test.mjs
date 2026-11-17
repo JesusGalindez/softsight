@@ -197,7 +197,7 @@ const SAMPLES = 20_000;
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "cobertura: no ejecutada — la confianza de R6 necesita además residuales multivista, que es R8 y " +
+  "cobertura: fuera de alcance — la confianza de R6 necesita además residuales multivista, que es R8 y " +
     "pide profundidad y máscaras; y sobre datos reales espera a un productor que entregue malla, " +
     "porque un SfM disperso no tiene superficie que cubrir",
 );

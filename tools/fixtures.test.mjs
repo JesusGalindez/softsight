@@ -31,6 +31,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { colmapRoot } from "./fixtures.mjs";
+import { SCOPE_MARK, SKIP_MARK, classifyGate } from "./gateResult.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
@@ -176,20 +177,30 @@ function versionados(ruta) {
 // en una puerta, esa puerta pasaría a contarse como verde sin que nadie lo viera:
 // el hueco no se notaría hasta necesitar lo que probaba.
 {
+  // El corredor ya no busca la subcadena por su cuenta: la lee de `gateResult.mjs`,
+  // y aquí se comprueba que esa es la que escriben las puertas y que el corredor
+  // la usa de verdad.
   const corredor = readFileSync(resolve(here, "run-tests.mjs"), "utf8");
-  assert.ok(
-    corredor.includes('": no ejecutada —"'),
-    "el corredor ya no busca la misma marca que las puertas escriben",
-  );
+  assert.equal(SKIP_MARK, ": no ejecutada —", "la marca de no ejecutada cambió de redacción");
+  assert.ok(corredor.includes("classifyGate"), "el corredor ya no clasifica con gateResult.mjs");
+
+  // Las tres lecturas que el corredor tiene que distinguir, y la que antes no veía.
+  const salto = classifyGate({ code: 0, out: `x: ok (algo)\nx${SKIP_MARK} falta el fixture` });
+  assert.ok(salto.skipped && !salto.failed);
+  const limite = classifyGate({ code: 0, out: `x: ok (algo)\nx${SCOPE_MARK} no mide eso a propósito` });
+  assert.ok(limite.scoped && !limite.skipped && !limite.failed, "un límite declarado no es un salto");
+  const muda = classifyGate({ code: 0, out: "" });
+  assert.ok(muda.silent && muda.failed, "una puerta que sale 0 sin comprobar nada tiene que ser roja");
+  assert.ok(classifyGate({ code: 1, out: "x: ok (algo)" }).failed);
 
   console.log(
-    "fixtures: ok (el corredor busca la misma marca que las puertas escriben: el mecanismo entero cuelga " +
+    "fixtures: ok (el corredor busca la misma marca que las puertas escriben, distingue un salto de un límite declarado y pone roja la puerta muda: el mecanismo entero cuelga " +
       "de esa subcadena, y una redacción distinta convertiría un hueco en un verde)",
   );
 }
 
 console.log(
-  "fixtures: no ejecutada — la fila de los ligeros comprueba el tope y el versionado, no que sean " +
+  "fixtures: fuera de alcance — la fila de los ligeros comprueba el tope y el versionado, no que sean " +
     "**sintéticos**: eso es un juicio sobre el origen del dato y no se deduce de los bytes. Y las puertas " +
     "que dependen de los fixtures del editor (SOFTSIGHT_FIXTURES) no entran en el bloque 3 porque su " +
     "raíz por defecto apunta fuera del repositorio y aquí no está",

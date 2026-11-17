@@ -246,7 +246,7 @@ function caja(positions, matrix) {
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "paridad: no ejecutada — falta la columna de un consumidor de fuera. `producers/colmap` cubre la " +
+  "paridad: fuera de alcance — falta la columna de un consumidor de fuera. `producers/colmap` cubre la " +
     "de `colmap-small-v1` porque tiene su propio lector, pero de `cube-v1` no hay segunda " +
     "implementación: lo escribimos nosotros y nadie más lo ha vuelto a escribir",
 );

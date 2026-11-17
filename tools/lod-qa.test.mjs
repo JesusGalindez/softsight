@@ -239,7 +239,7 @@ const malla = (mesh) => ({
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "lod: no ejecutada — la silueta se mide en ortográfica **a propósito**: un asset no declara desde " +
+  "lod: fuera de alcance — la silueta se mide en ortográfica **a propósito**: un asset no declara desde " +
     "dónde se le va a mirar, y elegir una distancia sería inventarse el dato que falta. El día que el " +
     "destino declare distancias de transición, el mismo módulo las acepta y el número pasa a ser el " +
     "que el jugador vería",

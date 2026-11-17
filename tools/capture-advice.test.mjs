@@ -357,7 +357,7 @@ const MUESTRAS = 8_000;
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "consejo: no ejecutada — **no planifica un vuelo**: no sabe de obstáculos, alcance, batería ni " +
+  "consejo: fuera de alcance — **no planifica un vuelo**: no sabe de obstáculos, alcance, batería ni " +
     "espacio aéreo, y dos sugerencias pueden salir del mismo punto mirando a sitios distintos sin que " +
     "nada las funda. Dice «desde aquí verías esto»; decidir si se puede ir es de quien conoce el sitio",
 );

@@ -239,7 +239,7 @@ const completo = (extra = {}) => ({
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "listo: no ejecutada — **no ejecutamos el validador de Khronos**, lo ingerimos. Es la autoridad " +
+  "listo: fuera de alcance — **no ejecutamos el validador de Khronos**, lo ingerimos. Es la autoridad " +
     "sobre si un GLB es un GLB y envolverlo aquí sería reimplementar lo que ya existe; lo que este " +
     "escalón aporta es la ranura y la regla de que sin ella no hay aprobación",
 );

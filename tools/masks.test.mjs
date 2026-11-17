@@ -268,7 +268,7 @@ function silueta(camera, valor, escala = 1) {
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "siluetas: no ejecutada — no hay siluetas sobre datos reales. Segmentarlas pide SAM2, que exige " +
+  "siluetas: fuera de alcance — no hay siluetas sobre datos reales. Segmentarlas pide SAM2, que exige " +
     "Python 3.10 y torch 2.3, y esta máquina tiene 3.9 y torch se quedó en 2.2.2 para macOS Intel. " +
     "Lo que falta es el fichero, no el camino: el paquete que las traiga se mide con lo de arriba",
 );

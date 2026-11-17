@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "verify": "tsc --noEmit && npm run test:animation",
+    "verify:rapido": "node tools/affectedGates.mjs",
+    "verify:mapa": "node tools/gateCoverage.mjs",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "build:agent3d": "vite build --config vite.node.config.ts",
@@ -66,6 +68,9 @@
     "test:self-intersection": "npm run build:agent3d && node tools/self-intersection.test.mjs",
     "test:mesh-topology": "npm run build:agent3d && node tools/mesh-topology.test.mjs",
     "test:mesh-diff": "npm run build:agent3d && node tools/mesh-diff.test.mjs",
+    "test:mesh-partition": "npm run build:agent3d && node tools/mesh-partition.test.mjs",
+    "test:build-fingerprint": "npm run build:agent3d && node tools/build-fingerprint.test.mjs",
+    "test:affected-gates": "node tools/affected-gates.test.mjs",
     "test:bands": "npm run build:agent3d && node tools/bands.test.mjs",
     "test:bounds-tree": "npm run build:agent3d && node tools/bounds-tree.test.mjs",
     "test:reconstruction": "npm run build:agent3d && node tools/reconstruction.test.mjs",

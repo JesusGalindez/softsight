@@ -192,7 +192,7 @@ const texto = readFileSync(join(raiz, artifactMalla.path), "utf8");
 rmSync(sandbox, { recursive: true, force: true });
 
 console.log(
-  "ply: no ejecutada — sobre un binario **real** no se prueba: los dos productores de la casa escriben " +
+  "ply: fuera de alcance — sobre un binario **real** no se prueba: los dos productores de la casa escriben " +
     "ASCII, y el fixture de COLMAP trae `points3D.txt`, no un `dense.ply`. Lo que falta es el fichero, " +
     "no el camino",
 );

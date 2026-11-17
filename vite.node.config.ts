@@ -1,6 +1,8 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
+import { FINGERPRINT_FILE, sourceFingerprint } from "./tools/buildFingerprint.mjs";
+
 /**
  * Empaquetado para Node del CLI de agentes. Va aparte de `vite.config.ts` porque
  * el objetivo es distinto: aquí no hay navegador, no hay HTML y el resultado es
@@ -12,6 +14,21 @@ import { defineConfig } from "vite";
  * eso sin tocar una sola línea del motor y sin añadir dependencias.
  */
 export default defineConfig({
+  // La huella de los fuentes con los que se hizo el paquete, al lado del paquete:
+  // el CLI y el servidor MCP la comparan con `src/` y avisan si sirven una
+  // compilación vieja (`tools/buildFingerprint.mjs`).
+  plugins: [
+    {
+      name: "huella-de-fuentes",
+      generateBundle() {
+        this.emitFile({
+          type: "asset",
+          fileName: FINGERPRINT_FILE,
+          source: `${JSON.stringify({ sources: sourceFingerprint(resolve(__dirname, "src")) }, null, 2)}\n`,
+        });
+      },
+    },
+  ],
   build: {
     ssr: resolve(__dirname, "src/soft/agent/index.ts"),
     outDir: "dist-node",
