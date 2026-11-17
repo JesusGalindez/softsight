@@ -242,6 +242,8 @@ export {
 } from "./storyAudit";
 export type { SceneReading, StoryAudit, StoryAuditOptions, StoryWarning } from "./storyAudit";
 export { SUMMARY_KEYS, projectFields, summarize } from "./reportView";
+export { compareSweep, criterionValue } from "./sweep";
+export type { SweepComparison, SweepCriterion, SweepEntry } from "./sweep";
 export {
   DEFECT_SEVERITIES,
   WARNING_CODES,
@@ -367,14 +369,9 @@ export type {
 export { REPAIR_NEIGHBOURHOOD_RATIO, classifyRepairs } from "./reconstruction/repair";
 export type { RepairAssessment, RepairBoundary, RepairInputs, RepairRisk } from "./reconstruction/repair";
 export { compareCandidates } from "./reconstruction/candidates";
-export type {
-  CandidateComparison,
-  CandidateReport,
-  CriterionComparison,
-  CriterionDirection,
-  CriterionValue,
-  ExcludedCandidate,
-} from "./reconstruction/candidates";
+export type { CandidateComparison, CandidateReport, ExcludedCandidate } from "./reconstruction/candidates";
+export { decideCriterion, dominanceVerdict, paretoFrontier } from "./dominance";
+export type { CriterionComparison, CriterionDirection, CriterionValue } from "./dominance";
 export { BUDGET_NAMES, BUDGET_TERMS, budgetCarriesScale, evaluateBudgets } from "./reconstruction/budgets";
 export type { BudgetMagnitude, BudgetName, BudgetResult, BudgetTerm, DeclaredBudget } from "./reconstruction/budgets";
 export { MASK_THRESHOLD, MASK_ASPECT_TOLERANCE, maskAllows, maskMismatch } from "./reconstruction/masks";

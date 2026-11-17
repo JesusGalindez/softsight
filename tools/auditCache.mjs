@@ -32,7 +32,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { trimDirectory } from "./lru.mjs";
@@ -52,6 +52,22 @@ function meshKey(mesh) {
   return hash.digest("hex").slice(0, 32);
 }
 
+/** El fichero de auditorías de un modelo: uno por ruta. */
+function cacheFile(root, modelPath) {
+  return join(root, `${createHash("sha256").update(`${CACHE_VERSION}|${modelPath}`).digest("hex").slice(0, 16)}.json`);
+}
+
+/** Olvida las auditorías de un modelo que va a dejar de existir: su fichero se
+ * nombra por la ruta y nadie volvería a abrirlo (`forgetModelCache`, el mismo
+ * motivo). */
+export function forgetAuditCache(modelPath, { root = ".cache/audits" } = {}) {
+  try {
+    unlinkSync(cacheFile(root, modelPath));
+  } catch {
+    // No estaba: no hay nada que olvidar.
+  }
+}
+
 /**
  * Devuelve `{ auditMesh, flush }`. `auditMesh` se le pasa a `reviewModel`;
  * `flush` guarda lo nuevo, y se llama una vez, al final.
@@ -59,7 +75,7 @@ function meshKey(mesh) {
 export function openAuditCache(modelPath, auditMesh, { root = ".cache/audits", enabled = true } = {}) {
   if (!enabled) return { auditMesh, flush() {} };
 
-  const file = join(root, `${createHash("sha256").update(`${CACHE_VERSION}|${modelPath}`).digest("hex").slice(0, 16)}.json`);
+  const file = cacheFile(root, modelPath);
   let entries = {};
   try {
     const stored = JSON.parse(readFileSync(file, "utf8"));

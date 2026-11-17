@@ -37,6 +37,12 @@
  * y vale igual entre dos candidatos.
  */
 
+import {
+  decideCriterion as decidir,
+  dominanceVerdict,
+  type CriterionComparison,
+  type CriterionValue,
+} from "../dominance";
 import type { Coverage } from "./coverage";
 import type { Confidence } from "./confidence";
 
@@ -59,25 +65,9 @@ export interface CandidateReport {
   cameras?: { declared: number; withImage: number };
 }
 
-export type CriterionDirection = "MAYOR_MEJOR" | "MENOR_MEJOR";
-
-export interface CriterionValue {
-  candidate: string;
-  value: number;
-  /** Intervalo de dos sigmas cuando la medida es de muestreo. Ausente si es exacta. */
-  interval?: [number, number];
-}
-
-export interface CriterionComparison {
-  name: string;
-  direction: CriterionDirection;
-  /** EXACT compara estricto; APPROXIMATE necesita que los intervalos no se toquen. */
-  measurementClass: "EXACT" | "APPROXIMATE";
-  values: CriterionValue[];
-  /** Quién gana. `null` con motivo cuando no se puede decidir. */
-  best: string | null;
-  reason?: string;
-}
+// La dirección, el valor y la comparación de un criterio viven en `../dominance`:
+// el barrido de variantes decide con la misma regla, y dos copias acabarían
+// decidiendo distinto el mismo empate.
 
 export interface ExcludedCandidate {
   candidate: string;
@@ -127,45 +117,6 @@ function nombres(reports: readonly CandidateReport[]): string[] {
     vistos.set(declarado, orden);
     return `${declarado}#${orden}`;
   });
-}
-
-/**
- * Decide un criterio a partir de sus valores.
- *
- * Con medidas exactas basta comparar; con medidas de muestreo hacen falta los
- * intervalos, y **si los del mejor y el segundo se tocan, no hay decisión**.
- */
-function decidir(
-  name: string,
-  direction: CriterionDirection,
-  measurementClass: "EXACT" | "APPROXIMATE",
-  values: CriterionValue[],
-): CriterionComparison {
-  const base = { name, direction, measurementClass, values };
-  if (values.length < 2) {
-    return { ...base, best: null, reason: "MEDIDA_AUSENTE_EN_ALGUN_CANDIDATO" };
-  }
-
-  const mejorQue = (a: number, b: number) => (direction === "MAYOR_MEJOR" ? a > b : a < b);
-  const ordenados = [...values].sort((a, b) =>
-    mejorQue(a.value, b.value) ? -1 : mejorQue(b.value, a.value) ? 1 : a.candidate.localeCompare(b.candidate),
-  );
-  const [primero, segundo] = ordenados;
-
-  if (primero.value === segundo.value) {
-    return { ...base, best: null, reason: "EMPATE" };
-  }
-  if (measurementClass === "APPROXIMATE") {
-    const [bajoA, altoA] = primero.interval ?? [primero.value, primero.value];
-    const [bajoB, altoB] = segundo.interval ?? [segundo.value, segundo.value];
-    // Solapan si ninguno queda entero por encima del otro. Con muestreo, dos
-    // números distintos que caen dentro del error del otro no son dos números
-    // distintos.
-    if (bajoA <= altoB && bajoB <= altoA) {
-      return { ...base, best: null, reason: "INTERVALOS_SOLAPADOS" };
-    }
-  }
-  return { ...base, best: primero.candidate };
 }
 
 /** Orden del veredicto: certificar es mejor que no saber, y no saber que fallar. */
@@ -294,24 +245,12 @@ export function compareCandidates(reports: readonly CandidateReport[]): Candidat
   recuento("aristas-no-manifold", (m) => m.nonManifoldEdges);
   recuento("triangulos-degenerados", (m) => m.degenerateTriangles);
 
-  // Dominancia: mejor o igual en todos los criterios decididos, y estrictamente
-  // mejor en alguno. Los indecidibles **no cuentan a favor ni en contra** — no se
-  // sabe quién gana ahí, y darlo por empate sería decidirlo.
-  const decididos = criteria.filter((criterion) => criterion.best !== null);
-  let verdict: string | null = null;
-  let reason: string | undefined = "NINGUNO_DOMINA";
-  if (decididos.length === 0) {
-    reason = "NINGUN_CRITERIO_DECIDIBLE";
-  } else {
-    for (const { id } of compatibles) {
-      const ganaTodos = decididos.every((criterion) => criterion.best === id);
-      if (ganaTodos) {
-        verdict = id;
-        reason = undefined;
-        break;
-      }
-    }
-  }
+  // Dominancia: el mejor en todos los criterios decididos. Los indecidibles **no
+  // cuentan a favor ni en contra** — la regla vive en `../dominance`.
+  const { verdict, reason } = dominanceVerdict(
+    compatibles.map((entrada) => entrada.id),
+    criteria,
+  );
 
   return {
     compared: compatibles.map((entrada) => entrada.id),

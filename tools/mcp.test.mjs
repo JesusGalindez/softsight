@@ -52,8 +52,13 @@ const LATEST = PROTOCOL_VERSIONS[0];
  * cada una incrustaba su esquema. No llega a los 6 KB que pedía el plan porque
  * las opciones tipadas de cada herramienta —el motivo de usar MCP— son la mayor
  * parte; el techo está para que no vuelva a crecer sin que nadie lo vea.
+ *
+ * **Subido a propósito con la fase 3**: las cinco de sesión y barrido lo llevan a
+ * 16.632 B con diecinueve. Lo que pesa son las opciones de revisión de
+ * `softsight_open` y `softsight_sweep`, que son estado de la sesión y no se
+ * pueden quitar sin volver a pedirlas en cada turno.
  */
-const CATALOG_MAX_BYTES = 12_000;
+const CATALOG_MAX_BYTES = 17_500;
 
 /** Abre el servidor MCP y devuelve con qué hablarle por JSON-RPC. */
 function openServer(env = {}) {
@@ -146,7 +151,8 @@ try {
       assert.ok(tool.description.length > 0, `${tool.name}: sin descripción`);
       assert.equal(tool.inputSchema.type, "object", `${tool.name}: el esquema debe ser un objeto`);
       assert.equal(typeof tool.annotations?.readOnlyHint, "boolean", `${tool.name}: sin readOnlyHint`);
-      assert.equal(tool.annotations.idempotentHint, true);
+      // Declarada en todas; cuál no es idempotente lo comprueba el bloque 6.
+      assert.equal(typeof tool.annotations.idempotentHint, "boolean", `${tool.name}: sin idempotentHint`);
     }
     // Ligero: la escena y el parche nombran su forma, no la copian.
     const escena = lista.find((tool) => tool.name === "softsight_scene").inputSchema.properties.scene;
@@ -418,6 +424,68 @@ try {
     } finally {
       conRaiz.close();
     }
+  }
+
+  // 6. Sesiones y barrido por MCP: el identificador vuelve en su bloque, el turno
+  // es el del CLI con el turno anterior como referencia, deshacer vuelve al
+  // estado de apertura, y el barrido trae la fila de la llamada suelta. Sin
+  // pliego, para que sea barato: los píxeles los cubre `test:session`.
+  {
+    const lista = (await server.call("tools/list", {})).message.result.tools;
+    const hint = (name) => lista.find((tool) => tool.name === name).annotations.idempotentHint;
+    assert.equal(hint("softsight_apply"), false, "aplicar dos veces no deja el mismo estado que aplicarlo una");
+    assert.equal(hint("softsight_sweep"), true);
+
+    const base = { model: MODEL, tile: 160, noCache: true, inspectOnly: true, summary: false };
+    const abierta = await server.tool("softsight_open", base);
+    const [sesion] = abierta.artifacts;
+    const { session } = JSON.parse(sesion.text);
+    assert.deepEqual(abierta.structuredContent.session, session);
+    const r0 = await runCli(["--model", MODEL, "--inspect-only", "true", "--tile", "160", "--no-cache", "true"]);
+    assert.deepEqual(comparable(abierta.report), comparable(r0.report));
+    await writeFile(join(work, "s-r0.json"), `${JSON.stringify(r0.report)}\n`);
+
+    const patch = { edits: [{ op: "translate", target: "rotor-*", delta: [0, 0.1, 0] }] };
+    await writeFile(join(work, "s-p.json"), `${JSON.stringify(patch)}\n`);
+    const aplicada = await server.tool("softsight_apply", { session: session.id, patches: [patch], summary: false });
+    const r1 = await runCli([
+      "--model", MODEL, "--patch", join(work, "s-p.json"), "--baseline-report", join(work, "s-r0.json"),
+      "--inspect-only", "true", "--tile", "160", "--no-cache", "true",
+    ]);
+    assert.deepEqual(comparable(aplicada.report), comparable(r1.report));
+    assert.equal(aplicada.structuredContent.session.patches, 1);
+
+    const exportada = await server.tool("softsight_export", { session: session.id });
+    await runCli([
+      "--model", MODEL, "--patch", join(work, "s-p.json"), "--inspect-only", "true", "--export", join(work, "s.glb"),
+      "--tile", "160", "--no-cache", "true",
+    ]);
+    const glb = exportada.artifacts.find((block) => block.resource?.uri === "softsight://drone.glb");
+    assert.deepEqual(Buffer.from(glb.resource.blob, "base64"), await readFile(join(work, "s.glb")));
+
+    const deshecha = await server.tool("softsight_undo", { session: session.id });
+    assert.equal(deshecha.structuredContent.session.stateHash, session.stateHash, "deshacer vuelve al estado de apertura");
+    const otra = await server.tool("softsight_undo", { session: session.id });
+    assert.equal(otra.isError, true, "sin nada que deshacer es un error de la herramienta, con su motivo");
+
+    const barrido = await server.tool("softsight_sweep", {
+      model: MODEL,
+      tile: 160,
+      noCache: true,
+      variants: [{ name: "movido", patches: [patch] }],
+      criteria: [{ field: "triangles", direction: "MENOR_MEJOR" }],
+      fields: "triangles,warningsDelta",
+    });
+    const suelta = await runCli([
+      "--model", MODEL, "--patch", join(work, "s-p.json"), "--baseline-report", join(work, "s-r0.json"),
+      "--inspect-only", "true", "--fields", "triangles,warningsDelta", "--tile", "160", "--no-cache", "true",
+    ]);
+    assert.deepEqual(barrido.report.variants[0].row, suelta.report);
+    assert.equal(barrido.report.reason, "NINGUN_CRITERIO_DECIDIBLE", "mover rotores no cambia los triángulos");
+    console.log(
+      "mcp: ok (sesión por MCP: abrir, aplicar y exportar dan lo del CLI con el turno anterior como referencia, " +
+        "deshacer vuelve al stateHash de apertura, y el barrido trae la fila de la llamada suelta)",
+    );
   }
 
   console.log(`mcp: ok (${Object.keys(TOOLS).length} herramientas; las de modelo, iguales al CLI directo)`);

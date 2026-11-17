@@ -31,7 +31,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { trimDirectory } from "./lru.mjs";
@@ -131,6 +131,21 @@ function deserialize(buffer) {
       },
     })),
   };
+}
+
+/**
+ * Olvida la entrada de un fichero que va a dejar de existir. La clave lleva la
+ * ruta, así que nadie volvería a acertarla: solo ocuparía sitio hasta que el LRU
+ * la echara, y de paso echaría antes a otras que sí se piden. Las sesiones y los
+ * barridos (`session.mjs`) la llaman antes de borrar su directorio. Se llama con
+ * el fichero todavía en disco, porque la clave necesita su `mtime` y su tamaño.
+ */
+export function forgetModelCache(path, { root = ".cache" } = {}) {
+  try {
+    unlinkSync(cachePath(root, path));
+  } catch {
+    // No estaba, o el fichero ya no existe: no hay nada que olvidar.
+  }
 }
 
 /**

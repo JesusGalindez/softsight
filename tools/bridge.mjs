@@ -126,7 +126,16 @@ const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 export const COMMANDS = new Set([
   "inspect", "render", "patch", "sample", "scene", "bvh", "story", "staging", "diff", "schema",
   "reconstructionInspect", "reconstructionCoverage", "reconstructionCompare", "productionValidate",
+  "sessionOpen", "sessionApply", "sessionUndo", "sessionExport", "sweep",
 ]);
+
+/**
+ * Las sesiones y el barrido (plan de mejora, fase 3) viven en `session.mjs`:
+ * gobiernan este mismo CLI por `argv`, turno a turno, y solo añaden la cuenta de
+ * ficheros que antes llevaba quien llamaba. Las sesiones necesitan un proceso que
+ * no se muera entre peticiones; el barrido no, es una petición.
+ */
+const SESSION_COMMANDS = new Set(["sessionOpen", "sessionApply", "sessionUndo", "sessionExport", "sweep"]);
 
 /**
  * Los cuatro que reciben **rutas** en vez de base64 (§67, §84). Piden la 2 y no
@@ -266,7 +275,7 @@ function checkFileName(name, slot) {
 
 /** Valida un payload base64 y lo convierte en bytes; los mismos límites para
  * escribir en el sandbox que para cachear el modelo. */
-function decodePayload(payload, slot) {
+export function decodePayload(payload, slot) {
   if (typeof payload !== "object" || payload === null || typeof payload.data !== "string" || typeof payload.name !== "string") {
     throw new BridgeError("invalid-request", `${slot}: cada fichero necesita { name, data } con data en base64`);
   }
@@ -308,16 +317,19 @@ function writeFileModelCached(slot, payload) {
   return target;
 }
 
-function readArtifact(workDir, name, mimeType) {
+/** Un artefacto del directorio de trabajo. `published` es el nombre con que sale,
+ * cuando no es el del fichero: la sesión guarda `pliego-3.png` y lo publica como
+ * `contact-sheet.png`, igual que `render`. */
+export function readArtifact(workDir, name, mimeType, published = name) {
   const path = join(workDir, name);
   const bytes = readFileSync(path);
   if (bytes.length > MAX_ARTIFACT_BYTES) {
     throw new BridgeError("artifact-too-large", `el artefacto '${name}' excede ${MAX_ARTIFACT_BYTES} bytes`);
   }
-  return { name, mimeType, data: bytes.toString("base64") };
+  return { name: published, mimeType, data: bytes.toString("base64") };
 }
 
-function parseOptions(options) {
+export function parseOptions(options) {
   if (options === undefined) return [];
   if (typeof options !== "object" || options === null || Array.isArray(options)) {
     throw new BridgeError("invalid-request", "options debe ser un objeto");
@@ -604,8 +616,12 @@ async function runPackageCommand(request) {
  *
  * `execute(args) -> { exitCode, stdout, stderr }`: lanzar un proceso o llamar al
  * CLI dentro de este. Por defecto, lo primero.
+ *
+ * `sessions` es el almacén de sesiones del proceso residente (`session.mjs`). El
+ * puente de un disparo no tiene ninguno —muere al contestar y se llevaría la
+ * sesión con él—, y entonces los comandos de sesión se rechazan con su motivo.
  */
-export async function handleRequest(request, execute = spawnAgent) {
+export async function handleRequest(request, execute = spawnAgent, sessions = null) {
   if (typeof request !== "object" || request === null || Array.isArray(request)) {
     throw new BridgeError("invalid-request", "la petición debe ser un objeto");
   }
@@ -648,6 +664,12 @@ export async function handleRequest(request, execute = spawnAgent) {
   }
   if (request.files !== undefined && (typeof request.files !== "object" || request.files === null || Array.isArray(request.files))) {
     throw new BridgeError("invalid-request", "files debe ser un objeto");
+  }
+  if (SESSION_COMMANDS.has(request.command)) {
+    // Importación diferida por el mismo motivo que las de paquete: `session.mjs`
+    // importa de aquí, y con los dos `import` arriba el ciclo se cierra.
+    const { runSessionCommand } = await import("./session.mjs");
+    return runSessionCommand(request, execute, sessions);
   }
   return runCommand(request, execute);
 }

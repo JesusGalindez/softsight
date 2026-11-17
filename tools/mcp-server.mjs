@@ -67,6 +67,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { checkBuild } from "./buildFingerprint.mjs";
 import { BridgeError, COMMANDS, PASSTHROUGH, errorResponse, handleRequest } from "./bridge.mjs";
 import { trimDirectory } from "./lru.mjs";
+import { createSessionStore } from "./session.mjs";
 import { SCHEMA_PART_NAMES, runAgent } from "./agent3d.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -169,6 +170,25 @@ const IMAGE_PROPERTY = {
   type: "boolean",
   description: "true: el pliego también como imagen. Solo cuenta con SOFTSIGHT_OUTPUT_ROOT; sin él va siempre.",
 };
+
+/** El identificador de una sesión, tal como lo devolvió `softsight_open`. */
+const SESSION_PROPERTY = { type: "string", description: "El identificador que devolvió softsight_open." };
+
+/** Las opciones que solo recortan la respuesta: valen en cada turno. */
+const PROJECTION_OPTIONS = ["summary", "fields"];
+
+/** La entrada de una sesión o de un barrido: un modelo del disco o una escena. */
+function inputFiles(model, scene) {
+  const files = {};
+  if (model !== undefined) files.model = filePayload(model);
+  if (scene !== undefined) files.scene = documentPayload("escena.json", scene);
+  return files;
+}
+
+/** Parches del agente con la forma que quiere el puente. */
+function patchPayloads(patches) {
+  return patches.map((patch, index) => documentPayload(`parche-${index}.json`, patch));
+}
 
 /**
  * Los comandos del puente que no tienen herramienta, cada uno con su motivo. Lo
@@ -396,6 +416,161 @@ export const TOOLS = {
   },
 
   // ---------------------------------------------------------------------------
+  // Las sesiones (fase 3): el banco lleva la cuenta de pliegos, informes y
+  // parches entre turnos. Un turno es el CLI con la lista entera de parches y el
+  // turno anterior como referencia —`session.mjs`—, así que lo que devuelve es lo
+  // que devolvería esa orden. Viven en este proceso: si se reinicia, se pierden,
+  // y el `stateHash` de la última respuesta dice si se rehízo la misma.
+  softsight_open: {
+    command: "sessionOpen",
+    readOnly: false,
+    idempotent: false,
+    description:
+      "Abre una sesión sobre un modelo o una escena y revisa el turno 0. Las opciones de revisión se fijan " +
+      "aquí; después, softsight_apply compara cada turno con el anterior sin pasar ficheros.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        model: MODEL_PROPERTY,
+        scene: documentProperty("scene", "Escena declarativa, en vez de model."),
+        inspectOnly: { type: "boolean", description: "Sin pliego en ningún turno: más barato, y sin diff." },
+        image: IMAGE_PROPERTY,
+        ...optionProperties([...COMMON_RENDER_OPTIONS, "auditFrames"]),
+      },
+      additionalProperties: false,
+    },
+    build({ model, scene, ...options }) {
+      return { command: "sessionOpen", files: inputFiles(model, scene), options: { summary: true, ...options } };
+    },
+  },
+
+  softsight_apply: {
+    command: "sessionApply",
+    readOnly: false,
+    idempotent: false,
+    description:
+      "Aplica parches a una sesión y la revisa: el informe trae el diff y el warningsDelta contra el turno " +
+      "anterior. Un parche con error de esquema no entra.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        session: SESSION_PROPERTY,
+        patches: {
+          type: "array",
+          minItems: 1,
+          items: documentProperty("patch", "Un parche."),
+          description: "Parches a aplicar, en orden.",
+        },
+        image: IMAGE_PROPERTY,
+        ...optionProperties(PROJECTION_OPTIONS),
+      },
+      required: ["session", "patches"],
+      additionalProperties: false,
+    },
+    build({ session, patches, ...options }) {
+      return {
+        command: "sessionApply",
+        session,
+        files: { patches: patchPayloads(patches) },
+        options: { summary: true, ...options },
+      };
+    },
+  },
+
+  softsight_undo: {
+    command: "sessionUndo",
+    readOnly: false,
+    idempotent: false,
+    description: "Deshace la última llamada a softsight_apply de la sesión y revisa el estado al que vuelve.",
+    inputSchema: {
+      type: "object",
+      properties: { session: SESSION_PROPERTY, image: IMAGE_PROPERTY, ...optionProperties(PROJECTION_OPTIONS) },
+      required: ["session"],
+      additionalProperties: false,
+    },
+    build({ session, ...options }) {
+      return { command: "sessionUndo", session, options: { summary: true, ...options } };
+    },
+  },
+
+  softsight_export: {
+    command: "sessionExport",
+    readOnly: false,
+    description:
+      "El modelo de la sesión tal como está, en GLB u OBJ, y la lista de parches que lo reproduce por el CLI.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        session: SESSION_PROPERTY,
+        format: { type: "string", enum: ["glb", "obj"], description: "glb por defecto." },
+        ...optionProperties(PROJECTION_OPTIONS),
+      },
+      required: ["session"],
+      additionalProperties: false,
+    },
+    build({ session, ...options }) {
+      return { command: "sessionExport", session, options: { summary: true, ...options } };
+    },
+  },
+
+  softsight_sweep: {
+    command: "sweep",
+    readOnly: true,
+    description:
+      "Revisa K variantes —listas de parches sobre un modelo o una escena— en una llamada y las cruza por los " +
+      "criterios declarados: dominancia y frontera, sin nota. Cada fila es la de su llamada suelta.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        model: MODEL_PROPERTY,
+        scene: documentProperty("scene", "Escena declarativa, en vez de model."),
+        variants: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              patches: { type: "array", minItems: 1, items: documentProperty("patch", "Un parche.") },
+            },
+            required: ["patches"],
+            additionalProperties: false,
+          },
+          description: "Las variantes: cada una, una lista de parches sobre la base.",
+        },
+        criteria: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              field: { type: "string", description: "Ruta con puntos en el informe; una lista cuenta por su longitud." },
+              direction: { type: "string", enum: ["MENOR_MEJOR", "MAYOR_MEJOR"] },
+            },
+            required: ["field", "direction"],
+            additionalProperties: false,
+          },
+        },
+        inspectOnly: { type: "boolean", description: "true por defecto: sin pliegos." },
+        ...optionProperties([...COMMON_RENDER_OPTIONS, "auditFrames"]),
+      },
+      required: ["variants"],
+      additionalProperties: false,
+    },
+    build({ model, scene, variants, criteria, ...options }) {
+      return {
+        command: "sweep",
+        files: inputFiles(model, scene),
+        variants: variants.map((variant) => ({
+          ...(variant.name === undefined ? {} : { name: variant.name }),
+          patches: patchPayloads(variant.patches),
+        })),
+        ...(criteria === undefined ? {} : { criteria }),
+        options,
+      };
+    },
+  },
+
+  // ---------------------------------------------------------------------------
   // Los cuatro de paquete (§68). Reciben **rutas**, no base64, y por eso no pasan
   // por `filePayload`: un paquete de reconstrucción no cabe en un argumento.
   // Quién puede leer qué lo decide `SOFTSIGHT_PACKAGE_ROOTS` en el entorno de
@@ -526,12 +701,14 @@ function announce(name, tool, protocol) {
   const entry = { name, description: tool.description, inputSchema: tool.inputSchema };
   if (atLeast(protocol, "2025-03-26")) {
     entry.annotations = {
-      // Las de solo lectura no tocan nada; las otras escriben sus artefactos, y
-      // solo en la raíz declarada. Ninguna destruye nada, y todas son
-      // idempotentes: la misma llamada da el mismo informe, que es el producto.
+      // Las de solo lectura no tocan nada; las otras escriben sus artefactos, solo
+      // en la raíz declarada, o cambian una sesión de este proceso. Ninguna
+      // destruye nada.
       readOnlyHint: tool.readOnly,
       destructiveHint: false,
-      idempotentHint: true,
+      // Todas menos las que cambian una sesión: aplicar dos veces el mismo parche
+      // no deja el mismo estado que aplicarlo una.
+      idempotentHint: tool.idempotent ?? true,
       openWorldHint: false,
     };
   }
@@ -559,6 +736,9 @@ function writeArtifact(artifact) {
  * memoria, así que recompilar no lo cambia. Lo que se compara en cada llamada es
  * si `src/` sigue siendo lo que se cargó. */
 const STARTUP_BUILD = checkBuild();
+
+/** Las sesiones de este proceso: viven mientras el servidor viva. */
+const SESSIONS = createSessionStore();
 
 /**
  * Ejecuta una herramienta. Lo que sale es la respuesta del puente tal cual, con
@@ -590,6 +770,7 @@ async function callTool(name, args, protocol) {
       // paquete traen la suya en `build`, porque hablan otro protocolo.
       { bridgeContractVersion: 1, ...tool.build(rest) },
       runAgent,
+      SESSIONS,
     );
   } catch (error) {
     // Datos mal escritos, opción desconocida, fichero que no existe: es un
@@ -599,6 +780,11 @@ async function callTool(name, args, protocol) {
   }
 
   const content = [{ type: "text", text: JSON.stringify(response.report, null, 2) }];
+  // La sesión, aparte del informe: el informe es el del CLI y no lleva nada que
+  // el CLI no ponga.
+  if (response.session !== undefined) {
+    content.push({ type: "text", text: JSON.stringify({ session: response.session }, null, 2) });
+  }
   const written = [];
   for (const artifact of response.artifacts ?? []) {
     const isImage = artifact.mimeType.startsWith("image/");
@@ -628,7 +814,12 @@ async function callTool(name, args, protocol) {
   if (atLeast(protocol, "2025-06-18")) {
     // El mismo contenido, como objeto. `exitCode` va aquí y no se inventa: es el
     // del CLI —1 si hay alguna certeza—, que por texto el agente no veía.
-    result.structuredContent = { exitCode: response.exitCode, report: response.report, artifacts: written };
+    result.structuredContent = {
+      exitCode: response.exitCode,
+      report: response.report,
+      artifacts: written,
+      ...(response.session === undefined ? {} : { session: response.session }),
+    };
   }
   return result;
 }
@@ -722,6 +913,9 @@ function createSession() {
 /** Bucle JSON-RPC 2.0 por stdio: una petición por línea, una respuesta por línea. */
 export async function serveMcp() {
   if (!STARTUP_BUILD.fresh) process.stderr.write(`aviso: ${STARTUP_BUILD.message}\n`);
+  // Salir por señal también borra los directorios de las sesiones (`session.mjs`).
+  process.once("SIGTERM", () => process.exit(143));
+  process.once("SIGINT", () => process.exit(130));
   const handlers = createSession();
   const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
   const reply = (body) => process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", ...body })}\n`);
