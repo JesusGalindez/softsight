@@ -15,6 +15,15 @@
  * se documenta con sus dos hashes, no un fallo que se tapa: `Math.sin`, `cos`,
  * `tan` y `hypot` no están especificados al último bit por el estándar.
  *
+ * **Y la reconstrucción, desde el 2026-11-17** (plan de mejora, 5.1). La misma
+ * pregunta sobre las medidas de `cube-v1`: el informe declara `coverage` y
+ * `confidence` como `BITWISE_EXACT`, y D28 pide comprobarlo en dos plataformas.
+ * Se fijan las huellas de `measurements`, `coverage` y `confidence`, y las
+ * fracciones de cobertura en claro, en `artifacts/agent/reconstruction-hashes.json`.
+ * **El consejo de captura no entra**: no es reproducible al bit ni dentro de un
+ * mismo proceso (H12 de `plan-mejora.md`), y fijarlo pondría rojo CI de vez en
+ * cuando sin que nada hubiera cambiado. Entra cuando H12 esté aislado.
+ *
  *   node tools/render-hashes.mjs            comprueba (sale 1 si no cuadra)
  *   node tools/render-hashes.mjs --write    refija el fichero desde esta máquina
  *
@@ -24,6 +33,7 @@
 
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -36,6 +46,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "..");
 const CLI = resolve(here, "agent3d.mjs");
 const FIXED = resolve(projectRoot, "artifacts/agent/render-hashes.json");
+const FIXED_RECONSTRUCTION = resolve(projectRoot, "artifacts/agent/reconstruction-hashes.json");
 
 /**
  * Los casos que se fijan. Cada uno son los argumentos del CLI **sin** `--out`,
@@ -72,9 +83,49 @@ async function runCase(testCase, outDir) {
   return { contractVersion: report.contractVersion, renderHash: report.renderHash };
 }
 
+/** Huella de un bloque del informe: el JSON tal cual sale, que es lo que se publica. */
+const blockHash = (value) => createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16);
+
+/**
+ * `cube-v1` generado de nuevo en un directorio temporal y medido sin caché: lo que
+ * se fija es lo que mide este binario sobre estos bytes, no lo que alguien guardó.
+ * Cada medida en su propio proceso, como el pliego.
+ */
+async function runReconstructionCase(outDir, run) {
+  const root = join(outDir, `cube-v1-${run}`);
+  await execFileAsync(process.execPath, [resolve(here, "cubeV1.mjs"), "--out", root], { cwd: projectRoot });
+  let stdout;
+  try {
+    ({ stdout } = await execFileAsync(
+      process.execPath,
+      [resolve(here, "reconstruction.mjs"), "inspect", join(root, "manifest.json"), "--no-cache"],
+      { cwd: projectRoot, maxBuffer: 64 * 1024 * 1024 },
+    ));
+  } catch (error) {
+    if (!error.stdout) throw error;
+    stdout = error.stdout;
+  }
+  const report = JSON.parse(stdout);
+  const { coverage } = report;
+  return {
+    name: "cube-v1",
+    contractVersion: report.contractVersion,
+    measurements: blockHash(report.measurements),
+    coverage: blockHash(coverage),
+    confidence: blockHash(report.confidence),
+    coverageRatios: {
+      observed: coverage.observedAreaRatio,
+      triangulated: coverage.triangulatedAreaRatio,
+      weak: coverage.weakAreaRatio,
+      unobserved: coverage.unobservedAreaRatio,
+    },
+  };
+}
+
 const write = process.argv.includes("--write");
 const outDir = await mkdtemp(join(tmpdir(), "softsight-hashes-"));
 const observed = [];
+let reconstruction;
 
 try {
   for (const testCase of CASES) {
@@ -90,13 +141,24 @@ try {
     );
     observed.push({ name: testCase.name, args: testCase.args, ...first });
   }
+  reconstruction = await runReconstructionCase(outDir, 1);
+  assert.deepEqual(
+    await runReconstructionCase(outDir, 2),
+    reconstruction,
+    "cube-v1: dos mediciones en dos procesos dieron números distintos",
+  );
+  console.log(
+    `determinismo: ok (cube-v1: cobertura ${reconstruction.coverage}, confianza ${reconstruction.confidence} ` +
+      `dos veces, contrato ${reconstruction.contractVersion})`,
+  );
 } finally {
   await rm(outDir, { recursive: true, force: true });
 }
 
 if (write) {
   await writeFile(FIXED, `${JSON.stringify({ schemaVersion: 1, cases: observed }, null, 2)}\n`);
-  console.log(`determinismo: fijados ${observed.length} casos en ${FIXED}`);
+  await writeFile(FIXED_RECONSTRUCTION, `${JSON.stringify({ schemaVersion: 1, cases: [reconstruction] }, null, 2)}\n`);
+  console.log(`determinismo: fijados ${observed.length} casos en ${FIXED} y cube-v1 en ${FIXED_RECONSTRUCTION}`);
 } else {
   const fixed = JSON.parse(await readFile(FIXED, "utf8"));
   assert.equal(fixed.schemaVersion, 1, "render-hashes.json: schemaVersion desconocida");
@@ -106,4 +168,16 @@ if (write) {
     "el pliego no coincide con el hash fijado en artifacts/agent/render-hashes.json",
   );
   console.log(`determinismo: ok (${observed.length} casos == artifacts/agent/render-hashes.json)`);
+  const fixedReconstruction = JSON.parse(await readFile(FIXED_RECONSTRUCTION, "utf8"));
+  assert.equal(fixedReconstruction.schemaVersion, 1, "reconstruction-hashes.json: schemaVersion desconocida");
+  assert.deepEqual(
+    [reconstruction],
+    fixedReconstruction.cases,
+    "las medidas de cube-v1 no coinciden con artifacts/agent/reconstruction-hashes.json",
+  );
+  console.log("determinismo: ok (cube-v1 == artifacts/agent/reconstruction-hashes.json: medidas, cobertura y confianza)");
 }
+console.log(
+  "determinismo: fuera de alcance — el consejo de captura de cube-v1 no se fija: no es reproducible al bit ni " +
+    "dentro de un mismo proceso (H12), y fijarlo haría de esta puerta un rojo intermitente",
+);

@@ -1,0 +1,128 @@
+{
+  "documentType": "softsight.status",
+  "statusVersion": 1,
+  "softsight": "0.1.0",
+  "contracts": {
+    "report": 3,
+    "bridge": 2,
+    "animationAudit": 1,
+    "storyAudit": 1,
+    "stagingAudit": 1,
+    "reconstructionPackage": "0.1",
+    "reconstructionReport": "0.3"
+  },
+  "decisions": {
+    "total": 34,
+    "IMPLEMENTADA": [
+      "D1",
+      "D2",
+      "D3",
+      "D4",
+      "D6",
+      "D7",
+      "D8",
+      "D9",
+      "D10",
+      "D11",
+      "D13",
+      "D14",
+      "D15",
+      "D16",
+      "D17",
+      "D18",
+      "D19",
+      "D20",
+      "D21",
+      "D22",
+      "D23",
+      "D24",
+      "D25",
+      "D27",
+      "D29",
+      "D30",
+      "D31",
+      "D32",
+      "D33",
+      "D34"
+    ],
+    "IMPLEMENTADA a medias": [
+      "D12"
+    ],
+    "ACORDADA": [
+      "D5",
+      "D26",
+      "D28"
+    ],
+    "PROPUESTA": [],
+    "REVERTIDA": []
+  },
+  "gates": {
+    "inSuite": 64,
+    "outsideSuite": [
+      "test:determinism",
+      "test:model-cache",
+      "test:worker"
+    ],
+    "needEditorFixture": [
+      "animation-contract",
+      "bridge",
+      "glb-loader",
+      "glb-writer",
+      "sample-surface"
+    ]
+  },
+  "bridge": {
+    "commands": [
+      "inspect",
+      "render",
+      "patch",
+      "sample",
+      "scene",
+      "bvh",
+      "story",
+      "staging",
+      "diff",
+      "schema",
+      "reconstructionInspect",
+      "reconstructionCoverage",
+      "reconstructionCompare",
+      "productionValidate",
+      "sessionOpen",
+      "sessionApply",
+      "sessionUndo",
+      "sessionExport",
+      "sweep",
+      "status",
+      "partition"
+    ]
+  },
+  "mcp": {
+    "tools": [
+      "softsight_inspect",
+      "softsight_render",
+      "softsight_patch",
+      "softsight_sample",
+      "softsight_diff",
+      "softsight_partition",
+      "softsight_scene",
+      "softsight_story",
+      "softsight_staging",
+      "softsight_bvh",
+      "softsight_open",
+      "softsight_apply",
+      "softsight_undo",
+      "softsight_export",
+      "softsight_sweep",
+      "softsight_reconstruction_inspect",
+      "softsight_reconstruction_coverage",
+      "softsight_reconstruction_compare",
+      "softsight_production_validate",
+      "softsight_status",
+      "softsight_schema"
+    ]
+  },
+  "cli": {
+    "flags": 53
+  },
+  "next": "docs/mapa-del-proyecto.md §5: qué toca ahora y de quién es, escrito a mano"
+}

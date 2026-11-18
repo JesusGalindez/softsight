@@ -285,10 +285,12 @@ Un agente que llega a la CLI tiene que leerse 7,4 KB de `--help`, decidir qué b
 combina, construir una línea de órdenes y parsear el informe. Ninguno de esos errores lo
 caza el esquema, porque el esquema valida la **entrada**, no la **invocación**.
 
-`tools/mcp-server.mjs` publica siete herramientas tipadas —`softsight_inspect`,
-`_render`, `_patch`, `_scene`, `_story`, `_bvh` y `_schema`— por JSON-RPC sobre stdio, sin
-dependencias. `softsight_inspect` devuelve el resumen por defecto. Para registrarlo en un
-cliente MCP:
+<!-- generado: herramientas-mcp -->
+`tools/mcp-server.mjs` publica 21 herramientas tipadas por JSON-RPC sobre stdio, sin dependencias, una por cada comando del puente: `softsight_inspect`, `softsight_render`, `softsight_patch`, `softsight_sample`, `softsight_diff`, `softsight_partition`, `softsight_scene`, `softsight_story`, `softsight_staging`, `softsight_bvh`, `softsight_open`, `softsight_apply`, `softsight_undo`, `softsight_export`, `softsight_sweep`, `softsight_reconstruction_inspect`, `softsight_reconstruction_coverage`, `softsight_reconstruction_compare`, `softsight_production_validate`, `softsight_status`, `softsight_schema`.
+<!-- /generado: herramientas-mcp -->
+
+`softsight_inspect` devuelve el resumen por defecto. Dentro de este repositorio no hace
+falta registrarlo: `.mcp.json` lo hace. Para registrarlo en otro cliente MCP:
 
 ```json
 {

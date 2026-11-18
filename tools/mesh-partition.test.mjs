@@ -21,7 +21,7 @@
 
 import assert from "node:assert/strict";
 
-import { auditPartition, partitionTriangles } from "../dist-node/agent3d.mjs";
+import { auditPartition, auditPartitionDocument, partitionTriangles } from "../dist-node/agent3d.mjs";
 
 const SEGMENTS = 8;
 const H = 1; // el cuerpo va de -1 a 1 en los tres ejes
@@ -239,6 +239,10 @@ function zOf(t) {
   assert.equal(half.parts[0].boundary.edges, 32);
   assert.equal(half.parts[1].boundary.edges, 32);
   assert.equal(half.parts[0].boundary.length, 8); // 32 × 0,25
+  // El total del corte cuenta cada arista una vez: las 8 de la costura y las 32
+  // del plano están en las dos partes, y el total no las suma dos veces.
+  assert.deepEqual(seam.cut, { edges: 8, length: 2 });
+  assert.deepEqual(half.cut, { edges: 32, length: 8 });
 
   assert.ok(
     half.parts[0].boundary.edges > 2 * seam.parts[0].boundary.edges,
@@ -256,5 +260,39 @@ function zOf(t) {
   assert.equal(again.parts[0].boundary.length, half.parts[0].boundary.length);
   console.log(
     `partición: ok (la costura abre ${seam.parts[0].boundary.edges} aristas y el corte por la mitad ${half.parts[0].boundary.edges}: la medida distingue, y dos pasadas dan el mismo número)`,
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* 7. El documento de `--partition`: lo que no encaja es un error de   */
+/*    datos, no una medida rara                                        */
+/* ------------------------------------------------------------------ */
+
+{
+  const doc = (parts) => ({ partitionVersion: 1, parts });
+  const report = auditPartitionDocument(body, doc([
+    { name: "resto", triangles: REST },
+    { name: "anillo", triangles: ring },
+  ]));
+  assert.deepEqual(report.mesh, { triangles: TRIANGLES, vertices: body.positions.length / 3 });
+  assert.deepEqual(report.cut, { edges: 8, length: 2 });
+  assert.deepEqual(report.parts.map((part) => [part.name, part.positionsFrom]), [["resto", "original"], ["anillo", "original"]]);
+  assert.deepEqual(report.parts[1].boundary, auditPartition(body, partitionTriangles(body, REST, ring)).parts[1].boundary);
+
+  // Con posiciones propias, el vértice movido se ve igual que en la función.
+  const movidas = Array.from(body.positions);
+  movidas[body.indices[ring[0] * 3] * 3 + 1] += 0.5;
+  const conPosiciones = auditPartitionDocument(body, doc([{ name: "anillo", triangles: ring, positions: movidas }]));
+  assert.equal(conPosiciones.parts[0].positionsFrom, "pieza");
+  assert.equal(conPosiciones.parts[0].vertices.moved, 1);
+
+  assert.throws(() => auditPartitionDocument(body, { partitionVersion: 2, parts: [{ name: "a", triangles: [0] }] }), /lee la 1/);
+  assert.throws(() => auditPartitionDocument(body, doc([{ name: "a", triangles: [0] }, { name: "a", triangles: [1] }])), /dos piezas llamadas «a»/);
+  assert.throws(() => auditPartitionDocument(body, doc([{ name: "a", triangles: [0], positions: [0, 0, 0] }])), /sin el mismo largo/);
+  assert.throws(() => auditPartitionDocument(body, doc([{ name: "a", triangels: [0] }])), /¿querías decir triangles\?/);
+  assert.throws(() => auditPartitionDocument(body, doc([])), /no tiene piezas/);
+  console.log(
+    "partición: ok (el documento de --partition da las mismas medidas que la función, con posiciones propias delata " +
+      "el vértice movido, y otra versión, un nombre repetido, otro largo o una errata son errores con su motivo)",
   );
 }

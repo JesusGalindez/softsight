@@ -63,6 +63,7 @@ export const GATES = [
   "bridge.test.mjs", // 15,5 s — lanza el CLI muchas veces, y ahora también el residente
   "session.test.mjs", // 11 s — N turnos de sesión contra el CLI lanzado aparte, byte a byte
   "sweep.test.mjs", // 9 s — cada fila del barrido contra su llamada suelta, y el cruce recalculado
+  "residuals.test.mjs", // 10,4 s — R8: la malla contra máscaras y profundidad, la caja analítica como verdad
   "incremental.test.mjs", // 5,5 s — seis revisiones del dron con contrato de topología
   "mcp.test.mjs", // 5,2 s — siete herramientas, cada una contra el CLI directo
   "summary.test.mjs", // 4,3 s — renderiza el dron entero para medir el recorte
@@ -121,6 +122,7 @@ export const GATES = [
   "geometry.test.mjs", // 0,2 s
   "text.test.mjs", // 0,2 s
   "agents-md.mjs --check", // 0,2 s — no acaba en .test.mjs porque también regenera
+  "estado.test.mjs", // 1,5 s — estado.json y los bloques al día, y ningún recuento a mano en la prosa vigilada
   "glb-writer.test.mjs", // 0,1 s
 ];
 

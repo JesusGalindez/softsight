@@ -129,7 +129,7 @@ hecho por los dos lados, da el mismo hash.
 | `test:framing` | Que el informe basta para reproducir el encuadre: las 84 cajas de `partScreenBoxes` de cuatro fixtures, recalculadas con la cámara publicada tras pasar el informe por JSON, más el control congelado que fija el editor | `npm run test:framing` (softsight), también dentro de `test:animation` |
 | `test:screen` | La auditoría 2D del movimiento contra fotogramas calculados a mano: fuera de cuadro, entrada a ciegas, oclusión prolongada, el umbral que manda y lo que ya se tapaba en reposo; más el ejemplar animado por el CLI | `npm run test:screen` (softsight), también dentro de `test:animation` |
 | `test:incremental` | El informe con contrato de topología, con la caché de auditoría fría, caliente y sin caché, y tras un parche que cambia la malla | `npm run test:incremental` (softsight), también dentro de `test:animation` |
-| `test:mcp` | Cada una de las siete herramientas MCP contra el CLI directo —informe, pliego y GLB byte a byte—, y que los esquemas de parámetros son la traducción de `SCENE_SCHEMA` y `PATCH_SCHEMA` | `npm run test:mcp` (softsight), también dentro de `test:animation` |
+| `test:mcp` | Cada herramienta MCP contra el CLI directo —informe, pliego y GLB byte a byte—, una por comando del puente, el techo del catálogo, los errores dentro del resultado y las sesiones | `npm run test:mcp` (softsight), también dentro de `test:animation` |
 | `test:summary` | El informe recortado contra el completo: cada clave del resumen es la misma, el resumen del dron cabe en 2.000 B, una ruta de `--fields` que no existe sale 2 con sugerencia, y la unión de las siete partes de `--schema` es el `--schema` completo | `npm run test:summary` (softsight), también dentro de `test:animation` |
 | `test:text-plan` | El plan de cartel: normalización de la copia, geometría de la caja, la escala que cabe, los colores por rol y la integración con el render | `npm run test:text-plan` (softsight), también dentro de `test:animation` |
 | `test:codes` | El registro de códigos de aviso contra `src/soft/`, en las dos direcciones, y contra lo que publica `--schema` | `npm run test:codes` (softsight), también dentro de `test:animation` |
@@ -142,20 +142,22 @@ ejecutan sin argumentos; pasar los tuyos después de `--` los sustituye.
 **Quién las ejecuta, desde el 2026-08-09.** `.github/workflows/verify.yml` corre
 tipos, las puertas y el determinismo en cada empujón, con la versión de Node
 tomada de `.nvmrc`. `npm run verify` es la misma orden en local. Aviso de
-alcance: cinco puertas —`animation-contract`, `glb-loader`, `sample-surface`,
-`glb-writer` y `bridge`— leen el fixture certificado del editor, que es un
-repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su
-motivo impreso. El verde de CI son tipos, determinismo en dos sistemas y **23 de
-las 28 puertas**; las cinco restantes solo las cierra una ejecución local con los
-dos repositorios al lado. `resources` corre en CI —su malla la genera el propio
+alcance, con los recuentos generados por `tools/estado.mjs`:
+
+<!-- generado: puertas-ci -->
+La suite (`npm run test:animation`) son 64 puertas. Estas 5 leen el fixture certificado del editor, que es un repositorio privado, y **en CI no corren**: se declaran «no ejecutada» con su motivo impreso — `animation-contract`, `bridge`, `glb-loader`, `glb-writer`, `sample-surface`. Fuera de la suite quedan `test:determinism`, `test:model-cache`, `test:worker`; de esas, CI corre `test:determinism` aparte, en dos sistemas.
+<!-- /generado: puertas-ci -->
+
+Las que piden el fixture del editor solo las cierra una ejecución local con los dos
+repositorios al lado. `resources` corre en CI —su malla la genera el propio
 repositorio— pero **solo el escalón de 100k**: el de 5M pide `SOFTSIGHT_HEAVY=1` y
 sin él se declara «no ejecutada» con su motivo, D22. La ruta se resuelve en `tools/fixtures.mjs` y
 `SOFTSIGHT_FIXTURES` la sustituye.
 
-Estado hoy, verificado el 2026-08-12: **ambas puertas en `accepted`; las 143
-comprobaciones de softsight en verde**, 28 puertas. El número ya no se lleva a mano: lo
-imprime `npm run test:animation` al terminar, contando las líneas `: ok` que
-emiten las propias puertas, junto con el tiempo de cada una.
+Estado verificado el 2026-08-12: **ambas puertas en `accepted`**. El recuento de
+comprobaciones de softsight no se lleva a mano: lo imprime `npm run test:animation` al
+terminar, contando las líneas `: ok` que emiten las propias puertas, junto con el tiempo
+de cada una.
 
 En el editor, **410 pruebas en verde y 6 en rojo**: las seis son de `mcp/`, el
 sidecar del paso F4.4 del plan del motor, que está a medio escribir y sin
@@ -171,708 +173,41 @@ convierte en fallo de puerta y no en un número silenciosamente distinto.
 
 ## 5. Qué toca ahora
 
-Orden vigente. Cada punto deja los dos repos verdes antes de pasar al siguiente.
+Lo abierto y de quién es, **y nada más**. Lo hecho vive en
+[`historial.md`](historial.md): el diario que estaba aquí, movido tal cual y con la
+misma numeración —el «mapa §5.21» que cita un documento anterior es el punto 21 del
+historial—. Los recuentos no se escriben a mano en ningún sitio: los da
+`node tools/agent3d.mjs --status`, generado de sus fuentes por `tools/estado.mjs`.
 
-1. **C5 — integración del attach** (hecho). Guarda la referencia completa de
-   superficie en el spawn de partículas, actualiza por frame con el evaluador
-   certificado y cerró la última excepción local de `renderer-spike.ts`.
-   Detalle en [`plan-fases-bcd.md`](plan-fases-bcd.md).
-2. **Fase D — puente local** (hecho). `tools/bridge.mjs` recibe JSON por stdin y
-   devuelve JSON por stdout con sandbox sin shell; el editor lo consume con
-   `softsight-import.mjs`, una sola ruta de importación. Detalle en
-   [`plan-fases-bcd.md`](plan-fases-bcd.md).
-3. **E1 — escritura de esqueleto y clips** (hecho). `serializeSkinnedGlb` en
-   `glbWriter.ts` cierra la asimetría de la que se partía: softsight sabía
-   verificar animación con skinning que no sabía escribir. La puerta
-   `test:glb-writer` reescribe el fixture y comprueba los cuatro hashes de
-   control; el fichero resultante pasa además el gate del editor con `accepted`
-   4/4, así que Three.js valida un GLB nuestro. Detalle en §7.
-4. **E2 — lector de BVH** (hecho). `bvhLoader.ts`: `parseBvh` lee `HIERARCHY` y
-   `MOTION` sin dependencias, y `bvhToSkinnedScene` alimenta directamente al
-   escritor de E1. La tubería `BVH → GLB con esqueleto` está cerrada, así que
-   entra en el pipeline certificado toda la biblioteca de captura de movimiento
-   que existe, incluida la salida de generadores como Kimodo. La puerta
-   `test:bvh` compara la cinemática directa contra el evaluador certificado por
-   dos caminos independientes; el cierre cruzado con Three.js se hizo sobre un
-   esqueleto con tres órdenes de rotación distintos, 4/4 hashes. Detalle en §7.
-5. **E3 — la tubería en la superficie** (hecho). `--bvh captura.bvh --export
-   esqueleto.glb`, con `--bvh-scale` y `--bvh-clip`; comando `bvh` en el puente,
-   el único que no recibe `model`; y un fixture versionado en
-   `artifacts/agent/captura-ejemplo.bvh` con tres órdenes de rotación distintos.
-   La puerta comprueba que **API, CLI y puente producen el mismo GLB byte a
-   byte**: los dos últimos son envoltorios y no deben decidir nada. El
-   `bridgeContractVersion` sigue en 1 porque añadir un comando no rompe a nadie.
-6. **E4 — atado de malla a esqueleto** (hecho). `bindModelToSkeleton` en
-   `skinBinding.ts`, y `--skeleton` + `--bind` en el CLI. Cierra la tubería:
-   BVH → esqueleto → modelo animado que **se puede mirar**. Ver el aviso de
-   alcance más abajo.
-7. **E5 — esqueleto, clips y auditoría de animación declarativos** (hecho).
-   `skeleton`, `bindings` y `clips` en la escena; `rigSpec.ts` los comprueba y
-   traduce, `animationAudit.ts` audita el movimiento. Un agente construye un
-   personaje animado entero en JSON y recibe hechos comprobables sobre él.
-8. **E6 — la escena por el puente** (hecho). Comando `scene` en `bridge.mjs`:
-   antes todo lo declarativo solo se alcanzaba llamando al CLI a mano, y por la
-   vía con sandbox —la que usa el editor— no se llegaba.
-9. **UI de estudio** (hecha, F0–F5 en el repo del editor). Detalle en §6.
-10. **Vida del movimiento** (hecha, en el editor, commit `5217497`). `wiggle.ts`
-    con ruido suave y determinista —puro en `(semilla, tiempo)`, no el PRNG con
-    estado—, `timeOffsetFrames` por capa para el desfase en cascada, e
-    interpolación `spring` en forma cerrada. Pestaña **Vida** en el inspector.
-    Esquema del proyecto 10 → 11.
-11. **Plan del motor** (en curso, otro proceso, en el repo del editor).
-    `docs/PLAN_MOTOR.md` y `AGENTS.md` mandan allí. F0 —gestor de calidad GPU
-    con tiers, presupuesto, muestreo y caché de frames— es el commit `1184cba`.
-    F1 —grafo de escena, registro de recursos y puente con Three— está hecho
-    localmente y sin commitear.
-12. **Historias por agentes** (en curso). Ver
-    [`plan-historias.md`](plan-historias.md), §9 para el orden. Hechos en el
-    editor y sin commitear los pasos 1 y 2: `activeSceneAt` en
-    `src/core/evaluator.ts` —qué escena está activa en un frame y su progreso
-    local, que empieza en 0 y nunca llega a 1 porque el 1 es el primer frame de
-    la siguiente— y `scenes` en el documento, con `composition.durationFrames`
-    derivada de la suma en la validación, que es por donde pasan todas las
-    mutaciones. Esquema del proyecto 11 → 12. Hecho también el paso 3, en
-    softsight y sin commitear: `storySpec.ts` resuelve el guion —roles,
-    duraciones, campos que cada rol exige— y `STORY_SCHEMA` sale por `--schema`
-    con el vocabulario de roles generado de una sola lista. La duración de la
-    pieza se deriva en los dos lados y ninguno la declara. Y el paso 4:
-    `storyAudit.ts` mide texto ilegible por tiempo, rol obligatorio ausente y
-    dos escenas seguidas con el mismo papel, con el ritmo de lectura declarado
-    en el propio informe. Sin heurísticas: los candidatos entran después y
-    marcados. Y el paso 5, en el editor: `scene-roles.ts` convierte los datos de
-    cada escena en capas de texto colocadas en su rango, con el vocabulario
-    congelado en `public/fixtures/softsight-story-schema.json` —traído por el
-    puente con `npm run softsight:story-schema`— y comparado por una prueba, así
-    que los roles del editor no son una copia sin comparar. Y el paso 6: `story`
-    en el puente y `--story` en el CLI —el puente solo ejecuta el CLI, así que
-    sin la bandera no había comando—, con `--reading-rate` para mover la
-    suposición. Sin `model` y sin artefactos: una historia no produce fichero.
-    `bridgeContractVersion` sigue en 1. Y el paso 7, con lo que se cierra el
-    plan: dos ejemplares versionados en `artifacts/agent/guion-*.json`, limpios
-    de avisos y **con formas distintas**, porque dos piezas con la misma
-    secuencia de roles enseñarían una plantilla. La puerta los audita: un
-    ejemplar con avisos enseñaría justo lo que la puerta rechaza.
-13. **Convergencia** (en curso). Ver
-    [`plan-convergencia.md`](plan-convergencia.md). Con F3 del plan del motor, el
-    editor tiene su propio rasterizador por software —`src/engine/cpu/`, raster
-    de Pineda, MSAA 4x, kernel WASM SIMD— y **nadie lo compara con el de
-    softsight**: deuda certificada en el sitio más caro, porque toca la
-    afirmación de exactitud que sostiene el producto. El plan la cierra con una
-    puerta de paridad que compara silueta, cajas y orden en duro y el color con
-    tolerancia declarada; después cierra el bucle de historias con la auditoría
-    de puesta en escena, y solo entonces optimiza. **A0 hecho el 2026-08-05: las
-    dos proyecciones coinciden al píxel** —cero de desviación en 12 cajas y seis
-    vistas—, y para lograrlo el informe publica ahora la cámara de cada vista
-    (`ViewReport.camera`), que antes se tiraba al serializar. **A3 hecho el
-    2026-08-05**: `npm run softsight:parity-gate` en el editor enfrenta los dos
-    rasterizadores. La vista en perspectiva da paridad exacta —0 píxeles sobre
-    9.251—; **A3 y A4 cerrados el mismo día**: la puerta destapó que
-    softsight descartaba caras visibles a incidencia rasante en proyección
-    ortográfica —usaba el test de perspectiva—, y con el arreglo las ocho vistas
-    de los dos fixtures dan **cero píxeles de diferencia**. `contractVersion`
-    sube a 3 porque se mueven los `renderHash`. De paso destapó que la prueba de profundidad
-    del rasterizador del editor compara `clipZ` sin dividir por w — arreglo del
-    plan del motor, no de este. **A5 hecho el 2026-08-05**: el dron entra en la
-    puerta y pasa, y los tres fixtures corren en seis segundos contra los treinta
-    de presupuesto. **E2 hecha el 2026-08-10**: `screenAudit.ts` audita lo que se
-    ve —fuera de cuadro, entrada a ciegas, oclusión prolongada— proyectando la
-    caja de cada pieza con la cámara del pliego, sin rasterizar; puerta
-    `test:screen`. **E1 hecha por la mitad el 2026-08-10**: la de softsight —el
-    informe basta para reproducir el encuadre, 84 cajas con cero diferencias, y
-    el control congelado en `artifacts/agent/encuadre-control.json` que el editor
-    fija—; la del editor, comparar sus cajas contra las nuestras, sigue allí.
-14. **Geometría compleja declarativa** (hecha). El agente ya no está limitado a
-    colocar primitivas: perfiles con nombre —círculo, superelipse, Gielis y NACA—,
-    `loft` de secciones **con recorrido opcional**, `sweep` de un perfil por un
-    recorrido, cuatro deformadores en cadena y `repeat` radial y espejo. Todo con su número exacto:
-    dos secciones iguales dan lo mismo que una extrusión, un barrido cerrado da lo
-    mismo que el toro, y la torsión conserva el volumen firmado. Plan cerrado en
-    [`plan-geometria.md`](plan-geometria.md), puerta `test:geometry` con 46
-    comprobaciones, ejemplar en `artifacts/agent/pieza-geometria.json`. El
-    recorrido del `loft` llegó el 2026-08-11 desde la §9 de su plan y sin
-    maquinaria nueva: `createSweep` se abrió a llevar **el perfil por estación**,
-    así que un loft de dos secciones iguales por una curva da la misma malla que
-    barrer ese perfil por ella —2,2e-16, el epsilon del doble—.
-15. **El informe separa defecto de observación** (hecho el 2026-08-10). Cada aviso
-    publica su `severity` —tomada de `warningCodes.ts` en el sitio donde se emite,
-    no escrita a mano— y el código de salida cuenta **certezas**, no avisos. Lo que
-    lo forzó fue una medida: el ejemplar `artifacts/agent/pieza-geometria.json`
-    daba 14 avisos, los 14 de `SIMETRIA_ROTA` y `PIVOTE_DESCENTRADO`, cero
-    defectos, y **salía 1**; la pieza que un agente copia lo primero fallaba la
-    orden. `PIVOTE_DESCENTRADO` pasa a `candidato` porque la medida es exacta pero
-    la conclusión supone que la pieza va a rotar, que es intención. Ningún aviso
-    desaparece —los 14 siguen en el informe y el ejemplar sale 0— y ningún hash se
-    movió: el pliego del dron sigue en `46228b7c` y `contractVersion` en 3. La
-    puerta `test:geometry` deja de excusar dos códigos y exige cero avisos de
-    `certeza` sobre el ejemplar. Queda anotado en
-    [`plan-geometria.md`](plan-geometria.md) §9.
-16. **Pesos declarados por fórmula** (hecho el 2026-08-10; plan cerrado). Ver [`plan-pesos.md`](plan-pesos.md). Es
-    el desbloqueo que sigue al atado rígido de E4 —piel suave, mallas continuas—
-    sin cruzar la línea que E4 trazó: el agente declara la región y la curva, la
-    herramienta evalúa una función determinista, y nadie adivina a qué hueso va
-    un vértice. `blend` en la regla del vínculo reparte el peso entre dos huesos
-    a lo largo del segmento que los une en reposo, con la misma tabla de
-    variación que describe una forma o un movimiento. **La costura del codo pasa
-    de 0,106066 a 6,7e-8** —el suelo de ruido de `Float32`, que ya trae 3,0e-8 en
-    reposo— y el atado rígido sale **byte a byte** igual que antes. El paso que
-    podía matar el plan, el cierre cruzado, salió a favor: los cuatro hashes de
-    control del GLB con pesos declarados **coinciden con Three.js**, con el
-    control congelado en `artifacts/agent/codo-banda-poses.json` y la puerta
-    `test:blend-contract`, que corre también en CI porque compara un número y no
-    ejecuta nada del editor. `skinAudit.ts` añade los cuatro invariantes
-    —`VERTICE_SIN_HUESO`, `PESOS_SIN_SUMAR`, `COSTURA_ROTA` y
-    `TORSION_APLASTADA`—, con lo que la tabla de códigos pasa de 36 a 40. La
-    costura solo se reprocha **donde hay banda**: dos piezas rígidas atadas a
-    huesos distintos que comparten vértices tienen pesos distintos por
-    definición, y avisar ahí sería repetir el ruido de `SIMETRIA_ROTA`. El
-    ejemplar es `artifacts/agent/codo-banda.json`, limpio de defectos y
-    certificado por la misma puerta. Límite conocido: una regla lleva **una**
-    banda, así que una pieza intermedia solo suelda uno de sus dos extremos.
-    Se alcanza por los cuatro caminos —API, `--scene`, `--bind` y el puente—, y la
-    puerta comprueba que los tres primeros dan **el mismo GLB byte a byte**. El
-    informe publica `mode` y `blendedParts`, que antes eran el literal `"rigid"`.
-    `contractVersion` sigue en 3 y `bridgeContractVersion` en 1: todo es aditivo.
-    Una regla admite **una banda o una lista** —tres como mucho, porque la cuarta
-    influencia de glTF se la lleva siempre su hueso—, con lo que una pieza con
-    costura por los dos extremos suelda las dos: el ejemplar
-    `artifacts/agent/brazo-articulado.json` pasa de abrirse 9,6e-2 y 4,5e-2 a
-    7,0e-8 y cero. Solapar bandas vale; que entre todas se lleven más de 1 es un
-    error del atado, porque dejaría al hueso de la regla en negativo.
-17. **B-R2 — la mitad que pagaba D32, hecha; el resto sigue aparcado.** D32 exige
-   que la conversión entre la convención canónica de matrices y la de glTF ocurra
-   **exactamente una vez**, en el adaptador de frontera. **No eran dos sitios:
-   eran tres**, y uno en las dos direcciones —`glbLoader.ts`, `animation.ts` y
-   `skinBinding.ts`, este último con la ida y la vuelta—. Las cuatro copias viven
-   ahora en `agent/gltfFrame.ts`, junto con la lectura del contenedor GLB, y
-   `test:gltf-frame` comprueba dos cosas: que las dos rutas den la misma matriz
-   para el mismo nodo, y que `column * 4 + row` no aparezca en `src/` fuera de ese
-   fichero. Lo segundo es lo que impide que la deuda vuelva: dos transposiciones
-   se cancelan y la geometría sale bien colocada por casualidad, así que ningún
-   hash la delata.
-   **Lo que sigue aparcado es lo otro**: unificar el árbol de nodos de los dos
-   lectores, que existen por motivos distintos —uno aplana para rasterizar, el
-   otro conserva la jerarquía para evaluar poses— y cuya fusión arriesga las 296
-   piezas del dron sin que nadie la pida.
-18. **Plan Ω — el coste por turno del agente** (hecho, salvo Ω6.4, que vive en el
-    editor). Ver [`plan-omega.md`](plan-omega.md), que lleva la tabla de antes y
-    ahora. No añadió funcionalidad: atacaba lo que hacía caro operar el banco
-    —16,5 KB por turno, 10.000 tokens de descubrimiento, 0,10 s de arranque por
-    llamada y 47,3 s de suite— y el hueco de que nada de esto lo ejecutaba una
-    máquina. **Ω4 hecha el 2026-08-09**: CI en tres
-    trabajos, `npm run verify` como orden única, y el pliego del dron fijado en
-    `artifacts/agent/render-hashes.json` (`46228b7c`, contrato 3, **el mismo en
-    `ubuntu-latest` y en `macos-latest`**: el determinismo deja de ser política y
-    pasa a ser un hecho medido en dos aritméticas). Destapó que cinco puertas
-    dependen del fixture privado del editor y en CI no corren; ver el aviso de
-    alcance en §4. **Ω7 hecha el mismo día**: `tools/run-tests.mjs` imprime el
-    tiempo de cada puerta y el recuento de comprobaciones, y con eso se vio que
-    `sample-surface` es el 62 % de la CPU de la suite y que esta máquina tiene dos
-    núcleos físicos —repartir entre cuatro procesos la empeoraba de 61 s a 89 s—.
-    El reparto queda apagado tras `SOFTSIGHT_TEST_JOBS` y el objetivo de bajar de
-    20 s pasa a depender de Ω6.2 y Ω6.3, no del paralelismo. **Ω1.3 hecha**: los
-    33 códigos de aviso viven en `warningCodes.ts` y son el tipo del campo
-    `code`, así que emitir uno que no esté en la tabla no compila; salen por
-    `--schema` con su causa, su severidad —certeza o candidato— y su arreglo.
-    **Ω1.1 y Ω1.2 hechas**: `--summary` deja el informe del dron en 1.108 B
-    frente a 16.493 B —un 93 % menos, con sus dos avisos dentro— y `--fields`
-    proyecta rutas con punto; las dos son proyecciones sobre el informe ya
-    construido y no recalculan nada. **Ω1.4 hecha**: `--schema <parte>` baja el
-    descubrimiento de 46.226 B a 12.321 el parche o 940 la muestra, y el completo
-    se construye uniendo las partes. **Ω5 hecha**: `AGENTS.md` en la raíz, 110
-    líneas, con las secciones de comandos, puertas y banderas generadas por
-    `tools/agents-md.mjs`. **Ω2 hecha**: `agent3d --serve` atiende las peticiones
-    del puente sin morirse entre una y otra —0,454 s por proceso contra 0,143 s
-    residente, un 69 % menos—, importando `handleRequest` de `bridge.mjs` para no
-    tener dos contratos; y `tools/lru.mjs` deja el criterio de expulsión escrito
-    una vez para las tres cachés, con lo que `.cache/` deja de crecer sin tope.
-    **Ω3 hecha**: `tools/mcp-server.mjs` publica siete herramientas tipadas por
-    JSON-RPC sobre el modo residente, con los esquemas de parámetros generados de
-    `SCENE_SCHEMA` y compañía; el servidor traduce a una petición del puente y no
-    decide nada. **Ω6 hecha salvo Ω6.4**, que vive en el editor: `sample-surface`
-    de 50,4 s a 0,8 s, la suite de 61 s a 34,5, y el contrato de topología de
-    0,46 s de CPU a 0,02 gracias a una caché de auditoría con clave en la huella
-    de la malla. Ningún hash se movió: el pliego del dron sigue en `46228b7c`.
-19. **Reconstrucción y certificación de producción** (empezada por el único sitio
-    que no depende del contrato). El orden de trabajo está en
-    [`plan-reconstruccion.md`](plan-reconstruccion.md) y **las decisiones de la
-    frontera en [`contrato-videomesh.md`](contrato-videomesh.md)**, que es lo que
-    rige. **Ronda de diseño cerrada el 2026-08-12 tras tres vueltas: 34 decisiones
-    acordadas, 12 principios, ninguna en PROPUESTA y una implementada —D25—**; el
-    resto sigue sin una prueba que falle sin ella. El registro queda
-    congelado —solo se admiten decisiones que bloqueen `cube-v1`— y el único
-    movimiento admisible es de acordada a implementada. **La frontera pública ya
-    está publicada**: `tools/contracts.mjs` genera `contracts/*.schema.json` de
-    los cinco esquemas que valida el código —nunca a mano, D15— y la puerta
-    `test:contracts` los compara con lo commiteado y ejerce el fixture
-    `unknown-field-v1`. Con eso D30 tiene probada su primera fila, campo
-    desconocido es error; las otras dos hablan de un espacio `extensions` que
-    ningún esquema declara, se quedan NOT_RUN con su motivo y **D30 sigue
-    acordada**. Y el **esqueleto de R0-A está en pie**: el esquema del paquete de
-    reconstrucción vive en `src/soft/agent/reconstruction/`, se publica como sexto
-    contrato, y la ingesta comprueba esquema, sandbox e integridad —sin IO, con el
-    sistema de ficheros inyectado— antes de abrir un solo artifact. Eso cierra
-    **D6** y **D21**; D7 y D29 quedan a medias porque sus otras mitades son el
-    informe y el escritor. D21 obligó a extender el esquema en ejecución con
-    `variants`, formas discriminadas por el literal del tipo: `anyOf` no llegaba
-    porque se aplica al campo y no a los elementos de una lista. **`cube-v1` ya se
-    genera aquí** —`npm run cube-v1`, 12,7 KB deterministas con malla, nube,
-    cuatro imágenes renderizadas por el propio motor y su CameraSet— y recorre
-    esquema, sandbox, hashes, PLY y auditoría: 12 triángulos, cerrada, volumen 1.
-    Y **R0-A está cerrado**: `npm run reconstruction -- inspect` recorre el
-    paquete entero y `cube-v1` sale `COMPLETE + PASS` con código 0, con un informe
-    que valida contra su esquema publicado y es idéntico byte a byte entre dos
-    ejecuciones —sin reloj, con el `runId` derivado del manifest—. Con eso son
-    **seis decisiones implementadas: D3, D6, D7, D14, D21 y D25**, y queda un
-    pendiente sin número que ya se aplica: qué certifica R0. La frontera publicada dejó además de tener agujeros:
-    de veinte objetos que admitían campos desconocidos quedan **dos, los dos a
-    propósito** —la tabla de una pista y el `data` de una escena—, y con ellos se
-    cerró uno que no era deuda sino error, `anyOf` emitiendo una forma genérica
-    que aceptaba cualquier objeto al lado de las alternativas de verdad. Y las
-    **convenciones de cámara dejaron de ser una afirmación sin puerta**: la
-    proyección de puntos conocidos se comprueba contra valores dorados y contra la
-    silueta que el rasterizador pintó, lo que destapó que las imágenes de
-    `cube-v1` salían ortográficas mientras el manifest declaraba `PINHOLE`. Y **el árbol de triángulos existe**: `boundsTree.ts`, con
-    `raycast`, `nearestPoint` y `queryAabb` juzgados contra la fuerza bruta y
-    deterministas byte a byte —5M triángulos en 2,56 s de CPU y 85,6 MiB de
-    árbol—. Es la estructura, no la métrica: la cobertura sigue bloqueada por D34.
-    **Diez decisiones implementadas** —D3, D6, D7, D13, D14, D16, D17, D21, D24,
-    D25—, incluida la que descubrió que `JSON.parse` convierte `1e999` en
-    `Infinity` sin que nadie escriba la palabra: un número no finito se rechaza
-    ahora en todo el repositorio. Y **el adaptador de COLMAP lee ya sus tres ficheros**, convirtiendo intrínsecos
-    posicionales a campos con nombre y la pose a la única forma del contrato, con
-    el marco declarado y no convertido; lo comprueban las propias observaciones
-    del fichero, 36 reproyecciones con error máximo de 6,1·10⁻⁹ píxeles. Le faltan
-    los datos reales para cerrarse. Lo siguiente es de los dos, R0-B, y espera al
-    `cube-v1` de VideoMesh. Una tercera mitad
-    entra en escena: VideoMesh reconstruye desde vídeo y SoftSight mide, verifica y
-    certifica lo que salga, sin convertirse en un motor de fotogrametría. Las
-    secciones 0–83 las escribió el agente de VideoMesh; las 84–86 son la respuesta
-    de este lado tras contrastarlas contra el código, y mandan donde se
-    contradigan. De las tres cosas que este párrafo daba por abiertas, **dos las
-    cerró el registro de decisiones y queda una**: el transporte del paquete lo
-    fija **D1** —filesystem y rutas, nada de base64 por el puente— y dónde viven
-    `reconstruction/` y `production/` lo fija **D27** —aquí, bajo
-    `src/soft/agent/`, con frontera modular estricta—. La que sigue abierta es
-    **en qué idioma van los códigos nuevos**, porque la tabla de
-    `warningCodes.ts` es una y la comparan las dos direcciones de `test:codes`;
-    es decisión de criterio y afecta a VideoMesh, así que no la toma un lado
-    solo. Queda anotada en [`plan-reconstruccion.md`](plan-reconstruccion.md)
-    §86.2 (g). De lo ya contrastado,
-    lo que cambió el orden de trabajo es que el techo de tamaño no estaba donde el
-    plan creía: `mesh.ts` ya es de arrays tipados, y quien no escalaba era
-    `auditMesh`, con un `Map` de clave de texto por vértice y otro de aristas.
-    **Eso es D25, y está hecho** en el orden que la decisión fija —línea base,
-    perfil, cambio, medida—: la soldadura es una tabla de dispersión abierta en
-    dos `Int32Array` y las aristas se cuentan agrupando por conteo y prefijos,
-    como `buildPositionGrid`. Sobre 5M triángulos, **de 11,41 s de CPU y 889 MiB
-    de RSS a 0,93 s y 315 MiB**, y de morir por debajo de ~400 MiB de heap viejo
-    a pasar con 64. La malla de prueba la genera `tools/scaleMesh.mjs` —toro
-    determinista, cero bytes en git— y la puerta es `test:resources`, que declara
-    NOT_RUN el escalón de 5M sin `SOFTSIGHT_HEAVY=1`. Ningún hash se movió: el
-    pliego del dron sigue en `46228b7c`. El árbol de triángulos, que va después,
-    **no se llama `bvh.ts`**: ese nombre ya es de la captura de movimiento.
-    **Jornada del 2026-09-13, resumida.** El detalle de cada pieza vive donde le
-    toca y aquí no se repite: las decisiones en
-    [`contrato-videomesh.md`](contrato-videomesh.md), los escalones y los huecos en
-    [`plan-reconstruccion.md`](plan-reconstruccion.md) §71 y §86. Lo que cambió el
-    estado:
+**De este repositorio, sin dueño todavía.** El detalle de cada uno, con su medida, en
+[`plan-mejora.md`](plan-mejora.md).
 
-    - **Diez decisiones pasan a IMPLEMENTADAS** —D4, D8, D9, D10, D11, D12, D20,
-      D30, D31 y D33—, así que el registro va por **21 de 34**. `test:contracts` y
-      `test:colmap` salen de las puertas bloqueadas por falta de fixture.
-    - **Y aparece el segundo productor**, `producers/colmap/`, que es lo que D26
-      exigía y no existía: escribe un paquete desde la salida de COLMAP sin
-      importar nada del verificador, y sus ocho poses coinciden con las del
-      adaptador **exactas a 0**. Ver el §5.21.
-    - **Con R0-B cumplido se desbloquea R6 y entra la cobertura**, que es la
-      pregunta para la que existe esta capa: una malla puede estar impecable y
-      describir una trasera que nadie fotografió. Tres regiones —sin observar,
-      débil, observada—, y la del medio justifica que sean tres: lo que ve una
-      sola cámara tiene evidencia y no triangula. Sobre `cube-v1`, 49,5 % y 50,5 %
-      con cuatro vistas y cero débil; con una sola, el 16,7 % observado es todo
-      débil, una cara de seis exacta. El veredicto sale **INCONCLUSIVE cuando el
-      umbral cae dentro del intervalo**, que es el §86.3 (k) hecho prueba.
-      Y con ella **la confianza geométrica**, que corrige una afirmación que duró
-      unas horas: no necesita entera los residuales de R8. La pregunta «¿desde
-      dónde se miró?» sale de la malla y el CameraSet; la que los necesita es
-      «¿coincide con lo que las fotos muestran?». Hace falta aparte de la
-      cobertura porque **dos cámaras casi juntas triangulan para ella y no para
-      la geometría**: medido, 16,7 % triangulado y el 100 % de eso con paralaje
-      de 0,73°. No sale un número entre 0 y 1 a propósito —sería el riesgo R8,
-      confianza tratada como exacta— sino fracciones de área por clase. Se
-      declaran `coverage` y `confidence-geometric`; **`confidence` a secas sigue
-      fuera**, porque quien la pide está pidiendo los residuales.
-    - **Y R7 las pone donde se leen.** Hasta ese momento eran funciones que nadie
-      llamaba: ahora el informe las trae y salen además en texto para una persona,
-      **derivado del mismo objeto** —la puerta lo comprueba cambiando el informe y
-      viendo que el texto cambia con él—. Los avisos llevan su ratio, sus muestras
-      y su intervalo (§53), y **no deciden el veredicto**: media superficie sin ver
-      avisa y no suspende, porque el umbral lo pone quien conoce la pieza. Faltan
-      los pliegos de contacto, que piden decidir qué vistas se rinden.
-    - **R1.5 declarado, y R4 y R5 cerrados.** Con ellos entran cuatro puertas
-      nuevas: `test:bands`, `test:mesh-diff`, `test:mesh-topology` y
-      `test:self-intersection`. El diff de R5 se alcanza además desde fuera
-      —`--model a --diff b` y el comando `diff` del puente—, que es lo que
-      necesita un pipeline de generación para preguntar «¿este pase mejoró o
-      derivó?» en vez de mirarlo. El veredicto lo pone quien llama, con
-      `--diff-max` en fracción de la diagonal.
-    - **Tres huecos del §86.3 cerrados** —(m), (n) y (o)— y con el de la reducción
-      apareció y se arregló una costura del suavizado entre bandas.
-    - **La severidad gana un tercer valor**, `aproximacion-determinista`, que el
-      editor lee: avisado en [`coordinacion.md`](coordinacion.md).
-    - Nada de esto movió un hash: el pliego del dron sigue en `46228b7c`,
-      `contractVersion` en 3 y `bridgeContractVersion` en 1.
+- **R8 sobre datos reales.** Los residuales están hechos (historial §23), probados
+  sobre evidencia fabricada. Falta un productor que entregue máscaras y mapas de
+  profundidad, y el envío a VideoMesh que todavía no se ha escrito: el informe sube a
+  0.3, la extensión `org.softsight.profundidad` y `SS-CAM-008`, que nace PROPUESTO.
+- **H11**: el veredicto de R9 no es dominancia con tres candidatos o más. Alinearlo es
+  decisión de quien consume el cruce.
+- **H12**: el consejo de captura no es reproducible al bit dentro de un mismo proceso,
+  y eso pone roja `test:recon-cache` de vez en cuando, también en CI. Sin aislar.
+- **H13**: `test:model-cache` espera salida 1 del dron desde antes de la severidad de
+  agosto; no corre ni en `verify` ni en CI, y por eso nadie lo vio.
+- **El encargo 05-A no tiene documento**: el código cita sus §2.1 y §2.2.
+- El §86.4 (r) de [`plan-reconstruccion.md`](plan-reconstruccion.md) —que cada ítem que
+  toque el informe o el rasterizador declare si mueve `contractVersion` y el pin del
+  editor— se aplica en `plan-mejora.md`, pero nada lo exige. Y el §86.2 (f) deja
+  pendiente el valor `externo` de la severidad hasta que exista quien lo emita.
 
-20. **Jornada del 2026-09-14 — la superficie, y las siluetas.** Dos piezas, y
-    las dos salen de la misma respuesta: la reconstrucción densa exige CUDA en
-    los dos caminos que existen —`patch_match_stereo` de COLMAP y el nodo
-    `DepthMap` de Meshroom, cuyos desarrolladores han dicho que no piensan
-    portarlo— y esta máquina no tiene GPU NVIDIA. Así que se hizo lo que sí corre
-    en CPU y desbloquea más.
+**Del registro.** Las decisiones que no están IMPLEMENTADAS, y lo que le falta a cada
+una, en su entrada de [`contrato-videomesh.md`](contrato-videomesh.md); la tabla del §2
+se genera de los títulos. D26 —la promoción del contrato a 1.0— espera, según su
+entrada, a un productor que entregue malla sobre datos reales.
 
-    - **`producers/superficie`: la nube dispersa se hace superficie.** Normales
-      por PCA sobre los k vecinos, orientadas **hacia la cámara más cercana** —el
-      paquete trae las cámaras, así que el lado de fuera no se propaga por un
-      árbol de expansión, se sabe—, campo con signo por distancia al plano
-      tangente y surface nets. **No es Poisson y no se llama Poisson:** Poisson
-      cierra la superficie aunque no haya datos, y esto deja agujero donde no hay
-      evidencia, que para lo que R6 mide es la respuesta honesta.
-    - **Y con ella, R6 deja de medir solo sobre el cubo.** `south-building`, ocho
-      vistas, 16.210 puntos → 8.214 triángulos: **72,7 % observada, 27,4 % que
-      nadie miró, 48,4 % sostenida** con paralaje mediano de 36,2°. Ninguna
-      imagen renderizada habría delatado ese 27,4 %. La puerta juzga con una
-      esfera, que corre sin el fixture pesado: área 12,587 contra 4π = 12,566,
-      cerrada, y las 21.640 caras hacia fuera —esa última caza el orden de los
-      quads invertido, que no se ve en ninguna otra medida—.
-    - **Las siluetas, y el falso positivo que matan.** Las tres condiciones de
-      `seesPoint` son geométricas y **ninguna mira la foto**, así que una muestra
-      que proyecta sobre el cielo salía observada. Eso pasa en el borde de la
-      silueta, donde el mallador extiende superficie más allá de donde hubo
-      evidencia: la cobertura se inflaba **donde más engaña**. Ahora el contorno
-      recorta, y `coverage.maskedCameras` lo declara —cero no significa que no
-      hubiera fondo, significa que el número es puramente geométrico—.
-    - **Ausente no es vacía**, y es la distinción que decide el módulo: sin
-      máscara no hay información y manda la geometría; con máscara vacía, esa
-      cámara no ve nada. Las dos igualdades que lo prueban salen **exactas**:
-      llena en todas ≡ medir sin máscaras, y vacía en la k ≡ quitar la cámara k
-      del CameraSet.
-    - **La primera extensión que este binario honra.** Las siluetas entran por
-      `org.softsight.mascaras`, el espacio experimental de D30, y **no por el
-      contrato**: añadir un tipo de artifact `MASK` al esquema publicado sería
-      declarar frontera algo que nadie de fuera ha confirmado. `SUPPORTED_EXTENSIONS`
-      llevaba vacía desde que se escribió.
-    - **Lo que no se pudo hacer, y por qué.** Segmentar de verdad —SAM2, que
-      `img2threejs` ya integra— pide Python 3.10 y torch 2.3; esta máquina tiene
-      3.9 y torch se quedó en 2.2.2 para macOS Intel. Lo que falta es **el
-      fichero, no el camino**: el paquete que traiga siluetas se mide con lo que
-      ya está puesto.
-    - **Y con superficie, las tres filas que le faltaban a D23.**
-      `package-parity-v1` trae los valores dorados de recuentos, caja tras
-      normalizar el marco y cámaras registradas, con la fórmula al lado para que
-      se rehagan sin leer nuestro código — que es lo único que hace que
-      «coincidimos» signifique algo, porque dos implementaciones pueden compartir
-      el mismo error. La fila 2 era la que engañaba: sobre `cube-v1` la
-      normalización es la identidad, así que **ignorar el grafo entero acierta**.
-      Los casos dorados rotan treinta grados y uno exige componer dos aristas en
-      orden; dos mutaciones —ignorar la matriz, componer al revés— ponen la puerta
-      roja donde no la ponía nada. De las tres columnas de la decisión hay dos:
-      `colmap-small-v1` tiene la del productor y los dos lectores caen **exactos
-      a 0** en los tres centros de cámara, con el dorado en medio a 4,1e-7; de
-      `cube-v1` no hay segunda implementación, así que **D23 sigue ACORDADA** y lo
-      que le falta está dicho.
-    - **Y la primera pieza de R9: el consejo de captura.** Es lo primero que el
-      informe produce **que se ejecuta**. Hasta ahora decía «el 27,4 % no lo vio
-      nadie» y ahí se acababa; ahora contesta **dónde ponerse**. Lo que lo hace
-      valer algo es que la ganancia no se estima: cada sugerencia trae una cámara
-      entera y su número sale de meterla en el CameraSet y volver a contar, así
-      que la puerta lo desmiente en una línea — y lo comprueba **en cada prefijo
-      del plan**. Sobre `south-building`, ocho fotos llevan la cobertura del
-      72,7 % al 87,6 %. La lista va en orden de ganancia medida y es un plan, no
-      un catálogo: cada número es lo que esa foto añade sobre las anteriores,
-      porque sumarlas contaría dos veces la cara que dos fotos recuperan.
-      Escribir la puerta encontró que **faltaba una tercera ganancia** —la
-      superficie que pasa a estar sostenida—: sin ella, una sugerencia de base no
-      ganaba nada y el consejo no sabía decir «sepárate». Se declara
-      `capture-advice` y no `capture-plan`: no sabe de obstáculos ni de batería.
-    - **Y los presupuestos dejan de ser decoración.** `budgets` estaba en el
-      esquema desde R0 y nadie lo leía: un paquete podía declarar `triangulos ≤ 5`,
-      entregar doce y salir PASS con salida 0. Tercer campo del contrato que se
-      rellenaba por educación, después del FrameGraph y de la provenance. Ahora se
-      evalúan contra lo medido y **uno excedido suspende**, con salida 1. El
-      vocabulario es cerrado —nueve términos— porque `name` es texto libre y
-      contra `suavidad` no se evalúa nada; lo que queda fuera sale `NO_EVALUADO` y
-      no toca el veredicto, y lo que se entiende pero no se pudo medir deja el
-      paquete INCONCLUSIVE. De paso se afinó D9: la regla de la escala ata a lo que
-      lleva escala dentro, porque mil triángulos son mil en cualquier escala.
-      **Aflojarla también para los nombres desconocidos duró media hora**: puso
-      roja la puerta de D9, que es donde vive el caso que la regla existe para
-      cazar.
-    - **Y R9 cierra con la comparación de candidatos.** La trampa del escalón
-      está en «comparables», que no es lo mismo que producidos con el mismo
-      binario: una cobertura medida con siluetas y otra sin ellas contestan
-      preguntas distintas y las dos son un número entre cero y uno con el mismo
-      nombre. Se declara indecidible en vez de ordenarse, igual que dos ratios
-      cuyos intervalos se solapan. **Y no sale una nota**: sale dominancia, y
-      cuando nadie domina se enseñan los criterios cruzados, porque los pesos que
-      resolverían el compromiso no los conoce quien mide. Entra `compare` en el
-      CLI al lado de `inspect`. Con esto **las cuatro piezas de R9 están**:
-      presupuesto, PASS/FAIL, consejo de captura y comparación.
-    - **Y R10, la frontera de reparación.** El eje no es «difícil o fácil»: es si
-      la reparación **puede contradecir la evidencia**. Soldar vértices repetidos
-      no mueve superficie y es SAFE; tapar un agujero donde nadie miró crea
-      superficie que ninguna foto puede desmentir y es UNSAFE. **El mismo agujero
-      vale cosas distintas según quién miró ahí**, y distinguirlo pide cruzar el
-      contorno con el CameraSet — lo que ninguna herramienta de malla puede hacer,
-      y la razón de que R10 viva aquí. La consecuencia es mecánica:
-      `breaksPurelyReconstructed` dice qué pierde el paquete, porque con ella D21
-      deja de certificar. Sobre `south-building`, **61 a revisar y 4 inseguras**,
-      las cuatro agujeros pequeños donde ninguna de las ocho cámaras miró.
-    - **Y R11: el manifest de producción**, que es **otro documento** y no el
-      paquete de reconstrucción con campos de más. Tres papeles —maestra, niveles
-      de detalle, proxy de colisión—, y el papel decide qué se mide: a un LOD,
-      cuánto se desvía de su maestra en las dos direcciones sin promediar; al
-      proxy, **de qué lado queda la superficie**, por paridad de cruces y no por
-      una distancia. Los dos topes son asimétricos a propósito: la colisión tiene
-      defecto cero —un proxy que no contiene la pieza deja que la atraviesen— y la
-      desviación del LOD **no se juzga sin tope declarado**, porque lo que un
-      nivel puede perder depende de a qué distancia se mira. Con esto el contrato
-      publicado pasa de siete esquemas a ocho.
-    - **Y R12: la silueta, que es donde un LOD se nota.** Un nivel que se desvía
-      el 2 % dentro de una pared plana es invisible; el mismo 2 % contra el cielo
-      se ve desde lejos, y la distancia de superficie **mide el mismo número en
-      los dos casos**. Medido sobre el fixture: lod-2 desvía el 2,71 % de
-      superficie y pierde el **12,1 % de silueta**. Se mide en píxeles, en
-      ortográfica —un asset no declara desde dónde se le mirará— y desde catorce
-      vistas, porque media esfera pierde el 50 % de silueta en la peor vista y el
-      0 % en la mejor. Lo que pierde y lo que gana van separados, como en R5.
-    - **Y la auditoría de UV, primera pieza de R13.** El fork no era «un documento
-      u otro» sino el **formato**: un PLY no puede expresar coordenadas de
-      textura, así que el artifact gana `format` y el lector de GLB que ya existía
-      pasa a alimentar R13. Lo que casi se pierde por el camino es que **ausente
-      no es cero**: los lectores rellenan `uvs` con ceros, así que un asset en PLY
-      salía con solape cero y densidad cero, o sea impecable. El dato se recupera
-      en el lector, donde todavía se distingue. Y el solape hubo que rehacerlo:
-      contando celdas daba 1,0000 sobre cualquier malla, porque dos triángulos
-      vecinos comparten las celdas de su arista y la adyacencia no es solape.
-    - **Y el resto de R13: textura y material.** El manifest gana artifacts
-      `TEXTURE` y un bloque `materials`, y con ellos **se cierra un hueco que
-      quedó escrito**: la auditoría de UV decía que no podía juzgar una UV fuera
-      del cuadrado «porque el documento no describe el modo de repetición». Ahora
-      lo describe, y con `CLAMP` es una contradicción del manifest consigo mismo.
-      El tamaño de la imagen convierte la densidad relativa en téxeles de verdad.
-      Y la comprobación de normales se cayó y hubo que rehacerla: azul medio y
-      norma media **las pasaba un damero corriente**, y lo que sí distingue es que
-      una normal tangente nunca apunta hacia dentro.
-    - **Y R14: la holgura, que es la asimetría que nadie mide.** R11 preguntaba
-      solo si la maestra asoma del proxy, y medir eso solo **premia al proxy más
-      grande posible**: la caja del fixture contiene la esfera al 100 % y tiene el
-      93 % de su superficie lejos de ella — se choca con el aire. Con la
-      convexidad, que el recuento de triángulos no ve: una caja con una esquina
-      hundida tiene los mismos doce triángulos y se sale un 32 %. Y un hallazgo
-      del camino: **una esfera teselada no es convexa como malla**, porque sus
-      quads no son coplanarios y una diagonal queda de valle.
-    - **Y R15: `PRODUCTION_READY`, que no se gana con silencio.** Doce escalones
-      negándose a resumir y ahora un veredicto de una palabra — pero una **nota**
-      pesa cosas incomparables y una **conjunción** dice «todo lo que declaraste
-      como necesario, pasó». La regla que lo sostiene: si algo no se pudo
-      comprobar, el veredicto es `UNKNOWN` y nunca aprobado, porque si no **el
-      asset más vacío sería el más listo**. Y tampoco se gana no declarando nada:
-      qué exigencias aplican lo decide el propio asset. El validador de Khronos no
-      se ejecuta, **se ingiere**: sin su informe no hay aprobación.
-    - **Y R16: el paquete cruza por ruta, y la caché que no se clava en ella.**
-      Trece escalones midiendo y un consumidor que no tenía por dónde entregar lo
-      medido: 150 MB de `dense.ply` son 200 en base64 y el tope son 256 **ya
-      codificados**. El paquete viaja por ruta y `bridgeContractVersion` sube a 2,
-      con una regla que sostiene a las otras cuatro — **la raíz la declara la
-      configuración, nunca la petición**—; si viniera en la petición, cualquiera
-      declararía `/`. Cuatro comandos en el puente y cuatro herramientas MCP, que
-      llaman a la misma API que el CLI: la cobertura es una **proyección** del
-      informe, no otra medida. La caché tiene la clave en el contenido y nunca en
-      `path + mtime + size`: dos paquetes distintos en la misma ruta, mismo tamaño
-      y mismo `mtime`, habrían recibido el uno la cobertura del otro. Y el §56 no
-      lleva tabla de invalidación a propósito — lo que invalida cada cosa es lo
-      que entra en su clave, así que la matriz sale sola. 439 ms → 279 ms de CPU
-      por informe. Y el banco del §61 —`npm run bench`, con `--nightly` para lo
-      que no cabe en la suite— **atraviesa el escalón de 10M**: 952 MiB de pico y
-      69 s de visibilidad. No afirma tiempos sino **pendientes**, porque un número
-      suelto no distingue «esta máquina es lenta» de «este código es cuadrático»;
-      y la pendiente se lee distinta según el tramo —muy por debajo de 1 de 100k a
-      5M, cerca de 1 de 1M a 10M—, que es lo que demuestra que el sesgo estaba en
-      el coste fijo del escalón pequeño y no en el algoritmo. Los cuatro
-      escalones, en [`plan-reconstruccion.md`](plan-reconstruccion.md) R16.
-    - **Y el lector de PLY binario**, que era el ítem 10 del §72 y el único de los
-      cincuenta y tres que seguía sin construirse. Una cabecera y dos cuerpos: lo
-      que cambia es cómo se leen los números, no qué significan, y dos cabeceras
-      habrían sido dos verdades sobre el mismo fichero. `parsePly` elige por la
-      línea `format` y no por la extensión. Lo que la puerta comprueba es que los
-      dos caminos dan la misma malla **byte a byte**, y `test:reconstruction`
-      comprueba lo mismo de otro modo: el mismo cubo en binario da exactamente la
-      misma cobertura que en texto. Un dato que salió al revés de lo esperado —el
-      cubo de juguete **crece** en binario, porque `-0.5` ocupa lo mismo escrito
-      que codificado— y que desbloqueó la etapa `parseo` del banco, la más cara en
-      memoria de las cuatro: 1.038 MiB en el escalón de 10M.
-    - **Y dos decisiones que pasan a IMPLEMENTADA, D1 y D27**, por caminos
-      opuestos y el mismo motivo. D1 —el paquete por ruta— describía un
-      transporte que no existió hasta R16; D27 —la frontera modular— describía
-      una regla que **se cumplía sin que nadie la comprobara**, que es lo que la
-      hacía frágil: una frontera que solo vive en la cabecera de un fichero es
-      una costumbre, y una costumbre se rompe sin que nadie se entere. Las dos se
-      cerraron rompiéndolas a propósito para ver la puerta en rojo, porque una
-      decisión no es IMPLEMENTADA por ser cierta hoy sino por haber quien avise
-      cuando deje de serlo.
-    - **Y D15 el mismo día, por el mismo patrón que D1**: su nota decía que le
-      faltaban dos fixtures porque «piden capabilities y sellado, que no existen»,
-      y los dos existían desde el 2026-09-13 — la nota describía un repositorio
-      que ya no era éste. Escribirlos destapó que **el esquema acepta los dos
-      documentos**, y que eso está bien: `state: WRITING` es lo que VideoMesh
-      escribe mientras construye, y qué capacidades sabe hacer este binario cambia
-      con cada escalón. El rechazo va en el **consumo**, no en la validación, y
-      cada lado rechaza una cosa distinta: VideoMesh no puede publicar sin sellar
-      y SoftSight no puede consumir sin sellar. De paso salió un sobreanuncio al
-      revés: `ply-binary` no estaba declarada, así que un productor que la pidiera
-      recibía UNSUPPORTED sobre algo que este binario sabe leer desde el día
-      antes. Quedan **10 ACORDADAS y 24 IMPLEMENTADAS**.
-    - **Y un fallo de frontera que la auditoría del registro destapó, D28.** No
-      era un desacuerdo de opinión: el **mismo campo** —`measurementClass`— tenía
-      tres formas dentro del esquema publicado, dos enums que no coincidían y tres
-      `string` libres cuya descripción decía `APPROXIMATE` sin que el esquema lo
-      exigiera. `measurementClass: "cualquier cosa"` pasaba la validación en tres
-      de los cinco sitios, y quien derivara modelos obtenía tres tipos para un
-      nombre. Los cinco publican ahora el mismo vocabulario desde
-      `reconstruction/measurement.ts`, y `DETERMINISTIC_APPROXIMATION` se retira
-      porque metía el segundo eje dentro del primero, que es lo que D28 nació para
-      deshacer. **D28 sigue ACORDADA a propósito**: su prueba pide macOS y Linux y
-      aquí no hay segunda plataforma, y el refinamiento de las reducciones
-      paralelas no tiene qué probar porque no hay reducción paralela en esta capa.
-      Media prueba es media prueba.
-    - **Y D18, con R0-A de D34.** Las dos llevaban desde el 2026-08-12 con la
-      misma nota —«falta el sobre del informe»— describiendo un repositorio que
-      ya no era éste: el sobre estaba y lo que faltaba era comprobarlo. `test:r0`
-      recorre **las nueve etapas como dato**, que es la lista que el contrato
-      escribe, y comprueba que cada una deja huella en el informe. Lo que no
-      miraba nadie es el sobre, que es la etapa que **ata el informe a su
-      entrada**: `run.inputManifestSha256` tiene que ser el sha del manifest
-      leído, porque si no el informe habla de otro paquete y sale igual de bien.
-      El caso que lo demuestra cambia el `packageId` y mira las dos cosas: el
-      sobre entero cambia y no se mueve una sola medida. R0-B sigue abierto y no
-      por falta de segundo productor —`producers/colmap/` lo es desde el 13—,
-      sino porque las tres comparaciones de D23 piden valores dorados de fuera.
-      Quedan **9 ACORDADAS y 25 IMPLEMENTADAS**.
-    - **Y D32, con el fixture que la decisión nombraba y no existía.** Lo que
-      `test:gltf-frame` comprobaba —que las dos rutas dan la misma matriz— es
-      necesario y no suficiente: desde que la conversión se unificó, las dos salen
-      del mismo módulo y **pueden coincidir estando las dos mal**. La ida y vuelta
-      tampoco basta, porque una transposición de más y otra de menos se cancelan y
-      el documento vuelve idéntico — que es el fallo que D32 describe con esas
-      palabras. Lo único que lo caza es **un punto conocido**, con los números
-      calculados fuera del repositorio: cuatro de los cinco casos se leen a ojo,
-      `(1,2,3) → (6,8,10)`, y el quinto usa un eje oblicuo, que es donde una
-      convención equivocada deja de disimular. La puerta comprueba además que la
-      trampa existe: leyendo sin transponer, el punto oblicuo se va a
-      `(-0,486, -0,735, 1,803)` en vez de a `(0,314, -0,485, 3,153)`. Quedan
-      **8 ACORDADAS y 26 IMPLEMENTADAS**.
-    - **Y D22, cuyas tres filas se cumplían sin que nadie las mirara.** No son
-      igual de frágiles: las dos primeras se rompen ruidosamente —alguien commitea
-      69 MB y está en el diff— y **la tercera se rompe en silencio**. Una puerta
-      que necesita un fixture ausente y sale verde sin decirlo deja un hueco del
-      tamaño de lo que probaba, y el registro dice «ok». Por eso ese bloque
-      **ejecuta** las tres puertas del COLMAP real con la raíz vacía en vez de leer
-      el código, y exige las dos cosas a la vez: salida 0 y el motivo escrito.
-      Cazó dos cosas al escribirse — el fixture de D32 sin versionar, y un falso
-      positivo mío por comparar los pesados por nombre en vez de por ruta, porque
-      `cameras.txt` existe en el sintético y en los dos pesados. Quedan
-      **7 ACORDADAS y 27 IMPLEMENTADAS**.
-    - Dieciséis puertas nuevas, `test:masks`, `test:producer-superficie`,
-      `test:parity`, `test:capture-advice`, `test:budgets`, `test:candidates`,
-      `test:repair`, `test:production`, `test:lod-qa`, `test:uv-qa` y
-      `test:texture-qa`, `test:collision-qa`, `test:readiness`,
-      `test:package-transport`, `test:recon-cache` y `test:preview-proxy`, y un identificador
-      nuevo,
-      `SS-CAM-007` (`MASCARA_NO_APLICABLE`), que se suma a los que esperan
-      respuesta. Ningún hash del rasterizador se movió.
+**Del editor:** la mitad de E1 —que el editor compare sus cajas contra
+`artifacts/agent/encuadre-control.json`—, Ω6.4 y F1 del plan del motor.
 
-21. **Qué queda, y de quién es.** Del lado de este repositorio **no queda nada
-    que no dependa de otro**, y conviene que esté dicho en un sitio en vez de
-    deducirse.
-
-    **Del dueño:** nada. Lo que había queda tachado abajo, con la fecha, para que
-    se vea qué desbloqueó a qué.
-
-    - ~~Mandar el envío 03.~~ **Enviado el 2026-09-15**, publicado en `main` con
-      los treinta y ocho commits que lo sostienen —[`envio-videomesh-03.md`](envio-videomesh-03.md)—.
-      Lo obliga §1.4: el informe **sube de versión por primera vez**,
-      `reconstructionReport` de `0.1` a `0.2`, después de cambiar seis veces con el
-      número quieto — que es justo lo que D12 existe para impedir. Lleva además el
-      enum de `measurementClass` estrechado, `coverage.maskedCameras` como campo
-      requerido, y los **32 identificadores en PROPUESTO**, que eran cinco en el
-      envío 01.
-
-      Lo que de verdad desbloquea es otra cosa: **el transporte del §84**. VideoMesh
-      no tenía por dónde entregar un paquete desde el envío 01 —150 MB de
-      `dense.ply` son ~200 en base64 contra un tope de 256 ya codificados, así que
-      no era estrecho sino imposible—, y ahora sí. Y corrige algo que el envío 02
-      afirmaba y dejó de ser cierto: a R0-B no le falta un segundo productor, le
-      faltan los valores dorados de D23.
-    - ~~Mandar el envío 02.~~ **Enviado el 2026-09-13**, publicado en `main` con
-      los commits que lo sostienen —[`envio-videomesh-02.md`](envio-videomesh-02.md)—.
-      Lleva cuatro campos obligatorios nuevos, la sustitución de `versions.report`
-      por `versions.contracts`, y los **28 identificadores en PROPUESTO** que
-      siguen esperando respuesta desde el envío 01.
-    - ~~El idioma de los códigos.~~ **Decidido el 2026-09-13: todo en español**, y
-      aplicado a los 32 motivos de frontera y a los cuatro del veredicto. No toca
-      los valores de enum que VideoMesh escribe —eso es el vocabulario del
-      paquete, no un código— y no os rompe porque D2 manda parsear el
-      identificador. Con esto se cierra lo último que quedaba abierto de las tres
-      cosas del punto 19.
-    - ~~De dónde sale un COLMAP real.~~ **Resuelto el 2026-09-13**: `colmap-real-v1`
-      —`south-building` y `gerrard-hall`— vive fuera del repositorio con su sha256
-      en `contracts/fixtures/colmap-real-v1.json` y la puerta lo busca en
-      `SOFTSIGHT_COLMAP`. **D4 pasa a IMPLEMENTADA** y `test:colmap` sale de las no
-      ejecutadas. Lo que la cierra son dos caminos al mismo número: nuestro error
-      medio de reproyección da 0,49697 px donde COLMAP declara 0,49703, sobre
-      61.514 puntos. Con esto **del dueño no queda nada**.
-
-    **De VideoMesh, que no existe.** Conviene que esté dicho: el contrato se
-    diseñó contra un consumidor que nunca se construyó, y los envíos 01 y 02
-    fueron a nadie. Eso no los invalida —siguen siendo la especificación de qué
-    tiene que hacer un segundo productor— pero cambia quién los cumple.
-
-    - ~~R0-B con el `cube-v1` de VideoMesh.~~ **Lo cumple `producers/colmap/`
-      desde el 2026-09-13**, que es un segundo productor de verdad: no importa
-      nada del verificador y coincide con el adaptador exacta a 0 en las ocho
-      poses. Lo que le falta para promover el contrato a 1.0 es **superficie**: un
-      SfM disperso no entrega malla. **Desde el 2026-09-14 la superficie existe**
-      —`producers/superficie` la fabrica en CPU—, así que las comparaciones de
-      recuentos y caja de D23 ya tienen qué comparar; lo que les falta ahora son
-      **valores dorados**, que es otra cosa y más pequeña.
-    - **Los 28 identificadores siguen sin fijar**, y sigue estando bien: se fijan
-      cuando un segundo productor los grabe en sus pruebas, venga de donde venga.
-
-    **Del editor:** la mitad de E1 —comparar sus cajas contra
-    `artifacts/agent/encuadre-control.json`—, Ω6.4 y F1 del plan del motor.
-
-    **Sin dueño y anotado:** el §86.4 (r) sigue sin aplicarse —cada item que toque
-    el informe o el rasterizador debería declarar si mueve `contractVersion` y si
-    obliga a subir el pin del editor—, y el §86.2 (f) deja pendiente el valor
-    `externo` de la severidad, que no entra hasta que exista un proveedor externo
-    que lo emita.
-
-22. **Plan de mejora** (fases 0 a 3 hechas el 2026-11-17, salvo 0.4). Ver
-    [`plan-mejora.md`](plan-mejora.md), que lleva la tabla de antes y ahora; aquí
-    solo lo que cambia el estado. La suite vuelve a verde y el verde deja de mentir:
-    una puerta muda es roja, y «no ejecutada» ya no cuenta los límites declarados.
-    MCP pasa a superficie de primera —catálogo de 41 KB a 16,6 KB con 19
-    herramientas, errores con `isError`, artefactos por ruta, y una herramienta por
-    comando del puente, comprobado—. El CLI avisa cuando sirve una compilación vieja,
-    y `verify:rapido` acorta el bucle interno sin cerrar nada. Y las **sesiones**: el
-    banco lleva la cuenta de pliego, informe y parches entre turnos, y un turno es el
-    CLI con la lista entera, comprobado contra el CLI lanzado aparte; el **barrido**
-    cruza K variantes por la frontera de Pareto. Queda anotado en el plan, sin dueño
-    todavía: la regla de veredicto de R9 no es dominancia con tres candidatos o más
-    (H11), el consejo de captura no es reproducible al bit dentro de un mismo proceso
-    —un rojo intermitente de `test:recon-cache`, ya presente en `main`— (H12), y el
-    encargo 05-A sigue sin documento. Ningún hash se movió: el pliego del
-    dron sigue en `46228b7c`, `contractVersion` en 3 y `bridgeContractVersion` en 2.
+**De VideoMesh:** nada pendiente en el registro. Contestó el envío 03 el 2026-09-15 y
+aceptó tal cual los identificadores que esperaban respuesta (D2).
 
 **Aviso de alcance sobre E4.** El plan excluye a propósito el rigging, la IK y
 el retargeting. E4 **no los introduce**: no calcula ni un solo peso. Aplica un
@@ -883,10 +218,6 @@ poder afirmar que el resultado es exacto, y con ello se va el valor de todo lo
 demás. Lo que falte de pesos suaves lo trae quien los tenga, por `JOINTS_0` y
 `WEIGHTS_0` —o lo declara el agente, si algún día se hace
 [`plan-pesos.md`](plan-pesos.md), que existe para dejar esta línea donde está—.
-
-Riesgo declarado: D era el mayor cuello de botella, porque el editor dependía
-del CLI por proceso. El puente lo cierra: el editor habla con un proceso local
-por JSON, y la forma del contrato sale de `--schema`, que no puede divergir.
 
 **Sobre medir fluidez.** No se puede desde el panel del navegador integrado:
 estrangula `requestAnimationFrame` a cero cuando no está en primer plano, lo que

@@ -46,15 +46,15 @@ qué es un argumento de línea de órdenes, no va en la capa 2.
 ## Descubrir el contrato sin leerse el repositorio
 
 ```bash
-node tools/agent3d.mjs --schema patch     # solo esa parte, 12 KB en vez de 46
+node tools/agent3d.mjs --status           # la foto del repositorio en 2 KB: lo primero
+node tools/agent3d.mjs --schema patch     # solo esa parte, no el esquema entero
 node tools/agent3d.mjs --schema codes     # qué avisos existen y cuáles traen arreglo
 node tools/agent3d.mjs --model x.glb --inspect-only --summary
 ```
 
-`--schema` sin argumento devuelve todo; las partes son
-`scene|patch|story|staging|sample|report|codes`, y el completo se construye uniéndolas.
-`--summary` y `--fields "warnings,spatial.floating"` recortan el informe: son proyecciones
-sobre el objeto ya construido y **no recalculan nada**.
+`--schema` sin argumento lo devuelve todo y con parte solo esa —`--help` las lista—, y el
+completo se construye uniéndolas. `--summary` y `--fields "warnings,spatial.floating"`
+recortan el informe: son proyecciones sobre lo ya construido y **no recalculan nada**.
 
 El registro de códigos vive en `src/soft/agent/warningCodes.ts` y es el tipo del campo
 `code`: emitir uno que no esté en la tabla no compila. `severity` distingue **certeza**
@@ -91,10 +91,10 @@ dan el mismo número. `npm run test:animation` las corre todas menos `test:deter
 `test:worker` y `test:model-cache`; sueltas sirven para iterar sobre una.
 
 <!-- generado: puertas -->
-`npm run test:affected-gates` · `npm run test:agents-md` · `npm run test:bands` · `npm run test:bind` · `npm run test:blend-contract` · `npm run test:boundaries` · `npm run test:bounds-tree` · `npm run test:bridge` · `npm run test:budgets` · `npm run test:build-fingerprint` · `npm run test:bvh` · `npm run test:candidates` · `npm run test:capture-advice` · `npm run test:codes` · `npm run test:collision-qa` · `npm run test:colmap` · `npm run test:confidence` · `npm run test:contracts` · `npm run test:coverage` · `npm run test:determinism` · `npm run test:fixtures` · `npm run test:framing` · `npm run test:geometry` · `npm run test:glb-writer` · `npm run test:gltf-frame` · `npm run test:incremental` · `npm run test:lod-qa` · `npm run test:masks` · `npm run test:mcp` · `npm run test:measurement` · `npm run test:mesh-diff` · `npm run test:mesh-partition` · `npm run test:mesh-topology` · `npm run test:model-cache` · `npm run test:package-transport` · `npm run test:parity` · `npm run test:ply-binary` · `npm run test:preview-proxy` · `npm run test:producer-colmap` · `npm run test:producer-superficie` · `npm run test:production` · `npm run test:r0` · `npm run test:readiness` · `npm run test:recon-cache` · `npm run test:reconstruction` · `npm run test:repair` · `npm run test:report-r7` · `npm run test:resources` · `npm run test:rig` · `npm run test:screen` · `npm run test:self-intersection` · `npm run test:session` · `npm run test:story` · `npm run test:summary` · `npm run test:sweep` · `npm run test:text` · `npm run test:text-plan` · `npm run test:texture-qa` · `npm run test:uv-qa` · `npm run test:worker`
+`npm run test:affected-gates` · `npm run test:agents-md` · `npm run test:bands` · `npm run test:bind` · `npm run test:blend-contract` · `npm run test:boundaries` · `npm run test:bounds-tree` · `npm run test:bridge` · `npm run test:budgets` · `npm run test:build-fingerprint` · `npm run test:bvh` · `npm run test:candidates` · `npm run test:capture-advice` · `npm run test:codes` · `npm run test:collision-qa` · `npm run test:colmap` · `npm run test:confidence` · `npm run test:contracts` · `npm run test:coverage` · `npm run test:determinism` · `npm run test:estado` · `npm run test:fixtures` · `npm run test:framing` · `npm run test:geometry` · `npm run test:glb-writer` · `npm run test:gltf-frame` · `npm run test:incremental` · `npm run test:lod-qa` · `npm run test:masks` · `npm run test:mcp` · `npm run test:measurement` · `npm run test:mesh-diff` · `npm run test:mesh-partition` · `npm run test:mesh-topology` · `npm run test:model-cache` · `npm run test:package-transport` · `npm run test:parity` · `npm run test:ply-binary` · `npm run test:preview-proxy` · `npm run test:producer-colmap` · `npm run test:producer-superficie` · `npm run test:production` · `npm run test:r0` · `npm run test:readiness` · `npm run test:recon-cache` · `npm run test:reconstruction` · `npm run test:repair` · `npm run test:report-r7` · `npm run test:residuals` · `npm run test:resources` · `npm run test:rig` · `npm run test:screen` · `npm run test:self-intersection` · `npm run test:session` · `npm run test:story` · `npm run test:summary` · `npm run test:sweep` · `npm run test:text` · `npm run test:text-plan` · `npm run test:texture-qa` · `npm run test:uv-qa` · `npm run test:worker`
 <!-- /generado: puertas -->
 
-Cinco leen el fixture certificado del editor, en un repositorio privado: sin él se declaran
+Las que leen el fixture certificado del editor —un repositorio privado— se declaran sin él
 «no ejecutada» con su motivo y salen 0 —en CI, siempre—; `SOFTSIGHT_FIXTURES` cambia la ruta.
 
 ## Banderas del CLI
@@ -102,7 +102,7 @@ Cinco leen el fixture certificado del editor, en un repositorio privado: sin él
 La explicación de cada una está en `--help`, que es donde vive.
 
 <!-- generado: banderas -->
-`--model` · `--scene` · `--bvh` · `--patch` · `--dry-run` · `--undo` · `--control-poses` · `--sample` · `--frames` · `--fps` · `--skeleton` · `--bind` · `--audit-frames` · `--bvh-scale` · `--bvh-clip` · `--story` · `--reading-rate` · `--staging` · `--contrast-ratio` · `--out` · `--export` · `--save-scene` · `--inspect-only` · `--summary` · `--fields` · `--select` · `--select-where` · `--isolate` · `--audit-limit` · `--tile` · `--ground` · `--preview-max-triangles` · `--material-colors` · `--baseline` · `--baseline-report` · `--expect-size` · `--diff-samples` · `--diff-seed` · `--diff-max` · `--max-triangles` · `--max-parts` · `--require-watertight` · `--max-boundary-edges` · `--max-degenerate` · `--max-symmetry-error` · `--parity` · `--no-cache` · `--schema` · `--serve` · `--debug` · `--help`
+`--model` · `--scene` · `--bvh` · `--patch` · `--dry-run` · `--undo` · `--control-poses` · `--sample` · `--frames` · `--fps` · `--skeleton` · `--bind` · `--audit-frames` · `--bvh-scale` · `--bvh-clip` · `--story` · `--reading-rate` · `--staging` · `--contrast-ratio` · `--out` · `--export` · `--save-scene` · `--inspect-only` · `--summary` · `--fields` · `--select` · `--select-where` · `--isolate` · `--audit-limit` · `--tile` · `--ground` · `--preview-max-triangles` · `--material-colors` · `--baseline` · `--baseline-report` · `--expect-size` · `--diff-samples` · `--diff-seed` · `--diff-max` · `--max-triangles` · `--max-parts` · `--require-watertight` · `--max-boundary-edges` · `--max-degenerate` · `--max-symmetry-error` · `--parity` · `--no-cache` · `--schema` · `--partition` · `--status` · `--serve` · `--debug` · `--help`
 <!-- /generado: banderas -->
 
 ## A dónde ir después
@@ -110,8 +110,8 @@ La explicación de cada una está en `--help`, que es donde vive.
 - [`docs/mapa-del-proyecto.md`](docs/mapa-del-proyecto.md) — de quién es cada dato, las
   puertas y **qué toca ahora** (§5). Ningún otro sitio lleva la cuenta.
 - [`README.md`](README.md) — qué hace y cómo se usa, con las medidas al lado.
-- [`docs/plan-omega.md`](docs/plan-omega.md) — el plan en curso: coste por turno, modo
-  residente, MCP.
+- [`docs/plan-mejora.md`](docs/plan-mejora.md) — el plan en curso: lo medido, las fases y
+  lo que queda. El anterior, `plan-omega.md`, es el del coste por turno y el MCP.
 - [`docs/plan-renderizador.md`](docs/plan-renderizador.md) — los descartes con su medida;
   se lee antes de proponer una optimización, no después.
 

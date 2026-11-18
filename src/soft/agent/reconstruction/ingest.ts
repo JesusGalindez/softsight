@@ -68,12 +68,39 @@ export const SUPPORTED_CONTRACT_VERSIONS = ["0.1"] as const;
 export const MASK_EXTENSION = "org.softsight.mascaras";
 
 /**
+ * La extensión de la profundidad: qué es cada número de un mapa (R8, D5).
+ *
+ * El contrato ya tiene el artifact `DEPTH_MAP`, con su cámara y su `depthKind`
+ * (D20), y no dice cómo se lee: en qué fichero, en qué canal, en qué unidad, qué
+ * valor significa «no medido». D5 lo acordó —«cada canal declara semántica,
+ * espacio, rango, unidad e inválido»— sin fijar dónde, y va por aquí por el mismo
+ * motivo que las máscaras: poner la forma en el esquema publicado sería declarar
+ * frontera algo que el otro lado no ha visto.
+ *
+ * ```json
+ * "org.softsight.profundidad": {
+ *   "required": false,
+ *   "data": { "porArtefacto": { "prof-1": {
+ *     "formato": "EXR", "canal": "Z", "semantica": "PROFUNDIDAD",
+ *     "espacio": "ORIGINAL", "unidad": "PAQUETE", "invalido": "CERO",
+ *     "rango": [0.1, 100]
+ *   } } }
+ * }
+ * ```
+ *
+ * `unidad: "PAQUETE"` es la única que se admite hoy: la misma que la malla. Otra
+ * —metros— pediría una escala absoluta que el paquete puede no tener (D9), y
+ * convertir sin ella sería inventar el dato.
+ */
+export const DEPTH_EXTENSION = "org.softsight.profundidad";
+
+/**
  * Qué extensiones entiende este binario.
  *
  * Se puede sustituir por parámetro, igual que `schemaHashes`, porque quien sabe
  * qué entiende un despliegue concreto no es este módulo.
  */
-export const SUPPORTED_EXTENSIONS: readonly string[] = [MASK_EXTENSION];
+export const SUPPORTED_EXTENSIONS: readonly string[] = [MASK_EXTENSION, DEPTH_EXTENSION];
 
 /**
  * La política de D30 para la extensión **opcional** desconocida, que la decisión
@@ -253,6 +280,8 @@ export const PACKAGE_CODES = {
   IMAGEN_DE_CAMARA_AUSENTE: "SS-CAM-002",
   RECTIFICADA_CON_DISTORSION: "SS-CAM-003",
   MASCARA_NO_APLICABLE: "SS-CAM-007",
+  // Lo emite el CLI, como el de las máscaras: comprobarlo exige abrir el EXR.
+  PROFUNDIDAD_NO_APLICABLE: "SS-CAM-008",
   // Lo emite el CLI y no este módulo: comprobarlo exige **decodificar la
   // imagen**, y aquí no hay IO a propósito. El identificador vive igual en la
   // tabla, que es lo que el otro lado parsea.

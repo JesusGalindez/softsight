@@ -328,6 +328,31 @@ export const TOOLS = {
     },
   },
 
+  softsight_partition: {
+    command: "partition",
+    readOnly: true,
+    description:
+      "Audita un reparto de una malla en piezas: conservación —nada perdido, nada repetido, ningún vértice " +
+      "movido— y el borde que abre el corte, por pieza y en total. Sin veredicto.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        model: { type: "string", description: "Ruta de la malla: PLY, GLB u OBJ." },
+        partition: documentProperty("partition", "El reparto."),
+        ...optionProperties(["summary", "fields"]),
+      },
+      required: ["model", "partition"],
+      additionalProperties: false,
+    },
+    build({ model, partition, ...options }) {
+      return {
+        command: "partition",
+        files: { model: filePayload(model), partition: documentPayload("reparto.json", partition) },
+        options,
+      };
+    },
+  },
+
   softsight_scene: {
     command: "scene",
     readOnly: false,
@@ -532,11 +557,11 @@ export const TOOLS = {
             properties: {
               name: { type: "string" },
               patches: { type: "array", minItems: 1, items: documentProperty("patch", "Un parche.") },
+              partition: documentProperty("partition", "Un reparto de la malla, en vez de patches."),
             },
-            required: ["patches"],
             additionalProperties: false,
           },
-          description: "Las variantes: cada una, una lista de parches sobre la base.",
+          description: "Las variantes: cada una, una lista de parches sobre la base o un reparto de la malla.",
         },
         criteria: {
           type: "array",
@@ -562,7 +587,8 @@ export const TOOLS = {
         files: inputFiles(model, scene),
         variants: variants.map((variant) => ({
           ...(variant.name === undefined ? {} : { name: variant.name }),
-          patches: patchPayloads(variant.patches),
+          ...(variant.patches === undefined ? {} : { patches: patchPayloads(variant.patches) }),
+          ...(variant.partition === undefined ? {} : { partition: documentPayload("reparto.json", variant.partition) }),
         })),
         ...(criteria === undefined ? {} : { criteria }),
         options,
@@ -669,6 +695,18 @@ export const TOOLS = {
         package: { root },
         ...(externalValidation === undefined ? {} : { externalValidation }),
       };
+    },
+  },
+
+  softsight_status: {
+    command: "status",
+    readOnly: true,
+    description:
+      "La foto del repositorio en ~2 KB: versiones de contrato, estado de cada decisión, puertas, " +
+      "comandos del puente y herramientas. Lo primero que leer antes de tocar nada.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    build() {
+      return { command: "status" };
     },
   },
 

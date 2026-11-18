@@ -73,6 +73,7 @@ export function imageGrid(bytes) {
   throw new Error("IMAGEN_NO_SOPORTADA: no es un PNG ni un JPEG con cabecera legible");
 }
 import {
+  DEPTH_EXTENSION,
   MASK_EXTENSION,
   compareCandidates,
   PACKAGE_CODES,
@@ -85,9 +86,11 @@ import {
   computeVisibility,
   ingestPackage,
   maskMismatch,
+  parseExr,
   parsePly,
 } from "../dist-node/agent3d.mjs";
 import { decodePng } from "./agent3d.mjs";
+import { zlibInflate } from "./exr.mjs";
 import { openVisibilityCache, visibilityKey } from "./reconCache.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -257,6 +260,9 @@ export function inspectPackage(manifestPath, { samples, cache = true, cacheRoot 
   // dice, porque medir con media silueta daría un número que nadie podría
   // interpretar y que nada delataría.
   const masks = loadMasks(manifest, ingest);
+  // Y la profundidad (R8), por el mismo camino: lo que la ingesta no puede
+  // comprobar sin abrir el EXR se comprueba aquí, y lo que no encaja se dice.
+  const depth = loadDepthMaps(manifest, ingest);
 
   // La superficie que se cruza con las cámaras (R6). La primera malla admitida y
   // el CameraSet: si el paquete trae varias, cruzar la primera y callar las demás
@@ -273,6 +279,7 @@ export function inspectPackage(manifestPath, { samples, cache = true, cacheRoot 
               ?.purelyReconstructed === true,
           samples: samples,
           masks,
+          depth,
         };
 
   // La visibilidad, si ya estaba medida sobre exactamente estos bytes (§55). La
@@ -404,6 +411,104 @@ function loadMasks(manifest, ingest) {
     masks.set(cameraId, mask);
   }
   return masks.size === 0 ? undefined : masks;
+}
+
+/** Qué valor marca «no medido», tal como lo declara la extensión de profundidad. */
+const DEPTH_INVALID = {
+  CERO: (value) => value === 0,
+  NAN: (value) => Number.isNaN(value),
+  INFINITO: (value) => value === Infinity || value === -Infinity,
+};
+
+/**
+ * Los mapas de profundidad que el paquete declara en `org.softsight.profundidad`,
+ * decodificados y listos para comparar (R8).
+ *
+ * Cada uno pasa por lo que D5 exige que se declare: el formato y el canal, la
+ * semántica, el espacio —que tiene que ser el de su cámara, D10—, la unidad, qué
+ * valor es «no medido» y, si lo hay, el rango válido. Lo que cae fuera del rango,
+ * es el valor inválido o no es un número finito pasa a `NaN`, que es la única
+ * marca de «no medido» que entiende el comparador. Un mapa que no encaje no se
+ * compara y se dice con `SS-CAM-008`: medir contra un número que no se sabe qué es
+ * daría un residuo que nadie podría interpretar.
+ */
+function loadDepthMaps(manifest, ingest) {
+  const entry = (manifest.extensions ?? {})[DEPTH_EXTENSION];
+  if (entry === undefined) return undefined;
+
+  const rutas = new Map(ingest.artifacts.map((artifact) => [artifact.id, artifact.realPath]));
+  const camaras = new Map((manifest.cameras ?? []).map((camera) => [camera.id, camera]));
+  const declarados = entry.data?.porArtefacto ?? {};
+  const maps = new Map();
+  const fallo = (mensaje) => {
+    ingest.issues.push({
+      code: PACKAGE_CODES.PROFUNDIDAD_NO_APLICABLE,
+      reason: PACKAGE_CODE_TABLE[PACKAGE_CODES.PROFUNDIDAD_NO_APLICABLE].reason,
+      message: mensaje,
+    });
+  };
+
+  for (const artifact of manifest.artifacts ?? []) {
+    if (artifact.type !== "DEPTH_MAP") continue;
+    const where = `mapa ${artifact.id}`;
+    const codificacion = declarados[artifact.id];
+    if (codificacion === undefined) {
+      fallo(`${where}: la extensión ${DEPTH_EXTENSION} no dice cómo se lee`);
+      continue;
+    }
+    const camera = camaras.get(artifact.cameraId);
+    const ruta = rutas.get(artifact.id);
+    // La ingesta ya avisó de la cámara que falta y del fichero que no se admitió.
+    if (camera === undefined || ruta === undefined) continue;
+
+    const { formato, canal, semantica, espacio, unidad, invalido, rango } = codificacion;
+    const problemas = [];
+    if (formato !== "EXR") problemas.push(`formato ${JSON.stringify(formato)}; se lee EXR (D5)`);
+    if (typeof canal !== "string" || canal === "") problemas.push("falta el canal");
+    if (semantica !== "PROFUNDIDAD") problemas.push(`semántica ${JSON.stringify(semantica)}; se compara PROFUNDIDAD`);
+    if (espacio !== camera.imageSpace) {
+      problemas.push(`espacio ${JSON.stringify(espacio)} sobre una cámara ${camera.imageSpace} (D10)`);
+    }
+    if (unidad !== "PAQUETE") {
+      problemas.push(`unidad ${JSON.stringify(unidad)}; se admite PAQUETE, la de la malla, y convertir pediría una escala (D9)`);
+    }
+    if (!(invalido in DEPTH_INVALID)) problemas.push(`inválido ${JSON.stringify(invalido)}; se admiten ${Object.keys(DEPTH_INVALID).join(", ")}`);
+    const conRango =
+      Array.isArray(rango) && rango.length === 2 && rango.every(Number.isFinite) && rango[0] < rango[1];
+    if (rango !== undefined && !conRango) problemas.push("el rango tiene que ser [mínimo, máximo] finitos y en orden");
+    if (problemas.length > 0) {
+      fallo(`${where}: ${problemas.join("; ")}`);
+      continue;
+    }
+
+    let imagen;
+    try {
+      imagen = parseExr(new Uint8Array(readFileSync(ruta)), { inflate: zlibInflate });
+    } catch (error) {
+      fallo(`${where}: no se puede leer (${error.message})`);
+      continue;
+    }
+    const valores = imagen.channels[canal];
+    if (valores === undefined) {
+      fallo(`${where}: el EXR no tiene el canal ${canal}; trae ${Object.keys(imagen.channels).join(", ")}`);
+      continue;
+    }
+    if (imagen.width !== camera.width || imagen.height !== camera.height) {
+      // Al revés que una máscara: la profundidad no se reescala, porque el valor de
+      // un píxel a otra resolución no es el de ninguno de los del original.
+      fallo(`${where}: es ${imagen.width}×${imagen.height} y su cámara ${camera.width}×${camera.height}`);
+      continue;
+    }
+    const esInvalido = DEPTH_INVALID[invalido];
+    const values = new Float64Array(valores.values.length);
+    for (let index = 0; index < values.length; index += 1) {
+      const value = valores.values[index];
+      const fuera = !Number.isFinite(value) || esInvalido(value) || (conRango && (value < rango[0] || value > rango[1]));
+      values[index] = fuera ? Number.NaN : value;
+    }
+    maps.set(camera.id, { width: imagen.width, height: imagen.height, values, depthKind: artifact.depthKind });
+  }
+  return maps.size === 0 ? undefined : maps;
 }
 
 /**
@@ -576,6 +681,40 @@ export function renderHuman(report) {
         `  ${s.camera.id}  desde (${ojo}) · ${mas(s.gain.deltaObserved)} vista ` +
           `${mas(s.gain.deltaTriangulated)} triangulada ${mas(s.gain.deltaSupported)} sostenida ` +
           `→ ${pct(s.gain.observedAreaRatio)} vista y ${pct(s.gain.supportedAreaRatio)} sostenida`,
+      );
+    }
+  }
+
+  // R8, con los mismos números que el JSON: lo que no se midió no sale, y por eso
+  // cada línea comprueba su campo en vez de imprimir un cero.
+  if (report.residuals) {
+    const r = report.residuals;
+    const num = (value, digits = 4) => (value === undefined ? "—" : value.toPrecision(digits));
+    lineas.push("");
+    if (r.masks) {
+      lineas.push(
+        `siluetas    ${r.masks.cameras} cámaras · IoU ${num(r.masks.iou)} · ` +
+          `${r.masks.falsePositiveRatio === undefined ? "—" : pct(r.masks.falsePositiveRatio)} de malla fuera de la máscara · ` +
+          `${r.masks.falseNegativeRatio === undefined ? "—" : pct(r.masks.falseNegativeRatio)} de máscara sin malla`,
+      );
+    }
+    if (r.depth) {
+      const d = r.depth;
+      lineas.push(
+        `profundidad ${d.cameras} mapas · ${d.compared} muestras comparadas` +
+          (d.stats === undefined
+            ? ""
+            : ` · error medio ${num(d.stats.meanAbs)}, mediano ${num(d.stats.medianAbs)}, p95 ${num(d.stats.p95Abs)}` +
+              ` · sesgo ${num(d.stats.meanSigned)}`),
+      );
+      if (d.meshMissRatio !== undefined && d.meshMissRatio > 0) {
+        lineas.push(`  donde la fuente midió, a la malla le falta el ${pct(d.meshMissRatio)}`);
+      }
+    }
+    if (r.normals && r.normals.samples > 0) {
+      lineas.push(
+        `normales    derivadas de la profundidad · mediana ${num(r.normals.medianDegrees)}°, ` +
+          `p95 ${num(r.normals.p95Degrees)}°, máximo ${num(r.normals.maxDegrees)}°`,
       );
     }
   }
